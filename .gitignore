@@ -1,0 +1,15 @@
+.next/
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+tsconfig.tsbuildinfo
+.codex-dev-server.*.log
+*.sqlite
+*.db
+real-data/
+private-data/
+imports/raw/
