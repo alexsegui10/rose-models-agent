@@ -60,7 +60,7 @@ describe("ConversationEngine", () => {
     });
 
     expect(second.candidate.currentState).toBe("PROFILE_READY_FOR_REVIEW");
-    expect(second.candidate.candidateDeclaredProfileAccessAccepted).toBe(true);
+    expect(second.candidate.candidateClaimsFollowRequestAccepted).toBe(true);
     expect(second.candidate.humanVerifiedProfileAccess).toBe(false);
   });
 
@@ -76,7 +76,7 @@ describe("ConversationEngine", () => {
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,
       instagramUsername: "lead_lista",
-      message: "Tengo experiencia creando contenido para Instagram, estoy disponible por las tardes y tengo iPhone."
+      message: "Tengo experiencia creando contenido para Instagram, estoy disponible por las tardes y tengo iPhone 13."
     });
 
     expect(second.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");

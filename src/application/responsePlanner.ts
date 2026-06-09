@@ -75,13 +75,13 @@ function humanReviewReasonFor(input: BuildResponsePlanInput, uncoveredQuestion: 
 }
 
 function isBusinessQuestionWithoutCoverage(input: BuildResponsePlanInput): boolean {
-  const message = input.inboundMessage.toLowerCase();
+  const message = normalize(input.inboundMessage);
   if (!looksLikeQuestion(message)) return false;
 
   if (asksUnsupportedSpecificQuestion(message, input.knowledgeEntries)) return true;
   if (input.knowledgeEntries.length > 0) return false;
 
-  return /\b(rose|agencia|vosotros|ustedes|contrato|porcentaje|sueldo|salario|servicio|llamada|contenido|modelo|mi parte|monetizacion|monetización|gestion|gestión|publicidad|impuestos|exclusividad)\b/.test(
+  return /\b(rose|agencia|vosotros|ustedes|contrato|porcentaje|sueldo|salario|servicio|llamada|contenido|modelo|mi parte|monetizacion|gestion|publicidad|impuestos|exclusividad)\b/.test(
     message
   );
 }
@@ -89,34 +89,40 @@ function isBusinessQuestionWithoutCoverage(input: BuildResponsePlanInput): boole
 function asksUnsupportedSpecificQuestion(message: string, knowledgeEntries: KnowledgeEntry[]): boolean {
   if (/\b(impuestos|fiscal|hacienda|publicidad|exclusividad)\b/.test(message)) return true;
 
-  const asksModelResponsibility = /\b(que hago yo|qué hago yo|que tendria que hacer yo|qué tendría que hacer yo|mi parte|modelo|enviar contenido|crear contenido)\b/.test(
-    message
-  );
+  const asksModelResponsibility = /\b(que hago yo|que tendria que hacer yo|mi parte|modelo|enviar contenido|crear contenido)\b/.test(message);
   if (!asksModelResponsibility) return false;
 
   return !knowledgeEntries.some((entry) => entry.category === "CONTENT_RESPONSIBILITIES" && entry.status === "ACTIVE");
 }
 
 function looksLikeQuestion(message: string): boolean {
-  return /[?¿]/.test(message) || /^\s*(que|qué|como|cómo|cuanto|cuánto|quien|quién|donde|dónde|cuando|cuándo|y que|y qué)\b/.test(message);
+  return /[?¿]/.test(message) || /^\s*(que|como|cuanto|quien|donde|cuando|y que)\b/.test(message);
 }
 
 function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
-  const message = input.inboundMessage.toLowerCase();
+  const message = normalize(input.inboundMessage);
 
   return (
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
-    (/\b(70\/30|quien recibe|quién recibe|quien se queda|quién se queda|me dais|dame|negociar|negociamos|excepcion|excepción)\b/.test(message) ||
-      /\b\d{1,3}\s?%/.test(message))
+    (/\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(message) ||
+      (/\b\d{1,3}\s?%/.test(message) && !/(70\s?%|30\s?%|70\/30)/.test(message)))
   );
 }
 
 function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: string[]): string[] {
-  const message = input.inboundMessage.toLowerCase();
-  const explicitCommercialQuestion =
-    input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" || /\b(salario|sueldo|porcentaje|reparto|cuanto cobra|cuánto cobra|comision|comisión)\b/.test(message);
+  const message = normalize(input.inboundMessage);
+  const exactPercentageQuestion = input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" && /\b(cual|exacto|70\/30|quien recibe|quien se queda)\b/.test(message);
+  const generalCommercialQuestion =
+    input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" || /\b(salario|sueldo|porcentaje|reparto|cuanto cobra|comision|skrill|liquidacion)\b/.test(message);
 
-  if (explicitCommercialQuestion) return facts;
+  if (exactPercentageQuestion) return facts;
+  if (generalCommercialQuestion) return facts.filter((fact) => !/\b70%|30%|70\/30\b/i.test(fact));
+  return facts.filter((fact) => !/\b(salario|porcentaje|reparto|econom|comercial|70%|30%)\b/i.test(fact));
+}
 
-  return facts.filter((fact) => !/\b(salario|porcentaje|reparto|econom|comercial)\b/i.test(fact));
+function normalize(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
 }

@@ -38,16 +38,8 @@ export function applyHumanReviewDecision(input: {
       ...input.candidate,
       currentState: toState,
       humanReviewStatus,
-      profileReviewed: input.decision === "APPROVE" || input.decision === "REJECT" ? true : input.candidate.profileReviewed,
-      humanProfileReviewed: input.decision === "APPROVE" || input.decision === "REJECT" ? true : input.candidate.humanProfileReviewed,
-      humanFitDecision:
-        input.decision === "APPROVE"
-          ? "APPROVED"
-          : input.decision === "REJECT"
-            ? "REJECTED"
-            : input.decision === "REQUEST_MORE_INFO"
-              ? "REQUEST_MORE_INFO"
-              : "TAKE_OVER",
+      humanProfileReviewStatus: input.decision === "APPROVE" ? "POTENTIAL_FIT" : input.decision === "REJECT" ? "NOT_A_FIT" : input.candidate.humanProfileReviewStatus,
+      humanFitDecision: input.decision === "APPROVE" ? "APPROVED" : input.decision === "REJECT" ? "REJECTED" : "PENDING",
       notes: input.note ? [...input.candidate.notes, input.note] : input.candidate.notes,
       updatedAt: new Date()
     }

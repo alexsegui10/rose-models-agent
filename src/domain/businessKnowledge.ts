@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CandidateStateSchema, HumanReviewReasonSchema } from "./candidate";
+import { CandidateStateSchema, HumanReviewReasonSchema, OnboardingBlockerSchema } from "./candidate";
 
 export const KnowledgeCategorySchema = z.enum([
   "AGENCY_PROFILE",
@@ -16,7 +16,7 @@ export const KnowledgeCategorySchema = z.enum([
 
 export type KnowledgeCategory = z.infer<typeof KnowledgeCategorySchema>;
 
-export const KnowledgeStatusSchema = z.enum(["DRAFT", "ACTIVE", "DEPRECATED"]);
+export const KnowledgeStatusSchema = z.enum(["DRAFT", "ACTIVE", "DEPRECATED", "DRAFT_LEGAL_REVIEW_REQUIRED"]);
 export type KnowledgeStatus = z.infer<typeof KnowledgeStatusSchema>;
 
 export const RevenueSharePolicySchema = z
@@ -33,6 +33,12 @@ export const RevenueSharePolicySchema = z
     approvedPercentageExplanation: z.string().nullable(),
     minimumAgencyPercentage: z.number().min(0).max(100).nullable(),
     maximumModelPercentage: z.number().min(0).max(100).nullable(),
+    calculationBasis: z.enum(["NET_AFTER_PLATFORM_COMMISSION"]).optional(),
+    platformPayoutRecipient: z.enum(["MODEL"]).optional(),
+    paymentMethodToAgency: z.enum(["SKRILL"]).optional(),
+    settlementIntervalDays: z.number().int().positive().optional(),
+    settlementStartsFromFirstRevenue: z.boolean().optional(),
+    alexCalculatesSettlementManually: z.boolean().optional(),
     version: z.string()
   })
   .superRefine((value, context) => {
@@ -56,8 +62,52 @@ export const RevenueSharePolicySchema = z
 
 export type RevenueSharePolicy = z.infer<typeof RevenueSharePolicySchema>;
 
+export const NegotiationAuthoritySchema = z.object({
+  STANDARD: z.object({ minimumAgencyPercentage: z.literal(70) }),
+  HIGH_POTENTIAL: z.object({ minimumAgencyPercentage: z.literal(65) }),
+  EXCEPTIONAL: z.object({ minimumAgencyPercentage: z.literal(60) })
+});
+export type NegotiationAuthority = z.infer<typeof NegotiationAuthoritySchema>;
+
+export const NegotiationLogSchema = z.object({
+  initialOfferAgencyPercentage: z.number().min(0).max(100),
+  objection: z.string().min(1),
+  candidateCounterOfferModelPercentage: z.number().min(0).max(100).nullable(),
+  offeredAgencyPercentage: z.number().min(0).max(100),
+  finalAgencyPercentage: z.number().min(0).max(100).nullable(),
+  reductionReason: z.string().min(1)
+});
+export type NegotiationLog = z.infer<typeof NegotiationLogSchema>;
+
+export const NonPaymentPolicySchema = z.object({
+  gracePeriodDays: z.literal(7),
+  reminderRequired: z.literal(true),
+  suspendAfterGracePeriod: z.literal(true),
+  terminateAfterContinuedNonPayment: z.literal(true),
+  allowDebtCollection: z.literal(true),
+  grantsUnlimitedContentRights: z.literal(false)
+});
+export type NonPaymentPolicy = z.infer<typeof NonPaymentPolicySchema>;
+
+export const CommunicationPolicySchema = z.object({
+  expectedResponseTimeHours: z.literal(48),
+  singleDelayCausesRejection: z.literal(false),
+  repeatedDelaysRequireHumanReview: z.literal(true)
+});
+export type CommunicationPolicy = z.infer<typeof CommunicationPolicySchema>;
+
+export const ContentProductionPolicySchema = z.object({
+  warmupDays: z.literal(5),
+  warmupPhotosPerDayMin: z.literal(2),
+  warmupPhotosPerDayMax: z.literal(3),
+  targetReelsPerWeekMin: z.literal(10),
+  targetReelsPerWeekMax: z.literal(20),
+  isContractualMinimumConfirmed: z.literal(false)
+});
+export type ContentProductionPolicy = z.infer<typeof ContentProductionPolicySchema>;
+
 export const CandidateDeviceRequirementSchema = z.object({
-  requiredDevice: z.literal("IPHONE"),
+  requiredDevice: z.literal("HIGH_QUALITY_PHONE"),
   isMandatory: z.literal(true),
   mustBeConfirmedBeforeHumanFinalApproval: z.literal(true),
   approvedQuestion: z.string().min(1),
@@ -68,9 +118,13 @@ export const CandidateDeviceRequirementSchema = z.object({
 export type CandidateDeviceRequirement = z.infer<typeof CandidateDeviceRequirementSchema>;
 
 export const QualificationReadinessSchema = z.object({
+  readyForHumanReview: z.boolean(),
+  readyForCall: z.boolean(),
+  readyForOnboarding: z.boolean(),
   isReady: z.boolean(),
   missingRequiredFields: z.array(z.string()).default([]),
-  blockingReasons: z.array(z.string()).default([])
+  blockingReasons: z.array(z.string()).default([]),
+  onboardingBlockers: z.array(OnboardingBlockerSchema).default([])
 });
 
 export type QualificationReadiness = z.infer<typeof QualificationReadinessSchema>;

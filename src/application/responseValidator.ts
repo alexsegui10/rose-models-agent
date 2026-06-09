@@ -28,7 +28,7 @@ export function validateAgentResponse(response: string, candidate: Candidate): R
     }
   }
 
-  if (!candidate.humanProfileReviewed && /hemos revisado tu perfil/i.test(response)) {
+  if (candidate.humanProfileReviewStatus === "NOT_REVIEWED" && /hemos revisado tu perfil/i.test(response)) {
     reasons.push("La respuesta afirma revision de perfil sin confirmacion.");
   }
 

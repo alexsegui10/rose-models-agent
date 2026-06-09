@@ -3,6 +3,9 @@ import { ConversationEngine } from "@/application/conversationEngine";
 import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
 import { LocalBusinessKnowledgeRetriever } from "@/application/businessKnowledgeRetriever";
 import { validateFactualResponse } from "@/application/factualValidator";
+import { ModelConversationOutputSchema } from "@/application/llmProvider";
+import { deviceEligibilityForDescription } from "@/application/policyRules";
+import { evaluateQualificationReadiness } from "@/application/qualificationPolicy";
 import { buildResponsePlan } from "@/application/responsePlanner";
 import { RevenueSharePolicySchema } from "@/domain/businessKnowledge";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
@@ -44,23 +47,23 @@ describe("commercial and device policy", () => {
     expect(result.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
   });
 
-  it("answers explicit percentage question without exact figures while policy is unconfirmed", async () => {
+  it("answers exact percentage question with confirmed 70/30", async () => {
     const { engine } = createEngine();
     const result = await engine.handleIncomingMessage({
-      instagramUsername: "percentage_unconfirmed_case",
+      instagramUsername: "percentage_confirmed_case",
       profileVisibility: "PUBLIC",
-      message: "Que porcentaje seria?"
+      message: "Cual es el porcentaje exacto?"
     });
 
-    expect(result.response.toLowerCase()).toContain("reparto");
-    expect(result.response).not.toContain("70");
+    expect(result.response).toContain("70%");
+    expect(result.response).toContain("30%");
     expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 
   it("accepts a confirmed percentage policy shape", () => {
     const policy = RevenueSharePolicySchema.parse({
-      agencyPercentage: 30,
-      modelPercentage: 70,
+      agencyPercentage: 70,
+      modelPercentage: 30,
       isConfirmed: true,
       discloseOnlyWhenExplicitlyAsked: true,
       canExplainNoFixedSalaryInChat: true,
@@ -68,14 +71,20 @@ describe("commercial and device policy", () => {
       canNegotiateByChat: false,
       negotiationRequiresHumanReview: true,
       approvedGeneralExplanation: "Va por reparto.",
-      approvedPercentageExplanation: "El reparto autorizado es 70% para la modelo y 30% para la agencia.",
-      minimumAgencyPercentage: 20,
-      maximumModelPercentage: 80,
+      approvedPercentageExplanation: "El reparto autorizado es 70% para la agencia y 30% para la modelo.",
+      minimumAgencyPercentage: 60,
+      maximumModelPercentage: 40,
+      calculationBasis: "NET_AFTER_PLATFORM_COMMISSION",
+      platformPayoutRecipient: "MODEL",
+      paymentMethodToAgency: "SKRILL",
+      settlementIntervalDays: 14,
+      settlementStartsFromFirstRevenue: true,
+      alexCalculatesSettlementManually: true,
       version: "test-confirmed-policy"
     });
 
-    expect(policy.agencyPercentage).toBe(30);
-    expect(policy.modelPercentage).toBe(70);
+    expect(policy.agencyPercentage).toBe(70);
+    expect(policy.modelPercentage).toBe(30);
   });
 
   it("escalates percentage negotiation and does not offer a new figure", async () => {
@@ -102,11 +111,11 @@ describe("commercial and device policy", () => {
     await repository.saveNegotiationDecision({
       candidateId: first.candidate.id,
       requestedModelPercentage: 90,
-      currentPolicyAgencyPercentage: null,
-      currentPolicyModelPercentage: null,
+      currentPolicyAgencyPercentage: 70,
+      currentPolicyModelPercentage: 30,
       decision: "ALLOW_CUSTOM_TERMS",
-      approvedAgencyPercentage: 20,
-      approvedModelPercentage: 80,
+      approvedAgencyPercentage: 65,
+      approvedModelPercentage: 35,
       reason: "Perfil con potencial alto.",
       decidedBy: "Alex",
       decidedAt: new Date()
@@ -119,8 +128,8 @@ describe("commercial and device policy", () => {
       message: "Entonces que condiciones me podeis ofrecer?"
     });
 
-    expect(second.response).toContain("80%");
-    expect(second.response).toContain("20%");
+    expect(second.response).toContain("35%");
+    expect(second.response).toContain("65%");
     expect(second.response).not.toContain("90%");
   });
 
@@ -129,24 +138,25 @@ describe("commercial and device policy", () => {
     const result = await engine.handleIncomingMessage({
       instagramUsername: "iphone_case",
       profileVisibility: "PUBLIC",
-      message: "Si, tengo iPhone"
+      message: "Si, tengo iPhone 13"
     });
 
-    expect(result.candidate.phoneDeviceType).toBe("IPHONE");
-    expect(result.candidate.hasRequiredIPhone).toBe(true);
+    expect(result.candidate.deviceType).toBe("IPHONE");
+    expect(result.candidate.deviceModel).toBe("iphone 13");
+    expect(result.candidate.deviceEligibility).toBe("APPROVED");
     expect(result.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
   });
 
-  it("pauses Android candidates and does not invent an exception", async () => {
+  it("pauses low quality Android candidates and does not invent an exception", async () => {
     const { engine } = createEngine();
     const result = await engine.handleIncomingMessage({
       instagramUsername: "android_case",
       profileVisibility: "PUBLIC",
-      message: "Tengo Android"
+      message: "Tengo un Android barato de mala calidad"
     });
 
-    expect(result.candidate.phoneDeviceType).toBe("ANDROID");
-    expect(result.candidate.hasRequiredIPhone).toBe(false);
+    expect(result.candidate.deviceType).toBe("OTHER");
+    expect(result.candidate.deviceEligibility).toBe("NOT_ELIGIBLE");
     expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
     expect(result.response.toLowerCase()).not.toContain("sirve igual");
   });
@@ -159,12 +169,56 @@ describe("commercial and device policy", () => {
       message: "Ahora tengo Android pero me comprare un iPhone pronto"
     });
 
-    expect(result.candidate.hasRequiredIPhone).toBeNull();
+    expect(result.candidate.deviceEligibility).toBe("PENDING_UPGRADE");
     expect(result.response.toLowerCase()).not.toContain("no pasa nada");
     expect(result.response.toLowerCase()).not.toContain("sirve igual");
   });
 
-  it("does not pass to final review without confirmed iPhone", async () => {
+  it("classifies iPhone 11 and 12 as pending quality test, not rejected", () => {
+    expect(deviceEligibilityForDescription("Tengo iPhone 11")).toBe("PENDING_QUALITY_TEST");
+    expect(deviceEligibilityForDescription("Tengo iPhone 12")).toBe("PENDING_QUALITY_TEST");
+  });
+
+  it("allows excellent candidate with future iPhone to human review and call but blocks onboarding", async () => {
+    const { engine } = createEngine();
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "future_iphone_excellent_case",
+      profileVisibility: "PUBLIC",
+      message: "Soy Laura, tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, estoy disponible por las tardes y me comprare un iPhone pronto"
+    });
+    const readiness = evaluateQualificationReadiness(result.candidate);
+
+    expect(result.candidate.deviceEligibility).toBe("PENDING_UPGRADE");
+    expect(result.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
+    expect(readiness.readyForHumanReview).toBe(true);
+    expect(readiness.readyForCall).toBe(true);
+    expect(readiness.readyForOnboarding).toBe(false);
+    expect(readiness.onboardingBlockers).toContain("DEVICE_UPGRADE_REQUIRED");
+  });
+
+  it("removes device onboarding blocker after confirming valid device", async () => {
+    const { engine } = createEngine();
+    const first = await engine.handleIncomingMessage({
+      instagramUsername: "future_iphone_resolved_case",
+      profileVisibility: "PUBLIC",
+      message: "Tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, estoy disponible por las tardes y me comprare un iPhone pronto"
+    });
+    const second = await engine.handleIncomingMessage({
+      candidateId: first.candidate.id,
+      instagramUsername: "future_iphone_resolved_case",
+      profileVisibility: "PUBLIC",
+      message: "Ya tengo iPhone 13"
+    });
+    const readiness = evaluateQualificationReadiness(second.candidate);
+
+    expect(second.candidate.deviceEligibility).toBe("APPROVED");
+    expect(readiness.onboardingBlockers).not.toContain("DEVICE_UPGRADE_REQUIRED");
+    expect(readiness.onboardingBlockers).not.toContain("DEVICE_QUALITY_TEST_REQUIRED");
+    expect(readiness.onboardingBlockers).toContain("IDENTITY_VERIFICATION_REQUIRED");
+    expect(readiness.onboardingBlockers).toContain("CONTRACT_REQUIRED");
+  });
+
+  it("does not pass to final review with unknown device", async () => {
     const { engine } = createEngine();
     const first = await engine.handleIncomingMessage({
       instagramUsername: "missing_iphone_case",
@@ -179,7 +233,7 @@ describe("commercial and device policy", () => {
     });
 
     expect(second.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
-    expect(second.response.toLowerCase()).toContain("iphone");
+    expect(second.response.toLowerCase()).toContain("movil");
   });
 
   it("does not ask for device again once answered", async () => {
@@ -187,7 +241,7 @@ describe("commercial and device policy", () => {
     const first = await engine.handleIncomingMessage({
       instagramUsername: "device_once_case",
       profileVisibility: "PUBLIC",
-      message: "Tengo iPhone"
+      message: "Tengo iPhone 13"
     });
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,
@@ -196,7 +250,7 @@ describe("commercial and device policy", () => {
       message: "Tengo 22 anos"
     });
 
-    expect(second.response.toLowerCase()).not.toContain("tienes iphone");
+    expect(second.response.toLowerCase()).not.toContain("que movil tienes");
   });
 
   it("factual validation blocks a custom percentage without approval", () => {
@@ -206,20 +260,21 @@ describe("commercial and device policy", () => {
         instagramUsername: "candidate",
         age: 22,
         isAdultConfirmed: true,
-        phoneDeviceType: "IPHONE",
-        hasRequiredIPhone: true,
-        profileVisibility: "PUBLIC",
+        deviceType: "IPHONE",
+        deviceModel: "iphone 13",
+        deviceEligibility: "APPROVED",
+        commercialTier: "STANDARD",
         declaredProfileVisibility: "PUBLIC",
-        candidateDeclaredProfileAccessAccepted: false,
+        candidateClaimsFollowRequestAccepted: false,
         humanVerifiedProfileAccess: false,
-        profileReviewed: false,
-        humanProfileReviewed: false,
-        humanFitDecision: "UNKNOWN",
+        humanProfileReviewStatus: "NOT_REVIEWED",
+        humanFitDecision: "PENDING",
         objections: [],
         notes: [],
         conversationSummary: "",
         currentState: "QUALIFYING",
         humanReviewStatus: "NOT_REQUIRED",
+        onboardingBlockers: [],
         interestLevel: "UNKNOWN",
         automationPaused: false,
         manualControlActive: false,
@@ -227,7 +282,7 @@ describe("commercial and device policy", () => {
         createdAt: new Date(),
         updatedAt: new Date()
       },
-      understanding: {
+      understanding: ModelConversationOutputSchema.parse({
         intent: "ASKS_ABOUT_PERCENTAGE",
         extractedData: {},
         dataCorrections: [],
@@ -246,7 +301,7 @@ describe("commercial and device policy", () => {
         provider: "deterministic",
         modelVersion: "deterministic-local-2026-06-08.1",
         promptVersion: "understanding-2026-06-08.1"
-      },
+      }),
       inboundMessage: "Me dais el 90%?",
       knowledgeEntries: []
     });

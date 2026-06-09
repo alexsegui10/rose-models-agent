@@ -1,13 +1,13 @@
 import { CandidateDeviceRequirementSchema, KnowledgeEntrySchema, type KnowledgeEntryInput } from "@/domain/businessKnowledge";
 
 export const candidateDeviceRequirement = CandidateDeviceRequirementSchema.parse({
-  requiredDevice: "IPHONE",
+  requiredDevice: "HIGH_QUALITY_PHONE",
   isMandatory: true,
   mustBeConfirmedBeforeHumanFinalApproval: true,
-  approvedQuestion: "Por cierto, una cosa importante: ¿tienes iPhone?",
+  approvedQuestion: "Por cierto, una cosa importante: que movil tienes?",
   rejectionOrPausePolicy:
-    "Si la candidata no tiene iPhone, no puede pasar a aprobacion final. Se pausa o se deriva a revision humana si indica que puede cambiarlo pronto; no se inventan excepciones.",
-  version: "candidate-device-iphone-2026-06-09.1"
+    "iPhone 13 o superior y Galaxy S23 o superior estan aprobados directamente. iPhone anterior al 13, otros Samsung y otros moviles de gama alta requieren prueba manual de calidad. Si va a comprar un dispositivo valido, puede hacerse llamada pero la incorporacion queda pendiente. Moviles de mala calidad bloquean la incorporacion.",
+  version: "candidate-device-eligibility-2026-06-09.2"
 });
 
 const entries: KnowledgeEntryInput[] = [
@@ -25,24 +25,53 @@ const entries: KnowledgeEntryInput[] = [
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-08"
-  }
-  ,
+  },
   {
-    id: "candidate-requirements-iphone",
+    id: "candidate-requirements-device-quality",
     category: "CANDIDATE_REQUIREMENTS",
-    title: "iPhone obligatorio",
-    facts: ["Tener iPhone es requisito obligatorio para trabajar con Rose Models."],
-    approvedAnswerPoints: [
-      "Por cierto, una cosa importante: ¿tienes iPhone?",
-      "Para trabajar con nosotros es necesario tener iPhone, porque parte del sistema y del contenido lo gestionamos desde ahi."
+    title: "Dispositivo valido",
+    facts: [
+      "iPhone 13 o superior esta aprobado directamente.",
+      "iPhone anterior al 13 requiere prueba manual de calidad.",
+      "Samsung Galaxy S23, S24, S25 o superior esta aprobado directamente.",
+      "Otros Samsung y otros moviles de gama alta requieren prueba manual de calidad.",
+      "Moviles de mala calidad bloquean la incorporacion.",
+      "Si va a comprar un iPhone, puede hacerse la llamada pero la incorporacion queda pendiente."
     ],
-    prohibitedClaims: ["Aprobar a una candidata sin iPhone confirmado.", "Inventar excepciones al requisito de iPhone.", "Prometer que Android sirve igualmente."],
-    mandatoryNuances: ["Preguntar de forma natural durante la cualificacion.", "No hacer una explicacion larga salvo que pregunte por que."],
-    escalationConditions: ["La candidata tiene Android u otro dispositivo.", "La candidata dice que comprara un iPhone pronto.", "No responde claramente."],
+    approvedAnswerPoints: [
+      "Por cierto, una cosa importante: que movil tienes?",
+      "iPhone 13 o superior y Galaxy S23 o superior nos sirven directamente.",
+      "Si es iPhone anterior al 13, otro Samsung u otro movil de gama alta, Alex revisa la calidad."
+    ],
+    prohibitedClaims: ["Aprobar incorporacion con movil de mala calidad.", "Decir que cualquier Android sirve.", "Bloquear automaticamente un Galaxy S23 o superior."],
+    mandatoryNuances: ["Preguntar de forma natural durante la cualificacion.", "Distinguir llamada de incorporacion final."],
+    escalationConditions: ["iPhone anterior al 13 u otro movil de gama alta requiere prueba manual.", "Compra futura deja incorporacion pendiente.", "No responde claramente."],
     allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
-    tags: ["iphone", "device", "requirement", "qualification"],
+    tags: ["device", "quality", "qualification", "iphone", "galaxy"],
     requiresHumanReview: false,
-    version: "candidate-requirements-iphone-2026-06-09.1",
+    version: "candidate-requirements-device-quality-2026-06-09.2",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-09"
+  },
+  {
+    id: "candidate-requirements-target-profile",
+    category: "CANDIDATE_REQUIREMENTS",
+    title: "Perfil objetivo y revision fisica humana",
+    facts: [
+      "Las campanas actuales se dirigen a Argentina.",
+      "La edad habitual buscada esta entre 30 y 50 anos y perfil maduro.",
+      "No es obligatorio tener seguidores, experiencia ni OnlyFans activo.",
+      "La valoracion fisica la realiza unicamente Alex."
+    ],
+    approvedAnswerPoints: ["No hace falta tener seguidores ni experiencia para que podamos valorarlo.", "La revision final del perfil la hace Alex."],
+    prohibitedClaims: ["Puntuar atractivo.", "Analizar el cuerpo.", "Comunicar motivos fisicos de rechazo.", "Usar criterios como cara espanola."],
+    mandatoryNuances: ["El chatbot recopila datos y pasa el perfil a revision humana."],
+    escalationConditions: ["Cualquier valoracion fisica o duda de encaje visual."],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_HUMAN_REVIEW"],
+    tags: ["target-profile", "physical-review", "followers", "experience"],
+    requiresHumanReview: false,
+    version: "candidate-requirements-target-profile-2026-06-09.1",
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-09"

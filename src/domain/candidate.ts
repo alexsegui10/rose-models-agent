@@ -17,7 +17,7 @@ export const CandidateStateSchema = z.enum([
 
 export type CandidateState = z.infer<typeof CandidateStateSchema>;
 
-export const ProfileVisibilitySchema = z.enum(["UNKNOWN", "PUBLIC", "PRIVATE", "UNAVAILABLE"]);
+export const ProfileVisibilitySchema = z.enum(["PUBLIC", "PRIVATE", "UNKNOWN"]);
 export type ProfileVisibility = z.infer<typeof ProfileVisibilitySchema>;
 
 export const HumanReviewStatusSchema = z.enum([
@@ -30,7 +30,10 @@ export const HumanReviewStatusSchema = z.enum([
 ]);
 export type HumanReviewStatus = z.infer<typeof HumanReviewStatusSchema>;
 
-export const HumanFitDecisionSchema = z.enum(["UNKNOWN", "PENDING", "APPROVED", "REJECTED", "REQUEST_MORE_INFO", "TAKE_OVER"]);
+export const HumanProfileReviewStatusSchema = z.enum(["NOT_REVIEWED", "POTENTIAL_FIT", "NOT_A_FIT"]);
+export type HumanProfileReviewStatus = z.infer<typeof HumanProfileReviewStatusSchema>;
+
+export const HumanFitDecisionSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
 export type HumanFitDecision = z.infer<typeof HumanFitDecisionSchema>;
 
 export const HumanReviewReasonSchema = z.enum([
@@ -46,8 +49,17 @@ export type HumanReviewReason = z.infer<typeof HumanReviewReasonSchema>;
 export const InterestLevelSchema = z.enum(["UNKNOWN", "LOW", "MEDIUM", "HIGH"]);
 export type InterestLevel = z.infer<typeof InterestLevelSchema>;
 
-export const PhoneDeviceTypeSchema = z.enum(["IPHONE", "ANDROID", "OTHER", "UNKNOWN"]);
-export type PhoneDeviceType = z.infer<typeof PhoneDeviceTypeSchema>;
+export const DeviceTypeSchema = z.enum(["IPHONE", "SAMSUNG", "OTHER", "UNKNOWN"]);
+export type DeviceType = z.infer<typeof DeviceTypeSchema>;
+
+export const DeviceEligibilitySchema = z.enum(["APPROVED", "PENDING_QUALITY_TEST", "PENDING_UPGRADE", "NOT_ELIGIBLE", "UNKNOWN"]);
+export type DeviceEligibility = z.infer<typeof DeviceEligibilitySchema>;
+
+export const CandidateCommercialTierSchema = z.enum(["STANDARD", "HIGH_POTENTIAL", "EXCEPTIONAL"]);
+export type CandidateCommercialTier = z.infer<typeof CandidateCommercialTierSchema>;
+
+export const OnboardingBlockerSchema = z.enum(["DEVICE_UPGRADE_REQUIRED", "DEVICE_QUALITY_TEST_REQUIRED", "IDENTITY_VERIFICATION_REQUIRED", "CONTRACT_REQUIRED"]);
+export type OnboardingBlocker = z.infer<typeof OnboardingBlockerSchema>;
 
 export const CandidateSchema = z.object({
   id: z.string(),
@@ -59,15 +71,15 @@ export const CandidateSchema = z.object({
   country: z.string().optional(),
   city: z.string().optional(),
   phone: z.string().optional(),
-  phoneDeviceType: PhoneDeviceTypeSchema.default("UNKNOWN"),
-  hasRequiredIPhone: z.boolean().nullable().default(null),
-  profileVisibility: ProfileVisibilitySchema.default("UNKNOWN"),
+  deviceType: DeviceTypeSchema.default("UNKNOWN"),
+  deviceModel: z.string().nullable().default(null),
+  deviceEligibility: DeviceEligibilitySchema.default("UNKNOWN"),
+  commercialTier: CandidateCommercialTierSchema.default("STANDARD"),
   declaredProfileVisibility: ProfileVisibilitySchema.default("UNKNOWN"),
-  candidateDeclaredProfileAccessAccepted: z.boolean().default(false),
+  candidateClaimsFollowRequestAccepted: z.boolean().default(false),
   humanVerifiedProfileAccess: z.boolean().default(false),
-  profileReviewed: z.boolean().default(false),
-  humanProfileReviewed: z.boolean().default(false),
-  humanFitDecision: HumanFitDecisionSchema.default("UNKNOWN"),
+  humanProfileReviewStatus: HumanProfileReviewStatusSchema.default("NOT_REVIEWED"),
+  humanFitDecision: HumanFitDecisionSchema.default("PENDING"),
   hasOnlyFans: z.boolean().optional(),
   worksWithAnotherAgency: z.boolean().optional(),
   experienceDescription: z.string().optional(),
@@ -81,6 +93,7 @@ export const CandidateSchema = z.object({
   currentState: CandidateStateSchema.default("NEW_LEAD"),
   humanReviewStatus: HumanReviewStatusSchema.default("NOT_REQUIRED"),
   humanReviewReason: HumanReviewReasonSchema.optional(),
+  onboardingBlockers: z.array(OnboardingBlockerSchema).default([]),
   automationPaused: z.boolean().default(false),
   manualControlActive: z.boolean().default(false),
   generationCancellationVersion: z.number().int().nonnegative().default(0),
@@ -126,14 +139,14 @@ export interface CandidatePatch {
   country?: string;
   city?: string;
   phone?: string;
-  phoneDeviceType?: PhoneDeviceType;
-  hasRequiredIPhone?: boolean | null;
-  profileVisibility?: ProfileVisibility;
+  deviceType?: DeviceType;
+  deviceModel?: string | null;
+  deviceEligibility?: z.infer<typeof DeviceEligibilitySchema>;
+  commercialTier?: z.infer<typeof CandidateCommercialTierSchema>;
   declaredProfileVisibility?: ProfileVisibility;
-  candidateDeclaredProfileAccessAccepted?: boolean;
+  candidateClaimsFollowRequestAccepted?: boolean;
   humanVerifiedProfileAccess?: boolean;
-  profileReviewed?: boolean;
-  humanProfileReviewed?: boolean;
+  humanProfileReviewStatus?: HumanProfileReviewStatus;
   humanFitDecision?: HumanFitDecision;
   hasOnlyFans?: boolean;
   worksWithAnotherAgency?: boolean;
@@ -148,6 +161,7 @@ export interface CandidatePatch {
   currentState?: CandidateState;
   humanReviewStatus?: HumanReviewStatus;
   humanReviewReason?: HumanReviewReason;
+  onboardingBlockers?: OnboardingBlocker[];
   automationPaused?: boolean;
   manualControlActive?: boolean;
   generationCancellationVersion?: number;
@@ -165,21 +179,22 @@ export function createCandidate(input: {
     id: crypto.randomUUID(),
     instagramUsername: input.instagramUsername,
     displayName: input.displayName,
-    profileVisibility: input.profileVisibility ?? "UNKNOWN",
-    phoneDeviceType: "UNKNOWN",
-    hasRequiredIPhone: null,
+    deviceType: "UNKNOWN",
+    deviceModel: null,
+    deviceEligibility: "UNKNOWN",
+    commercialTier: "STANDARD",
     declaredProfileVisibility: input.profileVisibility ?? "UNKNOWN",
-    candidateDeclaredProfileAccessAccepted: false,
+    candidateClaimsFollowRequestAccepted: false,
     humanVerifiedProfileAccess: false,
     isAdultConfirmed: false,
-    profileReviewed: false,
-    humanProfileReviewed: false,
-    humanFitDecision: "UNKNOWN",
+    humanProfileReviewStatus: "NOT_REVIEWED",
+    humanFitDecision: "PENDING",
     objections: [],
     notes: [],
     conversationSummary: "",
     currentState: "NEW_LEAD",
     humanReviewStatus: "NOT_REQUIRED",
+    onboardingBlockers: [],
     interestLevel: "UNKNOWN",
     automationPaused: false,
     manualControlActive: false,

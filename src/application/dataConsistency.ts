@@ -24,11 +24,11 @@ export function buildConsistentCandidatePatch(input: {
   applyValue("country", input.candidate.country, input.extractedData.country, patch, contradictions, corrections, allowsCorrection);
   applyValue("city", input.candidate.city, input.extractedData.city, patch, contradictions, corrections, allowsCorrection);
   applyValue("phone", input.candidate.phone, input.extractedData.phone, patch, contradictions, corrections, allowsCorrection);
-  applyValue("phoneDeviceType", input.candidate.phoneDeviceType, input.extractedData.phoneDeviceType, patch, contradictions, corrections, allowsCorrection);
-  applyValue("hasRequiredIPhone", input.candidate.hasRequiredIPhone, input.extractedData.hasRequiredIPhone, patch, contradictions, corrections, allowsCorrection);
+  applyValue("deviceType", input.candidate.deviceType, input.extractedData.deviceType, patch, contradictions, corrections, allowsCorrection);
+  applyValue("deviceModel", input.candidate.deviceModel, input.extractedData.deviceModel, patch, contradictions, corrections, allowsCorrection);
+  applyDeviceEligibility(input.candidate.deviceEligibility, input.extractedData.deviceEligibility, patch, contradictions, corrections, allowsCorrection);
   if (input.extractedData.profileVisibility) {
     patch.declaredProfileVisibility = input.extractedData.profileVisibility;
-    patch.profileVisibility = input.extractedData.profileVisibility;
   }
   applyValue("hasOnlyFans", input.candidate.hasOnlyFans, input.extractedData.hasOnlyFans, patch, contradictions, corrections, allowsCorrection);
   applyValue("worksWithAnotherAgency", input.candidate.worksWithAnotherAgency, input.extractedData.worksWithAnotherAgency, patch, contradictions, corrections, allowsCorrection);
@@ -78,4 +78,28 @@ function applyContentAvailability(
 ): void {
   if (typeof nextValue !== "string" || nextValue.trim().length === 0) return;
   applyValue("contentAvailability", currentValue, nextValue, patch, contradictions, corrections, allowsCorrection);
+}
+
+function applyDeviceEligibility(
+  currentValue: Candidate["deviceEligibility"],
+  nextValue: CandidatePatch["deviceEligibility"] | undefined,
+  patch: CandidatePatch,
+  contradictions: string[],
+  corrections: string[],
+  allowsCorrection: boolean
+): void {
+  if (nextValue === undefined) return;
+  const expectedResolution =
+    (currentValue === "PENDING_UPGRADE" || currentValue === "PENDING_QUALITY_TEST" || currentValue === "UNKNOWN") &&
+    (nextValue === "APPROVED" || nextValue === "PENDING_QUALITY_TEST");
+
+  if (expectedResolution) {
+    patch.deviceEligibility = nextValue;
+    if (currentValue !== nextValue && currentValue !== "UNKNOWN") {
+      corrections.push(`deviceEligibility corrected from ${currentValue} to ${nextValue}`);
+    }
+    return;
+  }
+
+  applyValue("deviceEligibility", currentValue, nextValue, patch, contradictions, corrections, allowsCorrection);
 }

@@ -32,12 +32,14 @@ El alcance inicial incluye:
 - **Proveedor LLM abstracto**: la aplicacion depende de una interfaz, no del SDK de OpenAI.
 - **Adaptador OpenAI opcional**: `LLM_MODE=OPENAI` activa comprension y redaccion mediante OpenAI solo si existe `OPENAI_API_KEY`; si falta la clave, el sistema vuelve a modo determinista.
 - **Modo de automatizacion por defecto**: `AUTOMATION_MODE=HUMAN_APPROVAL`. La IA propone borradores y Alex aprueba, edita, rechaza o toma control.
+- **Fase `CONVERSATIONAL_QUALITY_EVALUATION`**: antes de persistencia o Instagram se comparan modelos, respuestas y calidad conversacional con evaluacion humana.
 - **Repositorio en memoria para el simulador**: evita bloquear el MVP por infraestructura de base de datos. El esquema Drizzle queda definido para migrar a persistencia real.
 - **Motor determinista inicial**: permite probar estados y reglas sin gastar llamadas de IA. El adaptador LLM se podra conectar despues.
 - **Sistema de estilo por recuperacion dinamica**: se guardan ejemplos aprobados, se recuperan solo los mas relevantes y se evalua la respuesta antes de mostrarla.
 - **Base de conocimiento oficial separada**: las condiciones comerciales y politicas de Rose Models viven en entradas versionadas, no en ejemplos de estilo.
-- **Politica comercial confirmada**: el porcentaje solo se menciona si la candidata lo pregunta explicitamente; negociaciones y excepciones requieren revision humana.
-- **iPhone obligatorio**: se confirma durante la cualificacion y bloquea aprobacion final si falta.
+- **Politica comercial confirmada**: 70% Rose Models y 30% modelo, calculado sobre neto tras comision de plataforma; la liquidacion se calcula manualmente cada 14 dias y se paga a Rose Models por Skrill. El porcentaje solo se menciona si la candidata lo pregunta explicitamente; negociaciones y excepciones requieren revision humana.
+- **Elegibilidad de dispositivo**: iPhone 13+ y Galaxy S23+ aprobados; iPhone anterior al 13, otros Samsung y otros gama alta requieren prueba manual; compra futura permite llamada pero no incorporacion; movil malo bloquea.
+- **Politicas operativas confirmadas**: responsabilidades de Rose Models/modelo, contenido inicial y recurrente, impagos, seguimiento, llamada por WhatsApp, transparencia sobre IA y contratacion manual.
 - **Sin fine-tuning en esta fase**: primero se necesita una biblioteca de respuestas aprobadas por Alex y golden tests estables.
 
 ## Arquitectura por capas
@@ -85,6 +87,14 @@ El alcance inicial incluye:
 
 ### Incremento 4
 
+- Evaluacion conversacional real con sesiones A/B locales.
+- Importador ampliado de conversaciones anonimizadas completas.
+- Metricas de proveedor: modelo solicitado/real, fallback, latencia, tokens y coste estimado.
+- Pruebas con preguntas nuevas no literales para validar conocimiento y escalado.
+- Incorporar decisiones confirmadas por Alex sobre reparto, dispositivos, contenido, llamadas, impagos y seguimiento.
+
+### Incremento 5
+
 - Integracion Instagram por adaptador.
 - Notificaciones internas.
 - Calendario para llamadas.
@@ -98,10 +108,11 @@ El alcance inicial incluye:
 - Ejemplos reales pueden contener datos personales. Mitigacion: anonimizar y validar antes de convertirlos en ejemplos.
 - Un ejemplo bueno en una fase puede ser malo en otra. Mitigacion: recuperacion por estado, intencion, tags, calidad y aprobacion.
 - Los ejemplos pueden contradecir politicas oficiales. Mitigacion: prioridad de fuentes y validacion factual.
-- La politica 70/30 esta incompleta. Mitigacion: representar porcentajes como `null` hasta confirmar quien recibe cada parte.
+- La politica 70/30 ya esta confirmada, pero no debe mencionarse de forma proactiva. Mitigacion: `RevenueSharePolicy.discloseOnlyWhenExplicitlyAsked`.
 - El porcentaje no debe aparecer de forma proactiva. Mitigacion: `RevenueSharePolicy.discloseOnlyWhenExplicitlyAsked`.
 - La candidata puede intentar negociar condiciones. Mitigacion: motivo `PERCENTAGE_NEGOTIATION` y decision humana obligatoria antes de comunicar excepciones.
-- El requisito de iPhone puede faltar o ser negativo. Mitigacion: `QualificationReadinessPolicy` bloquea revision final sin `hasRequiredIPhone = true`.
+- El dispositivo puede faltar, requerir prueba o compra futura. Mitigacion: `DeviceEligibility` permite revision/llamada con pendientes, pero `onboardingBlockers` bloquea incorporacion final sin `APPROVED`, identidad y contrato.
+- Las clausulas sobre uso de contenido tras finalizacion requieren revision legal. Mitigacion: mantenerlas en `DRAFT_LEGAL_REVIEW_REQUIRED` y no usarlas como respuesta definitiva.
 - Una candidata puede mandar varios mensajes seguidos. Mitigacion: politica de debounce y procesamiento por turno agrupado.
 - Mensajes duplicados o carreras de concurrencia pueden crear respuestas duplicadas. Mitigacion: `externalMessageId`, version de cancelacion, bloqueo por candidata y control manual antes de enviar.
 
@@ -123,9 +134,9 @@ npm run dev
 ```bash
 LLM_MODE=DETERMINISTIC # DETERMINISTIC u OPENAI
 OPENAI_API_KEY=
-OPENAI_UNDERSTANDING_MODEL=gpt-4.1-mini
-OPENAI_WRITING_MODEL=gpt-4.1-mini
-OPENAI_REVIEW_MODEL=gpt-4.1-mini
+OPENAI_UNDERSTANDING_MODEL=gpt-5.4-mini # tambien compatible con gpt-4.1-mini
+OPENAI_WRITING_MODEL=gpt-5.4-mini # tambien compatible con gpt-4.1-mini
+OPENAI_REVIEW_MODEL=gpt-5.4-mini # tambien compatible con gpt-4.1-mini
 OPENAI_TIMEOUT_MS=12000
 OPENAI_MAX_RETRIES=1
 AUTOMATION_MODE=HUMAN_APPROVAL # DRAFT_ONLY, HUMAN_APPROVAL o AUTOMATIC

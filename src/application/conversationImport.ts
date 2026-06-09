@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ConversationRoleSchema } from "@/domain/candidate";
+import { CandidateStateSchema, ConversationRoleSchema } from "@/domain/candidate";
 import { ConversationExampleSchema, type ConversationExample } from "@/domain/conversationExample";
 
 export const ImportedConversationStatusSchema = z.enum(["RAW_REAL", "CORRECTED", "ALEX_APPROVED"]);
@@ -7,7 +7,10 @@ export type ImportedConversationStatus = z.infer<typeof ImportedConversationStat
 
 export const ImportedConversationMessageSchema = z.object({
   role: ConversationRoleSchema,
-  content: z.string().min(1)
+  content: z.string().min(1),
+  originalAlexResponse: z.string().optional(),
+  correctedResponse: z.string().optional(),
+  approved: z.boolean().default(false)
 });
 
 export const ImportedConversationSchema = z.object({
@@ -15,11 +18,20 @@ export const ImportedConversationSchema = z.object({
   status: ImportedConversationStatusSchema,
   source: z.literal("ANONYMIZED_JSON"),
   purpose: z.enum(["EXAMPLE", "EVALUATION"]),
-  stateBefore: z.string().min(1),
+  category: z.string().min(1).default("uncategorized"),
+  initialState: CandidateStateSchema.default("NEW_LEAD"),
+  stateBefore: CandidateStateSchema.default("NEW_LEAD"),
   tags: z.array(z.string()).default([]),
   messages: z.array(ImportedConversationMessageSchema).min(1),
+  originalAlexResponses: z.array(z.string()).default([]),
+  correctedResponses: z.array(z.string()).default([]),
+  approved: z.boolean().default(false),
   idealNextResponse: z.string().optional(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  outcome: z.string().optional(),
+  endedInCall: z.boolean().optional(),
+  candidateApproved: z.boolean().optional(),
+  anonymizedPersonalData: z.record(z.string()).default({})
 });
 
 export const ImportedConversationFileSchema = z.object({
@@ -29,6 +41,26 @@ export const ImportedConversationFileSchema = z.object({
 
 export type ImportedConversation = z.infer<typeof ImportedConversationSchema>;
 export type ImportedConversationFile = z.infer<typeof ImportedConversationFileSchema>;
+
+export class InMemoryImportedConversationRepository {
+  private readonly conversations = new Map<string, ImportedConversation>();
+
+  async importJson(json: string): Promise<ImportedConversation[]> {
+    const file = parseAnonymizedConversationJson(json);
+    for (const conversation of file.conversations) {
+      this.conversations.set(conversation.id, conversation);
+    }
+    return file.conversations;
+  }
+
+  async list(): Promise<ImportedConversation[]> {
+    return [...this.conversations.values()].sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  async get(id: string): Promise<ImportedConversation | null> {
+    return this.conversations.get(id) ?? null;
+  }
+}
 
 export function parseAnonymizedConversationJson(json: string): ImportedConversationFile {
   const parsed = ImportedConversationFileSchema.parse(JSON.parse(json));

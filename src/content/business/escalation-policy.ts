@@ -17,6 +17,40 @@ const entries: KnowledgeEntryInput[] = [
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-08"
+  },
+  {
+    id: "escalation-immediate-human-intervention",
+    category: "ESCALATION_POLICY",
+    title: "Intervencion humana inmediata",
+    facts: ["Escalar a Alex si hay enfado, sospecha de estafa, peticion de persona, problema, contradicciones graves, negociacion fuera de limites, dudas contractuales, informacion no cubierta o caso comercial excepcional."],
+    approvedAnswerPoints: ["Lo revisa Alex personalmente y te damos una respuesta con calma."],
+    prohibitedClaims: ["Resolver un caso excepcional sin Alex.", "Ignorar enfado o sospecha de estafa."],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_HUMAN_REVIEW", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    tags: ["human-intervention", "anger", "scam", "bot", "exception"],
+    mandatoryNuances: ["Alex puede detener el bot."],
+    escalationConditions: ["Enfado.", "Sospecha de estafa.", "Pregunta si habla con bot.", "Pide persona.", "Problema.", "Contradicciones graves.", "Negociacion fuera de limites.", "Dudas contractuales.", "Informacion no cubierta.", "Caso comercial excepcional."],
+    requiresHumanReview: true,
+    version: "escalation-immediate-human-intervention-2026-06-09.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-09"
+  },
+  {
+    id: "identity-ai-transparency",
+    category: "ESCALATION_POLICY",
+    title: "Transparencia si preguntan si es IA",
+    facts: ["El agente puede hablar como parte del equipo de Rose Models.", "Si preguntan directamente si es una IA, no debe negarlo."],
+    approvedAnswerPoints: ["Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso."],
+    prohibitedClaims: ["Negar que es IA.", "Hacerse pasar por Alex si preguntan directamente."],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_HUMAN_REVIEW", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    tags: ["ai", "identity", "transparency"],
+    mandatoryNuances: ["Respuesta transparente y breve."],
+    escalationConditions: ["La candidata se enfada o pide hablar con una persona."],
+    requiresHumanReview: true,
+    version: "identity-ai-transparency-2026-06-09.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-09"
   }
 ];
 

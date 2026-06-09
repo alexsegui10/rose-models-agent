@@ -31,7 +31,13 @@ export interface StructuredOutputRunner {
     instructions: string;
     payload: unknown;
     timeoutMs: number;
-  }): Promise<z.infer<T>>;
+  }): Promise<StructuredRunResult<z.infer<T>>>;
+}
+
+export interface StructuredRunResult<T> {
+  parsed: T;
+  inputTokens: number | null;
+  outputTokens: number | null;
 }
 
 export class OpenAIStructuredOutputRunner implements StructuredOutputRunner {
@@ -48,7 +54,7 @@ export class OpenAIStructuredOutputRunner implements StructuredOutputRunner {
     instructions: string;
     payload: unknown;
     timeoutMs: number;
-  }): Promise<z.infer<T>> {
+  }): Promise<StructuredRunResult<z.infer<T>>> {
     const request = this.client.responses.parse({
       model: input.model,
       input: [
@@ -67,7 +73,11 @@ export class OpenAIStructuredOutputRunner implements StructuredOutputRunner {
       throw new Error("OPENAI_EMPTY_STRUCTURED_OUTPUT");
     }
 
-    return input.schema.parse(parsed);
+    return {
+      parsed: input.schema.parse(parsed),
+      inputTokens: response.usage?.input_tokens ?? null,
+      outputTokens: response.usage?.output_tokens ?? null
+    };
   }
 }
 
@@ -79,8 +89,9 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
   }
 
   async understand(input: ConversationUnderstandingInput): Promise<ModelConversationOutput> {
+    const startedAt = Date.now();
     try {
-      const output = await runWithRetries(
+      const result = await runWithRetries(
         () =>
           withTimeout(
             this.runner.runStructured({
@@ -97,10 +108,21 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
       );
 
       return ModelConversationOutputSchema.parse({
-        ...output,
+        ...result.value.parsed,
         provider: "openai",
         modelVersion: this.options.understandingModel,
-        promptVersion: promptRegistry.understanding.version
+        promptVersion: promptRegistry.understanding.version,
+        requestedProvider: "OPENAI",
+        actualProvider: "openai",
+        requestedModel: this.options.understandingModel,
+        actualModel: this.options.understandingModel,
+        usedFallback: false,
+        fallbackReason: null,
+        durationMs: Date.now() - startedAt,
+        retryCount: result.retryCount,
+        inputTokens: result.value.inputTokens,
+        outputTokens: result.value.outputTokens,
+        estimatedCostUsd: estimateCostUsd(this.options.understandingModel, result.value.inputTokens, result.value.outputTokens)
       });
     } catch (error) {
       logSafeOpenAIError("understanding", error);
@@ -108,6 +130,14 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
       return {
         ...fallback,
         provider: "deterministic-fallback",
+        requestedProvider: "OPENAI",
+        actualProvider: "deterministic",
+        requestedModel: this.options.understandingModel,
+        actualModel: fallback.modelVersion,
+        usedFallback: true,
+        fallbackReason: safeErrorName(error),
+        durationMs: Date.now() - startedAt,
+        retryCount: this.options.maxRetries,
         internalNotes: [...fallback.internalNotes, "OpenAI understanding fallback used."]
       };
     }
@@ -122,8 +152,9 @@ export class OpenAIResponseDraftingProvider implements ResponseDraftingProvider 
   }
 
   async draft(input: ResponseDraftingInput): Promise<ResponseDraftOutput> {
+    const startedAt = Date.now();
     try {
-      const output = await runWithRetries(
+      const result = await runWithRetries(
         () =>
           withTimeout(
             this.runner.runStructured({
@@ -140,10 +171,21 @@ export class OpenAIResponseDraftingProvider implements ResponseDraftingProvider 
       );
 
       return ResponseDraftOutputSchema.parse({
-        ...output,
+        ...result.value.parsed,
         provider: "openai",
         modelVersion: this.options.writingModel,
-        promptVersion: promptRegistry.drafting.version
+        promptVersion: promptRegistry.drafting.version,
+        requestedProvider: "OPENAI",
+        actualProvider: "openai",
+        requestedModel: this.options.writingModel,
+        actualModel: this.options.writingModel,
+        usedFallback: false,
+        fallbackReason: null,
+        durationMs: Date.now() - startedAt,
+        retryCount: result.retryCount,
+        inputTokens: result.value.inputTokens,
+        outputTokens: result.value.outputTokens,
+        estimatedCostUsd: estimateCostUsd(this.options.writingModel, result.value.inputTokens, result.value.outputTokens)
       });
     } catch (error) {
       logSafeOpenAIError("drafting", error);
@@ -152,20 +194,30 @@ export class OpenAIResponseDraftingProvider implements ResponseDraftingProvider 
         provider: "openai-failed",
         modelVersion: this.options.writingModel,
         promptVersion: promptRegistry.drafting.version,
+        requestedProvider: "OPENAI",
+        actualProvider: "none",
+        requestedModel: this.options.writingModel,
+        actualModel: this.options.writingModel,
         usedFallback: true,
+        fallbackReason: safeErrorName(error),
+        durationMs: Date.now() - startedAt,
+        retryCount: this.options.maxRetries,
+        inputTokens: null,
+        outputTokens: null,
+        estimatedCostUsd: null,
         error: safeErrorName(error)
       });
     }
   }
 }
 
-async function runWithRetries<T>(operation: () => Promise<T>, maxRetries: number): Promise<T> {
+async function runWithRetries<T>(operation: () => Promise<T>, maxRetries: number): Promise<{ value: T; retryCount: number }> {
   let lastError: unknown;
   const attempts = Math.max(1, maxRetries + 1);
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await operation();
+      return { value: await operation(), retryCount: attempt - 1 };
     } catch (error) {
       lastError = error;
       if (attempt === attempts) break;
@@ -217,4 +269,19 @@ function logSafeOpenAIError(stage: string, error: unknown): void {
 
 function safeErrorName(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 120) : "unknown";
+}
+
+function estimateCostUsd(model: string, inputTokens: number | null, outputTokens: number | null): number | null {
+  if (inputTokens === null || outputTokens === null) return null;
+
+  const lowerModel = model.toLowerCase();
+  const rates = lowerModel.includes("gpt-5.4-mini")
+    ? { inputPerMillion: 0.25, outputPerMillion: 2 }
+    : lowerModel.includes("gpt-4.1-mini")
+      ? { inputPerMillion: 0.4, outputPerMillion: 1.6 }
+      : null;
+
+  if (!rates) return null;
+
+  return (inputTokens / 1_000_000) * rates.inputPerMillion + (outputTokens / 1_000_000) * rates.outputPerMillion;
 }

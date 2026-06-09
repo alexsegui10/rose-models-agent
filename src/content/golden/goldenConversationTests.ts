@@ -97,7 +97,7 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     title: "Varios datos en un mensaje",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
-    messages: ["Tengo 23, soy de Madrid, tengo experiencia en redes, estoy disponible por las tardes y tengo iPhone"],
+    messages: ["Tengo 23, soy de Madrid, tengo experiencia en redes, estoy disponible por las tardes y tengo iPhone 13"],
     expectedTransition: "WAITING_HUMAN_REVIEW",
     expectedExtractedFields: { age: 23, city: "Madrid" },
     responseMustIncludeAny: ["socio", "valorarlo"],

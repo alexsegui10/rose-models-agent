@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
+import type { ABEvaluationCase, ABWinner, EvaluationIssue, EvaluationSession } from "@/domain/evaluation";
 import type { ConversationFeedbackStatus, StyleEvaluation } from "@/domain/styleEvaluation";
 
 type SimulatorResponse = {
@@ -26,7 +28,17 @@ type DraftSummary = {
   provider: string;
   modelVersion: string;
   promptVersion: string;
+  requestedProvider: string;
+  actualProvider: string;
+  requestedModel: string;
+  actualModel: string;
   usedFallback: boolean;
+  fallbackReason?: string | null;
+  durationMs: number;
+  retryCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  estimatedCostUsd: number | null;
   error?: string;
 };
 
@@ -91,10 +103,34 @@ export default function Home() {
   const [feedbackReason, setFeedbackReason] = useState("");
   const [styleRating, setStyleRating] = useState<string>("");
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
+  const [abMessages, setAbMessages] = useState("Hola, me interesa\nQue porcentaje seria?");
+  const [abModelA, setAbModelA] = useState("gpt-4.1-mini");
+  const [abModelB, setAbModelB] = useState("gpt-5.4-mini");
+  const [abBlind, setAbBlind] = useState(true);
+  const [abCase, setAbCase] = useState<ABEvaluationCase | null>(null);
+  const [abWinner, setAbWinner] = useState<ABWinner>("TIE");
+  const [abStyleRating, setAbStyleRating] = useState("");
+  const [abNote, setAbNote] = useState("");
+  const [abLoading, setAbLoading] = useState(false);
+  const [evaluationSession, setEvaluationSession] = useState<EvaluationSession | null>(null);
+  const [evalConversationId, setEvalConversationId] = useState("conversation-demo");
+  const [evalModel, setEvalModel] = useState("gpt-5.4-mini");
+  const [evalIssues, setEvalIssues] = useState<EvaluationIssue[]>([]);
+  const [importJson, setImportJson] = useState(sampleImportJson);
+  const [importedConversations, setImportedConversations] = useState<ImportedConversation[]>([]);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
   const showDevelopmentPanel = process.env.NODE_ENV !== "production";
 
   useEffect(() => {
     void refreshCandidates();
+    void fetch("/api/simulator/conversation-import")
+      .then((response) => response.json())
+      .then((data: { conversations: ImportedConversation[] }) => {
+        setImportedConversations(data.conversations);
+        if (data.conversations[0]) {
+          setEvalConversationId(data.conversations[0].id);
+        }
+      });
   }, []);
 
   const currentCandidate = selectedCandidate;
@@ -108,13 +144,16 @@ export default function Home() {
       ["Ciudad", currentCandidate.city ?? "-"],
       ["Pais", currentCandidate.country ?? "-"],
       ["Telefono", currentCandidate.phone ?? "-"],
-      ["Dispositivo", currentCandidate.phoneDeviceType],
-      ["iPhone requerido", currentCandidate.hasRequiredIPhone === null ? "-" : booleanValue(currentCandidate.hasRequiredIPhone)],
+      ["Tipo dispositivo", currentCandidate.deviceType],
+      ["Modelo dispositivo", currentCandidate.deviceModel ?? "-"],
+      ["Elegibilidad dispositivo", currentCandidate.deviceEligibility],
+      ["Nivel comercial", currentCandidate.commercialTier],
       ["Visibilidad declarada", currentCandidate.declaredProfileVisibility],
-      ["Acceso aceptado declarado", booleanValue(currentCandidate.candidateDeclaredProfileAccessAccepted)],
+      ["Solicitud aceptada declarada", booleanValue(currentCandidate.candidateClaimsFollowRequestAccepted)],
       ["Acceso verificado", booleanValue(currentCandidate.humanVerifiedProfileAccess)],
-      ["Perfil revisado humano", booleanValue(currentCandidate.humanProfileReviewed)],
+      ["Revision perfil humano", currentCandidate.humanProfileReviewStatus],
       ["Decision humana", currentCandidate.humanFitDecision],
+      ["Bloqueos onboarding", currentCandidate.onboardingBlockers.join(", ") || "-"],
       ["OnlyFans", booleanValue(currentCandidate.hasOnlyFans)],
       ["Otra agencia", booleanValue(currentCandidate.worksWithAnotherAgency)],
       ["Revision humana", currentCandidate.humanReviewStatus]
@@ -125,6 +164,24 @@ export default function Home() {
     const response = await fetch("/api/candidates");
     const data = (await response.json()) as { candidates: Candidate[] };
     setCandidates(data.candidates);
+  }
+
+  async function importConversations() {
+    const response = await fetch("/api/simulator/conversation-import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ json: importJson })
+    });
+    const data = (await response.json()) as { conversations?: ImportedConversation[]; error?: string };
+    if (!response.ok) {
+      setImportStatus(data.error ?? "Importacion no valida.");
+      return;
+    }
+
+    const conversations = data.conversations ?? [];
+    setImportedConversations(conversations);
+    setEvalConversationId(conversations[0]?.id ?? evalConversationId);
+    setImportStatus(`${conversations.length} conversaciones importadas.`);
   }
 
   async function sendMessage() {
@@ -200,6 +257,85 @@ export default function Home() {
     await refreshCandidates();
   }
 
+  async function runABComparison() {
+    const messagesForRun = abMessages
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (messagesForRun.length === 0) return;
+
+    setAbLoading(true);
+    const response = await fetch("/api/simulator/ab-evaluation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: messagesForRun,
+        profileVisibility,
+        modelA: abModelA,
+        modelB: abModelB,
+        blind: abBlind
+      })
+    });
+    const data = (await response.json()) as { case: ABEvaluationCase };
+    setAbCase(data.case);
+    setAbWinner("TIE");
+    setAbStyleRating("");
+    setAbNote("");
+    setAbLoading(false);
+  }
+
+  async function saveABDecision() {
+    if (!abCase) return;
+
+    const response = await fetch("/api/simulator/ab-evaluation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: abCase.id,
+        winner: abWinner,
+        styleRating: abStyleRating ? Number(abStyleRating) : undefined,
+        note: abNote || undefined
+      })
+    });
+    const data = (await response.json()) as { case: ABEvaluationCase };
+    setAbCase(data.case);
+  }
+
+  async function createLocalEvaluationSession() {
+    const response = await fetch("/api/simulator/evaluation-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId: evalConversationId,
+        model: evalModel
+      })
+    });
+    const data = (await response.json()) as { session: EvaluationSession };
+    setEvaluationSession(data.session);
+  }
+
+  async function saveSessionTurnFeedback(status: ConversationFeedbackStatus) {
+    if (!evaluationSession || !lastResult) return;
+
+    const response = await fetch("/api/simulator/evaluation-session", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: evaluationSession.id,
+        turnIndex: evaluationSession.turnFeedback.length,
+        status,
+        originalResponse: lastResult.response,
+        editedResponse: status === "EDITED" ? editedResponse : undefined,
+        styleRating: styleRating ? Number(styleRating) : undefined,
+        issues: evalIssues,
+        note: feedbackReason || undefined
+      })
+    });
+    const data = (await response.json()) as { session: EvaluationSession };
+    setEvaluationSession(data.session);
+    setEvalIssues([]);
+  }
+
   return (
     <main className="app-shell">
       <aside className="panel">
@@ -259,7 +395,6 @@ export default function Home() {
               <option value="PUBLIC">Publico</option>
               <option value="PRIVATE">Privado</option>
               <option value="UNKNOWN">Desconocido</option>
-              <option value="UNAVAILABLE">No disponible</option>
             </select>
           </div>
           <textarea className="textarea" value={message} onChange={(event) => setMessage(event.target.value)} />
@@ -327,8 +462,32 @@ export default function Home() {
                   {lastResult.automationMode} / {lastResult.deliveryStatus}
                 </strong>
                 <p className="muted">
-                  {lastResult.draft.provider} · {lastResult.draft.modelVersion} · {lastResult.draft.promptVersion}
+                  {lastResult.draft.provider} / {lastResult.draft.modelVersion} / {lastResult.draft.promptVersion}
                 </p>
+                <div className="trace-grid">
+                  <span>Proveedor solicitado</span>
+                  <strong>{lastResult.draft.requestedProvider}</strong>
+                  <span>Proveedor real</span>
+                  <strong>{lastResult.draft.actualProvider}</strong>
+                  <span>Modelo solicitado</span>
+                  <strong>{lastResult.draft.requestedModel}</strong>
+                  <span>Modelo real</span>
+                  <strong>{lastResult.draft.actualModel}</strong>
+                  <span>Fallback</span>
+                  <strong>{lastResult.draft.usedFallback ? "Si" : "No"}</strong>
+                  <span>Motivo fallback</span>
+                  <strong>{lastResult.draft.fallbackReason ?? lastResult.draft.error ?? "-"}</strong>
+                  <span>Duracion</span>
+                  <strong>{lastResult.draft.durationMs} ms</strong>
+                  <span>Reintentos</span>
+                  <strong>{lastResult.draft.retryCount}</strong>
+                  <span>Tokens</span>
+                  <strong>
+                    {lastResult.draft.inputTokens ?? "-"} in / {lastResult.draft.outputTokens ?? "-"} out
+                  </strong>
+                  <span>Coste estimado</span>
+                  <strong>{lastResult.draft.estimatedCostUsd === null ? "-" : `$${lastResult.draft.estimatedCostUsd.toFixed(6)}`}</strong>
+                </div>
               </div>
             ) : null}
 
@@ -400,6 +559,115 @@ export default function Home() {
                 {feedbackStatus ? <p className="muted">Feedback guardado: {feedbackStatus}</p> : null}
               </div>
             ) : null}
+
+            <section className="evaluation-box">
+              <h2>Evaluacion A/B</h2>
+              <textarea className="textarea" value={abMessages} onChange={(event) => setAbMessages(event.target.value)} />
+              <div className="row">
+                <input className="field" value={abModelA} onChange={(event) => setAbModelA(event.target.value)} />
+                <input className="field" value={abModelB} onChange={(event) => setAbModelB(event.target.value)} />
+              </div>
+              <label className="checkbox-row">
+                <input checked={abBlind} type="checkbox" onChange={(event) => setAbBlind(event.target.checked)} />
+                Ocultar modelos al evaluar
+              </label>
+              <button className="secondary" disabled={abLoading} type="button" onClick={() => void runABComparison()}>
+                {abLoading ? "Ejecutando..." : "Ejecutar A/B"}
+              </button>
+
+              {abCase ? (
+                <div className="ab-result">
+                  <div className="ab-run">
+                    <span>Respuesta A{abCase.blind ? "" : ` / ${abCase.runA.model}`}</span>
+                    <p>{abCase.runA.response}</p>
+                    <small>{formatTrace(abCase.runA.providerTrace)}</small>
+                  </div>
+                  <div className="ab-run">
+                    <span>Respuesta B{abCase.blind ? "" : ` / ${abCase.runB.model}`}</span>
+                    <p>{abCase.runB.response}</p>
+                    <small>{formatTrace(abCase.runB.providerTrace)}</small>
+                  </div>
+                  <select className="field" value={abWinner} onChange={(event) => setAbWinner(event.target.value as ABWinner)}>
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="TIE">EMPATE</option>
+                    <option value="NONE">NINGUNA</option>
+                  </select>
+                  <select className="field" value={abStyleRating} onChange={(event) => setAbStyleRating(event.target.value)}>
+                    <option value="">Puntuacion estilo</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  <input className="field" value={abNote} onChange={(event) => setAbNote(event.target.value)} placeholder="Nota de Alex" />
+                  <button className="secondary" type="button" onClick={() => void saveABDecision()}>
+                    Guardar decision
+                  </button>
+                  {abCase.winner ? <p className="muted">Decision guardada: {abCase.winner}</p> : null}
+                </div>
+              ) : null}
+            </section>
+
+            <section className="evaluation-box">
+              <h2>Sesion de evaluacion</h2>
+              <textarea className="textarea import-textarea" value={importJson} onChange={(event) => setImportJson(event.target.value)} />
+              <button className="secondary" type="button" onClick={() => void importConversations()}>
+                Importar conversaciones
+              </button>
+              {importStatus ? <p className="muted">{importStatus}</p> : null}
+              <div className="row">
+                <select className="field" value={evalConversationId} onChange={(event) => setEvalConversationId(event.target.value)}>
+                  <option value="conversation-demo">conversation-demo</option>
+                  {importedConversations.map((conversation) => (
+                    <option key={conversation.id} value={conversation.id}>
+                      {conversation.id} / {conversation.category}
+                    </option>
+                  ))}
+                </select>
+                <input className="field" value={evalModel} onChange={(event) => setEvalModel(event.target.value)} />
+              </div>
+              <button className="secondary" type="button" onClick={() => void createLocalEvaluationSession()}>
+                Crear sesion
+              </button>
+              {importedConversations.find((conversation) => conversation.id === evalConversationId) ? (
+                <pre className="debug-json">{JSON.stringify(importedConversations.find((conversation) => conversation.id === evalConversationId), null, 2)}</pre>
+              ) : null}
+              {evaluationSession ? (
+                <div className="feedback-box">
+                  <p className="muted">Sesion {evaluationSession.id}</p>
+                  <div className="issue-grid">
+                    {(["FACTUAL_ERROR", "STATE_ERROR", "REPETITION", "TOO_FORMAL", "TOO_LONG", "UNNECESSARY_QUESTION", "MISSED_REAL_QUESTION"] as EvaluationIssue[]).map(
+                      (issue) => (
+                        <label className="checkbox-row" key={issue}>
+                          <input
+                            checked={evalIssues.includes(issue)}
+                            type="checkbox"
+                            onChange={(event) => {
+                              setEvalIssues((current) => (event.target.checked ? [...current, issue] : current.filter((item) => item !== issue)));
+                            }}
+                          />
+                          {issue}
+                        </label>
+                      )
+                    )}
+                  </div>
+                  <div className="row">
+                    <button className="secondary" type="button" onClick={() => void saveSessionTurnFeedback("APPROVED")}>
+                      Aprobar turno
+                    </button>
+                    <button className="secondary" type="button" onClick={() => void saveSessionTurnFeedback("EDITED")}>
+                      Editar turno
+                    </button>
+                    <button className="danger" type="button" onClick={() => void saveSessionTurnFeedback("REJECTED")}>
+                      Rechazar turno
+                    </button>
+                  </div>
+                  {evaluationSession.summary ? <pre className="debug-json">{JSON.stringify(evaluationSession.summary, null, 2)}</pre> : null}
+                </div>
+              ) : null}
+            </section>
           </section>
         ) : null}
       </aside>
@@ -414,3 +682,45 @@ function booleanValue(value: boolean | undefined): string {
 
   return value ? "Si" : "No";
 }
+
+function formatTrace(trace: ABEvaluationCase["runA"]["providerTrace"]): string {
+  const cost = trace.estimatedCostUsd === null ? "-" : `$${trace.estimatedCostUsd.toFixed(6)}`;
+  return `${trace.actualProvider} / ${trace.actualModel} / ${trace.durationMs} ms / ${trace.retryCount} reintentos / ${cost}`;
+}
+
+const sampleImportJson = JSON.stringify(
+  {
+    version: "1",
+    conversations: [
+      {
+        id: "eval-demo-1",
+        status: "CORRECTED",
+        source: "ANONYMIZED_JSON",
+        purpose: "EVALUATION",
+        category: "qualification",
+        initialState: "NEW_LEAD",
+        stateBefore: "QUALIFYING",
+        tags: ["demo", "quality"],
+        messages: [
+          {
+            role: "candidate",
+            content: "Hola, quiero saber como funciona",
+            originalAlexResponse: "Hola, te cuento.",
+            correctedResponse: "Hola, cuentame un poco de ti y vemos si encaja.",
+            approved: true
+          }
+        ],
+        originalAlexResponses: ["Hola, te cuento."],
+        correctedResponses: ["Hola, cuentame un poco de ti y vemos si encaja."],
+        approved: true,
+        notes: "Conversacion de ejemplo anonimizada para evaluar calidad.",
+        outcome: "evaluation_only",
+        endedInCall: false,
+        candidateApproved: false,
+        anonymizedPersonalData: { instagram: "ANON_HANDLE" }
+      }
+    ]
+  },
+  null,
+  2
+);

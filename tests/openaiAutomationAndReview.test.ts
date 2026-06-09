@@ -5,11 +5,11 @@ import { DeterministicUnderstandingProvider } from "@/application/dataExtractor"
 import { createLlmProviders } from "@/application/llmFactory";
 import { OpenAIConversationUnderstandingProvider, OpenAIResponseDraftingProvider, type StructuredOutputRunner } from "@/application/openaiProvider";
 import { InMemoryConversationFeedbackRepository, recordConversationFeedback } from "@/application/responseFeedback";
-import type { ConversationUnderstandingInput, ModelConversationOutput, ResponseDraftingProvider } from "@/application/llmProvider";
+import { ModelConversationOutputSchema, ResponseDraftOutputSchema, type ConversationUnderstandingInput, type ModelConversationOutput, type ResponseDraftingProvider } from "@/application/llmProvider";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
 function validUnderstanding(intent: ModelConversationOutput["intent"] = "CONFIRMS_INTEREST"): ModelConversationOutput {
-  return {
+  return ModelConversationOutputSchema.parse({
     intent,
     extractedData: {},
     dataCorrections: [],
@@ -28,7 +28,7 @@ function validUnderstanding(intent: ModelConversationOutput["intent"] = "CONFIRM
     provider: "openai",
     modelVersion: "fake-model",
     promptVersion: "fake-prompt"
-  };
+  });
 }
 
 function fakeRunner(output: unknown, delayMs = 0): StructuredOutputRunner {
@@ -37,7 +37,7 @@ function fakeRunner(output: unknown, delayMs = 0): StructuredOutputRunner {
       if (delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
-      return output;
+      return { parsed: output, inputTokens: 10, outputTokens: 5 };
     }
   };
 }
@@ -294,7 +294,7 @@ describe("OpenAI adapter, automation and review", () => {
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,
       instagramUsername: "multi_turn",
-      message: "Tengo 23 anos, soy de Madrid, tengo experiencia, estoy disponible por las tardes y tengo iPhone"
+      message: "Tengo 23 anos, soy de Madrid, tengo experiencia, estoy disponible por las tardes y tengo iPhone 13"
     });
 
     expect(second.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
@@ -402,13 +402,23 @@ function baseUnderstandingInput(inboundMessage: string): ConversationUnderstandi
 }
 
 function draft(response: string) {
-  return {
+  return ResponseDraftOutputSchema.parse({
     response,
     provider: "test",
     modelVersion: "test-model",
     promptVersion: "test-prompt",
-    usedFallback: false
-  };
+    requestedProvider: "TEST",
+    actualProvider: "test",
+    requestedModel: "test-model",
+    actualModel: "test-model",
+    usedFallback: false,
+    fallbackReason: null,
+    durationMs: 1,
+    retryCount: 0,
+    inputTokens: 10,
+    outputTokens: 5,
+    estimatedCostUsd: 0.001
+  });
 }
 
 function feedbackInput(status: "APPROVED" | "EDITED" | "REJECTED") {

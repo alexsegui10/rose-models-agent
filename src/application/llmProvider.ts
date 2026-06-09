@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CandidateStateSchema } from "@/domain/candidate";
+import { CandidateStateSchema, DeviceEligibilitySchema, DeviceTypeSchema } from "@/domain/candidate";
 
 export const ConversationIntentSchema = z.enum([
   "REQUESTS_INFORMATION",
@@ -26,9 +26,10 @@ export const ExtractedCandidateDataSchema = z.object({
   country: z.string().optional(),
   city: z.string().optional(),
   phone: z.string().optional(),
-  phoneDeviceType: z.enum(["IPHONE", "ANDROID", "OTHER", "UNKNOWN"]).optional(),
-  hasRequiredIPhone: z.boolean().nullable().optional(),
-  profileVisibility: z.enum(["UNKNOWN", "PUBLIC", "PRIVATE", "UNAVAILABLE"]).optional(),
+  deviceType: DeviceTypeSchema.optional(),
+  deviceModel: z.string().nullable().optional(),
+  deviceEligibility: DeviceEligibilitySchema.optional(),
+  profileVisibility: z.enum(["PUBLIC", "PRIVATE", "UNKNOWN"]).optional(),
   hasOnlyFans: z.boolean().optional(),
   worksWithAnotherAgency: z.boolean().optional(),
   experienceDescription: z.string().optional(),
@@ -59,7 +60,18 @@ export const ModelConversationOutputSchema = z.object({
   internalNotes: z.array(z.string()).default([]),
   provider: z.string().default("deterministic"),
   modelVersion: z.string().default("deterministic-local-2026-06-08.1"),
-  promptVersion: z.string().default("understanding-2026-06-08.1")
+  promptVersion: z.string().default("understanding-2026-06-08.1"),
+  requestedProvider: z.string().default("DETERMINISTIC"),
+  actualProvider: z.string().default("deterministic"),
+  requestedModel: z.string().default("deterministic-local-2026-06-08.1"),
+  actualModel: z.string().default("deterministic-local-2026-06-08.1"),
+  usedFallback: z.boolean().default(false),
+  fallbackReason: z.string().nullable().default(null),
+  durationMs: z.number().nonnegative().default(0),
+  retryCount: z.number().int().nonnegative().default(0),
+  inputTokens: z.number().int().nonnegative().nullable().default(null),
+  outputTokens: z.number().int().nonnegative().nullable().default(null),
+  estimatedCostUsd: z.number().nonnegative().nullable().default(null)
 });
 
 export type ModelConversationOutput = z.infer<typeof ModelConversationOutputSchema>;
@@ -95,7 +107,17 @@ export const ResponseDraftOutputSchema = z.object({
   modelVersion: z.string().default("deterministic-local-2026-06-08.1"),
   promptVersion: z.string().default("drafting-2026-06-08.1"),
   usedFallback: z.boolean().default(false),
-  error: z.string().optional()
+  error: z.string().optional(),
+  requestedProvider: z.string().default("DETERMINISTIC"),
+  actualProvider: z.string().default("deterministic"),
+  requestedModel: z.string().default("deterministic-local-2026-06-08.1"),
+  actualModel: z.string().default("deterministic-local-2026-06-08.1"),
+  fallbackReason: z.string().nullable().default(null),
+  durationMs: z.number().nonnegative().default(0),
+  retryCount: z.number().int().nonnegative().default(0),
+  inputTokens: z.number().int().nonnegative().nullable().default(null),
+  outputTokens: z.number().int().nonnegative().nullable().default(null),
+  estimatedCostUsd: z.number().nonnegative().nullable().default(null)
 });
 
 export type ResponseDraftOutput = z.infer<typeof ResponseDraftOutputSchema>;

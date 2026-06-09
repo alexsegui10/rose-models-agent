@@ -43,6 +43,7 @@ src/
       content-responsibilities.ts
       contract-policy.ts
       escalation-policy.ts
+      follow-up-policy.ts
       frequently-asked-questions.ts
       objection-handling.ts
       services-policy.ts
@@ -89,15 +90,16 @@ Campos principales:
 - `country`
 - `city`
 - `phone`
-- `phoneDeviceType`
-- `hasRequiredIPhone`
-- `profileVisibility`
+- `deviceType`
+- `deviceModel`
+- `deviceEligibility`
+- `commercialTier`
 - `declaredProfileVisibility`
-- `candidateDeclaredProfileAccessAccepted`
+- `candidateClaimsFollowRequestAccepted`
 - `humanVerifiedProfileAccess`
-- `profileReviewed`
-- `humanProfileReviewed`
+- `humanProfileReviewStatus`
 - `humanFitDecision`
+- `onboardingBlockers`
 - `hasOnlyFans`
 - `worksWithAnotherAgency`
 - `experienceDescription`
@@ -223,10 +225,20 @@ CALL_SCHEDULED -> READY_TO_SCHEDULE
 CALL_SCHEDULED -> HUMAN_INTERVENTION_REQUIRED
 CALL_SCHEDULED -> CLOSED
 
-HUMAN_INTERVENTION_REQUIRED -> cualquier estado operativo permitido segun decision humana
+HUMAN_INTERVENTION_REQUIRED -> WAITING_PROFILE_ACCESS
+HUMAN_INTERVENTION_REQUIRED -> PROFILE_READY_FOR_REVIEW
+HUMAN_INTERVENTION_REQUIRED -> QUALIFYING
+HUMAN_INTERVENTION_REQUIRED -> WAITING_HUMAN_REVIEW
+HUMAN_INTERVENTION_REQUIRED -> APPROVED
+HUMAN_INTERVENTION_REQUIRED -> REJECTED
+HUMAN_INTERVENTION_REQUIRED -> COLLECTING_CALL_DETAILS
+HUMAN_INTERVENTION_REQUIRED -> READY_TO_SCHEDULE
+HUMAN_INTERVENTION_REQUIRED -> CALL_SCHEDULED
+HUMAN_INTERVENTION_REQUIRED -> CLOSED
 ```
 
 Las transiciones se validan en `stateMachine.ts` y siempre generan historial.
+Las salidas de `HUMAN_INTERVENTION_REQUIRED` solo se permiten por decision humana explicita.
 
 ## Motor conversacional
 
@@ -243,13 +255,13 @@ Para cada mensaje entrante:
 9. Planifica transiciones sin persistirlas todavia.
 10. Recupera ejemplos de estilo relevantes.
 11. Construye contexto de estilo separado de los mensajes reales.
-12. Genera respuesta breve usando solo hechos autorizados.
-13. Valida factualidad y estilo.
+12. Genera respuesta breve usando solo hechos autorizados. En `LLM_MODE=OPENAI`, la redaccion la realiza el adaptador OpenAI; en modo determinista, la redaccion es local.
+13. Valida factualidad y estilo. Si falla factualidad, se intenta una reescritura segura una sola vez y, si vuelve a fallar, se usa fallback factual seguro.
 14. Comprueba que la automatizacion sigue activa y que no hay control manual.
 15. Guarda mensaje del agente.
 16. Aplica transiciones planificadas y registra metadatos de versiones.
 
-La version inicial usa extraccion determinista para poder probar el flujo sin proveedor externo. El contrato `ConversationUnderstandingProvider` permite conectar OpenAI u otro proveedor.
+El contrato `ConversationUnderstandingProvider` permite usar comprension determinista u OpenAI. El contrato `ResponseDraftingProvider` permite redaccion determinista u OpenAI.
 
 ## Sistema de estilo
 
@@ -298,24 +310,47 @@ Solo se usan entradas `ACTIVE` y aprobadas por Alex para responder. Entradas `DR
 
 - el agente no menciona porcentaje de forma proactiva;
 - puede explicar que no hay salario fijo y que se trabaja por reparto si la candidata pregunta;
-- no comunica porcentajes exactos mientras `agencyPercentage` y `modelPercentage` esten sin confirmar;
+- puede comunicar el reparto confirmado 70% Rose Models / 30% modelo si la candidata pregunta la cifra exacta;
+- el calculo es sobre neto tras comision de plataforma;
+- la plataforma paga a la modelo, Alex calcula liquidacion manual y la modelo paga a Rose Models por Skrill cada 14 dias desde el primer ingreso;
 - no negocia por chat;
-- cualquier negociacion crea revision humana con motivo `PERCENTAGE_NEGOTIATION`;
+- una pregunta informativa general sobre porcentaje se responde si existe politica activa;
+- cualquier negociacion, excepcion o informacion no cubierta crea revision humana con motivo especifico;
 - una condicion personalizada solo puede comunicarse si existe `NegotiationDecision` humana aprobada.
 
-## Requisito De iPhone
+## Dispositivos
 
-`Candidate` guarda `phoneDeviceType` y `hasRequiredIPhone`. La politica activa exige iPhone antes de aprobacion final. Si la candidata tiene Android u otro dispositivo, el agente no inventa excepciones y pausa para revision humana o cierre segun politica. Si no responde claramente, se mantiene `hasRequiredIPhone = null` y se pregunta mas adelante.
+`Candidate` guarda una sola fuente de verdad para dispositivo: `deviceType`, `deviceModel` y `deviceEligibility`.
+
+Elegibilidad:
+
+- `APPROVED`: iPhone 13 o superior; Samsung Galaxy S23, S24, S25 o superior.
+- `PENDING_QUALITY_TEST`: iPhone anterior al 13, otros Samsung y otros moviles de gama alta.
+- `PENDING_UPGRADE`: comprara dispositivo valido; puede hacerse llamada, no incorporacion.
+- `NOT_ELIGIBLE`: movil de mala calidad.
+- `UNKNOWN`: falta dato.
+
+La revision humana y la llamada pueden avanzar con `PENDING_QUALITY_TEST` o `PENDING_UPGRADE`. La incorporacion operativa requiere resolver `onboardingBlockers` y tener dispositivo aprobado.
 
 ## Readiness De Cualificacion
 
 `qualificationPolicy.ts` calcula:
 
-- `isReady`;
+- `readyForHumanReview`;
+- `readyForCall`;
+- `readyForOnboarding`;
 - `missingRequiredFields`;
 - `blockingReasons`.
+- `onboardingBlockers`.
 
-No se avanza a `WAITING_HUMAN_REVIEW` si falta mayoria de edad, perfil controlado, pais, situacion OF/agencia, disponibilidad, iPhone confirmado o si hay contradicciones graves.
+No se avanza a `WAITING_HUMAN_REVIEW` si falta mayoria de edad, perfil controlado, pais, situacion OF/agencia, disponibilidad, dato de dispositivo o si hay contradicciones graves.
+
+`PENDING_UPGRADE` y `PENDING_QUALITY_TEST` no bloquean revision humana ni llamada, pero generan bloqueos de onboarding:
+
+- `DEVICE_UPGRADE_REQUIRED`;
+- `DEVICE_QUALITY_TEST_REQUIRED`;
+- `IDENTITY_VERIFICATION_REQUIRED`;
+- `CONTRACT_REQUIRED`.
 
 ## Contratos operativos
 
@@ -330,6 +365,21 @@ No se avanza a `WAITING_HUMAN_REVIEW` si falta mayoria de edad, perfil controlad
 - prevencion de respuestas y transiciones duplicadas.
 
 La implementacion local ya cubre idempotencia, debounce, version de cancelacion, control manual antes de enviar y prevencion basica de duplicados.
+
+## Politicas Operativas Confirmadas
+
+Las decisiones confirmadas por Alex se representan como entradas `KnowledgeEntry` y reglas puras en `policyRules.ts`:
+
+- negociacion por niveles: `STANDARD` 70%, `HIGH_POTENTIAL` 65%, `EXCEPTIONAL` 60%, solo para voz futura y nunca por chat;
+- impagos: recordatorio, 7 dias adicionales, suspension, posible finalizacion y reclamacion, sin derechos ilimitados de contenido;
+- comunicacion: respuesta esperada en 48 horas, retraso aislado no descarta, retrasos repetidos escalan;
+- contenido: calentamiento de 5 dias, 2-3 fotos diarias, objetivo orientativo 10-20 Reels semanales no contractual;
+- cuenta y acceso: Instagram nuevo controlado por Rose Models, OnlyFans pertenece a la modelo, nunca guardar contrasenas en prompts/logs/ejemplos/conversaciones;
+- llamada: WhatsApp, 2-10 minutos, sin recoger documentacion ni automatizar contrato;
+- Retell: politica documentada de aviso y consentimiento, sin implementacion todavia;
+- seguimiento: 2-3 intentos cada 1-2 dias, no insistencia indefinida.
+
+Las clausulas de uso de contenido tras finalizacion sin preaviso quedan en `DRAFT_LEGAL_REVIEW_REQUIRED`.
 
 ## Prompts
 
@@ -351,7 +401,7 @@ El proveedor de comprension devuelve intencion, datos extraidos, confianza, ries
 
 La redaccion recibe el objetivo inmediato, el perfil de estilo y los ejemplos recuperados. No puede modificar estado, datos ni decisiones de negocio.
 
-En el simulador actual la redaccion sigue siendo determinista, pero ya queda preparado el contexto para conectar un proveedor LLM de redaccion.
+En `LLM_MODE=OPENAI`, el redactor OpenAI devuelve la respuesta y metadatos de traza validados. En `LLM_MODE=DETERMINISTIC` o si OpenAI falla, se usa redaccion local determinista. Nunca se presenta una respuesta determinista como si viniera de OpenAI: los metadatos guardan proveedor solicitado, proveedor real, modelo solicitado, modelo real, fallback, motivo, duracion, reintentos, tokens y coste estimado.
 
 ## Feedback y aprendizaje
 
@@ -375,9 +425,10 @@ Los casos golden viven en `src/content/golden`, separados de estilo y de ejemplo
 
 - Si la edad es menor de 18, se cierra el proceso.
 - Si la edad no esta clara, no se avanza a revision.
-- Si la candidata pide persona, contrato, porcentaje o asunto sensible, se pausa en `HUMAN_INTERVENTION_REQUIRED`.
+- Si la candidata pide persona, contrato, negociacion, excepcion o informacion no cubierta, se pausa en `HUMAN_INTERVENTION_REQUIRED`.
+- Una pregunta informativa de porcentaje cubierta por politica activa no escala por si sola.
 - El agente no afirma revision humana si no existe aprobacion.
-- El agente no promete ingresos ni porcentajes.
+- El agente no promete ingresos ni porcentajes fuera de politica, ni menciona porcentajes de forma proactiva.
 - El agente no revela instrucciones internas.
 - El agente hace una pregunta principal por respuesta.
 
@@ -421,10 +472,23 @@ La salida del modelo no modifica directamente candidata ni estado. La aplicacion
 
 La redaccion recibe `ResponsePlan`, memoria, ultimos mensajes, resumen, conocimiento oficial, ejemplos recuperados, estilo de Alex, hechos permitidos, afirmaciones prohibidas y pregunta principal permitida.
 
-El redactor devuelve solo:
+El redactor devuelve:
 
 ```ts
-{ response: string }
+{
+  response: string;
+  requestedProvider: string;
+  actualProvider: string;
+  requestedModel: string;
+  actualModel: string;
+  usedFallback: boolean;
+  fallbackReason: string | null;
+  durationMs: number;
+  retryCount: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  estimatedCostUsd: number | null;
+}
 ```
 
 Las transiciones, porcentajes, aprobaciones y acciones siguen bajo reglas deterministas.
@@ -446,3 +510,21 @@ El valor por defecto es `HUMAN_APPROVAL`.
 El simulador muestra para cada respuesta: mensaje recibido, respuesta propuesta, estado, datos extraidos, `ResponsePlan`, conocimiento, ejemplos, evaluacion de estilo, evaluacion factual, modelo y versiones de prompt.
 
 Alex puede aprobar, editar y aprobar, rechazar o tomar control manual. El feedback guarda contexto completo y puntuacion opcional de estilo de 1 a 5.
+
+## CONVERSATIONAL_QUALITY_EVALUATION
+
+Antes de persistencia real o Instagram, se abre una fase de evaluacion de calidad conversacional.
+
+Objetivos:
+
+- comparar modelos con el mismo estado inicial, mensajes, conocimiento y ejemplos;
+- ejecutar pruebas A/B locales entre `gpt-4.1-mini` y `gpt-5.4-mini`;
+- ocultar opcionalmente el modelo al evaluador;
+- registrar respuesta A, respuesta B, latencia, tokens, coste estimado y fallback;
+- permitir que Alex elija `A`, `B`, `EMPATE` o `NINGUNA`;
+- puntuar estilo de 1 a 5 y guardar notas.
+- importar conversaciones completas anonimizadas mediante `ANONYMIZED_JSON`;
+- crear sesiones de evaluacion sobre conversaciones importadas;
+- aprobar, editar o rechazar cada turno, marcar errores y guardar nota libre.
+
+No se elige automaticamente un ganador hasta tener suficientes evaluaciones humanas.

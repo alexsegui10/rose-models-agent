@@ -22,7 +22,7 @@ describe("golden style tests", () => {
       let result = await engine.handleIncomingMessage({
         candidateId: seeded.id,
         instagramUsername: seeded.instagramUsername,
-        profileVisibility: seeded.profileVisibility,
+        profileVisibility: seeded.declaredProfileVisibility,
         message: golden.messages[0] ?? ""
       });
 
@@ -76,10 +76,8 @@ function seedCandidate(id: string, initialCandidate: Record<string, unknown>, st
     city: stringFrom(initialCandidate.city),
     country: stringFrom(initialCandidate.country),
     phone: stringFrom(initialCandidate.phone),
-    profileVisibility,
     declaredProfileVisibility: profileVisibility,
-    profileReviewed: booleanFrom(initialCandidate.profileReviewed) ?? candidate.profileReviewed,
-    humanProfileReviewed: booleanFrom(initialCandidate.profileReviewed) ?? candidate.humanProfileReviewed,
+    humanProfileReviewStatus: booleanFrom(initialCandidate.profileReviewed) ? "POTENTIAL_FIT" : candidate.humanProfileReviewStatus,
     hasOnlyFans: booleanFrom(initialCandidate.hasOnlyFans),
     worksWithAnotherAgency: booleanFrom(initialCandidate.worksWithAnotherAgency),
     currentState: stateBefore,
@@ -88,7 +86,7 @@ function seedCandidate(id: string, initialCandidate: Record<string, unknown>, st
 }
 
 function profileVisibilityFrom(value: unknown): ProfileVisibility {
-  if (value === "PUBLIC" || value === "PRIVATE" || value === "UNKNOWN" || value === "UNAVAILABLE") {
+  if (value === "PUBLIC" || value === "PRIVATE" || value === "UNKNOWN") {
     return value;
   }
 

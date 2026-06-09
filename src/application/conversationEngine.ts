@@ -14,7 +14,7 @@ import { LocalExampleRetriever } from "./exampleRetriever";
 import { safeFactualFallback, validateFactualResponse, type FactualValidationResult } from "./factualValidator";
 import type { ConversationUnderstandingProvider, ModelConversationOutput, ResponseDraftOutput, ResponseDraftingProvider } from "./llmProvider";
 import { promptRegistry } from "./promptRegistry";
-import { evaluateQualificationReadiness } from "./qualificationPolicy";
+import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
 import { buildResponsePlan } from "./responsePlanner";
 import { safeFallbackResponse, validateAgentResponse } from "./responseValidator";
 import { buildStyleContext, immediateObjectiveFor, type BuiltStyleContext } from "./styleContextBuilder";
@@ -116,7 +116,7 @@ export class ConversationEngine {
     });
     const extractedPatch: CandidatePatch = {
       ...consistency.patch,
-      candidateDeclaredProfileAccessAccepted: understanding.intent === "ACCEPTS_PROFILE_REQUEST" ? true : consistency.patch.candidateDeclaredProfileAccessAccepted
+      candidateClaimsFollowRequestAccepted: understanding.intent === "ACCEPTS_PROFILE_REQUEST" ? true : consistency.patch.candidateClaimsFollowRequestAccepted
     };
     let updatedCandidate = applyExtractedData(activeCandidate, extractedPatch, input.profileVisibility);
     const commercialNotes =
@@ -131,6 +131,7 @@ export class ConversationEngine {
         ...consistency.contradictions.map((item) => `CONTRADICTION: ${item}`),
         ...consistency.corrections.map((item) => `CORRECTION: ${item}`)
       ],
+      onboardingBlockers: onboardingBlockersFor(updatedCandidate),
       lastMessageAt: new Date(),
       updatedAt: new Date()
     };
@@ -296,6 +297,16 @@ export class ConversationEngine {
         draftModelVersion: draft.modelVersion,
         draftPromptVersion: draft.promptVersion,
         draftUsedFallback: draft.usedFallback,
+        requestedProvider: draft.requestedProvider,
+        actualProvider: draft.actualProvider,
+        requestedModel: draft.requestedModel,
+        actualModel: draft.actualModel,
+        fallbackReason: draft.fallbackReason ?? draft.error ?? "",
+        durationMs: draft.durationMs + understanding.durationMs,
+        retryCount: draft.retryCount + understanding.retryCount,
+        inputTokens: draft.inputTokens ?? understanding.inputTokens ?? 0,
+        outputTokens: draft.outputTokens ?? understanding.outputTokens ?? 0,
+        estimatedCostUsd: draft.estimatedCostUsd ?? understanding.estimatedCostUsd ?? 0,
         styleProfileVersion: styleContext.styleProfileVersion,
         promptVersion: styleContext.promptVersion,
         understandingPromptVersion: promptRegistry.understanding.version,
@@ -354,7 +365,17 @@ export class ConversationEngine {
         provider: "deterministic",
         modelVersion: "deterministic-local-2026-06-08.1",
         promptVersion: promptRegistry.drafting.version,
-        usedFallback: false
+        usedFallback: false,
+        requestedProvider: "DETERMINISTIC",
+        actualProvider: "deterministic",
+        requestedModel: "deterministic-local-2026-06-08.1",
+        actualModel: "deterministic-local-2026-06-08.1",
+        fallbackReason: null,
+        durationMs: 0,
+        retryCount: 0,
+        inputTokens: null,
+        outputTokens: null,
+        estimatedCostUsd: null
       };
     }
 
@@ -422,7 +443,6 @@ export class ConversationEngine {
 
 function applyExtractedData(candidate: Candidate, extractedData: CandidatePatch, profileVisibility?: ProfileVisibility): Candidate {
   const patch: CandidatePatch = {
-    profileVisibility: profileVisibility ?? extractedData.declaredProfileVisibility ?? candidate.profileVisibility,
     declaredProfileVisibility: profileVisibility ?? extractedData.declaredProfileVisibility ?? candidate.declaredProfileVisibility
   };
 
@@ -434,8 +454,9 @@ function applyExtractedData(candidate: Candidate, extractedData: CandidatePatch,
   if (extractedData.country !== undefined) patch.country = extractedData.country;
   if (extractedData.city !== undefined) patch.city = extractedData.city;
   if (extractedData.phone !== undefined) patch.phone = extractedData.phone;
-  if (extractedData.phoneDeviceType !== undefined) patch.phoneDeviceType = extractedData.phoneDeviceType;
-  if (extractedData.hasRequiredIPhone !== undefined) patch.hasRequiredIPhone = extractedData.hasRequiredIPhone;
+  if (extractedData.deviceType !== undefined) patch.deviceType = extractedData.deviceType;
+  if (extractedData.deviceModel !== undefined) patch.deviceModel = extractedData.deviceModel;
+  if (extractedData.deviceEligibility !== undefined) patch.deviceEligibility = extractedData.deviceEligibility;
   if (typeof extractedData.hasOnlyFans === "boolean") patch.hasOnlyFans = extractedData.hasOnlyFans;
   if (typeof extractedData.worksWithAnotherAgency === "boolean") {
     patch.worksWithAnotherAgency = extractedData.worksWithAnotherAgency;
@@ -444,7 +465,7 @@ function applyExtractedData(candidate: Candidate, extractedData: CandidatePatch,
   if (extractedData.currentMonthlyRevenue !== undefined) patch.currentMonthlyRevenue = extractedData.currentMonthlyRevenue;
   if (extractedData.contentAvailability !== undefined) patch.contentAvailability = extractedData.contentAvailability;
   if (extractedData.goals !== undefined) patch.goals = extractedData.goals;
-  if (extractedData.candidateDeclaredProfileAccessAccepted) patch.candidateDeclaredProfileAccessAccepted = true;
+  if (extractedData.candidateClaimsFollowRequestAccepted) patch.candidateClaimsFollowRequestAccepted = true;
   if (extractedData.objections?.length) patch.objections = extractedData.objections;
 
   return {
@@ -462,7 +483,7 @@ function decideNextState(candidate: Candidate, understanding: ModelConversationO
     return "CLOSED";
   }
 
-  if (candidate.hasRequiredIPhone === false) {
+  if (candidate.deviceEligibility === "NOT_ELIGIBLE") {
     return "HUMAN_INTERVENTION_REQUIRED";
   }
 
@@ -478,7 +499,7 @@ function decideNextState(candidate: Candidate, understanding: ModelConversationO
     return "PROFILE_READY_FOR_REVIEW";
   }
 
-  if (candidate.currentState === "PROFILE_READY_FOR_REVIEW" && candidate.humanVerifiedProfileAccess && candidate.humanProfileReviewed) {
+  if (candidate.currentState === "PROFILE_READY_FOR_REVIEW" && candidate.humanVerifiedProfileAccess && candidate.humanProfileReviewStatus !== "NOT_REVIEWED") {
     return "QUALIFYING";
   }
 
@@ -486,7 +507,7 @@ function decideNextState(candidate: Candidate, understanding: ModelConversationO
     return "QUALIFYING";
   }
 
-  if (candidate.currentState === "QUALIFYING" && evaluateQualificationReadiness(candidate).isReady) {
+  if (candidate.currentState === "QUALIFYING" && evaluateQualificationReadiness(candidate).readyForHumanReview) {
     return "WAITING_HUMAN_REVIEW";
   }
 
@@ -511,8 +532,20 @@ function generateResponse(candidate: Candidate, understanding: ModelConversation
       return "Eso se puede valorar segun el perfil y el potencial de la cuenta. Lo comento con mi socio y en la llamada te explicamos que condiciones podriamos ofrecerte.";
     }
 
-    if (candidate.hasRequiredIPhone === false) {
-      return "Para trabajar con nosotros es necesario tener iPhone, porque parte del sistema y del contenido lo gestionamos desde ahi. Si tienes pensado cambiarlo pronto, dimelo y lo podemos valorar.";
+    if (understanding.humanReviewReason?.toLowerCase().includes("ia") || understanding.humanReviewReason?.toLowerCase().includes("bot")) {
+      return "Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso.";
+    }
+
+    if (candidate.deviceEligibility === "NOT_ELIGIBLE") {
+      return "Con un movil de mala calidad no podriamos avanzar con la incorporacion. Si tienes pensado cambiarlo pronto, dimelo y lo podemos valorar.";
+    }
+
+    if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
+      return "Ese movil tendria que revisarlo Alex con una prueba de calidad antes de confirmar incorporacion. Podemos seguir valorando el perfil y verlo bien.";
+    }
+
+    if (candidate.deviceEligibility === "PENDING_UPGRADE") {
+      return "Podemos hacer la llamada igualmente, pero la incorporacion quedaria pendiente hasta que tengas el dispositivo adecuado.";
     }
 
     if (responsePlan.uncoveredQuestion) {
@@ -520,7 +553,7 @@ function generateResponse(candidate: Candidate, understanding: ModelConversation
     }
 
     if (responsePlan.answerFacts.length > 0 && understanding.intent === "ASKS_ABOUT_PERCENTAGE") {
-      return "Va por reparto, no por salario fijo. Los porcentajes concretos prefiero revisarlos con mi socio antes de confirmarlos por aqui.";
+      return businessResponseFromPlan(responsePlan, candidate);
     }
 
     return "Gracias por decirmelo. Esto prefiero revisarlo con mi socio antes de darte una respuesta, asi que lo miro y te escribo con calma.";
@@ -567,6 +600,31 @@ function generateResponse(candidate: Candidate, understanding: ModelConversation
 }
 
 function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candidate): string {
+  if (responsePlan.knowledgeEntryIds.includes("commercial-revenue-share-general") && responsePlan.answerFacts.some((fact) => fact.includes("70%"))) {
+    const parts = ["El reparto estandar es 70% para Rose Models y 30% para ti.", "Se calcula sobre el neto despues de la comision de la plataforma."];
+    if (responsePlan.questionToAsk && !candidate.age) parts.push(responsePlan.questionToAsk);
+    return parts.join("\n\n");
+  }
+
+  if (responsePlan.knowledgeEntryIds.includes("commercial-no-fixed-salary")) {
+    return withOptionalQuestion("No funciona como un salario fijo.\n\nVa por reparto y los detalles se explican mejor en llamada para que quede claro.", responsePlan, candidate);
+  }
+
+  if (responsePlan.knowledgeEntryIds.includes("commercial-why-agency-70")) {
+    return "Porque Rose Models se encarga de la parte operativa: cuentas, trafico, publicacion, chatting, monetizacion y estrategia.";
+  }
+
+  if (responsePlan.knowledgeEntryIds.includes("content-new-and-old-material")) {
+    const mentionsOldMaterial = responsePlan.answerFacts.some((fact) => fact.toLowerCase().includes("material antiguo"));
+    return mentionsOldMaterial
+      ? "Para Instagram necesitamos contenido nuevo. Para OnlyFans se puede aprovechar material antiguo si sirve, pero eso lo vemos segun el caso."
+      : withOptionalQuestion("Para Instagram necesitamos contenido nuevo y que no se haya publicado antes.", responsePlan, candidate);
+  }
+
+  if (responsePlan.knowledgeEntryIds.includes("content-boundaries-neutral-question")) {
+    return "¿Hay algun tipo de contenido que no quieras hacer o algun limite que debamos tener en cuenta?";
+  }
+
   const firstFact = responsePlan.answerFacts[0] ?? "Te lo explico con calma.";
   const secondFact = responsePlan.answerFacts.find((fact) => fact !== firstFact);
   const parts = [firstFact];
@@ -580,6 +638,11 @@ function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candida
   }
 
   return parts.join("\n\n");
+}
+
+function withOptionalQuestion(response: string, responsePlan: ResponsePlan, candidate: Candidate): string {
+  if (responsePlan.questionToAsk && !candidate.age) return `${response}\n\n${responsePlan.questionToAsk}`;
+  return response;
 }
 
 function rewriteFromPlan(
@@ -632,8 +695,8 @@ function nextQualifyingQuestion(candidate: Candidate): string | null {
     return "Perfecto. ¿Que disponibilidad tendrias para crear contenido durante la semana?";
   }
 
-  if (candidate.hasRequiredIPhone === null) {
-    return "Por cierto, una cosa importante: ¿tienes iPhone?";
+  if (candidate.deviceEligibility === "UNKNOWN") {
+    return "Por cierto, una cosa importante: ¿que movil tienes?";
   }
 
   return null;
@@ -690,9 +753,13 @@ function knownDataForModel(candidate: Candidate): Record<string, string | number
     country: candidate.country ?? null,
     phone: candidate.phone ?? null,
     declaredProfileVisibility: candidate.declaredProfileVisibility,
-    candidateDeclaredProfileAccessAccepted: candidate.candidateDeclaredProfileAccessAccepted,
+    deviceType: candidate.deviceType,
+    deviceModel: candidate.deviceModel,
+    deviceEligibility: candidate.deviceEligibility,
+    commercialTier: candidate.commercialTier,
+    candidateClaimsFollowRequestAccepted: candidate.candidateClaimsFollowRequestAccepted,
     humanVerifiedProfileAccess: candidate.humanVerifiedProfileAccess,
-    humanProfileReviewed: candidate.humanProfileReviewed,
+    humanProfileReviewStatus: candidate.humanProfileReviewStatus,
     humanFitDecision: candidate.humanFitDecision,
     hasOnlyFans: candidate.hasOnlyFans ?? null,
     worksWithAnotherAgency: candidate.worksWithAnotherAgency ?? null
@@ -716,7 +783,7 @@ function tagsForRetrieval(candidate: Candidate, understanding: ModelConversation
 function criticalRestrictionReason(candidate: Candidate, understanding: ModelConversationOutput, contradictions: string[]): string | null {
   if (candidate.manualControlActive || candidate.automationPaused) return "La automatizacion esta pausada por control manual.";
   if (contradictions.length > 0) return `Datos contradictorios detectados: ${contradictions.join("; ")}`;
-  if (candidate.hasRequiredIPhone === false) return "No tiene el iPhone obligatorio.";
+  if (candidate.deviceEligibility === "NOT_ELIGIBLE") return "Movil no elegible por calidad.";
   if (understanding.intent === "PROMPT_INJECTION") return "Intento de obtener instrucciones internas.";
   return null;
 }
@@ -761,7 +828,18 @@ function skippedResult(candidate: Candidate, response: string, duplicate: boolea
     internalNotes: [reason],
     provider: "deterministic",
     modelVersion: "deterministic-local-2026-06-08.1",
-    promptVersion: promptRegistry.understanding.version
+    promptVersion: promptRegistry.understanding.version,
+    requestedProvider: "DETERMINISTIC",
+    actualProvider: "deterministic",
+    requestedModel: "deterministic-local-2026-06-08.1",
+    actualModel: "deterministic-local-2026-06-08.1",
+    usedFallback: false,
+    fallbackReason: null,
+    durationMs: 0,
+    retryCount: 0,
+    inputTokens: null,
+    outputTokens: null,
+    estimatedCostUsd: null
   };
   const responsePlan: ResponsePlan = {
     objective: reason,
@@ -820,7 +898,17 @@ function skippedResult(candidate: Candidate, response: string, duplicate: boolea
       provider: "deterministic",
       modelVersion: "deterministic-local-2026-06-08.1",
       promptVersion: promptRegistry.drafting.version,
-      usedFallback: false
+      usedFallback: false,
+      requestedProvider: "DETERMINISTIC",
+      actualProvider: "deterministic",
+      requestedModel: "deterministic-local-2026-06-08.1",
+      actualModel: "deterministic-local-2026-06-08.1",
+      fallbackReason: null,
+      durationMs: 0,
+      retryCount: 0,
+      inputTokens: null,
+      outputTokens: null,
+      estimatedCostUsd: null
     },
     contradictions: [],
     corrections: []

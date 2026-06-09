@@ -135,7 +135,7 @@ const rawExamples: ConversationExampleInput[] = [
     sourceType: "ALEX_APPROVED",
     title: "Cierre por rechazo humano",
     description: "Cierra de forma educada tras decision humana.",
-    candidateContext: { profileReviewed: true },
+    candidateContext: { humanProfileReviewStatus: "POTENTIAL_FIT" },
     stateBefore: "REJECTED",
     intents: ["OTHER"],
     messages: [{ role: "candidate", content: "Que tal, habeis podido verlo?" }],

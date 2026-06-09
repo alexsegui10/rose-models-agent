@@ -15,7 +15,7 @@ export const candidateStateEnum = pgEnum("candidate_state", [
   "CLOSED"
 ]);
 
-export const profileVisibilityEnum = pgEnum("profile_visibility", ["UNKNOWN", "PUBLIC", "PRIVATE", "UNAVAILABLE"]);
+export const profileVisibilityEnum = pgEnum("profile_visibility", ["PUBLIC", "PRIVATE", "UNKNOWN"]);
 export const humanReviewStatusEnum = pgEnum("human_review_status", [
   "NOT_REQUIRED",
   "PENDING",
@@ -26,8 +26,12 @@ export const humanReviewStatusEnum = pgEnum("human_review_status", [
 ]);
 export const conversationRoleEnum = pgEnum("conversation_role", ["candidate", "agent", "alex", "system"]);
 export const conversationAuthorEnum = pgEnum("conversation_author", ["CANDIDATE", "AI_AGENT", "ALEX", "TEAM_MEMBER", "SYSTEM"]);
-export const humanFitDecisionEnum = pgEnum("human_fit_decision", ["UNKNOWN", "PENDING", "APPROVED", "REJECTED", "REQUEST_MORE_INFO", "TAKE_OVER"]);
-export const phoneDeviceTypeEnum = pgEnum("phone_device_type", ["IPHONE", "ANDROID", "OTHER", "UNKNOWN"]);
+export const humanFitDecisionEnum = pgEnum("human_fit_decision", ["PENDING", "APPROVED", "REJECTED"]);
+export const humanProfileReviewStatusEnum = pgEnum("human_profile_review_status", ["NOT_REVIEWED", "POTENTIAL_FIT", "NOT_A_FIT"]);
+export const deviceTypeEnum = pgEnum("device_type", ["IPHONE", "SAMSUNG", "OTHER", "UNKNOWN"]);
+export const deviceEligibilityEnum = pgEnum("device_eligibility", ["APPROVED", "PENDING_QUALITY_TEST", "PENDING_UPGRADE", "NOT_ELIGIBLE", "UNKNOWN"]);
+export const candidateCommercialTierEnum = pgEnum("candidate_commercial_tier", ["STANDARD", "HIGH_POTENTIAL", "EXCEPTIONAL"]);
+export const onboardingBlockerEnum = pgEnum("onboarding_blocker", ["DEVICE_UPGRADE_REQUIRED", "DEVICE_QUALITY_TEST_REQUIRED", "IDENTITY_VERIFICATION_REQUIRED", "CONTRACT_REQUIRED"]);
 export const humanReviewReasonEnum = pgEnum("human_review_reason", ["PROFILE_REVIEW", "PERCENTAGE_NEGOTIATION", "COMMERCIAL_EXCEPTION", "CONTRACT_QUESTION", "DATA_CONTRADICTION", "OTHER"]);
 export const negotiationDecisionEnum = pgEnum("negotiation_decision", ["KEEP_STANDARD_TERMS", "ALLOW_CUSTOM_TERMS", "REJECT_NEGOTIATION", "DISCUSS_IN_CALL"]);
 export const conversationFeedbackStatusEnum = pgEnum("conversation_feedback_status", ["APPROVED", "EDITED", "REJECTED"]);
@@ -42,15 +46,15 @@ export const candidates = pgTable("candidates", {
   country: text("country"),
   city: text("city"),
   phone: text("phone"),
-  phoneDeviceType: phoneDeviceTypeEnum("phone_device_type").notNull().default("UNKNOWN"),
-  hasRequiredIPhone: boolean("has_required_iphone"),
-  profileVisibility: profileVisibilityEnum("profile_visibility").notNull().default("UNKNOWN"),
+  deviceType: deviceTypeEnum("device_type").notNull().default("UNKNOWN"),
+  deviceModel: text("device_model"),
+  deviceEligibility: deviceEligibilityEnum("device_eligibility").notNull().default("UNKNOWN"),
+  commercialTier: candidateCommercialTierEnum("commercial_tier").notNull().default("STANDARD"),
   declaredProfileVisibility: profileVisibilityEnum("declared_profile_visibility").notNull().default("UNKNOWN"),
-  candidateDeclaredProfileAccessAccepted: boolean("candidate_declared_profile_access_accepted").notNull().default(false),
+  candidateClaimsFollowRequestAccepted: boolean("candidate_claims_follow_request_accepted").notNull().default(false),
   humanVerifiedProfileAccess: boolean("human_verified_profile_access").notNull().default(false),
-  profileReviewed: boolean("profile_reviewed").notNull().default(false),
-  humanProfileReviewed: boolean("human_profile_reviewed").notNull().default(false),
-  humanFitDecision: humanFitDecisionEnum("human_fit_decision").notNull().default("UNKNOWN"),
+  humanProfileReviewStatus: humanProfileReviewStatusEnum("human_profile_review_status").notNull().default("NOT_REVIEWED"),
+  humanFitDecision: humanFitDecisionEnum("human_fit_decision").notNull().default("PENDING"),
   hasOnlyFans: boolean("has_only_fans"),
   worksWithAnotherAgency: boolean("works_with_another_agency"),
   experienceDescription: text("experience_description"),
@@ -64,6 +68,7 @@ export const candidates = pgTable("candidates", {
   currentState: candidateStateEnum("current_state").notNull().default("NEW_LEAD"),
   humanReviewStatus: humanReviewStatusEnum("human_review_status").notNull().default("NOT_REQUIRED"),
   humanReviewReason: humanReviewReasonEnum("human_review_reason"),
+  onboardingBlockers: jsonb("onboarding_blockers").$type<string[]>().notNull().default([]),
   automationPaused: boolean("automation_paused").notNull().default(false),
   manualControlActive: boolean("manual_control_active").notNull().default(false),
   generationCancellationVersion: integer("generation_cancellation_version").notNull().default(0),

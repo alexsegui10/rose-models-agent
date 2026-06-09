@@ -24,7 +24,7 @@ describe("operational safety", () => {
       messages: [
         { content: "Tengo 23", externalMessageId: "debounce-1" },
         { content: "Soy de Madrid", externalMessageId: "debounce-2" },
-        { content: "Tengo experiencia creando contenido, estoy disponible por las tardes y tengo iPhone", externalMessageId: "debounce-3" }
+        { content: "Tengo experiencia creando contenido, estoy disponible por las tardes y tengo iPhone 13", externalMessageId: "debounce-3" }
       ]
     });
 
@@ -93,9 +93,9 @@ describe("operational safety", () => {
     });
 
     expect(second.candidate.currentState).toBe("PROFILE_READY_FOR_REVIEW");
-    expect(second.candidate.candidateDeclaredProfileAccessAccepted).toBe(true);
+    expect(second.candidate.candidateClaimsFollowRequestAccepted).toBe(true);
     expect(second.candidate.humanVerifiedProfileAccess).toBe(false);
-    expect(second.candidate.humanProfileReviewed).toBe(false);
+    expect(second.candidate.humanProfileReviewStatus).toBe("NOT_REVIEWED");
   });
 
   it("escalates contradictory age data", async () => {

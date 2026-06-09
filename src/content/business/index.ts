@@ -6,10 +6,13 @@ import { contentResponsibilityEntries } from "./content-responsibilities";
 import { contractPolicyEntries } from "./contract-policy";
 import { escalationPolicyEntries } from "./escalation-policy";
 import { frequentlyAskedQuestionEntries } from "./frequently-asked-questions";
+import { followUpPolicyEntries } from "./follow-up-policy";
 import { objectionHandlingEntries } from "./objection-handling";
 import { servicesPolicyEntries } from "./services-policy";
 
 export { activeRevenueSharePolicy } from "./commercial-policy";
+export { communicationPolicy, contentProductionPolicy } from "./content-responsibilities";
+export { followUpPolicy } from "./follow-up-policy";
 
 export const businessKnowledgeEntries = [
   ...agencyProfileEntries,
@@ -20,7 +23,7 @@ export const businessKnowledgeEntries = [
   ...contractPolicyEntries,
   ...escalationPolicyEntries,
   ...frequentlyAskedQuestionEntries,
+  ...followUpPolicyEntries,
   ...objectionHandlingEntries,
   ...servicesPolicyEntries
 ];
-

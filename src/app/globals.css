@@ -38,7 +38,7 @@ button {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  grid-template-columns: 320px minmax(0, 1fr) 430px;
   gap: 1px;
   background: var(--line);
 }
@@ -149,6 +149,12 @@ button {
   resize: vertical;
 }
 
+.import-textarea {
+  min-height: 180px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
 .primary {
   min-height: 42px;
   padding: 0 16px;
@@ -213,6 +219,70 @@ button {
   display: grid;
   gap: 10px;
   margin-top: 14px;
+}
+
+.trace-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 1.2fr);
+  gap: 6px 10px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.trace-grid span,
+.ab-run span {
+  color: var(--muted);
+}
+
+.trace-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.evaluation-box {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.evaluation-box h2 {
+  margin: 0;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ab-result,
+.issue-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.ab-run {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.ab-run p {
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.ab-run small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .debug-json {

@@ -4,6 +4,7 @@ import { DeterministicUnderstandingProvider } from "@/application/dataExtractor"
 import { LocalExampleRetriever } from "@/application/exampleRetriever";
 import { LocalBusinessKnowledgeRetriever } from "@/application/businessKnowledgeRetriever";
 import { validateFactualResponse } from "@/application/factualValidator";
+import { ModelConversationOutputSchema } from "@/application/llmProvider";
 import { buildResponsePlan } from "@/application/responsePlanner";
 import { evaluateResponseStyle } from "@/application/styleEvaluator";
 import { createCandidate, type Candidate, type ProfileVisibility } from "@/domain/candidate";
@@ -54,7 +55,7 @@ describe("business knowledge golden tests", () => {
     expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 
-  it("does not invent who receives each percentage while revenue share is unconfirmed", async () => {
+  it("answers who receives each percentage now that revenue share is confirmed", async () => {
     const { engine } = createKnowledgeEngine();
 
     const result = await engine.handleIncomingMessage({
@@ -63,10 +64,10 @@ describe("business knowledge golden tests", () => {
       message: "En el 70/30 quien recibe el 70?"
     });
 
-    expect(result.response.toLowerCase()).toContain("socio");
-    expect(result.response.toLowerCase()).not.toContain("modelo recibe");
-    expect(result.response.toLowerCase()).not.toContain("agencia recibe");
-    expect(result.responsePlan.requiresHumanReview).toBe(true);
+    expect(result.response).toContain("70%");
+    expect(result.response).toContain("30%");
+    expect(result.response.toLowerCase()).toContain("rose models");
+    expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 
   it("answers what the agency does from official knowledge", async () => {
@@ -83,7 +84,7 @@ describe("business knowledge golden tests", () => {
     expect(result.responsePlan.knowledgeEntryIds).toContain("services-agency-management");
   });
 
-  it("blocks DRAFT responsibilities instead of using them as official knowledge", async () => {
+  it("answers model responsibilities from active official knowledge", async () => {
     const { engine } = createKnowledgeEngine();
 
     const result = await engine.handleIncomingMessage({
@@ -92,10 +93,10 @@ describe("business knowledge golden tests", () => {
       message: "Y que tendria que hacer yo como modelo?"
     });
 
-    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
-    expect(result.response.toLowerCase()).toContain("socio");
-    expect(result.responsePlan.knowledgeEntryIds).not.toContain("content-model-responsibilities");
-    expect(result.responsePlan.uncoveredQuestion).toBe(true);
+    expect(result.candidate.currentState).toBe("QUALIFYING");
+    expect(result.response.toLowerCase()).toContain("drive");
+    expect(result.responsePlan.knowledgeEntryIds).toContain("content-model-responsibilities");
+    expect(result.responsePlan.uncoveredQuestion).toBe(false);
   });
 
   it("answers a new covered process question using the FAQ", async () => {
@@ -159,9 +160,10 @@ describe("business knowledge golden tests", () => {
       message: "En el 70/30 quien se queda cada parte?"
     });
 
-    expect(result.response).not.toContain("70%");
-    expect(result.response).not.toContain("30%");
-    expect(result.responsePlan.requiresHumanReview).toBe(true);
+    expect(result.response).toContain("70%");
+    expect(result.response).toContain("30%");
+    expect(result.response.toLowerCase()).toContain("rose models");
+    expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 
   it("factual validation rejects invented services", () => {
@@ -257,7 +259,7 @@ function candidateForPlan(): Candidate {
 }
 
 function baseUnderstanding() {
-  return {
+  return ModelConversationOutputSchema.parse({
     intent: "OTHER" as const,
     extractedData: {},
     dataCorrections: [],
@@ -276,5 +278,5 @@ function baseUnderstanding() {
     provider: "deterministic",
     modelVersion: "deterministic-local-2026-06-08.1",
     promptVersion: "understanding-2026-06-08.1"
-  };
+  });
 }

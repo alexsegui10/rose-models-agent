@@ -26,6 +26,14 @@ export function validateFactualResponse(response: string, plan: ResponsePlan): F
     reasons.push("La respuesta incluye porcentajes no autorizados para chat.");
   }
 
+  if (/(?:\d{1,3}\s?%)/.test(response) && !plan.hasApprovedNegotiationDecision) {
+    const percentages = [...response.matchAll(/(\d{1,3})\s?%/g)].map((match) => Number(match[1]));
+    const allowed = [activeRevenueSharePolicy.agencyPercentage, activeRevenueSharePolicy.modelPercentage].filter((value): value is number => typeof value === "number");
+    if (percentages.some((percentage) => !allowed.includes(percentage))) {
+      reasons.push("La respuesta incluye porcentajes fuera de la politica aprobada.");
+    }
+  }
+
   for (const pattern of forbiddenIncomePatterns) {
     if (pattern.test(response)) reasons.push("La respuesta promete ingresos o resultados economicos.");
   }
