@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { normalizeCandidate } from "@/domain/candidate";
 import { getSimulatorRepository } from "@/server/simulatorStore";
 
 const ManualControlSchema = z.object({
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
   }
 
   const updated = await repository.saveCandidate({
-    ...candidate,
+    ...normalizeCandidate(candidate),
     manualControlActive: parsed.data.manualControlActive,
     automationPaused: parsed.data.manualControlActive,
     updatedAt: new Date()

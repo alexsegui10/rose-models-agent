@@ -1,5 +1,5 @@
 import type { NegotiationDecision } from "@/domain/businessKnowledge";
-import type { Candidate, ConversationMessage, StateTransition } from "@/domain/candidate";
+import { normalizeCandidate, type Candidate, type ConversationMessage, type StateTransition } from "@/domain/candidate";
 import type { CandidateRepository } from "./types";
 
 export class InMemoryCandidateRepository implements CandidateRepository {
@@ -9,21 +9,24 @@ export class InMemoryCandidateRepository implements CandidateRepository {
   private readonly negotiationDecisions = new Map<string, NegotiationDecision>();
 
   async findCandidateById(id: string): Promise<Candidate | null> {
-    return this.candidates.get(id) ?? null;
+    const candidate = this.candidates.get(id);
+    return candidate ? this.normalizeAndStore(candidate) : null;
   }
 
   async findCandidateByInstagram(instagramUsername: string): Promise<Candidate | null> {
     const normalized = instagramUsername.toLowerCase();
-    return [...this.candidates.values()].find((candidate) => candidate.instagramUsername.toLowerCase() === normalized) ?? null;
+    const candidate = [...this.candidates.values()].find((item) => item.instagramUsername.toLowerCase() === normalized);
+    return candidate ? this.normalizeAndStore(candidate) : null;
   }
 
   async listCandidates(): Promise<Candidate[]> {
-    return [...this.candidates.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    return [...this.candidates.values()]
+      .map((candidate) => this.normalizeAndStore(candidate))
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
   async saveCandidate(candidate: Candidate): Promise<Candidate> {
-    this.candidates.set(candidate.id, candidate);
-    return candidate;
+    return this.normalizeAndStore(candidate);
   }
 
   async listMessages(candidateId: string, limit = 50): Promise<ConversationMessage[]> {
@@ -87,5 +90,11 @@ export class InMemoryCandidateRepository implements CandidateRepository {
   async saveNegotiationDecision(decision: NegotiationDecision): Promise<NegotiationDecision> {
     this.negotiationDecisions.set(decision.candidateId, decision);
     return decision;
+  }
+
+  private normalizeAndStore(candidate: Candidate): Candidate {
+    const normalized = normalizeCandidate(candidate);
+    this.candidates.set(normalized.id, normalized);
+    return normalized;
   }
 }

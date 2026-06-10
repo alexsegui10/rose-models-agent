@@ -104,6 +104,18 @@ export const CandidateSchema = z.object({
 
 export type Candidate = z.infer<typeof CandidateSchema>;
 
+type CandidateDateField = "createdAt" | "updatedAt" | "lastMessageAt";
+
+export type CandidateNormalizationInput = Partial<Omit<Candidate, CandidateDateField | "humanFitDecision">> & {
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+  lastMessageAt?: Date | string;
+  humanFitDecision?: unknown;
+  profileVisibility?: ProfileVisibility;
+  candidateDeclaredProfileAccessAccepted?: boolean;
+  profileReviewed?: boolean;
+};
+
 export const ConversationRoleSchema = z.enum(["candidate", "agent", "alex", "system"]);
 export type ConversationRole = z.infer<typeof ConversationRoleSchema>;
 
@@ -202,4 +214,60 @@ export function createCandidate(input: {
     createdAt: now,
     updatedAt: now
   });
+}
+
+export function normalizeCandidate(candidate: CandidateNormalizationInput): Candidate {
+  const now = new Date();
+  const createdAt = normalizeDate(candidate.createdAt, now);
+  const updatedAt = normalizeDate(candidate.updatedAt, createdAt);
+  const lastMessageAt = normalizeOptionalDate(candidate.lastMessageAt);
+  const humanFitDecision = HumanFitDecisionSchema.safeParse(candidate.humanFitDecision);
+
+  return CandidateSchema.parse({
+    ...candidate,
+    declaredProfileVisibility: candidate.declaredProfileVisibility ?? candidate.profileVisibility ?? "UNKNOWN",
+    candidateClaimsFollowRequestAccepted: candidate.candidateClaimsFollowRequestAccepted ?? candidate.candidateDeclaredProfileAccessAccepted ?? false,
+    humanProfileReviewStatus: candidate.humanProfileReviewStatus ?? (candidate.profileReviewed ? "POTENTIAL_FIT" : "NOT_REVIEWED"),
+    humanFitDecision: humanFitDecision.success ? humanFitDecision.data : "PENDING",
+    deviceType: candidate.deviceType ?? "UNKNOWN",
+    deviceModel: candidate.deviceModel ?? null,
+    deviceEligibility: candidate.deviceEligibility ?? "UNKNOWN",
+    commercialTier: candidate.commercialTier ?? "STANDARD",
+    objections: candidate.objections ?? [],
+    notes: candidate.notes ?? [],
+    conversationSummary: candidate.conversationSummary ?? "",
+    interestLevel: candidate.interestLevel ?? "UNKNOWN",
+    humanReviewStatus: candidate.humanReviewStatus ?? "NOT_REQUIRED",
+    onboardingBlockers: candidate.onboardingBlockers ?? [],
+    automationPaused: candidate.automationPaused ?? false,
+    manualControlActive: candidate.manualControlActive ?? false,
+    generationCancellationVersion: candidate.generationCancellationVersion ?? 0,
+    createdAt,
+    updatedAt,
+    lastMessageAt
+  });
+}
+
+function normalizeDate(value: Date | string | undefined, fallback: Date): Date {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsedDate = new Date(value);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+
+  return fallback;
+}
+
+function normalizeOptionalDate(value: Date | string | undefined): Date | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsedDate = normalizeDate(value, new Date(Number.NaN));
+  return Number.isNaN(parsedDate.getTime()) ? undefined : parsedDate;
 }

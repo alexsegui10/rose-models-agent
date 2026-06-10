@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { ProfileVisibilitySchema } from "@/domain/candidate";
+import type { ResponseDraftOutput } from "@/application/llmProvider";
+import { promptRegistry } from "@/application/promptRegistry";
+import { normalizeCandidate, ProfileVisibilitySchema } from "@/domain/candidate";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 
 const SendMessageSchema = z.object({
@@ -22,17 +24,19 @@ export async function POST(request: Request) {
   const engine = getSimulatorEngine();
   const repository = getSimulatorRepository();
   const result = await engine.handleIncomingMessage(parsed.data);
+  const candidate = await repository.saveCandidate(normalizeCandidate(result.candidate));
+  const draft = result.draft ?? missingDraftTrace(result.response);
   const messages = await repository.listMessages(result.candidate.id);
   const transitions = await repository.listTransitions(result.candidate.id);
 
   return NextResponse.json({
-    candidate: result.candidate,
+    candidate,
     response: result.response,
     duplicate: result.duplicate,
     automationBlocked: result.automationBlocked,
     automationMode: result.automationMode,
     deliveryStatus: result.deliveryStatus,
-    draft: result.draft,
+    draft,
     contradictions: result.contradictions,
     corrections: result.corrections,
     understanding: result.understanding,
@@ -72,4 +76,25 @@ export async function POST(request: Request) {
     messages,
     transitions
   });
+}
+
+function missingDraftTrace(response: string): ResponseDraftOutput {
+  return {
+    response,
+    provider: "unknown",
+    modelVersion: "unknown",
+    promptVersion: promptRegistry.drafting.version,
+    usedFallback: true,
+    requestedProvider: "UNKNOWN",
+    actualProvider: "unknown",
+    requestedModel: "unknown",
+    actualModel: "unknown",
+    fallbackReason: "missing-draft-trace",
+    durationMs: 0,
+    retryCount: 0,
+    inputTokens: null,
+    outputTokens: null,
+    estimatedCostUsd: null,
+    error: "La respuesta no incluia trazas de generacion."
+  };
 }

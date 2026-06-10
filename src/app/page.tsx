@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
 import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import type { ABEvaluationCase, ABWinner, EvaluationIssue, EvaluationSession } from "@/domain/evaluation";
@@ -11,7 +12,7 @@ type SimulatorResponse = {
   response: string;
   automationMode: string;
   deliveryStatus: string;
-  draft: DraftSummary;
+  draft?: DraftSummary;
   understanding: unknown;
   messages: ConversationMessage[];
   transitions: StateTransition[];
@@ -119,6 +120,8 @@ export default function Home() {
   const [importJson, setImportJson] = useState(sampleImportJson);
   const [importedConversations, setImportedConversations] = useState<ImportedConversation[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [technicalPanelOpen, setTechnicalPanelOpen] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const showDevelopmentPanel = process.env.NODE_ENV !== "production";
 
   useEffect(() => {
@@ -134,31 +137,7 @@ export default function Home() {
   }, []);
 
   const currentCandidate = selectedCandidate;
-  const extractedRows = useMemo(() => {
-    if (!currentCandidate) return [];
-
-    return [
-      ["Estado", currentCandidate.currentState],
-      ["Usuario", currentCandidate.instagramUsername],
-      ["Edad", currentCandidate.age?.toString() ?? "-"],
-      ["Ciudad", currentCandidate.city ?? "-"],
-      ["Pais", currentCandidate.country ?? "-"],
-      ["Telefono", currentCandidate.phone ?? "-"],
-      ["Tipo dispositivo", currentCandidate.deviceType],
-      ["Modelo dispositivo", currentCandidate.deviceModel ?? "-"],
-      ["Elegibilidad dispositivo", currentCandidate.deviceEligibility],
-      ["Nivel comercial", currentCandidate.commercialTier],
-      ["Visibilidad declarada", currentCandidate.declaredProfileVisibility],
-      ["Solicitud aceptada declarada", booleanValue(currentCandidate.candidateClaimsFollowRequestAccepted)],
-      ["Acceso verificado", booleanValue(currentCandidate.humanVerifiedProfileAccess)],
-      ["Revision perfil humano", currentCandidate.humanProfileReviewStatus],
-      ["Decision humana", currentCandidate.humanFitDecision],
-      ["Bloqueos onboarding", currentCandidate.onboardingBlockers.join(", ") || "-"],
-      ["OnlyFans", booleanValue(currentCandidate.hasOnlyFans)],
-      ["Otra agencia", booleanValue(currentCandidate.worksWithAnotherAgency)],
-      ["Revision humana", currentCandidate.humanReviewStatus]
-    ];
-  }, [currentCandidate]);
+  const extractedRows = useMemo(() => buildCandidatePanelRows(currentCandidate), [currentCandidate]);
 
   async function refreshCandidates() {
     const response = await fetch("/api/candidates");
@@ -186,33 +165,46 @@ export default function Home() {
 
   async function sendMessage() {
     setLoading(true);
-    const response = await fetch("/api/simulator/message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        candidateId: selectedCandidate?.id,
-        instagramUsername,
-        profileVisibility,
-        message
-      })
-    });
-    const data = (await response.json()) as SimulatorResponse;
-    setSelectedCandidate(data.candidate);
-    setInstagramUsername(data.candidate.instagramUsername);
-    setMessages(data.messages);
-    setTransitions(data.transitions);
-    setRetrievedExamples(data.retrievedExamples);
-    setKnowledgeEntries(data.knowledgeEntries);
-    setResponsePlan(data.responsePlan);
-    setFactualValidation(data.factualValidation);
-    setStyleEvaluation(data.styleEvaluation);
-    setStyleContext(data.styleContext);
-    setLastResult(data);
-    setEditedResponse(data.response);
-    setFeedbackStatus(null);
-    setMessage("");
-    await refreshCandidates();
-    setLoading(false);
+    setSendError(null);
+
+    try {
+      const response = await fetch("/api/simulator/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidateId: selectedCandidate?.id,
+          instagramUsername,
+          profileVisibility,
+          message
+        })
+      });
+      const data = (await response.json()) as Partial<SimulatorResponse> & { error?: string };
+
+      if (!response.ok || !data.candidate) {
+        setSendError(formatApiError(data.error));
+        return;
+      }
+
+      setSelectedCandidate(data.candidate);
+      setInstagramUsername(data.candidate.instagramUsername);
+      setMessages(data.messages ?? []);
+      setTransitions(data.transitions ?? []);
+      setRetrievedExamples(data.retrievedExamples ?? []);
+      setKnowledgeEntries(data.knowledgeEntries ?? []);
+      setResponsePlan(data.responsePlan ?? null);
+      setFactualValidation(data.factualValidation ?? null);
+      setStyleEvaluation(data.styleEvaluation ?? null);
+      setStyleContext(data.styleContext ?? null);
+      setLastResult(data as SimulatorResponse);
+      setEditedResponse(data.response ?? "");
+      setFeedbackStatus(null);
+      setMessage("");
+      await refreshCandidates();
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "No se pudo enviar el mensaje.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function sendFeedback(status: ConversationFeedbackStatus) {
@@ -234,7 +226,7 @@ export default function Home() {
         styleRating: styleRating ? Number(styleRating) : undefined,
         state: selectedCandidate.currentState,
         contextSnapshot: JSON.stringify(lastResult ?? styleContext),
-        modelVersion: lastResult?.draft.modelVersion
+        modelVersion: lastResult?.draft?.modelVersion
       })
     });
     setFeedbackStatus(status);
@@ -322,7 +314,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sessionId: evaluationSession.id,
-        turnIndex: evaluationSession.turnFeedback.length,
+        turnIndex: evaluationSession.turnFeedback?.length ?? 0,
         status,
         originalResponse: lastResult.response,
         editedResponse: status === "EDITED" ? editedResponse : undefined,
@@ -402,6 +394,7 @@ export default function Home() {
             {loading ? "Enviando..." : "Enviar mensaje"}
           </button>
         </form>
+        {sendError ? <p className="error-text">{sendError}</p> : null}
       </section>
 
       <aside className="panel">
@@ -429,12 +422,16 @@ export default function Home() {
 
         {showDevelopmentPanel ? (
           <section className="dev-panel">
-            <h2>Modo desarrollo</h2>
+            <button className="secondary" type="button" onClick={() => setTechnicalPanelOpen((current) => !current)}>
+              {technicalPanelOpen ? "Ocultar detalles tecnicos" : "Mostrar detalles tecnicos"}
+            </button>
+            {technicalPanelOpen ? (
+              <>
             {styleEvaluation ? (
               <div className="data-row">
                 <span>Evaluacion de estilo</span>
                 <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
-                <p className="muted">{styleEvaluation.reasons.length > 0 ? styleEvaluation.reasons.join(" ") : "Sin alertas de estilo."}</p>
+                <p className="muted">{(styleEvaluation.reasons?.length ?? 0) > 0 ? styleEvaluation.reasons.join(" ") : "Sin alertas de estilo."}</p>
               </div>
             ) : null}
 
@@ -442,7 +439,7 @@ export default function Home() {
               <div className="data-row">
                 <span>Validacion factual</span>
                 <strong>{factualValidation.valid ? "Correcta" : "Revisar"}</strong>
-                <p className="muted">{factualValidation.reasons.length > 0 ? factualValidation.reasons.join(" ") : "Sin alertas factuales."}</p>
+                <p className="muted">{(factualValidation.reasons?.length ?? 0) > 0 ? factualValidation.reasons.join(" ") : "Sin alertas factuales."}</p>
               </div>
             ) : null}
 
@@ -461,33 +458,7 @@ export default function Home() {
                 <strong>
                   {lastResult.automationMode} / {lastResult.deliveryStatus}
                 </strong>
-                <p className="muted">
-                  {lastResult.draft.provider} / {lastResult.draft.modelVersion} / {lastResult.draft.promptVersion}
-                </p>
-                <div className="trace-grid">
-                  <span>Proveedor solicitado</span>
-                  <strong>{lastResult.draft.requestedProvider}</strong>
-                  <span>Proveedor real</span>
-                  <strong>{lastResult.draft.actualProvider}</strong>
-                  <span>Modelo solicitado</span>
-                  <strong>{lastResult.draft.requestedModel}</strong>
-                  <span>Modelo real</span>
-                  <strong>{lastResult.draft.actualModel}</strong>
-                  <span>Fallback</span>
-                  <strong>{lastResult.draft.usedFallback ? "Si" : "No"}</strong>
-                  <span>Motivo fallback</span>
-                  <strong>{lastResult.draft.fallbackReason ?? lastResult.draft.error ?? "-"}</strong>
-                  <span>Duracion</span>
-                  <strong>{lastResult.draft.durationMs} ms</strong>
-                  <span>Reintentos</span>
-                  <strong>{lastResult.draft.retryCount}</strong>
-                  <span>Tokens</span>
-                  <strong>
-                    {lastResult.draft.inputTokens ?? "-"} in / {lastResult.draft.outputTokens ?? "-"} out
-                  </strong>
-                  <span>Coste estimado</span>
-                  <strong>{lastResult.draft.estimatedCostUsd === null ? "-" : `$${lastResult.draft.estimatedCostUsd.toFixed(6)}`}</strong>
-                </div>
+                {lastResult.draft ? <DraftTrace draft={lastResult.draft} /> : <p className="muted">Sin trazas de proveedor para esta respuesta.</p>}
               </div>
             ) : null}
 
@@ -520,7 +491,7 @@ export default function Home() {
                 <div className="data-row" key={example.id}>
                   <span>{example.category}</span>
                   <strong>{example.title}</strong>
-                  <p className="muted">{example.tags.join(", ")}</p>
+                  <p className="muted">{example.tags?.join(", ") || "-"}</p>
                 </div>
               ))}
             </div>
@@ -668,6 +639,8 @@ export default function Home() {
                 </div>
               ) : null}
             </section>
+              </>
+            ) : null}
           </section>
         ) : null}
       </aside>
@@ -675,12 +648,46 @@ export default function Home() {
   );
 }
 
-function booleanValue(value: boolean | undefined): string {
-  if (value === undefined) {
-    return "-";
+function DraftTrace({ draft }: { draft: DraftSummary }) {
+  return (
+    <>
+      <p className="muted">
+        {draft.provider} / {draft.modelVersion} / {draft.promptVersion}
+      </p>
+      <div className="trace-grid">
+        <span>Proveedor solicitado</span>
+        <strong>{draft.requestedProvider}</strong>
+        <span>Proveedor real</span>
+        <strong>{draft.actualProvider}</strong>
+        <span>Modelo solicitado</span>
+        <strong>{draft.requestedModel}</strong>
+        <span>Modelo real</span>
+        <strong>{draft.actualModel}</strong>
+        <span>Fallback</span>
+        <strong>{draft.usedFallback ? "Si" : "No"}</strong>
+        <span>Motivo fallback</span>
+        <strong>{draft.fallbackReason ?? draft.error ?? "-"}</strong>
+        <span>Duracion</span>
+        <strong>{draft.durationMs} ms</strong>
+        <span>Reintentos</span>
+        <strong>{draft.retryCount}</strong>
+        <span>Tokens</span>
+        <strong>
+          {draft.inputTokens ?? "-"} in / {draft.outputTokens ?? "-"} out
+        </strong>
+        <span>Coste estimado</span>
+        <strong>{draft.estimatedCostUsd === null ? "-" : `$${draft.estimatedCostUsd.toFixed(6)}`}</strong>
+      </div>
+    </>
+  );
+}
+
+function formatApiError(error: unknown): string {
+  if (typeof error === "string" && error.trim()) {
+    return error;
   }
 
-  return value ? "Si" : "No";
+  return "La API no devolvio una respuesta valida. Revisa la consola del servidor.";
 }
 
 function formatTrace(trace: ABEvaluationCase["runA"]["providerTrace"]): string {
