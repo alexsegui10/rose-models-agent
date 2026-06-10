@@ -1,4 +1,11 @@
-import type { Candidate, CandidatePatch, CandidateState, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
+import type {
+  Candidate,
+  CandidatePatch,
+  CandidateState,
+  ConversationMessage,
+  ProfileVisibility,
+  StateTransition
+} from "@/domain/candidate";
 import type { AutomationMode, DraftDeliveryStatus } from "@/domain/automation";
 import { createCandidate } from "@/domain/candidate";
 import { createTransition } from "@/domain/stateMachine";
@@ -12,7 +19,12 @@ import { buildConsistentCandidatePatch } from "./dataConsistency";
 import type { ExampleRetriever } from "./exampleRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
 import { safeFactualFallback, validateFactualResponse, type FactualValidationResult } from "./factualValidator";
-import type { ConversationUnderstandingProvider, ModelConversationOutput, ResponseDraftOutput, ResponseDraftingProvider } from "./llmProvider";
+import type {
+  ConversationUnderstandingProvider,
+  ModelConversationOutput,
+  ResponseDraftOutput,
+  ResponseDraftingProvider
+} from "./llmProvider";
 import { promptRegistry } from "./promptRegistry";
 import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
 import { buildResponsePlan } from "./responsePlanner";
@@ -49,6 +61,7 @@ export interface HandleIncomingMessageResult {
   draft: ResponseDraftOutput;
   contradictions: string[];
   corrections: string[];
+  plannedTransitions: StateTransition[];
 }
 
 export interface ConversationEngineDependencies {
@@ -82,18 +95,25 @@ export class ConversationEngine {
     });
   }
 
-  async handleIncomingTurn(input: CandidateLookupInput & { messages: IncomingTurnMessage[] }): Promise<HandleIncomingMessageResult> {
+  async handleIncomingTurn(
+    input: CandidateLookupInput & { messages: IncomingTurnMessage[] }
+  ): Promise<HandleIncomingMessageResult> {
     const groupedMessage = groupMessagesForTurn(input.messages);
     const candidate = await this.loadOrCreateCandidate(input);
 
     if (groupedMessage.externalMessageId) {
-      const duplicateInbound = await this.dependencies.repository.findMessageByExternalId(candidate.id, groupedMessage.externalMessageId);
+      const duplicateInbound = await this.dependencies.repository.findMessageByExternalId(
+        candidate.id,
+        groupedMessage.externalMessageId
+      );
       if (duplicateInbound) {
         return skippedResult(candidate, duplicateInbound.content, true, "Mensaje duplicado ignorado.");
       }
     }
 
-    await this.dependencies.repository.addMessage(candidateMessage(candidate.id, groupedMessage.content, groupedMessage.externalMessageId));
+    await this.dependencies.repository.addMessage(
+      candidateMessage(candidate.id, groupedMessage.content, groupedMessage.externalMessageId)
+    );
     const activeCandidate: Candidate = {
       ...candidate,
       generationCancellationVersion: candidate.generationCancellationVersion + 1,
@@ -116,7 +136,8 @@ export class ConversationEngine {
     });
     const extractedPatch: CandidatePatch = {
       ...consistency.patch,
-      candidateClaimsFollowRequestAccepted: understanding.intent === "ACCEPTS_PROFILE_REQUEST" ? true : consistency.patch.candidateClaimsFollowRequestAccepted
+      candidateClaimsFollowRequestAccepted:
+        understanding.intent === "ACCEPTS_PROFILE_REQUEST" ? true : consistency.patch.candidateClaimsFollowRequestAccepted
     };
     let updatedCandidate = applyExtractedData(activeCandidate, extractedPatch, input.profileVisibility);
     const commercialNotes =
@@ -171,7 +192,10 @@ export class ConversationEngine {
         ...projectedCandidate,
         currentState: nextState,
         humanReviewStatus: nextState === "WAITING_HUMAN_REVIEW" ? "PENDING" : projectedCandidate.humanReviewStatus,
-        humanReviewReason: nextState === "HUMAN_INTERVENTION_REQUIRED" ? responsePlan.humanReviewReason ?? projectedCandidate.humanReviewReason : projectedCandidate.humanReviewReason,
+        humanReviewReason:
+          nextState === "HUMAN_INTERVENTION_REQUIRED"
+            ? (responsePlan.humanReviewReason ?? projectedCandidate.humanReviewReason)
+            : projectedCandidate.humanReviewReason,
         updatedAt: new Date()
       };
     }
@@ -261,7 +285,8 @@ export class ConversationEngine {
         deliveryStatus: "BLOCKED",
         draft,
         contradictions: consistency.contradictions,
-        corrections: consistency.corrections
+        corrections: consistency.corrections,
+        plannedTransitions
       };
     }
 
@@ -284,7 +309,8 @@ export class ConversationEngine {
         deliveryStatus,
         draft,
         contradictions: consistency.contradictions,
-        corrections: consistency.corrections
+        corrections: consistency.corrections,
+        plannedTransitions
       };
     }
 
@@ -345,7 +371,8 @@ export class ConversationEngine {
       deliveryStatus,
       draft,
       contradictions: consistency.contradictions,
-      corrections: consistency.corrections
+      corrections: consistency.corrections,
+      plannedTransitions
     };
   }
 
@@ -428,7 +455,9 @@ export class ConversationEngine {
   }
 
   private async latestCandidateBeforeSend(projectedCandidate: Candidate): Promise<Candidate> {
-    const checked = this.dependencies.beforeSendCheck ? await this.dependencies.beforeSendCheck(projectedCandidate) : projectedCandidate;
+    const checked = this.dependencies.beforeSendCheck
+      ? await this.dependencies.beforeSendCheck(projectedCandidate)
+      : projectedCandidate;
     const latest = await this.dependencies.repository.findCandidateById(projectedCandidate.id);
     return latest
       ? {
@@ -441,7 +470,11 @@ export class ConversationEngine {
   }
 }
 
-function applyExtractedData(candidate: Candidate, extractedData: CandidatePatch, profileVisibility?: ProfileVisibility): Candidate {
+function applyExtractedData(
+  candidate: Candidate,
+  extractedData: CandidatePatch,
+  profileVisibility?: ProfileVisibility
+): Candidate {
   const patch: CandidatePatch = {
     declaredProfileVisibility: profileVisibility ?? extractedData.declaredProfileVisibility ?? candidate.declaredProfileVisibility
   };
@@ -474,7 +507,12 @@ function applyExtractedData(candidate: Candidate, extractedData: CandidatePatch,
   };
 }
 
-function decideNextState(candidate: Candidate, understanding: ModelConversationOutput, responsePlan: ResponsePlan, criticalHumanReviewReason: string | null): CandidateState | null {
+function decideNextState(
+  candidate: Candidate,
+  understanding: ModelConversationOutput,
+  responsePlan: ResponsePlan,
+  criticalHumanReviewReason: string | null
+): CandidateState | null {
   if (understanding.intent === "DECLINES") {
     return "CLOSED";
   }
@@ -487,11 +525,21 @@ function decideNextState(candidate: Candidate, understanding: ModelConversationO
     return "HUMAN_INTERVENTION_REQUIRED";
   }
 
-  if (criticalHumanReviewReason || responsePlan.requiresHumanReview || understanding.requiresHumanReview || understanding.intent === "REQUESTS_HUMAN" || understanding.intent === "PROMPT_INJECTION") {
+  if (
+    criticalHumanReviewReason ||
+    responsePlan.requiresHumanReview ||
+    understanding.requiresHumanReview ||
+    understanding.intent === "REQUESTS_HUMAN" ||
+    understanding.intent === "PROMPT_INJECTION"
+  ) {
     return "HUMAN_INTERVENTION_REQUIRED";
   }
 
-  if (candidate.currentState === "NEW_LEAD" && candidate.declaredProfileVisibility === "PRIVATE" && !candidate.humanVerifiedProfileAccess) {
+  if (
+    candidate.currentState === "NEW_LEAD" &&
+    candidate.declaredProfileVisibility === "PRIVATE" &&
+    !candidate.humanVerifiedProfileAccess
+  ) {
     return "WAITING_PROFILE_ACCESS";
   }
 
@@ -499,7 +547,11 @@ function decideNextState(candidate: Candidate, understanding: ModelConversationO
     return "PROFILE_READY_FOR_REVIEW";
   }
 
-  if (candidate.currentState === "PROFILE_READY_FOR_REVIEW" && candidate.humanVerifiedProfileAccess && candidate.humanProfileReviewStatus !== "NOT_REVIEWED") {
+  if (
+    candidate.currentState === "PROFILE_READY_FOR_REVIEW" &&
+    candidate.humanVerifiedProfileAccess &&
+    candidate.humanProfileReviewStatus !== "NOT_REVIEWED"
+  ) {
     return "QUALIFYING";
   }
 
@@ -514,7 +566,12 @@ function decideNextState(candidate: Candidate, understanding: ModelConversationO
   return null;
 }
 
-function generateResponse(candidate: Candidate, understanding: ModelConversationOutput, responsePlan: ResponsePlan, approvedNegotiationDecision: NegotiationDecision | null): string {
+function generateResponse(
+  candidate: Candidate,
+  understanding: ModelConversationOutput,
+  responsePlan: ResponsePlan,
+  approvedNegotiationDecision: NegotiationDecision | null
+): string {
   if (candidate.currentState === "CLOSED" && candidate.age && candidate.age < 18) {
     return "Gracias por contestar. Ahora mismo solo podemos valorar perfiles de personas mayores de edad, asi que no podemos seguir con el proceso. Te deseo lo mejor.";
   }
@@ -532,7 +589,10 @@ function generateResponse(candidate: Candidate, understanding: ModelConversation
       return "Eso se puede valorar segun el perfil y el potencial de la cuenta. Lo comento con mi socio y en la llamada te explicamos que condiciones podriamos ofrecerte.";
     }
 
-    if (understanding.humanReviewReason?.toLowerCase().includes("ia") || understanding.humanReviewReason?.toLowerCase().includes("bot")) {
+    if (
+      understanding.humanReviewReason?.toLowerCase().includes("ia") ||
+      understanding.humanReviewReason?.toLowerCase().includes("bot")
+    ) {
       return "Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso.";
     }
 
@@ -600,14 +660,24 @@ function generateResponse(candidate: Candidate, understanding: ModelConversation
 }
 
 function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candidate): string {
-  if (responsePlan.knowledgeEntryIds.includes("commercial-revenue-share-general") && responsePlan.answerFacts.some((fact) => fact.includes("70%"))) {
-    const parts = ["El reparto estandar es 70% para Rose Models y 30% para ti.", "Se calcula sobre el neto despues de la comision de la plataforma."];
+  if (
+    responsePlan.knowledgeEntryIds.includes("commercial-revenue-share-general") &&
+    responsePlan.answerFacts.some((fact) => fact.includes("70%"))
+  ) {
+    const parts = [
+      "El reparto estandar es 70% para Rose Models y 30% para ti.",
+      "Se calcula sobre el neto despues de la comision de la plataforma."
+    ];
     if (responsePlan.questionToAsk && !candidate.age) parts.push(responsePlan.questionToAsk);
     return parts.join("\n\n");
   }
 
   if (responsePlan.knowledgeEntryIds.includes("commercial-no-fixed-salary")) {
-    return withOptionalQuestion("No funciona como un salario fijo.\n\nVa por reparto y los detalles se explican mejor en llamada para que quede claro.", responsePlan, candidate);
+    return withOptionalQuestion(
+      "No funciona como un salario fijo.\n\nVa por reparto y los detalles se explican mejor en llamada para que quede claro.",
+      responsePlan,
+      candidate
+    );
   }
 
   if (responsePlan.knowledgeEntryIds.includes("commercial-why-agency-70")) {
@@ -618,7 +688,11 @@ function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candida
     const mentionsOldMaterial = responsePlan.answerFacts.some((fact) => fact.toLowerCase().includes("material antiguo"));
     return mentionsOldMaterial
       ? "Para Instagram necesitamos contenido nuevo. Para OnlyFans se puede aprovechar material antiguo si sirve, pero eso lo vemos segun el caso."
-      : withOptionalQuestion("Para Instagram necesitamos contenido nuevo y que no se haya publicado antes.", responsePlan, candidate);
+      : withOptionalQuestion(
+          "Para Instagram necesitamos contenido nuevo y que no se haya publicado antes.",
+          responsePlan,
+          candidate
+        );
   }
 
   if (responsePlan.knowledgeEntryIds.includes("content-boundaries-neutral-question")) {
@@ -702,7 +776,11 @@ function nextQualifyingQuestion(candidate: Candidate): string | null {
   return null;
 }
 
-function transitionReason(nextState: CandidateState, understanding: ModelConversationOutput, criticalHumanReviewReason: string | null): string {
+function transitionReason(
+  nextState: CandidateState,
+  understanding: ModelConversationOutput,
+  criticalHumanReviewReason: string | null
+): string {
   if (nextState === "WAITING_HUMAN_REVIEW") {
     return "La candidata tiene informacion minima suficiente para revision humana.";
   }
@@ -734,7 +812,11 @@ function candidateMessage(candidateId: string, content: string, externalMessageI
   };
 }
 
-function agentMessage(candidateId: string, content: string, metadata: Record<string, string | number | boolean>): ConversationMessage {
+function agentMessage(
+  candidateId: string,
+  content: string,
+  metadata: Record<string, string | number | boolean>
+): ConversationMessage {
   return {
     id: crypto.randomUUID(),
     candidateId,
@@ -780,7 +862,11 @@ function tagsForRetrieval(candidate: Candidate, understanding: ModelConversation
   return tags;
 }
 
-function criticalRestrictionReason(candidate: Candidate, understanding: ModelConversationOutput, contradictions: string[]): string | null {
+function criticalRestrictionReason(
+  candidate: Candidate,
+  understanding: ModelConversationOutput,
+  contradictions: string[]
+): string | null {
   if (candidate.manualControlActive || candidate.automationPaused) return "La automatizacion esta pausada por control manual.";
   if (contradictions.length > 0) return `Datos contradictorios detectados: ${contradictions.join("; ")}`;
   if (candidate.deviceEligibility === "NOT_ELIGIBLE") return "Movil no elegible por calidad.";
@@ -789,7 +875,9 @@ function criticalRestrictionReason(candidate: Candidate, understanding: ModelCon
 }
 
 function canAutomationSend(candidate: Candidate, tokenVersion: number): boolean {
-  return !candidate.manualControlActive && !candidate.automationPaused && candidate.generationCancellationVersion === tokenVersion;
+  return (
+    !candidate.manualControlActive && !candidate.automationPaused && candidate.generationCancellationVersion === tokenVersion
+  );
 }
 
 function deliveryStatusFor(
@@ -911,7 +999,8 @@ function skippedResult(candidate: Candidate, response: string, duplicate: boolea
       estimatedCostUsd: null
     },
     contradictions: [],
-    corrections: []
+    corrections: [],
+    plannedTransitions: []
   };
 }
 

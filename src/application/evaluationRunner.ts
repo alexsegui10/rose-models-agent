@@ -1,10 +1,11 @@
 import { ConversationEngine, type HandleIncomingMessageResult } from "./conversationEngine";
+import type { ImportedConversation } from "./conversationImport";
 import { createLlmProviders } from "./llmFactory";
 import { DeterministicUnderstandingProvider } from "./dataExtractor";
 import { LocalBusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
-import type { CandidateState, ProfileVisibility } from "@/domain/candidate";
+import { createCandidate, type Candidate, type CandidateState, type ProfileVisibility } from "@/domain/candidate";
 import {
   ABEvaluationCaseSchema,
   EvaluationSessionSchema,
@@ -15,9 +16,10 @@ import {
   type EvaluationSession,
   type EvaluationSessionSummary,
   type EvaluationTurnFeedback,
+  type PlaybackTurn,
   type ProviderCallTrace
 } from "@/domain/evaluation";
-import type { AlexStyleRating } from "@/domain/styleEvaluation";
+import type { AlexStyleRating, StyleEvaluation } from "@/domain/styleEvaluation";
 
 export interface RunABEvaluationInput {
   messages: string[];
@@ -134,13 +136,158 @@ export async function runABEvaluation(input: RunABEvaluationInput): Promise<ABEv
   };
 }
 
-export function createEvaluationSession(input: { conversationId: string; model: string }): EvaluationSession {
+export interface PlayImportedConversationInput {
+  conversation: ImportedConversation;
+  model: string;
+  openaiApiKey?: string;
+}
+
+export interface PlayImportedConversationResult {
+  turns: PlaybackTurn[];
+  providerTraces: ProviderCallTrace[];
+}
+
+export async function playImportedConversation(input: PlayImportedConversationInput): Promise<PlayImportedConversationResult> {
+  const repository = new InMemoryCandidateRepository();
+  const env = {
+    ...process.env,
+    LLM_MODE: input.openaiApiKey ? "OPENAI" : "DETERMINISTIC",
+    OPENAI_API_KEY: input.openaiApiKey ?? process.env.OPENAI_API_KEY,
+    OPENAI_UNDERSTANDING_MODEL: input.model,
+    OPENAI_WRITING_MODEL: input.model,
+    AUTOMATION_MODE: "DRAFT_ONLY"
+  } as NodeJS.ProcessEnv;
+  const providers = createLlmProviders(env);
+  const engine = new ConversationEngine({
+    repository,
+    understandingProvider:
+      providers.config.llmMode === "OPENAI" ? providers.understandingProvider : new DeterministicUnderstandingProvider(),
+    draftingProvider: providers.draftingProvider,
+    businessKnowledgeRetriever: new LocalBusinessKnowledgeRetriever(),
+    exampleRetriever: new LocalExampleRetriever(),
+    automationMode: "DRAFT_ONLY"
+  });
+
+  const turns: PlaybackTurn[] = [];
+  const providerTraces: ProviderCallTrace[] = [];
+  const username = `playback_${crypto.randomUUID()}`;
+  let candidateId: string | undefined;
+
+  if (input.conversation.initialState !== "NEW_LEAD") {
+    const seededCandidate = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: username, profileVisibility: "PUBLIC" }),
+      currentState: input.conversation.initialState
+    });
+    candidateId = seededCandidate.id;
+  }
+
+  for (let index = 0; index < input.conversation.messages.length; index += 1) {
+    const message = input.conversation.messages[index];
+    if (!message || message.role !== "candidate") {
+      continue;
+    }
+
+    const result = await engine.handleIncomingMessage({
+      candidateId,
+      instagramUsername: username,
+      profileVisibility: "PUBLIC",
+      message: message.content
+    });
+    const playbackCandidate = await applyPlannedPlaybackTransitions(repository, result);
+    candidateId = playbackCandidate.id;
+
+    const providerTrace = traceFromResult(result);
+    providerTraces.push(providerTrace);
+    turns.push({
+      turnIndex: turns.length,
+      candidateMessage: message.content,
+      generatedResponse: result.response,
+      originalResponse: originalResponseFor(input.conversation.messages, index),
+      resultingState: playbackCandidate.currentState,
+      suggestedIssues: suggestEvaluationIssues(result.factualValidation, result.styleEvaluation),
+      providerTrace
+    });
+  }
+
+  return { turns, providerTraces };
+}
+
+/**
+ * Solo para playback de evaluacion: aplica al candidato EFIMERO las transiciones que el motor
+ * planifico de forma determinista pero no persistio porque corre en DRAFT_ONLY. Replica lo que
+ * hace la rama de envio del motor para que cada turno se reproduzca desde el estado real.
+ */
+async function applyPlannedPlaybackTransitions(
+  repository: InMemoryCandidateRepository,
+  result: HandleIncomingMessageResult
+): Promise<Candidate> {
+  if (result.plannedTransitions.length === 0) {
+    return result.candidate;
+  }
+
+  let candidate = result.candidate;
+  for (const transition of result.plannedTransitions) {
+    await repository.addTransition(transition);
+    candidate = {
+      ...candidate,
+      currentState: transition.toState,
+      humanReviewStatus: transition.toState === "WAITING_HUMAN_REVIEW" ? "PENDING" : candidate.humanReviewStatus,
+      humanReviewReason:
+        transition.toState === "HUMAN_INTERVENTION_REQUIRED"
+          ? (result.responsePlan.humanReviewReason ?? candidate.humanReviewReason)
+          : candidate.humanReviewReason,
+      updatedAt: new Date()
+    };
+  }
+
+  return repository.saveCandidate(candidate);
+}
+
+export function suggestEvaluationIssues(
+  factualValidation: { valid: boolean },
+  styleEvaluation: StyleEvaluation
+): EvaluationIssue[] {
+  const issues: EvaluationIssue[] = [];
+  if (!factualValidation.valid) issues.push("FACTUAL_ERROR");
+  if (styleEvaluation.isTooFormal) issues.push("TOO_FORMAL");
+  if (styleEvaluation.isTooLong) issues.push("TOO_LONG");
+  if (styleEvaluation.repeatsKnownInformation) issues.push("REPETITION");
+  if (styleEvaluation.asksTooManyQuestions) issues.push("UNNECESSARY_QUESTION");
+  if (!styleEvaluation.addressesCandidateMessage) issues.push("MISSED_REAL_QUESTION");
+  return issues;
+}
+
+function originalResponseFor(messages: ImportedConversation["messages"], candidateIndex: number): string | null {
+  const followUps: string[] = [];
+  for (let index = candidateIndex + 1; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (!message || message.role === "candidate") {
+      break;
+    }
+    if (message.role === "agent" || message.role === "alex") {
+      followUps.push(message.content);
+    }
+  }
+  if (followUps.length > 0) {
+    return followUps.join("\n");
+  }
+
+  const candidateMessage = messages[candidateIndex];
+  return candidateMessage?.correctedResponse ?? candidateMessage?.originalAlexResponse ?? null;
+}
+
+export function createEvaluationSession(input: {
+  conversationId: string;
+  model: string;
+  playbackTurns?: PlaybackTurn[];
+}): EvaluationSession {
   return {
     id: crypto.randomUUID(),
     conversationId: input.conversationId,
     model: input.model,
     createdAt: new Date(),
-    turnFeedback: []
+    turnFeedback: [],
+    playbackTurns: input.playbackTurns
   };
 }
 
@@ -152,10 +299,11 @@ export function addTurnFeedback(
   const turnFeedback = [...session.turnFeedback.filter((item) => item.turnIndex !== feedback.turnIndex), feedback].sort(
     (a, b) => a.turnIndex - b.turnIndex
   );
+  const traces = providerTraces.length > 0 ? providerTraces : (session.playbackTurns ?? []).map((turn) => turn.providerTrace);
   return {
     ...session,
     turnFeedback,
-    summary: summarizeSession(session.model, turnFeedback, providerTraces)
+    summary: summarizeSession(session.model, turnFeedback, traces)
   };
 }
 

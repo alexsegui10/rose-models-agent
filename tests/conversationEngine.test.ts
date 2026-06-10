@@ -29,6 +29,29 @@ describe("ConversationEngine", () => {
     expect(result.response).toContain("experiencia");
   });
 
+  it("exposes planned transitions in DRAFT_ONLY mode without persisting them", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      automationMode: "DRAFT_ONLY"
+    });
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_draft_transitions",
+      profileVisibility: "PUBLIC",
+      message: "Hola, me interesa. Tengo 22 años y soy de Madrid."
+    });
+
+    expect(result.candidate.currentState).toBe("NEW_LEAD");
+    expect(result.plannedTransitions.map((transition) => transition.toState)).toEqual(["QUALIFYING"]);
+    expect(result.plannedTransitions[0]?.fromState).toBe("NEW_LEAD");
+
+    const stored = await repository.findCandidateById(result.candidate.id);
+    expect(stored?.currentState).toBe("NEW_LEAD");
+    expect(await repository.listTransitions(result.candidate.id)).toHaveLength(0);
+  });
+
   it("asks for profile access when the profile is private", async () => {
     const { engine, repository } = createEngine();
 

@@ -72,6 +72,17 @@ export const EvaluationTurnFeedbackSchema = z.object({
 });
 export type EvaluationTurnFeedback = z.infer<typeof EvaluationTurnFeedbackSchema>;
 
+export const PlaybackTurnSchema = z.object({
+  turnIndex: z.number().int().nonnegative(),
+  candidateMessage: z.string().min(1),
+  generatedResponse: z.string(),
+  originalResponse: z.string().nullable(),
+  resultingState: CandidateStateSchema,
+  suggestedIssues: z.array(EvaluationIssueSchema).default([]),
+  providerTrace: ProviderCallTraceSchema
+});
+export type PlaybackTurn = z.infer<typeof PlaybackTurnSchema>;
+
 export const EvaluationSessionSummarySchema = z.object({
   approvedWithoutChangesPct: z.number().nonnegative(),
   editedPct: z.number().nonnegative(),
@@ -92,6 +103,7 @@ export const EvaluationSessionSchema = z.object({
   model: z.string(),
   createdAt: z.date(),
   turnFeedback: z.array(EvaluationTurnFeedbackSchema).default([]),
+  playbackTurns: z.array(PlaybackTurnSchema).optional(),
   summary: EvaluationSessionSummarySchema.optional()
 });
 export type EvaluationSession = z.infer<typeof EvaluationSessionSchema>;
