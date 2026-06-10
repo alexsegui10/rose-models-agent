@@ -8,14 +8,13 @@ export interface LlmRuntimeConfig {
   openaiApiKey?: string;
   understandingModel: string;
   writingModel: string;
-  reviewModel: string;
   timeoutMs: number;
   maxRetries: number;
 }
 
-const defaultUnderstandingModel = "gpt-4.1-mini";
-const defaultWritingModel = "gpt-4.1-mini";
-const defaultReviewModel = "gpt-4.1-mini";
+// gpt-4.1-mini fue deslistado por OpenAI (su variante nano se apaga el 23-oct-2026).
+const defaultUnderstandingModel = "gpt-5.4-mini";
+const defaultWritingModel = "gpt-5.4-mini";
 
 export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRuntimeConfig {
   const requestedMode = env.LLM_MODE === "OPENAI" ? "OPENAI" : "DETERMINISTIC";
@@ -29,7 +28,6 @@ export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRu
     openaiApiKey,
     understandingModel: env.OPENAI_UNDERSTANDING_MODEL?.trim() || defaultUnderstandingModel,
     writingModel: env.OPENAI_WRITING_MODEL?.trim() || defaultWritingModel,
-    reviewModel: env.OPENAI_REVIEW_MODEL?.trim() || defaultReviewModel,
     timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 12000),
     maxRetries: positiveNumber(env.OPENAI_MAX_RETRIES, 1)
   };

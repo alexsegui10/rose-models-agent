@@ -9,7 +9,7 @@ import { getEvaluationRepository } from "@/server/simulatorStore";
 const RunABSchema = z.object({
   messages: z.array(z.string().min(1)).min(1),
   profileVisibility: ProfileVisibilitySchema.default("PUBLIC"),
-  modelA: z.string().default("gpt-4.1-mini"),
+  modelA: z.string().default("gpt-5.4-nano"),
   modelB: z.string().default("gpt-5.4-mini"),
   blind: z.boolean().default(true)
 });

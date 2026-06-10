@@ -97,6 +97,26 @@ describe("ConversationEngine", () => {
     expect(result.response).toContain("mayores de edad");
   });
 
+  it("does not advance to human review while the age is unknown, even with the rest complete", async () => {
+    const { engine } = createEngine();
+
+    const first = await engine.handleIncomingMessage({
+      instagramUsername: "lead_sin_edad",
+      profileVisibility: "PUBLIC",
+      message: "Hola, me interesa mucho. Soy de Valencia."
+    });
+
+    const second = await engine.handleIncomingMessage({
+      candidateId: first.candidate.id,
+      instagramUsername: "lead_sin_edad",
+      message: "Tengo experiencia creando contenido para Instagram, estoy disponible por las tardes y tengo iPhone 13."
+    });
+
+    expect(second.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
+    expect(second.candidate.isAdultConfirmed).not.toBe(true);
+    expect(second.candidate.currentState).toBe("QUALIFYING");
+  });
+
   it("stores phone if the candidate sends it directly without skipping age", async () => {
     const { engine } = createEngine();
 

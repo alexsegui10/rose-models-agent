@@ -74,7 +74,7 @@ export class InMemoryEvaluationRepository {
 }
 
 export async function runABEvaluation(input: RunABEvaluationInput): Promise<ABEvaluationCase> {
-  const modelA = input.modelA ?? process.env.AB_MODEL_A ?? "gpt-4.1-mini";
+  const modelA = input.modelA ?? process.env.AB_MODEL_A ?? "gpt-5.4-nano";
   const modelB = input.modelB ?? process.env.AB_MODEL_B ?? "gpt-5.4-mini";
   const sharedKnowledgeRetriever = new LocalBusinessKnowledgeRetriever();
   const sharedExampleRetriever = new LocalExampleRetriever();
@@ -110,7 +110,9 @@ export function addTurnFeedback(
   feedback: EvaluationTurnFeedback,
   providerTraces: ProviderCallTrace[] = []
 ): EvaluationSession {
-  const turnFeedback = [...session.turnFeedback.filter((item) => item.turnIndex !== feedback.turnIndex), feedback].sort((a, b) => a.turnIndex - b.turnIndex);
+  const turnFeedback = [...session.turnFeedback.filter((item) => item.turnIndex !== feedback.turnIndex), feedback].sort(
+    (a, b) => a.turnIndex - b.turnIndex
+  );
   return {
     ...session,
     turnFeedback,
@@ -118,12 +120,17 @@ export function addTurnFeedback(
   };
 }
 
-export function summarizeSession(model: string, feedback: EvaluationTurnFeedback[], providerTraces: ProviderCallTrace[] = []): EvaluationSessionSummary {
+export function summarizeSession(
+  model: string,
+  feedback: EvaluationTurnFeedback[],
+  providerTraces: ProviderCallTrace[] = []
+): EvaluationSessionSummary {
   const total = Math.max(feedback.length, 1);
   const ratings = feedback.map((item) => item.styleRating).filter((value): value is AlexStyleRating => typeof value === "number");
   const countIssue = (issue: EvaluationIssue) => feedback.filter((item) => item.issues.includes(issue)).length;
   const totalCost = providerTraces.reduce((sum, trace) => sum + (trace.estimatedCostUsd ?? 0), 0);
-  const averageLatencyMs = providerTraces.length > 0 ? providerTraces.reduce((sum, trace) => sum + trace.durationMs, 0) / providerTraces.length : 0;
+  const averageLatencyMs =
+    providerTraces.length > 0 ? providerTraces.reduce((sum, trace) => sum + trace.durationMs, 0) / providerTraces.length : 0;
 
   return {
     approvedWithoutChangesPct: (feedback.filter((item) => item.status === "APPROVED").length / total) * 100,
@@ -158,7 +165,8 @@ async function runModelConversation(
   const providers = createLlmProviders(env);
   const engine = new ConversationEngine({
     repository,
-    understandingProvider: providers.config.llmMode === "OPENAI" ? providers.understandingProvider : new DeterministicUnderstandingProvider(),
+    understandingProvider:
+      providers.config.llmMode === "OPENAI" ? providers.understandingProvider : new DeterministicUnderstandingProvider(),
     draftingProvider: providers.draftingProvider,
     businessKnowledgeRetriever,
     exampleRetriever,

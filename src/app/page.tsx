@@ -105,7 +105,7 @@ export default function Home() {
   const [styleRating, setStyleRating] = useState<string>("");
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
   const [abMessages, setAbMessages] = useState("Hola, me interesa\nQue porcentaje seria?");
-  const [abModelA, setAbModelA] = useState("gpt-4.1-mini");
+  const [abModelA, setAbModelA] = useState("gpt-5.4-nano");
   const [abModelB, setAbModelB] = useState("gpt-5.4-mini");
   const [abBlind, setAbBlind] = useState(true);
   const [abCase, setAbCase] = useState<ABEvaluationCase | null>(null);
@@ -383,7 +383,11 @@ export default function Home() {
               onChange={(event) => setInstagramUsername(event.target.value)}
               placeholder="instagram_username"
             />
-            <select className="field" value={profileVisibility} onChange={(event) => setProfileVisibility(event.target.value as ProfileVisibility)}>
+            <select
+              className="field"
+              value={profileVisibility}
+              onChange={(event) => setProfileVisibility(event.target.value as ProfileVisibility)}
+            >
               <option value="PUBLIC">Publico</option>
               <option value="PRIVATE">Privado</option>
               <option value="UNKNOWN">Desconocido</option>
@@ -427,218 +431,268 @@ export default function Home() {
             </button>
             {technicalPanelOpen ? (
               <>
-            {styleEvaluation ? (
-              <div className="data-row">
-                <span>Evaluacion de estilo</span>
-                <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
-                <p className="muted">{(styleEvaluation.reasons?.length ?? 0) > 0 ? styleEvaluation.reasons.join(" ") : "Sin alertas de estilo."}</p>
-              </div>
-            ) : null}
-
-            {factualValidation ? (
-              <div className="data-row">
-                <span>Validacion factual</span>
-                <strong>{factualValidation.valid ? "Correcta" : "Revisar"}</strong>
-                <p className="muted">{(factualValidation.reasons?.length ?? 0) > 0 ? factualValidation.reasons.join(" ") : "Sin alertas factuales."}</p>
-              </div>
-            ) : null}
-
-            {responsePlan ? (
-              <div className="data-row">
-                <span>Plan de respuesta</span>
-                <strong>{responsePlan.objective}</strong>
-                <p className="muted">{responsePlan.humanReviewReason ?? "Sin revision humana requerida."}</p>
-                <pre className="debug-json">{JSON.stringify(responsePlan, null, 2)}</pre>
-              </div>
-            ) : null}
-
-            {lastResult ? (
-              <div className="data-row">
-                <span>Automatizacion</span>
-                <strong>
-                  {lastResult.automationMode} / {lastResult.deliveryStatus}
-                </strong>
-                {lastResult.draft ? <DraftTrace draft={lastResult.draft} /> : <p className="muted">Sin trazas de proveedor para esta respuesta.</p>}
-              </div>
-            ) : null}
-
-            {styleContext ? (
-              <div className="data-row">
-                <span>Versiones</span>
-                <strong>{styleContext.styleProfileVersion}</strong>
-                <p className="muted">{styleContext.retrieverVersion}</p>
-              </div>
-            ) : null}
-
-            {lastResult ? (
-              <div className="data-row">
-                <span>Datos extraidos</span>
-                <strong>Comprension</strong>
-                <pre className="debug-json">{JSON.stringify(lastResult.understanding, null, 2)}</pre>
-              </div>
-            ) : null}
-
-            <div className="data-grid">
-              {knowledgeEntries.map((entry) => (
-                <div className="data-row" key={entry.id}>
-                  <span>{entry.category}</span>
-                  <strong>{entry.title}</strong>
-                  <p className="muted">{entry.version}</p>
-                </div>
-              ))}
-
-              {retrievedExamples.map((example) => (
-                <div className="data-row" key={example.id}>
-                  <span>{example.category}</span>
-                  <strong>{example.title}</strong>
-                  <p className="muted">{example.tags?.join(", ") || "-"}</p>
-                </div>
-              ))}
-            </div>
-
-            {selectedCandidate && messages.some((item) => item.role === "agent") ? (
-              <div className="feedback-box">
-                <textarea
-                  className="textarea"
-                  value={editedResponse}
-                  onChange={(event) => setEditedResponse(event.target.value)}
-                  placeholder="Respuesta editada por Alex"
-                />
-                <input className="field" value={feedbackReason} onChange={(event) => setFeedbackReason(event.target.value)} placeholder="Motivo opcional" />
-                <select className="field" value={styleRating} onChange={(event) => setStyleRating(event.target.value)}>
-                  <option value="">Puntuacion estilo</option>
-                  <option value="1">1 - nunca lo diria</option>
-                  <option value="2">2 - poco parecido</option>
-                  <option value="3">3 - aceptable</option>
-                  <option value="4">4 - bastante parecido</option>
-                  <option value="5">5 - exactamente como lo diria</option>
-                </select>
-                <div className="row">
-                  <button className="secondary" type="button" onClick={() => void sendFeedback("APPROVED")}>
-                    Aprobar
-                  </button>
-                  <button className="secondary" type="button" onClick={() => void sendFeedback("EDITED")}>
-                    Editar y aprobar
-                  </button>
-                  <button className="danger" type="button" onClick={() => void sendFeedback("REJECTED")}>
-                    Rechazar
-                  </button>
-                  <button className="danger" type="button" onClick={() => void takeManualControl()}>
-                    Tomar control
-                  </button>
-                </div>
-                {feedbackStatus ? <p className="muted">Feedback guardado: {feedbackStatus}</p> : null}
-              </div>
-            ) : null}
-
-            <section className="evaluation-box">
-              <h2>Evaluacion A/B</h2>
-              <textarea className="textarea" value={abMessages} onChange={(event) => setAbMessages(event.target.value)} />
-              <div className="row">
-                <input className="field" value={abModelA} onChange={(event) => setAbModelA(event.target.value)} />
-                <input className="field" value={abModelB} onChange={(event) => setAbModelB(event.target.value)} />
-              </div>
-              <label className="checkbox-row">
-                <input checked={abBlind} type="checkbox" onChange={(event) => setAbBlind(event.target.checked)} />
-                Ocultar modelos al evaluar
-              </label>
-              <button className="secondary" disabled={abLoading} type="button" onClick={() => void runABComparison()}>
-                {abLoading ? "Ejecutando..." : "Ejecutar A/B"}
-              </button>
-
-              {abCase ? (
-                <div className="ab-result">
-                  <div className="ab-run">
-                    <span>Respuesta A{abCase.blind ? "" : ` / ${abCase.runA.model}`}</span>
-                    <p>{abCase.runA.response}</p>
-                    <small>{formatTrace(abCase.runA.providerTrace)}</small>
+                {styleEvaluation ? (
+                  <div className="data-row">
+                    <span>Evaluacion de estilo</span>
+                    <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
+                    <p className="muted">
+                      {(styleEvaluation.reasons?.length ?? 0) > 0 ? styleEvaluation.reasons.join(" ") : "Sin alertas de estilo."}
+                    </p>
                   </div>
-                  <div className="ab-run">
-                    <span>Respuesta B{abCase.blind ? "" : ` / ${abCase.runB.model}`}</span>
-                    <p>{abCase.runB.response}</p>
-                    <small>{formatTrace(abCase.runB.providerTrace)}</small>
-                  </div>
-                  <select className="field" value={abWinner} onChange={(event) => setAbWinner(event.target.value as ABWinner)}>
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="TIE">EMPATE</option>
-                    <option value="NONE">NINGUNA</option>
-                  </select>
-                  <select className="field" value={abStyleRating} onChange={(event) => setAbStyleRating(event.target.value)}>
-                    <option value="">Puntuacion estilo</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                  </select>
-                  <input className="field" value={abNote} onChange={(event) => setAbNote(event.target.value)} placeholder="Nota de Alex" />
-                  <button className="secondary" type="button" onClick={() => void saveABDecision()}>
-                    Guardar decision
-                  </button>
-                  {abCase.winner ? <p className="muted">Decision guardada: {abCase.winner}</p> : null}
-                </div>
-              ) : null}
-            </section>
+                ) : null}
 
-            <section className="evaluation-box">
-              <h2>Sesion de evaluacion</h2>
-              <textarea className="textarea import-textarea" value={importJson} onChange={(event) => setImportJson(event.target.value)} />
-              <button className="secondary" type="button" onClick={() => void importConversations()}>
-                Importar conversaciones
-              </button>
-              {importStatus ? <p className="muted">{importStatus}</p> : null}
-              <div className="row">
-                <select className="field" value={evalConversationId} onChange={(event) => setEvalConversationId(event.target.value)}>
-                  <option value="conversation-demo">conversation-demo</option>
-                  {importedConversations.map((conversation) => (
-                    <option key={conversation.id} value={conversation.id}>
-                      {conversation.id} / {conversation.category}
-                    </option>
-                  ))}
-                </select>
-                <input className="field" value={evalModel} onChange={(event) => setEvalModel(event.target.value)} />
-              </div>
-              <button className="secondary" type="button" onClick={() => void createLocalEvaluationSession()}>
-                Crear sesion
-              </button>
-              {importedConversations.find((conversation) => conversation.id === evalConversationId) ? (
-                <pre className="debug-json">{JSON.stringify(importedConversations.find((conversation) => conversation.id === evalConversationId), null, 2)}</pre>
-              ) : null}
-              {evaluationSession ? (
-                <div className="feedback-box">
-                  <p className="muted">Sesion {evaluationSession.id}</p>
-                  <div className="issue-grid">
-                    {(["FACTUAL_ERROR", "STATE_ERROR", "REPETITION", "TOO_FORMAL", "TOO_LONG", "UNNECESSARY_QUESTION", "MISSED_REAL_QUESTION"] as EvaluationIssue[]).map(
-                      (issue) => (
-                        <label className="checkbox-row" key={issue}>
-                          <input
-                            checked={evalIssues.includes(issue)}
-                            type="checkbox"
-                            onChange={(event) => {
-                              setEvalIssues((current) => (event.target.checked ? [...current, issue] : current.filter((item) => item !== issue)));
-                            }}
-                          />
-                          {issue}
-                        </label>
-                      )
+                {factualValidation ? (
+                  <div className="data-row">
+                    <span>Validacion factual</span>
+                    <strong>{factualValidation.valid ? "Correcta" : "Revisar"}</strong>
+                    <p className="muted">
+                      {(factualValidation.reasons?.length ?? 0) > 0
+                        ? factualValidation.reasons.join(" ")
+                        : "Sin alertas factuales."}
+                    </p>
+                  </div>
+                ) : null}
+
+                {responsePlan ? (
+                  <div className="data-row">
+                    <span>Plan de respuesta</span>
+                    <strong>{responsePlan.objective}</strong>
+                    <p className="muted">{responsePlan.humanReviewReason ?? "Sin revision humana requerida."}</p>
+                    <pre className="debug-json">{JSON.stringify(responsePlan, null, 2)}</pre>
+                  </div>
+                ) : null}
+
+                {lastResult ? (
+                  <div className="data-row">
+                    <span>Automatizacion</span>
+                    <strong>
+                      {lastResult.automationMode} / {lastResult.deliveryStatus}
+                    </strong>
+                    {lastResult.draft ? (
+                      <DraftTrace draft={lastResult.draft} />
+                    ) : (
+                      <p className="muted">Sin trazas de proveedor para esta respuesta.</p>
                     )}
                   </div>
-                  <div className="row">
-                    <button className="secondary" type="button" onClick={() => void saveSessionTurnFeedback("APPROVED")}>
-                      Aprobar turno
-                    </button>
-                    <button className="secondary" type="button" onClick={() => void saveSessionTurnFeedback("EDITED")}>
-                      Editar turno
-                    </button>
-                    <button className="danger" type="button" onClick={() => void saveSessionTurnFeedback("REJECTED")}>
-                      Rechazar turno
-                    </button>
+                ) : null}
+
+                {styleContext ? (
+                  <div className="data-row">
+                    <span>Versiones</span>
+                    <strong>{styleContext.styleProfileVersion}</strong>
+                    <p className="muted">{styleContext.retrieverVersion}</p>
                   </div>
-                  {evaluationSession.summary ? <pre className="debug-json">{JSON.stringify(evaluationSession.summary, null, 2)}</pre> : null}
+                ) : null}
+
+                {lastResult ? (
+                  <div className="data-row">
+                    <span>Datos extraidos</span>
+                    <strong>Comprension</strong>
+                    <pre className="debug-json">{JSON.stringify(lastResult.understanding, null, 2)}</pre>
+                  </div>
+                ) : null}
+
+                <div className="data-grid">
+                  {knowledgeEntries.map((entry) => (
+                    <div className="data-row" key={entry.id}>
+                      <span>{entry.category}</span>
+                      <strong>{entry.title}</strong>
+                      <p className="muted">{entry.version}</p>
+                    </div>
+                  ))}
+
+                  {retrievedExamples.map((example) => (
+                    <div className="data-row" key={example.id}>
+                      <span>{example.category}</span>
+                      <strong>{example.title}</strong>
+                      <p className="muted">{example.tags?.join(", ") || "-"}</p>
+                    </div>
+                  ))}
                 </div>
-              ) : null}
-            </section>
+
+                {selectedCandidate && messages.some((item) => item.role === "agent") ? (
+                  <div className="feedback-box">
+                    <textarea
+                      className="textarea"
+                      value={editedResponse}
+                      onChange={(event) => setEditedResponse(event.target.value)}
+                      placeholder="Respuesta editada por Alex"
+                    />
+                    <input
+                      className="field"
+                      value={feedbackReason}
+                      onChange={(event) => setFeedbackReason(event.target.value)}
+                      placeholder="Motivo opcional"
+                    />
+                    <select className="field" value={styleRating} onChange={(event) => setStyleRating(event.target.value)}>
+                      <option value="">Puntuacion estilo</option>
+                      <option value="1">1 - nunca lo diria</option>
+                      <option value="2">2 - poco parecido</option>
+                      <option value="3">3 - aceptable</option>
+                      <option value="4">4 - bastante parecido</option>
+                      <option value="5">5 - exactamente como lo diria</option>
+                    </select>
+                    <div className="row">
+                      <button className="secondary" type="button" onClick={() => void sendFeedback("APPROVED")}>
+                        Aprobar
+                      </button>
+                      <button className="secondary" type="button" onClick={() => void sendFeedback("EDITED")}>
+                        Editar y aprobar
+                      </button>
+                      <button className="danger" type="button" onClick={() => void sendFeedback("REJECTED")}>
+                        Rechazar
+                      </button>
+                      <button className="danger" type="button" onClick={() => void takeManualControl()}>
+                        Tomar control
+                      </button>
+                    </div>
+                    {feedbackStatus ? <p className="muted">Feedback guardado: {feedbackStatus}</p> : null}
+                  </div>
+                ) : null}
+
+                <section className="evaluation-box">
+                  <h2>Evaluacion A/B</h2>
+                  <textarea className="textarea" value={abMessages} onChange={(event) => setAbMessages(event.target.value)} />
+                  <div className="row">
+                    <input className="field" value={abModelA} onChange={(event) => setAbModelA(event.target.value)} />
+                    <input className="field" value={abModelB} onChange={(event) => setAbModelB(event.target.value)} />
+                  </div>
+                  <label className="checkbox-row">
+                    <input checked={abBlind} type="checkbox" onChange={(event) => setAbBlind(event.target.checked)} />
+                    Ocultar modelos al evaluar
+                  </label>
+                  <button className="secondary" disabled={abLoading} type="button" onClick={() => void runABComparison()}>
+                    {abLoading ? "Ejecutando..." : "Ejecutar A/B"}
+                  </button>
+
+                  {abCase ? (
+                    <div className="ab-result">
+                      <div className="ab-run">
+                        <span>Respuesta A{abCase.blind ? "" : ` / ${abCase.runA.model}`}</span>
+                        <p>{abCase.runA.response}</p>
+                        <small>{formatTrace(abCase.runA.providerTrace)}</small>
+                      </div>
+                      <div className="ab-run">
+                        <span>Respuesta B{abCase.blind ? "" : ` / ${abCase.runB.model}`}</span>
+                        <p>{abCase.runB.response}</p>
+                        <small>{formatTrace(abCase.runB.providerTrace)}</small>
+                      </div>
+                      <select
+                        className="field"
+                        value={abWinner}
+                        onChange={(event) => setAbWinner(event.target.value as ABWinner)}
+                      >
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="TIE">EMPATE</option>
+                        <option value="NONE">NINGUNA</option>
+                      </select>
+                      <select className="field" value={abStyleRating} onChange={(event) => setAbStyleRating(event.target.value)}>
+                        <option value="">Puntuacion estilo</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                      </select>
+                      <input
+                        className="field"
+                        value={abNote}
+                        onChange={(event) => setAbNote(event.target.value)}
+                        placeholder="Nota de Alex"
+                      />
+                      <button className="secondary" type="button" onClick={() => void saveABDecision()}>
+                        Guardar decision
+                      </button>
+                      {abCase.winner ? <p className="muted">Decision guardada: {abCase.winner}</p> : null}
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className="evaluation-box">
+                  <h2>Sesion de evaluacion</h2>
+                  <textarea
+                    className="textarea import-textarea"
+                    value={importJson}
+                    onChange={(event) => setImportJson(event.target.value)}
+                  />
+                  <button className="secondary" type="button" onClick={() => void importConversations()}>
+                    Importar conversaciones
+                  </button>
+                  {importStatus ? <p className="muted">{importStatus}</p> : null}
+                  <div className="row">
+                    <select
+                      className="field"
+                      value={evalConversationId}
+                      onChange={(event) => setEvalConversationId(event.target.value)}
+                    >
+                      <option value="conversation-demo">conversation-demo</option>
+                      {importedConversations.map((conversation) => (
+                        <option key={conversation.id} value={conversation.id}>
+                          {conversation.id} / {conversation.category}
+                        </option>
+                      ))}
+                    </select>
+                    <input className="field" value={evalModel} onChange={(event) => setEvalModel(event.target.value)} />
+                  </div>
+                  <button className="secondary" type="button" onClick={() => void createLocalEvaluationSession()}>
+                    Crear sesion
+                  </button>
+                  {importedConversations.find((conversation) => conversation.id === evalConversationId) ? (
+                    <pre className="debug-json">
+                      {JSON.stringify(
+                        importedConversations.find((conversation) => conversation.id === evalConversationId),
+                        null,
+                        2
+                      )}
+                    </pre>
+                  ) : null}
+                  {evaluationSession ? (
+                    <div className="feedback-box">
+                      <p className="muted">Sesion {evaluationSession.id}</p>
+                      <div className="issue-grid">
+                        {(
+                          [
+                            "FACTUAL_ERROR",
+                            "STATE_ERROR",
+                            "REPETITION",
+                            "TOO_FORMAL",
+                            "TOO_LONG",
+                            "UNNECESSARY_QUESTION",
+                            "MISSED_REAL_QUESTION"
+                          ] as EvaluationIssue[]
+                        ).map((issue) => (
+                          <label className="checkbox-row" key={issue}>
+                            <input
+                              checked={evalIssues.includes(issue)}
+                              type="checkbox"
+                              onChange={(event) => {
+                                setEvalIssues((current) =>
+                                  event.target.checked ? [...current, issue] : current.filter((item) => item !== issue)
+                                );
+                              }}
+                            />
+                            {issue}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="row">
+                        <button className="secondary" type="button" onClick={() => void saveSessionTurnFeedback("APPROVED")}>
+                          Aprobar turno
+                        </button>
+                        <button className="secondary" type="button" onClick={() => void saveSessionTurnFeedback("EDITED")}>
+                          Editar turno
+                        </button>
+                        <button className="danger" type="button" onClick={() => void saveSessionTurnFeedback("REJECTED")}>
+                          Rechazar turno
+                        </button>
+                      </div>
+                      {evaluationSession.summary ? (
+                        <pre className="debug-json">{JSON.stringify(evaluationSession.summary, null, 2)}</pre>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
               </>
             ) : null}
           </section>

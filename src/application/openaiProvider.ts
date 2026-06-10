@@ -271,15 +271,19 @@ function safeErrorName(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 120) : "unknown";
 }
 
-function estimateCostUsd(model: string, inputTokens: number | null, outputTokens: number | null): number | null {
+// Tarifas oficiales (developers.openai.com/api/docs/pricing, verificadas 10-jun-2026).
+// Si OpenAI cambia precios, actualizar aqui y en tests/openaiCostEstimation.test.ts.
+export function estimateCostUsd(model: string, inputTokens: number | null, outputTokens: number | null): number | null {
   if (inputTokens === null || outputTokens === null) return null;
 
   const lowerModel = model.toLowerCase();
   const rates = lowerModel.includes("gpt-5.4-mini")
-    ? { inputPerMillion: 0.25, outputPerMillion: 2 }
-    : lowerModel.includes("gpt-4.1-mini")
-      ? { inputPerMillion: 0.4, outputPerMillion: 1.6 }
-      : null;
+    ? { inputPerMillion: 0.75, outputPerMillion: 4.5 }
+    : lowerModel.includes("gpt-5.4-nano")
+      ? { inputPerMillion: 0.2, outputPerMillion: 1.25 }
+      : lowerModel.includes("gpt-4.1-mini")
+        ? { inputPerMillion: 0.4, outputPerMillion: 1.6 }
+        : null;
 
   if (!rates) return null;
 
