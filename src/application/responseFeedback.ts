@@ -1,6 +1,13 @@
 import { alexStyleProfile } from "@/content/style/alex-style-profile";
 import type { CandidateState } from "@/domain/candidate";
-import type { AlexStyleRating, ApprovedResponse, ConversationFeedback, ConversationFeedbackStatus } from "@/domain/styleEvaluation";
+import {
+  ApprovedResponseSchema,
+  ConversationFeedbackSchema,
+  type AlexStyleRating,
+  type ApprovedResponse,
+  type ConversationFeedback,
+  type ConversationFeedbackStatus
+} from "@/domain/styleEvaluation";
 
 export interface CreateConversationFeedbackInput {
   candidateId: string;
@@ -44,6 +51,43 @@ export class InMemoryConversationFeedbackRepository implements ConversationFeedb
   async listApprovedResponses(): Promise<ApprovedResponse[]> {
     return [...this.approvedResponses.values()];
   }
+
+  toSnapshot(): unknown {
+    return {
+      feedback: [...this.feedback.values()],
+      approvedResponses: [...this.approvedResponses.values()]
+    };
+  }
+
+  restoreSnapshot(data: unknown): void {
+    if (!isSnapshotRecord(data)) {
+      return;
+    }
+
+    if (Array.isArray(data.feedback)) {
+      this.feedback.clear();
+      for (const item of data.feedback) {
+        const parsed = ConversationFeedbackSchema.safeParse(item);
+        if (parsed.success) {
+          this.feedback.set(parsed.data.id, parsed.data);
+        }
+      }
+    }
+
+    if (Array.isArray(data.approvedResponses)) {
+      this.approvedResponses.clear();
+      for (const item of data.approvedResponses) {
+        const parsed = ApprovedResponseSchema.safeParse(item);
+        if (parsed.success) {
+          this.approvedResponses.set(parsed.data.id, parsed.data);
+        }
+      }
+    }
+  }
+}
+
+function isSnapshotRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function recordConversationFeedback(

@@ -5,15 +5,17 @@ import { LocalBusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 import type { CandidateState, ProfileVisibility } from "@/domain/candidate";
-import type {
-  ABModelRun,
-  ABEvaluationCase,
-  ABWinner,
-  EvaluationIssue,
-  EvaluationSession,
-  EvaluationSessionSummary,
-  EvaluationTurnFeedback,
-  ProviderCallTrace
+import {
+  ABEvaluationCaseSchema,
+  EvaluationSessionSchema,
+  type ABModelRun,
+  type ABEvaluationCase,
+  type ABWinner,
+  type EvaluationIssue,
+  type EvaluationSession,
+  type EvaluationSessionSummary,
+  type EvaluationTurnFeedback,
+  type ProviderCallTrace
 } from "@/domain/evaluation";
 import type { AlexStyleRating } from "@/domain/styleEvaluation";
 
@@ -71,6 +73,43 @@ export class InMemoryEvaluationRepository {
   async listSessions(): Promise<EvaluationSession[]> {
     return [...this.sessions.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
+
+  toSnapshot(): unknown {
+    return {
+      abCases: [...this.abCases.values()],
+      sessions: [...this.sessions.values()]
+    };
+  }
+
+  restoreSnapshot(data: unknown): void {
+    if (!isSnapshotRecord(data)) {
+      return;
+    }
+
+    if (Array.isArray(data.abCases)) {
+      this.abCases.clear();
+      for (const item of data.abCases) {
+        const parsed = ABEvaluationCaseSchema.safeParse(item);
+        if (parsed.success) {
+          this.abCases.set(parsed.data.id, parsed.data);
+        }
+      }
+    }
+
+    if (Array.isArray(data.sessions)) {
+      this.sessions.clear();
+      for (const item of data.sessions) {
+        const parsed = EvaluationSessionSchema.safeParse(item);
+        if (parsed.success) {
+          this.sessions.set(parsed.data.id, parsed.data);
+        }
+      }
+    }
+  }
+}
+
+function isSnapshotRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function runABEvaluation(input: RunABEvaluationInput): Promise<ABEvaluationCase> {

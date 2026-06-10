@@ -76,6 +76,10 @@ Protocolo (metodología 2026 verificada):
 - [ ] A/B honesto: gpt-5.4-mini vs gpt-5.4-nano (¿basta el barato para comprensión?), pares
       emparejados, ciego, test binomial. Con 100-200 pares solo se detectan ganadores ≥60-65%;
       empate estadístico → decidir por coste/latencia/fallbacks. Validar harness con un A/A.
+- [ ] Adaptador Anthropic (`anthropicProvider.ts`) tras las interfaces existentes, con el mismo
+      fallback determinista y trazas honestas, para A/B a ciegas GPT vs Claude (decisión de Alex,
+      10-jun-2026). Candidatos: claude-haiku-4-5 ($1/$5 por M) y claude-sonnet-4-6 ($3/$15 por M).
+      El proveedor del bot se decide con datos del A/B, no por preferencia.
 - [ ] Opcional (spike 1 día): promptfoo local como gate de regresión en CI (es el path oficial
       tras la muerte de OpenAI Evals el 30-nov-2026). Si fricciona con el pipeline multi-turno,
       descartarlo sin pena.

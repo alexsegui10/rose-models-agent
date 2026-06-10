@@ -60,6 +60,31 @@ export class InMemoryImportedConversationRepository {
   async get(id: string): Promise<ImportedConversation | null> {
     return this.conversations.get(id) ?? null;
   }
+
+  toSnapshot(): unknown {
+    return {
+      conversations: [...this.conversations.values()]
+    };
+  }
+
+  restoreSnapshot(data: unknown): void {
+    if (typeof data !== "object" || data === null || Array.isArray(data)) {
+      return;
+    }
+
+    const conversations = (data as Record<string, unknown>).conversations;
+    if (!Array.isArray(conversations)) {
+      return;
+    }
+
+    this.conversations.clear();
+    for (const item of conversations) {
+      const parsed = ImportedConversationSchema.safeParse(item);
+      if (parsed.success) {
+        this.conversations.set(parsed.data.id, parsed.data);
+      }
+    }
+  }
 }
 
 export function parseAnonymizedConversationJson(json: string): ImportedConversationFile {
@@ -75,7 +100,10 @@ export function parseAnonymizedConversationJson(json: string): ImportedConversat
 
 export function approvedImportedConversationsForExamples(file: ImportedConversationFile): ConversationExample[] {
   return file.conversations
-    .filter((conversation) => conversation.status === "ALEX_APPROVED" && conversation.purpose === "EXAMPLE" && conversation.idealNextResponse)
+    .filter(
+      (conversation) =>
+        conversation.status === "ALEX_APPROVED" && conversation.purpose === "EXAMPLE" && conversation.idealNextResponse
+    )
     .map((conversation) =>
       ConversationExampleSchema.parse({
         id: `imported-${conversation.id}`,
