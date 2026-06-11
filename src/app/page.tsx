@@ -924,8 +924,16 @@ function formatApiError(error: unknown): string {
 
 function formatTrace(trace: ABEvaluationCase["runA"]["providerTrace"]): string {
   const cost = trace.estimatedCostUsd === null ? "-" : `$${trace.estimatedCostUsd.toFixed(6)}`;
-  const fallback = trace.usedFallback ? " / fallback" : "";
+  const fallback = trace.usedFallback ? ` / fallback${formatFallbackStages(trace.fallbackReason)}` : "";
   return `${trace.actualProvider} / ${trace.actualModel} / ${trace.durationMs} ms / ${trace.retryCount} reintentos / ${cost}${fallback}`;
+}
+
+function formatFallbackStages(fallbackReason: string | null | undefined): string {
+  if (!fallbackReason) return "";
+  const stages: string[] = [];
+  if (fallbackReason.includes("comprension:")) stages.push("comprension");
+  if (fallbackReason.includes("redaccion:")) stages.push("redaccion");
+  return stages.length > 0 ? ` ${stages.join(" + ")}` : "";
 }
 
 function formatSessionSummary(summary: EvaluationSessionSummary): string {

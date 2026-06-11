@@ -3,15 +3,46 @@ import { ConversationEngine } from "@/application/conversationEngine";
 import { parseAnonymizedConversationJson, approvedImportedConversationsForExamples } from "@/application/conversationImport";
 import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
 import { createLlmProviders } from "@/application/llmFactory";
-import { OpenAIConversationUnderstandingProvider, OpenAIResponseDraftingProvider, type StructuredOutputRunner } from "@/application/openaiProvider";
+import {
+  ApiConversationUnderstandingSchema,
+  OpenAIConversationUnderstandingProvider,
+  OpenAIResponseDraftingProvider,
+  type ApiConversationUnderstanding,
+  type StructuredOutputRunner
+} from "@/application/openaiProvider";
 import { InMemoryConversationFeedbackRepository, recordConversationFeedback } from "@/application/responseFeedback";
-import { ModelConversationOutputSchema, ResponseDraftOutputSchema, type ConversationUnderstandingInput, type ModelConversationOutput, type ResponseDraftingProvider } from "@/application/llmProvider";
+import {
+  ResponseDraftOutputSchema,
+  type ConversationUnderstandingInput,
+  type ModelConversationOutput,
+  type ResponseDraftingProvider
+} from "@/application/llmProvider";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
-function validUnderstanding(intent: ModelConversationOutput["intent"] = "CONFIRMS_INTEREST"): ModelConversationOutput {
-  return ModelConversationOutputSchema.parse({
+// El runner devuelve ahora la forma de cara a la API (modo estricto de structured outputs):
+// todos los campos presentes y "sin dato" modelado como null, nunca como campo ausente.
+function validUnderstanding(intent: ModelConversationOutput["intent"] = "CONFIRMS_INTEREST"): ApiConversationUnderstanding {
+  return ApiConversationUnderstandingSchema.parse({
     intent,
-    extractedData: {},
+    extractedData: {
+      firstName: null,
+      age: null,
+      country: null,
+      city: null,
+      phone: null,
+      deviceType: null,
+      deviceModel: null,
+      deviceEligibility: null,
+      profileVisibility: null,
+      hasOnlyFans: null,
+      worksWithAnotherAgency: null,
+      experienceDescription: null,
+      currentMonthlyRevenue: null,
+      requestedModelPercentage: null,
+      contentAvailability: null,
+      goals: null,
+      objections: null
+    },
     dataCorrections: [],
     dataContradictions: [],
     confidence: 0.9,
@@ -24,10 +55,7 @@ function validUnderstanding(intent: ModelConversationOutput["intent"] = "CONFIRM
     requiresHumanReview: false,
     humanReviewReason: null,
     response: "",
-    internalNotes: [],
-    provider: "openai",
-    modelVersion: "fake-model",
-    promptVersion: "fake-prompt"
+    internalNotes: []
   });
 }
 
@@ -171,7 +199,11 @@ describe("OpenAI adapter, automation and review", () => {
 
   it("blocks drafted percentages that are not allowed", async () => {
     const { engine } = createEngine({
-      draftingProvider: { async draft() { return draft("Te damos el 90% sin problema."); } }
+      draftingProvider: {
+        async draft() {
+          return draft("Te damos el 90% sin problema.");
+        }
+      }
     });
 
     const result = await engine.handleIncomingMessage({
@@ -186,7 +218,11 @@ describe("OpenAI adapter, automation and review", () => {
 
   it("blocks drafted claims that contradict knowledge", async () => {
     const { engine } = createEngine({
-      draftingProvider: { async draft() { return draft("Tambien hacemos fotografias y viajes para todas las modelos."); } }
+      draftingProvider: {
+        async draft() {
+          return draft("Tambien hacemos fotografias y viajes para todas las modelos.");
+        }
+      }
     });
 
     const result = await engine.handleIncomingMessage({

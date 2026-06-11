@@ -1,17 +1,142 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { CandidateStateSchema, DeviceEligibilitySchema, DeviceTypeSchema } from "@/domain/candidate";
 import { promptRegistry } from "./promptRegistry";
 import {
+  ConversationIntentSchema,
   ModelConversationOutputSchema,
   ResponseDraftOutputSchema,
   type ConversationUnderstandingInput,
   type ConversationUnderstandingProvider,
+  type ExtractedCandidateData,
   type ModelConversationOutput,
   type ResponseDraftingInput,
   type ResponseDraftingProvider,
   type ResponseDraftOutput
 } from "./llmProvider";
+
+// ---------------------------------------------------------------------------
+// Esquema de cara a la API (OpenAI structured outputs en modo estricto).
+//
+// El modo estricto exige que TODAS las propiedades esten en `required`, que
+// `additionalProperties` sea false y rechaza `.optional()` sin `.nullable()`
+// y los `default`. Por eso el contrato interno (ModelConversationOutputSchema,
+// lleno de optionals/defaults) NO puede enviarse a la API: el SDK lanza
+// "Zod field ... uses `.optional()` without `.nullable()` which is not
+// supported by the API" antes de hacer la peticion.
+//
+// Aqui el "dato ausente" se modela como null y se mapea despues al contrato
+// interno (null -> campo omitido). Las restricciones de rango (confidence 0-1,
+// porcentaje 0-100, edad positiva) se siguen validando tras el mapeo con
+// ModelConversationOutputSchema, asi que ningun invariante se relaja.
+// ---------------------------------------------------------------------------
+
+const ApiExtractedCandidateDataSchema = z.object({
+  firstName: z.string().nullable(),
+  age: z.number().int().nullable(),
+  country: z.string().nullable(),
+  city: z.string().nullable(),
+  phone: z.string().nullable(),
+  deviceType: DeviceTypeSchema.nullable(),
+  deviceModel: z.string().nullable(),
+  deviceEligibility: DeviceEligibilitySchema.nullable(),
+  profileVisibility: z.enum(["PUBLIC", "PRIVATE", "UNKNOWN"]).nullable(),
+  hasOnlyFans: z.boolean().nullable(),
+  worksWithAnotherAgency: z.boolean().nullable(),
+  experienceDescription: z.string().nullable(),
+  currentMonthlyRevenue: z.number().nullable(),
+  requestedModelPercentage: z.number().nullable(),
+  contentAvailability: z.string().nullable(),
+  goals: z.string().nullable(),
+  objections: z.array(z.string()).nullable()
+});
+
+export const ApiConversationUnderstandingSchema = z.object({
+  intent: ConversationIntentSchema,
+  extractedData: ApiExtractedCandidateDataSchema,
+  dataCorrections: z.array(z.string()),
+  dataContradictions: z.array(z.string()),
+  confidence: z.number(),
+  commercialQuestionsDetected: z.array(z.string()),
+  requestsCall: z.boolean(),
+  requestsHuman: z.boolean(),
+  isNegotiation: z.boolean(),
+  requestedModelPercentage: z.number().nullable(),
+  suggestedStateTransition: CandidateStateSchema.nullable(),
+  requiresHumanReview: z.boolean(),
+  humanReviewReason: z.string().nullable(),
+  response: z.string(),
+  internalNotes: z.array(z.string())
+});
+
+export type ApiConversationUnderstanding = z.infer<typeof ApiConversationUnderstandingSchema>;
+
+type UnderstandingCoreFields = Pick<
+  ModelConversationOutput,
+  | "intent"
+  | "extractedData"
+  | "dataCorrections"
+  | "dataContradictions"
+  | "confidence"
+  | "commercialQuestionsDetected"
+  | "requestsCall"
+  | "requestsHuman"
+  | "isNegotiation"
+  | "requestedModelPercentage"
+  | "suggestedStateTransition"
+  | "requiresHumanReview"
+  | "humanReviewReason"
+  | "response"
+  | "internalNotes"
+>;
+
+export function mapApiUnderstandingToModelOutput(api: ApiConversationUnderstanding): UnderstandingCoreFields {
+  return {
+    intent: api.intent,
+    extractedData: compactExtractedData(api.extractedData),
+    dataCorrections: api.dataCorrections,
+    dataContradictions: api.dataContradictions,
+    confidence: api.confidence,
+    commercialQuestionsDetected: api.commercialQuestionsDetected,
+    requestsCall: api.requestsCall,
+    requestsHuman: api.requestsHuman,
+    isNegotiation: api.isNegotiation,
+    requestedModelPercentage: api.requestedModelPercentage,
+    suggestedStateTransition: api.suggestedStateTransition,
+    requiresHumanReview: api.requiresHumanReview,
+    humanReviewReason: api.humanReviewReason,
+    response: api.response,
+    internalNotes: api.internalNotes
+  };
+}
+
+function compactExtractedData(data: ApiConversationUnderstanding["extractedData"]): ExtractedCandidateData {
+  const result: ExtractedCandidateData = {};
+  if (data.firstName !== null) result.firstName = data.firstName;
+  if (data.age !== null) result.age = data.age;
+  if (data.country !== null) result.country = data.country;
+  if (data.city !== null) result.city = data.city;
+  if (data.phone !== null) result.phone = data.phone;
+  if (data.deviceType !== null) result.deviceType = data.deviceType;
+  if (data.deviceModel !== null) result.deviceModel = data.deviceModel;
+  if (data.deviceEligibility !== null) result.deviceEligibility = data.deviceEligibility;
+  if (data.profileVisibility !== null) result.profileVisibility = data.profileVisibility;
+  if (data.hasOnlyFans !== null) result.hasOnlyFans = data.hasOnlyFans;
+  if (data.worksWithAnotherAgency !== null) result.worksWithAnotherAgency = data.worksWithAnotherAgency;
+  if (data.experienceDescription !== null) result.experienceDescription = data.experienceDescription;
+  if (data.currentMonthlyRevenue !== null) result.currentMonthlyRevenue = data.currentMonthlyRevenue;
+  if (data.requestedModelPercentage !== null) result.requestedModelPercentage = data.requestedModelPercentage;
+  if (data.contentAvailability !== null) result.contentAvailability = data.contentAvailability;
+  if (data.goals !== null) result.goals = data.goals;
+  if (data.objections !== null) result.objections = data.objections;
+  return result;
+}
+
+/** Expuesto para tests de regresion: el JSON schema generado debe ser compatible con el modo estricto. */
+export function buildUnderstandingTextFormat() {
+  return zodTextFormat(ApiConversationUnderstandingSchema, "rose_understanding");
+}
 
 export interface OpenAIProviderOptions {
   apiKey: string;
@@ -96,7 +221,7 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
           withTimeout(
             this.runner.runStructured({
               model: this.options.understandingModel,
-              schema: ModelConversationOutputSchema,
+              schema: ApiConversationUnderstandingSchema,
               schemaName: "rose_understanding",
               instructions: buildUnderstandingInstructions(),
               payload: input,
@@ -107,8 +232,11 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
         this.options.maxRetries
       );
 
+      // Doble validacion deliberada: protege frente a runners inyectados que no validen.
+      const apiOutput = ApiConversationUnderstandingSchema.parse(result.value.parsed);
+
       return ModelConversationOutputSchema.parse({
-        ...result.value.parsed,
+        ...mapApiUnderstandingToModelOutput(apiOutput),
         provider: "openai",
         modelVersion: this.options.understandingModel,
         promptVersion: promptRegistry.understanding.version,
@@ -244,6 +372,8 @@ function buildUnderstandingInstructions(): string {
   return [
     "Eres el modulo de comprension estructurada de Rose Models.",
     "Devuelve solo datos estructurados validos.",
+    "Rellena todos los campos del esquema y usa null cuando no haya dato real; no inventes valores.",
+    "Si la candidata responde solo un numero a la pregunta de edad, es su edad.",
     "No decidas estados, transiciones ni acciones de negocio.",
     "Marca negociacion, solicitudes humanas, datos contradictorios y preguntas comerciales.",
     "No incluyas datos personales en notas internas salvo el campo estructurado correspondiente."

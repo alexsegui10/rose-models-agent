@@ -1,8 +1,8 @@
 export const promptRegistry = {
   understanding: {
     id: "rose-understanding",
-    version: "understanding-2026-06-08.1",
-    purpose: "Clasificar intencion, extraer datos y detectar riesgos sin decidir negocio."
+    version: "understanding-2026-06-11.1",
+    purpose: "Clasificar intencion, extraer datos y detectar riesgos sin decidir negocio. Esquema estricto: null = sin dato."
   },
   drafting: {
     id: "rose-drafting",
@@ -27,4 +27,3 @@ export const promptRegistry = {
 } as const;
 
 export type PromptRegistry = typeof promptRegistry;
-

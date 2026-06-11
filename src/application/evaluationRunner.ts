@@ -394,14 +394,28 @@ async function runModelConversation(
   };
 }
 
-function traceFromResult(result: HandleIncomingMessageResult): ProviderCallTrace {
+/**
+ * Traza combinada del turno (comprension + redaccion). Invariante 6: si CUALQUIERA de las dos
+ * llamadas uso fallback, la traza lo dice y el motivo identifica la etapa ("comprension: ..." /
+ * "redaccion: ..."). Antes solo se reflejaba la redaccion y un fallback de comprension era
+ * invisible en la UI. Exportada para tests.
+ */
+export function traceFromResult(result: Pick<HandleIncomingMessageResult, "understanding" | "draft">): ProviderCallTrace {
+  const fallbackReasons: string[] = [];
+  if (result.understanding.usedFallback) {
+    fallbackReasons.push(`comprension: ${result.understanding.fallbackReason ?? "motivo desconocido"}`);
+  }
+  if (result.draft.usedFallback) {
+    fallbackReasons.push(`redaccion: ${result.draft.fallbackReason ?? result.draft.error ?? "motivo desconocido"}`);
+  }
+
   return {
     requestedProvider: result.draft.requestedProvider,
     actualProvider: result.draft.actualProvider,
     requestedModel: result.draft.requestedModel,
     actualModel: result.draft.actualModel,
-    usedFallback: result.draft.usedFallback,
-    fallbackReason: result.draft.fallbackReason ?? result.draft.error ?? null,
+    usedFallback: result.understanding.usedFallback || result.draft.usedFallback,
+    fallbackReason: fallbackReasons.length > 0 ? fallbackReasons.join(" | ") : null,
     durationMs: result.draft.durationMs + result.understanding.durationMs,
     retryCount: result.draft.retryCount + result.understanding.retryCount,
     inputTokens: sumNullable(result.draft.inputTokens, result.understanding.inputTokens),
