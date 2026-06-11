@@ -1,5 +1,6 @@
 import { alexStyleProfile } from "@/content/style/alex-style-profile";
 import type { CandidateState } from "@/domain/candidate";
+import type { ConversationFeedbackRepository } from "@/infrastructure/repositories/types";
 import {
   ApprovedResponseSchema,
   ConversationFeedbackSchema,
@@ -22,12 +23,9 @@ export interface CreateConversationFeedbackInput {
   modelVersion?: string;
 }
 
-export interface ConversationFeedbackRepository {
-  saveFeedback(feedback: ConversationFeedback): Promise<ConversationFeedback>;
-  listFeedback(candidateId?: string): Promise<ConversationFeedback[]>;
-  saveApprovedResponse(response: ApprovedResponse): Promise<ApprovedResponse>;
-  listApprovedResponses(): Promise<ApprovedResponse[]>;
-}
+// La interfaz vive ahora en repositories/types.ts (junto al resto de contratos de repositorio);
+// se re-exporta aquí para no romper a los consumidores existentes.
+export type { ConversationFeedbackRepository } from "@/infrastructure/repositories/types";
 
 export class InMemoryConversationFeedbackRepository implements ConversationFeedbackRepository {
   private readonly feedback = new Map<string, ConversationFeedback>();

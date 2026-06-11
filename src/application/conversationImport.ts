@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CandidateStateSchema, ConversationRoleSchema } from "@/domain/candidate";
 import { ConversationExampleSchema, type ConversationExample } from "@/domain/conversationExample";
+import type { ImportedConversationRepository } from "@/infrastructure/repositories/types";
 
 export const ImportedConversationStatusSchema = z.enum(["RAW_REAL", "CORRECTED", "ALEX_APPROVED"]);
 export type ImportedConversationStatus = z.infer<typeof ImportedConversationStatusSchema>;
@@ -42,7 +43,7 @@ export const ImportedConversationFileSchema = z.object({
 export type ImportedConversation = z.infer<typeof ImportedConversationSchema>;
 export type ImportedConversationFile = z.infer<typeof ImportedConversationFileSchema>;
 
-export class InMemoryImportedConversationRepository {
+export class InMemoryImportedConversationRepository implements ImportedConversationRepository {
   private readonly conversations = new Map<string, ImportedConversation>();
 
   async importJson(json: string): Promise<ImportedConversation[]> {

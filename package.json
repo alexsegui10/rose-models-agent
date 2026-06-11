@@ -9,6 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:backup": "node scripts/db-backup.mjs",
     "convert:instagram": "node scripts/convert-instagram-export.mjs",
     "import:replay": "node scripts/convert-instagram-export.mjs --post"
   },

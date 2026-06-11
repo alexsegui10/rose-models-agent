@@ -11,7 +11,6 @@ import {
   EvaluationSessionSchema,
   type ABModelRun,
   type ABEvaluationCase,
-  type ABWinner,
   type EvaluationIssue,
   type EvaluationSession,
   type EvaluationSessionSummary,
@@ -20,6 +19,7 @@ import {
   type ProviderCallTrace
 } from "@/domain/evaluation";
 import type { AlexStyleRating, StyleEvaluation } from "@/domain/styleEvaluation";
+import type { EvaluationRepository, RecordABDecisionInput } from "@/infrastructure/repositories/types";
 
 export interface RunABEvaluationInput {
   messages: string[];
@@ -31,7 +31,7 @@ export interface RunABEvaluationInput {
   openaiApiKey?: string;
 }
 
-export class InMemoryEvaluationRepository {
+export class InMemoryEvaluationRepository implements EvaluationRepository {
   private readonly abCases = new Map<string, ABEvaluationCase>();
   private readonly sessions = new Map<string, EvaluationSession>();
 
@@ -44,12 +44,7 @@ export class InMemoryEvaluationRepository {
     return [...this.abCases.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
-  async recordABDecision(input: {
-    id: string;
-    winner: ABWinner;
-    styleRating?: AlexStyleRating;
-    note?: string;
-  }): Promise<ABEvaluationCase> {
+  async recordABDecision(input: RecordABDecisionInput): Promise<ABEvaluationCase> {
     const existing = this.abCases.get(input.id);
     if (!existing) throw new Error("AB evaluation not found.");
 

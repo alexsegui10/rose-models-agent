@@ -16,3 +16,4 @@ private-data/
 imports/raw/
 data/simulator-snapshot.json
 data/simulator-snapshot.json.tmp
+backups/
