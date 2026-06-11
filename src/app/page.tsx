@@ -91,6 +91,14 @@ type FactualValidationSummary = {
   uncoveredInformation: boolean;
 };
 
+type SimulatorStatus = {
+  persistenceMode: string;
+  llmMode: string;
+  writingModel: string;
+};
+
+type SimulatorTab = "EVALUACION" | "CHAT" | "AB";
+
 const EVALUATION_ISSUE_OPTIONS: EvaluationIssue[] = [
   "FACTUAL_ERROR",
   "STATE_ERROR",
@@ -102,6 +110,8 @@ const EVALUATION_ISSUE_OPTIONS: EvaluationIssue[] = [
 ];
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<SimulatorTab>("EVALUACION");
+  const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
@@ -147,6 +157,9 @@ export default function Home() {
 
   useEffect(() => {
     void refreshCandidates();
+    void fetch("/api/simulator/status")
+      .then((response) => response.json())
+      .then((data: SimulatorStatus) => setRuntimeStatus(data));
     void fetch("/api/simulator/conversation-import")
       .then((response) => response.json())
       .then((data: { conversations: ImportedConversation[] }) => {
@@ -393,202 +406,137 @@ export default function Home() {
   }
 
   return (
-    <main className="app-shell">
-      <aside className="panel">
-        <h2>Candidatas</h2>
-        <p className="muted">Simulador local sin Instagram real.</p>
-        <div className="candidate-list">
-          {candidates.map((candidate) => (
-            <button
-              className="candidate-button"
-              key={candidate.id}
-              onClick={() => {
-                setSelectedCandidate(candidate);
-                setInstagramUsername(candidate.instagramUsername);
-                setProfileVisibility(candidate.declaredProfileVisibility);
-              }}
-            >
-              <strong>@{candidate.instagramUsername}</strong>
-              <span className="muted">{candidate.currentState}</span>
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <section className="main-panel">
-        <header className="header">
+    <div className="app-frame">
+      <header className="top-bar">
+        <div>
           <h1>Rose Models Agent</h1>
-          <p className="muted">Chat de prueba para el nucleo conversacional.</p>
-        </header>
-
-        <div className="messages">
-          {messages.length === 0 ? (
-            <p className="muted">Envia un mensaje como candidata para iniciar la conversacion.</p>
-          ) : (
-            messages.map((item) => (
-              <div className={`message ${item.role}`} key={item.id}>
-                {item.content}
-              </div>
-            ))
-          )}
+          <p className="muted">Simulador local sin Instagram real.</p>
         </div>
+        <nav className="tab-bar">
+          <button
+            className={activeTab === "EVALUACION" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("EVALUACION")}
+          >
+            Evaluacion
+          </button>
+          <button
+            className={activeTab === "CHAT" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("CHAT")}
+          >
+            Chat de prueba
+          </button>
+          <button
+            className={activeTab === "AB" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("AB")}
+          >
+            A/B de modelos
+          </button>
+        </nav>
+        <p className="status-bar">
+          Persistencia: {runtimeStatus?.persistenceMode ?? "..."} · IA: {runtimeStatus?.llmMode ?? "..."} (
+          {runtimeStatus?.writingModel ?? "..."})
+        </p>
+      </header>
 
-        <form
-          className="composer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void sendMessage();
-          }}
-        >
+      {activeTab === "EVALUACION" ? (
+        <section className="panel eval-panel">
+          <h2>Evaluacion de conversaciones importadas</h2>
+          <p className="muted">Selecciona una conversacion, reproducela con el modelo elegido y evalua cada turno generado.</p>
+
+          {importedConversations.length === 0 ? (
+            <p className="muted">
+              No hay conversaciones importadas todavia. Ejecuta npm run import:replay o usa el bloque Importar mas conversaciones
+              (JSON) de abajo.
+            </p>
+          ) : (
+            <div className="conversation-card-list">
+              {importedConversations.map((conversation) => (
+                <button
+                  className={conversation.id === evalConversationId ? "conversation-card selected" : "conversation-card"}
+                  key={conversation.id}
+                  type="button"
+                  onClick={() => setEvalConversationId(conversation.id)}
+                >
+                  <strong>{conversation.id}</strong>
+                  <span className="muted">{conversation.category}</span>
+                  <span className="muted">{conversation.messages.length} mensajes</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="row">
             <input
               className="field"
-              value={instagramUsername}
-              onChange={(event) => setInstagramUsername(event.target.value)}
-              placeholder="instagram_username"
+              value={evalModel}
+              onChange={(event) => setEvalModel(event.target.value)}
+              placeholder="Modelo de redaccion"
             />
-            <select
-              className="field"
-              value={profileVisibility}
-              onChange={(event) => setProfileVisibility(event.target.value as ProfileVisibility)}
+            <button
+              className="primary"
+              disabled={evalLoading || !evalConversationId}
+              type="button"
+              onClick={() => void playConversationSession()}
             >
-              <option value="PUBLIC">Publico</option>
-              <option value="PRIVATE">Privado</option>
-              <option value="UNKNOWN">Desconocido</option>
-            </select>
-          </div>
-          <textarea className="textarea" value={message} onChange={(event) => setMessage(event.target.value)} />
-          <button className="primary" disabled={loading || !message.trim()} type="submit">
-            {loading ? "Enviando..." : "Enviar mensaje"}
-          </button>
-        </form>
-        {sendError ? <p className="error-text">{sendError}</p> : null}
-      </section>
-
-      <aside className="panel">
-        <h2>Revision de Alex</h2>
-        <p className="muted">Datos extraidos y cambios de estado.</p>
-        {currentCandidate ? <span className="state-pill">{currentCandidate.currentState}</span> : null}
-        <div className="data-grid">
-          {extractedRows.map(([label, value]) => (
-            <div className="data-row" key={label}>
-              <span>{label}</span>
-              <strong>{value}</strong>
-            </div>
-          ))}
-        </div>
-        <div className="data-grid">
-          {transitions.map((transition) => (
-            <div className="data-row" key={transition.id}>
-              <span>{transition.trigger}</span>
-              <strong>
-                {transition.fromState} -&gt; {transition.toState}
-              </strong>
-            </div>
-          ))}
-        </div>
-
-        {showDevelopmentPanel ? (
-          <section className="dev-panel">
-            <button className="secondary" type="button" onClick={() => setTechnicalPanelOpen((current) => !current)}>
-              {technicalPanelOpen ? "Ocultar detalles tecnicos" : "Mostrar detalles tecnicos"}
+              {evalLoading ? "Reproduciendo..." : "Reproducir conversacion"}
             </button>
-            {technicalPanelOpen ? (
-              <>
-                {styleEvaluation ? (
-                  <div className="data-row">
-                    <span>Evaluacion de estilo</span>
-                    <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
-                    <p className="muted">
-                      {(styleEvaluation.reasons?.length ?? 0) > 0 ? styleEvaluation.reasons.join(" ") : "Sin alertas de estilo."}
-                    </p>
-                  </div>
-                ) : null}
+          </div>
+          {selectedImportedConversation ? (
+            <p className="muted">
+              Seleccionada: {selectedImportedConversation.id} / {selectedImportedConversation.category} /{" "}
+              {selectedImportedConversation.messages.length} mensajes
+            </p>
+          ) : null}
+          {evalError ? <p className="error-text">{evalError}</p> : null}
 
-                {factualValidation ? (
-                  <div className="data-row">
-                    <span>Validacion factual</span>
-                    <strong>{factualValidation.valid ? "Correcta" : "Revisar"}</strong>
-                    <p className="muted">
-                      {(factualValidation.reasons?.length ?? 0) > 0
-                        ? factualValidation.reasons.join(" ")
-                        : "Sin alertas factuales."}
-                    </p>
-                  </div>
-                ) : null}
-
-                {responsePlan ? (
-                  <div className="data-row">
-                    <span>Plan de respuesta</span>
-                    <strong>{responsePlan.objective}</strong>
-                    <p className="muted">{responsePlan.humanReviewReason ?? "Sin revision humana requerida."}</p>
-                    <pre className="debug-json">{JSON.stringify(responsePlan, null, 2)}</pre>
-                  </div>
-                ) : null}
-
-                {lastResult ? (
-                  <div className="data-row">
-                    <span>Automatizacion</span>
-                    <strong>
-                      {lastResult.automationMode} / {lastResult.deliveryStatus}
-                    </strong>
-                    {lastResult.draft ? (
-                      <DraftTrace draft={lastResult.draft} />
-                    ) : (
-                      <p className="muted">Sin trazas de proveedor para esta respuesta.</p>
-                    )}
-                  </div>
-                ) : null}
-
-                {styleContext ? (
-                  <div className="data-row">
-                    <span>Versiones</span>
-                    <strong>{styleContext.styleProfileVersion}</strong>
-                    <p className="muted">{styleContext.retrieverVersion}</p>
-                  </div>
-                ) : null}
-
-                {lastResult ? (
-                  <div className="data-row">
-                    <span>Datos extraidos</span>
-                    <strong>Comprension</strong>
-                    <pre className="debug-json">{JSON.stringify(lastResult.understanding, null, 2)}</pre>
-                  </div>
-                ) : null}
-
-                <div className="data-grid">
-                  {knowledgeEntries.map((entry) => (
-                    <div className="data-row" key={entry.id}>
-                      <span>{entry.category}</span>
-                      <strong>{entry.title}</strong>
-                      <p className="muted">{entry.version}</p>
+          {evaluationSession ? (
+            <div className="feedback-box">
+              <p className="muted">
+                Sesion {evaluationSession.id} / {evaluationSession.model}
+              </p>
+              {(evaluationSession.playbackTurns ?? []).map((turn) => {
+                const savedFeedback = evaluationSession.turnFeedback.find((item) => item.turnIndex === turn.turnIndex);
+                return (
+                  <div className="ab-result" key={turn.turnIndex}>
+                    <div className="ab-run">
+                      <span>Turno {turn.turnIndex + 1} / Candidata</span>
+                      <p>{turn.candidateMessage}</p>
                     </div>
-                  ))}
-
-                  {retrievedExamples.map((example) => (
-                    <div className="data-row" key={example.id}>
-                      <span>{example.category}</span>
-                      <strong>{example.title}</strong>
-                      <p className="muted">{example.tags?.join(", ") || "-"}</p>
+                    <div className="ab-run">
+                      <span>Respuesta generada / Estado: {turn.resultingState}</span>
+                      <p>{turn.generatedResponse || "Sin respuesta generada (automatizacion bloqueada)."}</p>
+                      <small>{formatTrace(turn.providerTrace)}</small>
                     </div>
-                  ))}
-                </div>
-
-                {selectedCandidate && messages.some((item) => item.role === "agent") ? (
-                  <div className="feedback-box">
+                    <div className="ab-run">
+                      <span>Respuesta original</span>
+                      <p>{turn.originalResponse ?? "Sin respuesta original registrada."}</p>
+                    </div>
                     <textarea
                       className="textarea"
-                      value={editedResponse}
-                      onChange={(event) => setEditedResponse(event.target.value)}
+                      value={turnEdits[turn.turnIndex] ?? turn.generatedResponse}
+                      onChange={(event) => setTurnEdits((current) => ({ ...current, [turn.turnIndex]: event.target.value }))}
                       placeholder="Respuesta editada por Alex"
                     />
-                    <input
+                    <div className="issue-grid">
+                      {EVALUATION_ISSUE_OPTIONS.map((issue) => (
+                        <label className="checkbox-row" key={issue}>
+                          <input
+                            checked={(turnIssues[turn.turnIndex] ?? []).includes(issue)}
+                            type="checkbox"
+                            onChange={(event) => toggleTurnIssue(turn.turnIndex, issue, event.target.checked)}
+                          />
+                          {issue}
+                        </label>
+                      ))}
+                    </div>
+                    <select
                       className="field"
-                      value={feedbackReason}
-                      onChange={(event) => setFeedbackReason(event.target.value)}
-                      placeholder="Motivo opcional"
-                    />
-                    <select className="field" value={styleRating} onChange={(event) => setStyleRating(event.target.value)}>
+                      value={turnRatings[turn.turnIndex] ?? ""}
+                      onChange={(event) => setTurnRatings((current) => ({ ...current, [turn.turnIndex]: event.target.value }))}
+                    >
                       <option value="">Puntuacion estilo</option>
                       <option value="1">1 - nunca lo diria</option>
                       <option value="2">2 - poco parecido</option>
@@ -597,223 +545,338 @@ export default function Home() {
                       <option value="5">5 - exactamente como lo diria</option>
                     </select>
                     <div className="row">
-                      <button className="secondary" type="button" onClick={() => void sendFeedback("APPROVED")}>
+                      <button className="secondary" type="button" onClick={() => void savePlaybackTurnFeedback(turn, "APPROVED")}>
                         Aprobar
                       </button>
-                      <button className="secondary" type="button" onClick={() => void sendFeedback("EDITED")}>
+                      <button className="secondary" type="button" onClick={() => void savePlaybackTurnFeedback(turn, "EDITED")}>
                         Editar y aprobar
                       </button>
-                      <button className="danger" type="button" onClick={() => void sendFeedback("REJECTED")}>
+                      <button className="danger" type="button" onClick={() => void savePlaybackTurnFeedback(turn, "REJECTED")}>
                         Rechazar
                       </button>
-                      <button className="danger" type="button" onClick={() => void takeManualControl()}>
-                        Tomar control
-                      </button>
                     </div>
-                    {feedbackStatus ? <p className="muted">Feedback guardado: {feedbackStatus}</p> : null}
+                    {savedFeedback ? <p className="muted">Feedback guardado: {savedFeedback.status}</p> : null}
                   </div>
-                ) : null}
+                );
+              })}
+              {(evaluationSession.playbackTurns ?? []).length === 0 ? (
+                <p className="muted">Esta sesion no tiene turnos reproducidos.</p>
+              ) : null}
+              {evaluationSession.summary ? (
+                <div className="ab-run">
+                  <span>Resumen de la sesion</span>
+                  <p>{formatSessionSummary(evaluationSession.summary)}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
-                <section className="evaluation-box">
-                  <h2>Evaluacion A/B</h2>
-                  <textarea className="textarea" value={abMessages} onChange={(event) => setAbMessages(event.target.value)} />
-                  <div className="row">
-                    <input className="field" value={abModelA} onChange={(event) => setAbModelA(event.target.value)} />
-                    <input className="field" value={abModelB} onChange={(event) => setAbModelB(event.target.value)} />
+          <details className="import-details">
+            <summary>Importar mas conversaciones (JSON)</summary>
+            <div className="feedback-box">
+              <textarea
+                className="textarea import-textarea"
+                value={importJson}
+                onChange={(event) => setImportJson(event.target.value)}
+              />
+              <button className="secondary" type="button" onClick={() => void importConversations()}>
+                Importar conversaciones
+              </button>
+              {importStatus ? <p className="muted">{importStatus}</p> : null}
+            </div>
+          </details>
+        </section>
+      ) : null}
+
+      {activeTab === "CHAT" ? (
+        <main className="app-shell">
+          <aside className="panel">
+            <h2>Candidatas</h2>
+            <p className="muted">Simulador local sin Instagram real.</p>
+            <div className="candidate-list">
+              {candidates.map((candidate) => (
+                <button
+                  className="candidate-button"
+                  key={candidate.id}
+                  onClick={() => {
+                    setSelectedCandidate(candidate);
+                    setInstagramUsername(candidate.instagramUsername);
+                    setProfileVisibility(candidate.declaredProfileVisibility);
+                  }}
+                >
+                  <strong>@{candidate.instagramUsername}</strong>
+                  <span className="muted">{candidate.currentState}</span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="main-panel">
+            <header className="header">
+              <h2>Chat de prueba</h2>
+              <p className="muted">Chat de prueba para el nucleo conversacional.</p>
+            </header>
+
+            <div className="messages">
+              {messages.length === 0 ? (
+                <p className="muted">Envia un mensaje como candidata para iniciar la conversacion.</p>
+              ) : (
+                messages.map((item) => (
+                  <div className={`message ${item.role}`} key={item.id}>
+                    {item.content}
                   </div>
-                  <label className="checkbox-row">
-                    <input checked={abBlind} type="checkbox" onChange={(event) => setAbBlind(event.target.checked)} />
-                    Ocultar modelos al evaluar
-                  </label>
-                  <button className="secondary" disabled={abLoading} type="button" onClick={() => void runABComparison()}>
-                    {abLoading ? "Ejecutando..." : "Ejecutar A/B"}
-                  </button>
+                ))
+              )}
+            </div>
 
-                  {abCase ? (
-                    <div className="ab-result">
-                      <div className="ab-run">
-                        <span>Respuesta A{abCase.blind ? "" : ` / ${abCase.runA.model}`}</span>
-                        <p>{abCase.runA.response}</p>
-                        <small>{formatTrace(abCase.runA.providerTrace)}</small>
-                      </div>
-                      <div className="ab-run">
-                        <span>Respuesta B{abCase.blind ? "" : ` / ${abCase.runB.model}`}</span>
-                        <p>{abCase.runB.response}</p>
-                        <small>{formatTrace(abCase.runB.providerTrace)}</small>
-                      </div>
-                      <select
-                        className="field"
-                        value={abWinner}
-                        onChange={(event) => setAbWinner(event.target.value as ABWinner)}
-                      >
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="TIE">EMPATE</option>
-                        <option value="NONE">NINGUNA</option>
-                      </select>
-                      <select className="field" value={abStyleRating} onChange={(event) => setAbStyleRating(event.target.value)}>
-                        <option value="">Puntuacion estilo</option>
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                      </select>
-                      <input
-                        className="field"
-                        value={abNote}
-                        onChange={(event) => setAbNote(event.target.value)}
-                        placeholder="Nota de Alex"
-                      />
-                      <button className="secondary" type="button" onClick={() => void saveABDecision()}>
-                        Guardar decision
-                      </button>
-                      {abCase.winner ? <p className="muted">Decision guardada: {abCase.winner}</p> : null}
-                    </div>
-                  ) : null}
-                </section>
-
-                <section className="evaluation-box">
-                  <h2>Sesion de evaluacion</h2>
-                  <textarea
-                    className="textarea import-textarea"
-                    value={importJson}
-                    onChange={(event) => setImportJson(event.target.value)}
-                  />
-                  <button className="secondary" type="button" onClick={() => void importConversations()}>
-                    Importar conversaciones
-                  </button>
-                  {importStatus ? <p className="muted">{importStatus}</p> : null}
-                  <div className="row">
-                    <select
-                      className="field"
-                      value={evalConversationId}
-                      onChange={(event) => setEvalConversationId(event.target.value)}
-                    >
-                      <option value="">Selecciona conversacion importada</option>
-                      {importedConversations.map((conversation) => (
-                        <option key={conversation.id} value={conversation.id}>
-                          {conversation.id} / {conversation.category}
-                        </option>
-                      ))}
-                    </select>
-                    <input className="field" value={evalModel} onChange={(event) => setEvalModel(event.target.value)} />
-                  </div>
-                  {selectedImportedConversation ? (
-                    <p className="muted">
-                      {selectedImportedConversation.messages.length} mensajes / {selectedImportedConversation.category}
-                    </p>
-                  ) : null}
-                  <button
-                    className="secondary"
-                    disabled={evalLoading || !evalConversationId}
-                    type="button"
-                    onClick={() => void playConversationSession()}
-                  >
-                    {evalLoading ? "Reproduciendo..." : "Reproducir conversacion"}
-                  </button>
-                  {evalError ? <p className="error-text">{evalError}</p> : null}
-                  {evaluationSession ? (
-                    <div className="feedback-box">
-                      <p className="muted">
-                        Sesion {evaluationSession.id} / {evaluationSession.model}
-                      </p>
-                      {(evaluationSession.playbackTurns ?? []).map((turn) => {
-                        const savedFeedback = evaluationSession.turnFeedback.find((item) => item.turnIndex === turn.turnIndex);
-                        return (
-                          <div className="ab-result" key={turn.turnIndex}>
-                            <div className="ab-run">
-                              <span>Turno {turn.turnIndex + 1} / Candidata</span>
-                              <p>{turn.candidateMessage}</p>
-                            </div>
-                            <div className="ab-run">
-                              <span>Respuesta generada / Estado: {turn.resultingState}</span>
-                              <p>{turn.generatedResponse || "Sin respuesta generada (automatizacion bloqueada)."}</p>
-                              <small>{formatTrace(turn.providerTrace)}</small>
-                            </div>
-                            <div className="ab-run">
-                              <span>Respuesta original</span>
-                              <p>{turn.originalResponse ?? "Sin respuesta original registrada."}</p>
-                            </div>
-                            <textarea
-                              className="textarea"
-                              value={turnEdits[turn.turnIndex] ?? turn.generatedResponse}
-                              onChange={(event) =>
-                                setTurnEdits((current) => ({ ...current, [turn.turnIndex]: event.target.value }))
-                              }
-                              placeholder="Respuesta editada por Alex"
-                            />
-                            <div className="issue-grid">
-                              {EVALUATION_ISSUE_OPTIONS.map((issue) => (
-                                <label className="checkbox-row" key={issue}>
-                                  <input
-                                    checked={(turnIssues[turn.turnIndex] ?? []).includes(issue)}
-                                    type="checkbox"
-                                    onChange={(event) => toggleTurnIssue(turn.turnIndex, issue, event.target.checked)}
-                                  />
-                                  {issue}
-                                </label>
-                              ))}
-                            </div>
-                            <select
-                              className="field"
-                              value={turnRatings[turn.turnIndex] ?? ""}
-                              onChange={(event) =>
-                                setTurnRatings((current) => ({ ...current, [turn.turnIndex]: event.target.value }))
-                              }
-                            >
-                              <option value="">Puntuacion estilo</option>
-                              <option value="1">1 - nunca lo diria</option>
-                              <option value="2">2 - poco parecido</option>
-                              <option value="3">3 - aceptable</option>
-                              <option value="4">4 - bastante parecido</option>
-                              <option value="5">5 - exactamente como lo diria</option>
-                            </select>
-                            <div className="row">
-                              <button
-                                className="secondary"
-                                type="button"
-                                onClick={() => void savePlaybackTurnFeedback(turn, "APPROVED")}
-                              >
-                                Aprobar
-                              </button>
-                              <button
-                                className="secondary"
-                                type="button"
-                                onClick={() => void savePlaybackTurnFeedback(turn, "EDITED")}
-                              >
-                                Editar y aprobar
-                              </button>
-                              <button
-                                className="danger"
-                                type="button"
-                                onClick={() => void savePlaybackTurnFeedback(turn, "REJECTED")}
-                              >
-                                Rechazar
-                              </button>
-                            </div>
-                            {savedFeedback ? <p className="muted">Feedback guardado: {savedFeedback.status}</p> : null}
-                          </div>
-                        );
-                      })}
-                      {(evaluationSession.playbackTurns ?? []).length === 0 ? (
-                        <p className="muted">Esta sesion no tiene turnos reproducidos.</p>
-                      ) : null}
-                      {evaluationSession.summary ? (
-                        <div className="ab-run">
-                          <span>Resumen de la sesion</span>
-                          <p>{formatSessionSummary(evaluationSession.summary)}</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </section>
-              </>
-            ) : null}
+            <form
+              className="composer"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendMessage();
+              }}
+            >
+              <div className="row">
+                <input
+                  className="field"
+                  value={instagramUsername}
+                  onChange={(event) => setInstagramUsername(event.target.value)}
+                  placeholder="instagram_username"
+                />
+                <select
+                  className="field"
+                  value={profileVisibility}
+                  onChange={(event) => setProfileVisibility(event.target.value as ProfileVisibility)}
+                >
+                  <option value="PUBLIC">Publico</option>
+                  <option value="PRIVATE">Privado</option>
+                  <option value="UNKNOWN">Desconocido</option>
+                </select>
+              </div>
+              <textarea className="textarea" value={message} onChange={(event) => setMessage(event.target.value)} />
+              <button className="primary" disabled={loading || !message.trim()} type="submit">
+                {loading ? "Enviando..." : "Enviar mensaje"}
+              </button>
+            </form>
+            {sendError ? <p className="error-text">{sendError}</p> : null}
           </section>
-        ) : null}
-      </aside>
-    </main>
+
+          <aside className="panel">
+            <h2>Revision de Alex</h2>
+            <p className="muted">Datos extraidos y cambios de estado.</p>
+            {currentCandidate ? <span className="state-pill">{currentCandidate.currentState}</span> : null}
+            <div className="data-grid">
+              {extractedRows.map(([label, value]) => (
+                <div className="data-row" key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="data-grid">
+              {transitions.map((transition) => (
+                <div className="data-row" key={transition.id}>
+                  <span>{transition.trigger}</span>
+                  <strong>
+                    {transition.fromState} -&gt; {transition.toState}
+                  </strong>
+                </div>
+              ))}
+            </div>
+
+            {showDevelopmentPanel ? (
+              <section className="dev-panel">
+                <button className="secondary" type="button" onClick={() => setTechnicalPanelOpen((current) => !current)}>
+                  {technicalPanelOpen ? "Ocultar detalles tecnicos" : "Mostrar detalles tecnicos"}
+                </button>
+                {technicalPanelOpen ? (
+                  <>
+                    {styleEvaluation ? (
+                      <div className="data-row">
+                        <span>Evaluacion de estilo</span>
+                        <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
+                        <p className="muted">
+                          {(styleEvaluation.reasons?.length ?? 0) > 0
+                            ? styleEvaluation.reasons.join(" ")
+                            : "Sin alertas de estilo."}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {factualValidation ? (
+                      <div className="data-row">
+                        <span>Validacion factual</span>
+                        <strong>{factualValidation.valid ? "Correcta" : "Revisar"}</strong>
+                        <p className="muted">
+                          {(factualValidation.reasons?.length ?? 0) > 0
+                            ? factualValidation.reasons.join(" ")
+                            : "Sin alertas factuales."}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {responsePlan ? (
+                      <div className="data-row">
+                        <span>Plan de respuesta</span>
+                        <strong>{responsePlan.objective}</strong>
+                        <p className="muted">{responsePlan.humanReviewReason ?? "Sin revision humana requerida."}</p>
+                        <pre className="debug-json">{JSON.stringify(responsePlan, null, 2)}</pre>
+                      </div>
+                    ) : null}
+
+                    {lastResult ? (
+                      <div className="data-row">
+                        <span>Automatizacion</span>
+                        <strong>
+                          {lastResult.automationMode} / {lastResult.deliveryStatus}
+                        </strong>
+                        {lastResult.draft ? (
+                          <DraftTrace draft={lastResult.draft} />
+                        ) : (
+                          <p className="muted">Sin trazas de proveedor para esta respuesta.</p>
+                        )}
+                      </div>
+                    ) : null}
+
+                    {styleContext ? (
+                      <div className="data-row">
+                        <span>Versiones</span>
+                        <strong>{styleContext.styleProfileVersion}</strong>
+                        <p className="muted">{styleContext.retrieverVersion}</p>
+                      </div>
+                    ) : null}
+
+                    {lastResult ? (
+                      <div className="data-row">
+                        <span>Datos extraidos</span>
+                        <strong>Comprension</strong>
+                        <pre className="debug-json">{JSON.stringify(lastResult.understanding, null, 2)}</pre>
+                      </div>
+                    ) : null}
+
+                    <div className="data-grid">
+                      {knowledgeEntries.map((entry) => (
+                        <div className="data-row" key={entry.id}>
+                          <span>{entry.category}</span>
+                          <strong>{entry.title}</strong>
+                          <p className="muted">{entry.version}</p>
+                        </div>
+                      ))}
+
+                      {retrievedExamples.map((example) => (
+                        <div className="data-row" key={example.id}>
+                          <span>{example.category}</span>
+                          <strong>{example.title}</strong>
+                          <p className="muted">{example.tags?.join(", ") || "-"}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {selectedCandidate && messages.some((item) => item.role === "agent") ? (
+                      <div className="feedback-box">
+                        <textarea
+                          className="textarea"
+                          value={editedResponse}
+                          onChange={(event) => setEditedResponse(event.target.value)}
+                          placeholder="Respuesta editada por Alex"
+                        />
+                        <input
+                          className="field"
+                          value={feedbackReason}
+                          onChange={(event) => setFeedbackReason(event.target.value)}
+                          placeholder="Motivo opcional"
+                        />
+                        <select className="field" value={styleRating} onChange={(event) => setStyleRating(event.target.value)}>
+                          <option value="">Puntuacion estilo</option>
+                          <option value="1">1 - nunca lo diria</option>
+                          <option value="2">2 - poco parecido</option>
+                          <option value="3">3 - aceptable</option>
+                          <option value="4">4 - bastante parecido</option>
+                          <option value="5">5 - exactamente como lo diria</option>
+                        </select>
+                        <div className="row">
+                          <button className="secondary" type="button" onClick={() => void sendFeedback("APPROVED")}>
+                            Aprobar
+                          </button>
+                          <button className="secondary" type="button" onClick={() => void sendFeedback("EDITED")}>
+                            Editar y aprobar
+                          </button>
+                          <button className="danger" type="button" onClick={() => void sendFeedback("REJECTED")}>
+                            Rechazar
+                          </button>
+                          <button className="danger" type="button" onClick={() => void takeManualControl()}>
+                            Tomar control
+                          </button>
+                        </div>
+                        {feedbackStatus ? <p className="muted">Feedback guardado: {feedbackStatus}</p> : null}
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+              </section>
+            ) : null}
+          </aside>
+        </main>
+      ) : null}
+
+      {activeTab === "AB" ? (
+        <section className="panel eval-panel">
+          <h2>Evaluacion A/B</h2>
+          <p className="muted">Compara dos modelos con los mismos mensajes y guarda la decision de Alex.</p>
+          <textarea className="textarea" value={abMessages} onChange={(event) => setAbMessages(event.target.value)} />
+          <div className="row">
+            <input className="field" value={abModelA} onChange={(event) => setAbModelA(event.target.value)} />
+            <input className="field" value={abModelB} onChange={(event) => setAbModelB(event.target.value)} />
+          </div>
+          <label className="checkbox-row">
+            <input checked={abBlind} type="checkbox" onChange={(event) => setAbBlind(event.target.checked)} />
+            Ocultar modelos al evaluar
+          </label>
+          <button className="secondary" disabled={abLoading} type="button" onClick={() => void runABComparison()}>
+            {abLoading ? "Ejecutando..." : "Ejecutar A/B"}
+          </button>
+
+          {abCase ? (
+            <div className="ab-result">
+              <div className="ab-run">
+                <span>Respuesta A{abCase.blind ? "" : ` / ${abCase.runA.model}`}</span>
+                <p>{abCase.runA.response}</p>
+                <small>{formatTrace(abCase.runA.providerTrace)}</small>
+              </div>
+              <div className="ab-run">
+                <span>Respuesta B{abCase.blind ? "" : ` / ${abCase.runB.model}`}</span>
+                <p>{abCase.runB.response}</p>
+                <small>{formatTrace(abCase.runB.providerTrace)}</small>
+              </div>
+              <select className="field" value={abWinner} onChange={(event) => setAbWinner(event.target.value as ABWinner)}>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="TIE">EMPATE</option>
+                <option value="NONE">NINGUNA</option>
+              </select>
+              <select className="field" value={abStyleRating} onChange={(event) => setAbStyleRating(event.target.value)}>
+                <option value="">Puntuacion estilo</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+              <input
+                className="field"
+                value={abNote}
+                onChange={(event) => setAbNote(event.target.value)}
+                placeholder="Nota de Alex"
+              />
+              <button className="secondary" type="button" onClick={() => void saveABDecision()}>
+                Guardar decision
+              </button>
+              {abCase.winner ? <p className="muted">Decision guardada: {abCase.winner}</p> : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+    </div>
   );
 }
 
