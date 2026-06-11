@@ -160,6 +160,20 @@ describe("IMPORTED_CONVERSATION_PLAYBACK", () => {
     expect(result.turns[1]?.originalResponse).toBeNull();
   });
 
+  it("skips attachment placeholders: the ad share is noise, not a message to answer", async () => {
+    const conversation = buildConversation([
+      { role: "candidate", content: "[archivo adjunto]" },
+      { role: "candidate", content: "¡Hola! Quiero más información." },
+      { role: "alex", content: "Hola soy Alex de Rose Models" }
+    ]);
+
+    const result = await playImportedConversation({ conversation, model: "gpt-5.4-mini" });
+
+    expect(result.turns).toHaveLength(1);
+    expect(result.turns[0]?.candidateMessage).toBe("¡Hola! Quiero más información.");
+    expect(result.turns[0]?.originalResponse).toBe("Hola soy Alex de Rose Models");
+  });
+
   it("falls back to inline corrected or original Alex annotations when no agent message follows", async () => {
     const conversation = buildConversation([
       {

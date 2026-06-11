@@ -181,6 +181,11 @@ export async function playImportedConversation(input: PlayImportedConversationIn
     if (!message || message.role !== "candidate") {
       continue;
     }
+    // El share del anuncio llega como "[archivo adjunto]" antes del CTA real; Alex nunca
+    // lo responde en la realidad, asi que no es un turno evaluable.
+    if (isAttachmentPlaceholder(message.content)) {
+      continue;
+    }
 
     const result = await engine.handleIncomingMessage({
       candidateId,
@@ -250,6 +255,11 @@ export function suggestEvaluationIssues(
   if (styleEvaluation.asksTooManyQuestions) issues.push("UNNECESSARY_QUESTION");
   if (!styleEvaluation.addressesCandidateMessage) issues.push("MISSED_REAL_QUESTION");
   return issues;
+}
+
+function isAttachmentPlaceholder(content: string): boolean {
+  const normalized = content.trim().toLowerCase();
+  return normalized === "[archivo adjunto]" || normalized.length === 0;
 }
 
 function originalResponseFor(messages: ImportedConversation["messages"], candidateIndex: number): string | null {
