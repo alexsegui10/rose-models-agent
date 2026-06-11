@@ -1,55 +1,55 @@
 import { KnowledgeEntrySchema, type KnowledgeEntryInput } from "@/domain/businessKnowledge";
 
-// Gaps reales del guion que mataron leads: "cual es el proceso de seleccion?" y "a que paises
-// venden?" quedaron sin respuesta en chats reales. Propuestas redactadas para que Alex las
-// apruebe; mientras tanto quedan en DRAFT y la pregunta se escala a revision humana.
+// Respuestas confirmadas por Alex el 2026-06-11 (antes eran gaps reales del guion que mataban leads).
 const entries: KnowledgeEntryInput[] = [
   {
-    id: "faq-selection-process-draft",
+    id: "faq-selection-process",
     category: "FAQ",
-    title: "Proceso de seleccion (propuesta pendiente de Alex)",
+    title: "Proceso de seleccion",
     facts: [
-      "La pregunta 'cual es el proceso de seleccion?' quedo sin respuesta en varias conversaciones reales y perdio leads.",
-      "Propuesta pendiente de aprobar: revision del perfil, preguntas rapidas (nombre, edad, OnlyFans, otras agencias, movil) y llamada final."
+      "El proceso de seleccion consiste en analizar la cuenta de la candidata para verificar si encaja en el tipo de perfil con el que trabaja la agencia.",
+      "Despues del analisis del perfil se hacen unas preguntas rapidas y, si encaja, se agenda una llamada."
     ],
     approvedAnswerPoints: [
-      "Propuesta pendiente de Alex: es sencillo, primero vemos tu perfil, te hacemos unas preguntas rapidas y si encajas agendamos una llamada para explicarte todo."
+      "Analizamos tu cuenta para verificar si encajas en el tipo de perfil con el que trabajamos.",
+      "Si encajas, te hacemos unas preguntas rapidas y agendamos una llamada para explicarte todo mejor."
     ],
     prohibitedClaims: ["Prometer aceptacion automatica.", "Detallar criterios fisicos de seleccion."],
-    mandatoryNuances: ["Mientras este en DRAFT, la pregunta se deriva a revision humana."],
-    escalationConditions: ["Cualquier pregunta por el proceso de seleccion mientras no haya respuesta aprobada."],
+    mandatoryNuances: ["La valoracion del perfil la hace el equipo humano, no se comunica un criterio fisico."],
+    escalationConditions: ["La candidata pide los criterios exactos de seleccion o discute una valoracion."],
     allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING"],
     tags: ["faq", "process", "selection"],
-    requiresHumanReview: true,
-    version: "faq-selection-process-2026-06-10.1",
-    status: "DRAFT",
-    approvedByAlex: false,
-    updatedAt: "2026-06-10"
+    requiresHumanReview: false,
+    version: "faq-selection-process-2026-06-11.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-11"
   },
   {
-    id: "faq-target-countries-draft",
+    id: "faq-target-countries",
     category: "FAQ",
-    title: "A que paises se vende (propuesta pendiente de Alex)",
+    title: "A que paises se vende",
     facts: [
-      "La pregunta 'a que paises venden?' no tiene respuesta canonica confirmada por Alex.",
-      "Lo dicho en chats reales: el trafico es espanol porque hay mas poder adquisitivo, y en OnlyFans puede bloquearse el acceso por pais."
+      "La agencia intenta vender el 100% a publico espanol porque tiene mayor poder adquisitivo.",
+      "En OnlyFans puede bloquearse el acceso por pais (relevante para la privacidad de la candidata)."
     ],
-    approvedAnswerPoints: [
-      "Propuesta pendiente de Alex: trabajamos sobre todo trafico espanol, que es donde hay mas poder adquisitivo."
-    ],
+    approvedAnswerPoints: ["Intentamos vender el 100% a espanoles porque tienen mayor poder adquisitivo."],
     prohibitedClaims: [
-      "Decir 'solo trabajamos con espanolas': formulacion discriminatoria e incorrecta, el espanol es el trafico, no la candidata.",
+      "Decir 'solo trabajamos con espanolas': formulacion discriminatoria e incorrecta, el espanol es el trafico/comprador, no la candidata.",
+      "Garantizar que el 100% del trafico sera siempre espanol.",
       "Inventar una lista cerrada de paises."
     ],
-    mandatoryNuances: ["Mientras este en DRAFT, la pregunta se deriva a revision humana."],
-    escalationConditions: ["Cualquier pregunta sobre paises o mercados de venta mientras no haya respuesta aprobada."],
+    mandatoryNuances: [
+      "El espanol se refiere al publico comprador; las candidatas pueden ser de cualquier pais hispanohablante."
+    ],
+    escalationConditions: ["La candidata pide garantias contractuales sobre el origen del trafico."],
     allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED"],
     tags: ["faq", "countries", "market"],
-    requiresHumanReview: true,
-    version: "faq-target-countries-2026-06-10.1",
-    status: "DRAFT",
-    approvedByAlex: false,
-    updatedAt: "2026-06-10"
+    requiresHumanReview: false,
+    version: "faq-target-countries-2026-06-11.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-11"
   }
 ];
 

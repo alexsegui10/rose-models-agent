@@ -77,24 +77,42 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
   if (/\b(70\/30|quien recibe|quien se queda)\b/.test(message)) tags.push("percentage", "revenue-share");
   if (/\b(por que.*70|porque.*70|porcentaje.*alto|os quedais.*70)\b/.test(message)) tags.push("why-70", "percentage", "services");
-  if (/\b(skrill|liquidacion|cada 14|14 dias|neto|comision de la plataforma)\b/.test(message)) tags.push("settlement", "skrill", "payment", "revenue-share");
-  if (/\b(me dais|dame|negociar|negociamos|excepcion)\b/.test(message) || /\b\d{1,3}\s?%/.test(message)) tags.push("percentage", "revenue-share", "sensitive", "negotiation");
-  if (/\b(que haceis|que hace la agencia|servicios|trafico|estrategia|monetizacion)\b/.test(message)) tags.push("services", "agency", "strategy", "traffic", "monetization");
-  if (/\b(que hago yo|mi parte|modelo|contenido|crear contenido|enviar contenido|drive)\b/.test(message)) tags.push("model-responsibilities", "content");
-  if (/\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message)) tags.push("production", "reels", "photos", "warmup");
-  if (/\b(publicado antes|publicar antes|nuevo|material antiguo|contenido antiguo|ya creado|reutilizar|sexting|viejos videos)\b/.test(message)) {
+  if (/\b(skrill|liquidacion|cada 14|14 dias|neto|comision de la plataforma)\b/.test(message))
+    tags.push("settlement", "skrill", "payment", "revenue-share");
+  if (/\b(me dais|dame|negociar|negociamos|excepcion)\b/.test(message) || /\b\d{1,3}\s?%/.test(message))
+    tags.push("percentage", "revenue-share", "sensitive", "negotiation");
+  if (/\b(que haceis|que hace la agencia|servicios|trafico|estrategia|monetizacion)\b/.test(message))
+    tags.push("services", "agency", "strategy", "traffic", "monetization");
+  if (/\b(que hago yo|mi parte|modelo|contenido|crear contenido|enviar contenido|drive)\b/.test(message))
+    tags.push("model-responsibilities", "content");
+  if (/\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message))
+    tags.push("production", "reels", "photos", "warmup");
+  if (
+    /\b(publicado antes|publicar antes|nuevo|material antiguo|contenido antiguo|ya creado|reutilizar|sexting|viejos videos)\b/.test(
+      message
+    )
+  ) {
     tags.push("old-material", "new-content", "onlyfans", "instagram");
   }
   if (/\b(limites|no quiero hacer|contenido anal|desnudo|juguetes)\b/.test(message)) tags.push("boundaries", "limits", "content");
   if (/\b(llamada|llamar|telefono|whatsapp)\b/.test(message)) tags.push("call", "schedule");
-  if (/\b(grabar|grabacion|transcribir|transcripcion|retell)\b/.test(message)) tags.push("retell", "recording", "transcript", "consent");
+  if (/\b(grabar|grabacion|transcribir|transcripcion|retell)\b/.test(message))
+    tags.push("retell", "recording", "transcript", "consent");
   if (/\b(contrato|legal|clausula|permanencia)\b/.test(message)) tags.push("contract", "legal", "human-review");
-  if (/\b(preaviso|finalizar|terminar|contenido autorizado|dejar la agencia)\b/.test(message)) tags.push("termination", "content-rights", "legal-review");
+  if (/\b(preaviso|finalizar|terminar|contenido autorizado|dejar la agencia)\b/.test(message))
+    tags.push("termination", "content-rights", "legal-review");
   if (/\b(como funciona|proceso|que pasos)\b/.test(message)) tags.push("faq", "process", "how-it-works");
-  if (/\b(desconfianza|duda|no me fio|raro|estafa|enfadada|enfado)\b/.test(message)) tags.push("distrust", "objection", "human-intervention", "scam", "anger");
-  if (/\b(iphone|i phone|android|movil|telefono necesito|samsung|galaxy|s23|s24|s25)\b/.test(message)) tags.push("iphone", "galaxy", "device", "quality", "requirement");
+  if (/\b(desconfianza|duda|no me fio|raro|estafa|enfadada|enfado)\b/.test(message))
+    tags.push("distrust", "objection", "human-intervention", "scam", "anger");
+  if (/\b(iphone|i phone|android|movil|telefono necesito|samsung|galaxy|s23|s24|s25)\b/.test(message))
+    tags.push("iphone", "galaxy", "device", "quality", "requirement");
   if (/\b(ia|inteligencia artificial|bot|asistente virtual)\b/.test(message)) tags.push("ai", "identity", "transparency");
   if (/\b(no responde|seguimiento|volver a escribir|insistir)\b/.test(message)) tags.push("follow-up", "decline", "limited");
+  if (/\b(lanzamiento|lanzar|lanzais|cuando empiezo|cuando se lanza|cuanto tarda|30 dias|semanas)\b/.test(message))
+    tags.push("launch", "timeline", "warmup");
+  if (/\b(paises|que pais|vendeis|venden|mercado|compradores|poder adquisitivo)\b/.test(message))
+    tags.push("countries", "market", "faq");
+  if (/\b(seleccion|requisitos para entrar|como entro|que buscais)\b/.test(message)) tags.push("selection", "process", "faq");
 
   if (input.intent === "ASKS_ABOUT_PERCENTAGE") tags.push("percentage", "revenue-share");
   if (input.intent === "ASKS_ABOUT_CONTRACT") tags.push("contract", "legal", "human-review");

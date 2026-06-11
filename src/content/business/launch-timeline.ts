@@ -1,36 +1,36 @@
 import { KnowledgeEntrySchema, type KnowledgeEntryInput } from "@/domain/businessKnowledge";
 
-// Contradiccion real entre conversaciones (2-3 semanas vs 30 dias). Pendiente de que Alex
-// confirme el plazo vigente: hasta entonces la entrada queda en DRAFT y no se usa para responder.
+// Plazo confirmado por Alex el 2026-06-11: unos 30 dias desde la creacion de la cuenta,
+// a veces un poco antes si la cuenta crece muy rapido. (La mencion a "2-3 semanas" vista en
+// algun chat antiguo queda descartada como afirmacion.)
 const entries: KnowledgeEntryInput[] = [
   {
-    id: "launch-timeline-pending",
+    id: "launch-timeline",
     category: "SERVICES",
-    title: "Plazo de lanzamiento pendiente de confirmacion de Alex",
+    title: "Plazo de lanzamiento de OnlyFans",
     facts: [
-      "En conversaciones reales el lanzamiento de OnlyFans se explico de dos formas contradictorias: a las 2 o 3 semanas en unos hilos y a los 30 dias en otros.",
-      "El calentamiento inicial de unos 5 dias si esta confirmado.",
-      "Alex debe confirmar el plazo de lanzamiento vigente antes de activar esta entrada."
+      "El lanzamiento llega aproximadamente a los 30 dias desde que se crea la cuenta de Instagram.",
+      "Puede adelantarse un poco si la cuenta crece muy rapido.",
+      "Los primeros dias (unos 5) son de calentamiento de la cuenta."
     ],
     approvedAnswerPoints: [
-      "Propuesta pendiente de Alex: los primeros dias son de calentamiento y el plazo exacto del lanzamiento te lo confirma Alex en la llamada."
+      "El lanzamiento suele ser a los 30 dias desde que creamos la cuenta, a veces un poco antes si la cuenta crece muy rapido.",
+      "Los primeros dias son de calentamiento de la cuenta y despues empezamos a publicar con mas volumen."
     ],
     prohibitedClaims: [
+      "Prometer una fecha exacta de lanzamiento o de primeros ingresos.",
       "Afirmar que el lanzamiento es a las 2 o 3 semanas.",
-      "Afirmar que el lanzamiento es a los 30 dias.",
-      "Prometer fechas de resultados o de facturacion."
+      "Garantizar que el plazo se adelantara."
     ],
-    mandatoryNuances: [
-      "Mientras Alex no confirme el plazo, no afirmar ninguna de las dos cifras y derivar el detalle a la llamada."
-    ],
-    escalationConditions: ["Pregunta por el plazo exacto de lanzamiento o de primeros resultados."],
-    allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
-    tags: ["launch", "timeline", "warmup", "pending-alex"],
-    requiresHumanReview: true,
-    version: "launch-timeline-pending-2026-06-10.1",
-    status: "DRAFT",
-    approvedByAlex: false,
-    updatedAt: "2026-06-10"
+    mandatoryNuances: ["El plazo es orientativo y depende del crecimiento de la cuenta."],
+    escalationConditions: ["La candidata exige compromisos de fechas o de ingresos por escrito."],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE"],
+    tags: ["launch", "timeline", "warmup"],
+    requiresHumanReview: false,
+    version: "launch-timeline-2026-06-11.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-11"
   }
 ];
 

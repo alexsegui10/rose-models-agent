@@ -8,12 +8,14 @@ const NEW_ACTIVE_ENTRY_IDS = [
   "geo-privacy-three-layers",
   "face-requirement-mandatory",
   "multi-agency-different-traffic",
-  "services-secondary-traffic"
+  "services-secondary-traffic",
+  // Promovidas de DRAFT a ACTIVE el 2026-06-11 con las respuestas confirmadas por Alex:
+  "launch-timeline",
+  "faq-selection-process",
+  "faq-target-countries"
 ];
 
-const DRAFT_ENTRY_IDS = ["launch-timeline-pending", "faq-selection-process-draft", "faq-target-countries-draft"];
-
-const DRAFT_BAIT_QUESTIONS = [
+const PROMOTED_BAIT_QUESTIONS = [
   "Cual es el proceso de seleccion?",
   "A que paises vendeis el contenido?",
   "El lanzamiento es a las 2 o 3 semanas o a los 30 dias?"
@@ -85,47 +87,68 @@ describe("new knowledge entries from real conversation synthesis (2026-06-10)", 
     expect(entry?.facts.some((fact) => fact.includes("Telegram") && fact.includes("Twitter"))).toBe(true);
   });
 
-  it("keeps the pending entries as DRAFT, unapproved and flagged for human review", () => {
-    for (const id of DRAFT_ENTRY_IDS) {
-      const entry = businessKnowledgeEntries.find((candidate) => candidate.id === id);
-      expect(entry, id).toBeDefined();
-      expect(entry?.status, id).toBe("DRAFT");
-      expect(entry?.approvedByAlex, id).toBe(false);
-      expect(entry?.requiresHumanReview, id).toBe(true);
-    }
+  it("answers the launch timeline with the 30-day figure Alex confirmed", async () => {
+    const entries = await retrieveFor("El lanzamiento es a las 2 o 3 semanas o a los 30 dias?");
+
+    const entry = entries.find((candidate) => candidate.id === "launch-timeline");
+    expect(entry).toBeDefined();
+    expect(entry?.approvedAnswerPoints.some((point) => point.includes("30 dias"))).toBe(true);
+    expect(entry?.approvedAnswerPoints.some((point) => point.includes("crece muy rapido"))).toBe(true);
+    expect(entry?.prohibitedClaims.some((claim) => claim.includes("2 o 3 semanas"))).toBe(true);
   });
 
-  it("never returns DRAFT entries for production retrieval even when they are the only match", async () => {
-    const drafts = businessKnowledgeEntries.filter((entry) => DRAFT_ENTRY_IDS.includes(entry.id));
-    expect(drafts).toHaveLength(DRAFT_ENTRY_IDS.length);
-    const retriever = new LocalBusinessKnowledgeRetriever(drafts);
+  it("answers the selection process question with Alex's confirmed wording", async () => {
+    const entries = await retrieveFor("Cual es el proceso de seleccion?");
 
-    for (const question of DRAFT_BAIT_QUESTIONS) {
-      const result = await retriever.retrieve({ candidate: probeCandidate(), intent: "REQUESTS_INFORMATION", question });
-      expect(result, question).toHaveLength(0);
-    }
+    const entry = entries.find((candidate) => candidate.id === "faq-selection-process");
+    expect(entry).toBeDefined();
+    expect(entry?.approvedAnswerPoints.some((point) => point.includes("Analizamos tu cuenta"))).toBe(true);
   });
 
-  it("only returns ACTIVE entries approved by Alex for production retrieval of draft-baited questions", async () => {
-    for (const question of DRAFT_BAIT_QUESTIONS) {
+  it("answers the target countries question with the Spanish-audience rationale", async () => {
+    const entries = await retrieveFor("A que paises vendeis el contenido?");
+
+    const entry = entries.find((candidate) => candidate.id === "faq-target-countries");
+    expect(entry).toBeDefined();
+    expect(entry?.approvedAnswerPoints.some((point) => point.includes("poder adquisitivo"))).toBe(true);
+    expect(entry?.prohibitedClaims.some((claim) => claim.includes("solo trabajamos con espanolas"))).toBe(true);
+  });
+
+  it("only returns ACTIVE entries approved by Alex for production retrieval of the promoted questions", async () => {
+    for (const question of PROMOTED_BAIT_QUESTIONS) {
       const entries = await retrieveFor(question);
+      expect(entries.length, question).toBeGreaterThan(0);
       for (const entry of entries) {
         expect(entry.status, `${question} -> ${entry.id}`).toBe("ACTIVE");
         expect(entry.approvedByAlex, `${question} -> ${entry.id}`).toBe(true);
       }
-      const ids = entries.map((entry) => entry.id);
-      for (const draftId of DRAFT_ENTRY_IDS) {
-        expect(ids, question).not.toContain(draftId);
-      }
     }
   });
 
-  it("exposes the selection process draft only when drafts are explicitly requested", async () => {
-    const production = await retrieveFor("Cual es el proceso de seleccion?");
-    expect(production.map((entry) => entry.id)).not.toContain("faq-selection-process-draft");
+  it("never returns DRAFT entries for production retrieval even when they are the only match", async () => {
+    const syntheticDraft = {
+      ...businessKnowledgeEntries.find((entry) => entry.id === "faq-selection-process")!,
+      id: "faq-synthetic-draft",
+      status: "DRAFT" as const,
+      approvedByAlex: false,
+      requiresHumanReview: true
+    };
+    const retriever = new LocalBusinessKnowledgeRetriever([syntheticDraft]);
 
-    const withDrafts = await retrieveFor("Cual es el proceso de seleccion?", true);
-    expect(withDrafts.map((entry) => entry.id)).toContain("faq-selection-process-draft");
+    const production = await retriever.retrieve({
+      candidate: probeCandidate(),
+      intent: "REQUESTS_INFORMATION",
+      question: "Cual es el proceso de seleccion?"
+    });
+    expect(production).toHaveLength(0);
+
+    const withDrafts = await retriever.retrieve({
+      candidate: probeCandidate(),
+      intent: "REQUESTS_INFORMATION",
+      question: "Cual es el proceso de seleccion?",
+      includeDrafts: true
+    });
+    expect(withDrafts.map((entry) => entry.id)).toContain("faq-synthetic-draft");
   });
 
   it("forbids repeating the real 75/25 anomaly and proactive salary offers in the commercial policy", () => {
