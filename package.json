@@ -8,7 +8,9 @@
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "convert:instagram": "node scripts/convert-instagram-export.mjs",
+    "import:replay": "node scripts/convert-instagram-export.mjs --post"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

@@ -8,7 +8,7 @@ import { createCandidate, type Candidate, type ProfileVisibility } from "@/domai
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
 describe("golden style tests", () => {
-  for (const golden of goldenConversationTests.slice(0, 10)) {
+  for (const golden of goldenConversationTests) {
     it(golden.title, async () => {
       const repository = new InMemoryCandidateRepository();
       const engine = new ConversationEngine({
@@ -47,7 +47,9 @@ describe("golden style tests", () => {
       }
 
       if (golden.responseMustIncludeAny.length > 0) {
-        expect(golden.responseMustIncludeAny.some((item) => result.response.toLowerCase().includes(item.toLowerCase()))).toBe(true);
+        expect(golden.responseMustIncludeAny.some((item) => result.response.toLowerCase().includes(item.toLowerCase()))).toBe(
+          true
+        );
       }
 
       expect(result.retrievedExamples.length).toBeGreaterThanOrEqual(3);
@@ -77,7 +79,9 @@ function seedCandidate(id: string, initialCandidate: Record<string, unknown>, st
     country: stringFrom(initialCandidate.country),
     phone: stringFrom(initialCandidate.phone),
     declaredProfileVisibility: profileVisibility,
-    humanProfileReviewStatus: booleanFrom(initialCandidate.profileReviewed) ? "POTENTIAL_FIT" : candidate.humanProfileReviewStatus,
+    humanProfileReviewStatus: booleanFrom(initialCandidate.profileReviewed)
+      ? "POTENTIAL_FIT"
+      : candidate.humanProfileReviewStatus,
     hasOnlyFans: booleanFrom(initialCandidate.hasOnlyFans),
     worksWithAnotherAgency: booleanFrom(initialCandidate.worksWithAnotherAgency),
     currentState: stateBefore,

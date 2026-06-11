@@ -1,8 +1,61 @@
 import type { ConversationUnderstandingInput, ConversationUnderstandingProvider, ModelConversationOutput } from "./llmProvider";
 import { deviceEligibilityForDescription, deviceModelForDescription, deviceTypeForDescription } from "./policyRules";
 
-const phonePattern = /(?:\+34\s?)?(?:6|7|8|9)\d{2}[\s.-]?\d{3}[\s.-]?\d{3}\b/;
+const phonePatterns: readonly RegExp[] = [
+  // Argentina: prefijo +54 (con o sin "+"), "9" de movil opcional y 10 digitos (codigo de area + numero) con espacios/guiones.
+  /(?<!\d)\+?54[\s.-]?(?:9[\s.-]?)?(?:\d{2}[\s.-]?\d{4}[\s.-]?\d{4}|\d{3}[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/,
+  // Colombia: prefijo +57 (con o sin "+") y movil de 10 digitos que empieza por 3.
+  /(?<!\d)\+?57[\s.-]?3\d{2}[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/,
+  // España: prefijo +34 opcional y 9 digitos que empiezan por 6/7/8/9.
+  /(?<!\d)(?:\+34[\s.-]?)?[6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}(?!\d)/,
+  // LATAM local sin prefijo de pais: 10 digitos agrupados, p. ej. "11 2345 6789" (AR) o "3001234567" (CO).
+  /(?<!\d)(?:\d{2}[\s.-]?\d{4}[\s.-]?\d{4}|\d{3}[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/
+];
 const agePattern = /\b(?:(?:tengo|edad)\s+(\d{1,2})|(\d{1,2})\s*(?:anos|años|a\b))/i;
+
+function stripPhoneSpans(text: string): string {
+  let result = text;
+  for (const pattern of phonePatterns) {
+    result = result.replace(new RegExp(pattern.source, "g"), " ");
+  }
+  return result;
+}
+
+interface LocationKeyword {
+  readonly keyword: string;
+  readonly country: string;
+  readonly city: string | null;
+}
+
+const locationKeywords: readonly LocationKeyword[] = [
+  { keyword: "mar del plata", country: "Argentina", city: "Mar del Plata" },
+  { keyword: "buenos aires", country: "Argentina", city: "Buenos Aires" },
+  { keyword: "la plata", country: "Argentina", city: "La Plata" },
+  { keyword: "argentina", country: "Argentina", city: null },
+  { keyword: "cordoba", country: "Argentina", city: "Cordoba" },
+  { keyword: "rosario", country: "Argentina", city: "Rosario" },
+  { keyword: "mendoza", country: "Argentina", city: "Mendoza" },
+  { keyword: "colombia", country: "Colombia", city: null },
+  { keyword: "medellin", country: "Colombia", city: "Medellín" },
+  { keyword: "bogota", country: "Colombia", city: "Bogotá" },
+  { keyword: "cali", country: "Colombia", city: "Cali" },
+  { keyword: "barranquilla", country: "Colombia", city: "Barranquilla" },
+  { keyword: "bucaramanga", country: "Colombia", city: "Bucaramanga" },
+  { keyword: "pereira", country: "Colombia", city: "Pereira" },
+  { keyword: "uruguay", country: "Uruguay", city: null },
+  { keyword: "montevideo", country: "Uruguay", city: "Montevideo" },
+  { keyword: "espana", country: "España", city: null },
+  { keyword: "madrid", country: "España", city: "Madrid" },
+  { keyword: "barcelona", country: "España", city: "Barcelona" },
+  { keyword: "valencia", country: "España", city: "Valencia" },
+  { keyword: "sevilla", country: "España", city: "Sevilla" },
+  { keyword: "malaga", country: "España", city: "Malaga" },
+  { keyword: "alicante", country: "España", city: "Alicante" },
+  { keyword: "bilbao", country: "España", city: "Bilbao" },
+  { keyword: "murcia", country: "España", city: "Murcia" }
+];
+
+const locationPattern = new RegExp(`\\b(?:${locationKeywords.map((entry) => entry.keyword).join("|")})\\b`);
 
 export class DeterministicUnderstandingProvider implements ConversationUnderstandingProvider {
   async understand(input: ConversationUnderstandingInput): Promise<ModelConversationOutput> {
@@ -15,8 +68,8 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   const extractedData: ModelConversationOutput["extractedData"] = {};
   const internalNotes: string[] = [];
 
-  const phoneMatch = normalized.match(phonePattern);
-  if (phoneMatch) extractedData.phone = phoneMatch[0].replace(/[\s.-]/g, "");
+  const phone = extractPhone(normalized);
+  if (phone) extractedData.phone = phone;
 
   const deviceEligibility = deviceEligibilityForDescription(normalized);
   if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
@@ -38,33 +91,39 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
     extractedData.deviceEligibility = deviceEligibility === "UNKNOWN" ? "PENDING_QUALITY_TEST" : deviceEligibility;
   }
 
-  if (/\b(comprare|compraré|cambiare|cambiaré|me comprare|me compraré|me cambio)\b.*\b(iphone|i phone|galaxy|s23|s24|s25)\b/.test(normalized)) {
+  if (
+    /\b(comprare|compraré|cambiare|cambiaré|me comprare|me compraré|me cambio)\b.*\b(iphone|i phone|galaxy|s23|s24|s25)\b/.test(
+      normalized
+    )
+  ) {
     extractedData.deviceType = "UNKNOWN";
     extractedData.deviceEligibility = "PENDING_UPGRADE";
     extractedData.objections = [...(extractedData.objections ?? []), "Tiene pensado comprar un dispositivo valido pronto."];
   }
 
-  const ageMatch = normalized.match(agePattern);
+  // Los numeros argentinos locales empiezan por "11"/"15": si la candidata escribe
+  // "tengo 11 2345 6789" no podemos leer edad 11 y cerrarla como menor (invariante 2).
+  const ageMatch = stripPhoneSpans(normalized).match(agePattern);
   if (ageMatch) extractedData.age = Number(ageMatch[1] ?? ageMatch[2]);
 
   if (mentionsPrivateProfile(normalized)) extractedData.profileVisibility = "PRIVATE";
 
-  if (/\b(madrid|barcelona|valencia|sevilla|malaga|alicante|bilbao|murcia|argentina|buenos aires|cordoba|rosario)\b/.test(normalized)) {
-    const location = normalized.match(/\b(madrid|barcelona|valencia|sevilla|malaga|alicante|bilbao|murcia|argentina|buenos aires|cordoba|rosario)\b/)?.[0] ?? "";
-    if (["argentina", "buenos aires", "cordoba", "rosario"].includes(location)) {
-      extractedData.country = "Argentina";
-      if (location !== "argentina") extractedData.city = titleCase(location);
-    } else {
-      extractedData.city = titleCase(location);
-      extractedData.country = "España";
+  const locationMatch = normalized.match(locationPattern);
+  if (locationMatch) {
+    const location = locationKeywords.find((entry) => entry.keyword === locationMatch[0]);
+    if (location) {
+      extractedData.country = location.country;
+      if (location.city) extractedData.city = location.city;
     }
   }
 
   if (/\b(onlyfans|of)\b/.test(normalized)) extractedData.hasOnlyFans = true;
   if (/\b(no tengo onlyfans|sin onlyfans|no tengo of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
 
-  if (/\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized)) extractedData.worksWithAnotherAgency = true;
-  if (/\b(no trabajo con otra agencia|no tengo agencia|sin agencia)\b/.test(normalized)) extractedData.worksWithAnotherAgency = false;
+  if (/\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized))
+    extractedData.worksWithAnotherAgency = true;
+  if (/\b(no trabajo con otra agencia|no tengo agencia|sin agencia)\b/.test(normalized))
+    extractedData.worksWithAnotherAgency = false;
 
   const revenueMatch = normalized.match(/\b(?:ingreso|ingresos|facturo|gano)\s*(?:unos|sobre)?\s*(\d{3,6})\b/);
   if (revenueMatch) extractedData.currentMonthlyRevenue = Number(revenueMatch[1]);
@@ -92,7 +151,10 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   const requestedPercentageMatch = normalized.match(/\b(\d{1,3})\s?%/);
   if (requestedPercentageMatch) extractedData.requestedModelPercentage = Number(requestedPercentageMatch[1]);
 
-  if (/\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo)\b/.test(normalized) || /\b\d{1,3}\s?%/.test(normalized)) {
+  if (
+    /\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo)\b/.test(normalized) ||
+    /\b\d{1,3}\s?%/.test(normalized)
+  ) {
     const asksForException = /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(normalized);
     const asksNonStandardNumber = /\b\d{1,3}\s?%/.test(normalized) && !/(70\s?%|30\s?%|70\/30)/.test(normalized);
     const requiresHumanReview = asksForException || asksNonStandardNumber;
@@ -111,14 +173,15 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   }
 
   if (/\b(llamada|llamar|telefono|whatsapp)\b/.test(normalized)) {
-    return baseOutput(phoneMatch ? "PROVIDES_PHONE" : "REQUESTS_CALL", extractedData, 0.8, false, null, internalNotes);
+    return baseOutput(phone ? "PROVIDES_PHONE" : "REQUESTS_CALL", extractedData, 0.8, false, null, internalNotes);
   }
 
   if (/\b(aceptada|acepte|acepté|ya os acepte|ya os acepté|solicitud aceptada)\b/.test(normalized)) {
     return baseOutput("ACCEPTS_PROFILE_REQUEST", extractedData, 0.82, false, null, internalNotes);
   }
 
-  if (/\b(no me interesa|paso|no gracias|no quiero)\b/.test(normalized)) return baseOutput("DECLINES", extractedData, 0.82, false, null, internalNotes);
+  if (/\b(no me interesa|paso|no gracias|no quiero)\b/.test(normalized))
+    return baseOutput("DECLINES", extractedData, 0.82, false, null, internalNotes);
 
   if (/\b(persona|alex|humano|hablar con alguien)\b/.test(normalized)) {
     return baseOutput("REQUESTS_HUMAN", extractedData, 0.82, true, "La candidata pide hablar con una persona.", internalNotes);
@@ -129,7 +192,8 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   }
 
   if (extractedData.age) return baseOutput("PROVIDES_AGE", extractedData, 0.78, false, null, internalNotes);
-  if (/\b(si|sí|vale|me interesa|info|informacion)\b/.test(normalized)) return baseOutput("CONFIRMS_INTEREST", extractedData, 0.72, false, null, internalNotes);
+  if (/\b(si|sí|vale|me interesa|info|informacion)\b/.test(normalized))
+    return baseOutput("CONFIRMS_INTEREST", extractedData, 0.72, false, null, internalNotes);
 
   return baseOutput(Object.keys(extractedData).length > 0 ? "OTHER" : "UNCLEAR", extractedData, 0.55, false, null, internalNotes);
 }
@@ -175,6 +239,14 @@ function baseOutput(
   };
 }
 
+function extractPhone(normalized: string): string | null {
+  for (const pattern of phonePatterns) {
+    const match = normalized.match(pattern);
+    if (match) return match[0].replace(/\D/g, "");
+  }
+  return null;
+}
+
 function mentionsPrivateProfile(normalized: string): boolean {
   return /\b(privada|cuenta privada|perfil privado)\b/.test(normalized);
 }
@@ -184,12 +256,4 @@ function normalize(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "");
-}
-
-function titleCase(value: string): string {
-  if (!value) return value;
-  return value
-    .split(" ")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
