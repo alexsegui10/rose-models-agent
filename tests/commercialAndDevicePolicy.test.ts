@@ -184,7 +184,8 @@ describe("commercial and device policy", () => {
     const result = await engine.handleIncomingMessage({
       instagramUsername: "future_iphone_excellent_case",
       profileVisibility: "PUBLIC",
-      message: "Soy Laura, tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, estoy disponible por las tardes y me comprare un iPhone pronto"
+      message:
+        "Soy Laura, tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, estoy disponible por las tardes y me comprare un iPhone pronto"
     });
     const readiness = evaluateQualificationReadiness(result.candidate);
 
@@ -201,7 +202,8 @@ describe("commercial and device policy", () => {
     const first = await engine.handleIncomingMessage({
       instagramUsername: "future_iphone_resolved_case",
       profileVisibility: "PUBLIC",
-      message: "Tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, estoy disponible por las tardes y me comprare un iPhone pronto"
+      message:
+        "Tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, estoy disponible por las tardes y me comprare un iPhone pronto"
     });
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,
@@ -223,7 +225,7 @@ describe("commercial and device policy", () => {
     const first = await engine.handleIncomingMessage({
       instagramUsername: "missing_iphone_case",
       profileVisibility: "PUBLIC",
-      message: "Tengo 24 anos, soy de Madrid y tengo experiencia en redes"
+      message: "Soy Ana, tengo 24 anos, soy de Madrid y tengo experiencia en redes"
     });
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,

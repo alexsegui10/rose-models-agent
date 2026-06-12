@@ -11,7 +11,8 @@ const phonePatterns: readonly RegExp[] = [
   // LATAM local sin prefijo de pais: 10 digitos agrupados, p. ej. "11 2345 6789" (AR) o "3001234567" (CO).
   /(?<!\d)(?:\d{2}[\s.-]?\d{4}[\s.-]?\d{4}|\d{3}[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/
 ];
-const agePattern = /\b(?:(?:tengo|edad)\s+(\d{1,2})|(\d{1,2})\s*(?:anos|años|a\b))/i;
+// (?!\d) evita leer "tengo 1500000 seguidores" como edad 15 (invariante 2: una edad fantasma cierra adultas).
+const agePattern = /\b(?:(?:tengo|edad)\s+(\d{1,2})(?!\d)|(\d{1,2})\s*(?:anos|años|a\b))/i;
 
 function stripPhoneSpans(text: string): string {
   let result = text;
@@ -57,6 +58,49 @@ const locationKeywords: readonly LocationKeyword[] = [
 
 const locationPattern = new RegExp(`\\b(?:${locationKeywords.map((entry) => entry.keyword).join("|")})\\b`);
 
+// "soy laura" captura nombre; "soy de madrid" / "soy argentina" / "soy modelo" no.
+const explicitNamePattern = /\b(?:me llamo|mi nombre es)\s+([a-zñ]{2,})/;
+const casualNamePattern = /\bsoy\s+([a-zñ]{3,})\b/;
+const nameStopwords = new Set([
+  "del",
+  "los",
+  "las",
+  "una",
+  "muy",
+  "mas",
+  "menor",
+  "mayor",
+  "modelo",
+  "creadora",
+  "chica",
+  "nueva",
+  "mama",
+  "madre",
+  "argentina",
+  "colombiana",
+  "espanola",
+  "mexicana",
+  "venezolana",
+  "uruguaya",
+  "chilena",
+  "peruana",
+  "ecuatoriana",
+  "interesada",
+  "seria",
+  "timida"
+]);
+
+function extractFirstName(normalized: string): string | undefined {
+  const explicitMatch = normalized.match(explicitNamePattern);
+  const candidateName = explicitMatch?.[1] ?? normalized.match(casualNamePattern)?.[1];
+  if (!candidateName) return undefined;
+  if (!explicitMatch) {
+    if (nameStopwords.has(candidateName)) return undefined;
+    if (locationKeywords.some((entry) => entry.keyword === candidateName)) return undefined;
+  }
+  return candidateName.charAt(0).toUpperCase() + candidateName.slice(1);
+}
+
 export class DeterministicUnderstandingProvider implements ConversationUnderstandingProvider {
   async understand(input: ConversationUnderstandingInput): Promise<ModelConversationOutput> {
     return extractDeterministicUnderstanding(input.inboundMessage);
@@ -68,8 +112,12 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   const extractedData: ModelConversationOutput["extractedData"] = {};
   const internalNotes: string[] = [];
 
-  const phone = extractPhone(normalized);
+  const mentionsPhoneContext = /\b(numero|telefono|whatsapp|wassap|wasap|movil|celular|cel)\b/.test(normalized);
+  const phone = extractPhone(normalized, mentionsPhoneContext);
   if (phone) extractedData.phone = phone;
+
+  const firstName = extractFirstName(normalized);
+  if (firstName) extractedData.firstName = firstName;
 
   const deviceEligibility = deviceEligibilityForDescription(normalized);
   if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
@@ -118,7 +166,9 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   }
 
   if (/\b(onlyfans|of)\b/.test(normalized)) extractedData.hasOnlyFans = true;
+  // Negacion antes de la mencion ("no tengo of", "nunca tuve onlyfans", "no, jamas he usado of").
   if (/\b(no tengo onlyfans|sin onlyfans|no tengo of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
+  if (/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\b(?:onlyfans|of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
 
   if (/\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized))
     extractedData.worksWithAnotherAgency = true;
@@ -152,7 +202,9 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   if (requestedPercentageMatch) extractedData.requestedModelPercentage = Number(requestedPercentageMatch[1]);
 
   if (
-    /\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo)\b/.test(normalized) ||
+    /\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo|cuanto pagan|cuanto pagais|cuanto me pagan|cuanto se gana|cuanto ganaria|cuanto cobraria|cuanto cobrar[ie]a)\b/.test(
+      normalized
+    ) ||
     /\b\d{1,3}\s?%/.test(normalized)
   ) {
     const asksForException = /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(normalized);
@@ -172,7 +224,7 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
     return baseOutput("ASKS_ABOUT_CONTRACT", extractedData, 0.86, true, "Pregunta contractual o legal.", internalNotes);
   }
 
-  if (/\b(llamada|llamar|telefono|whatsapp)\b/.test(normalized)) {
+  if (/\b(llamada|llamar|llamame|telefono|whatsapp|numero|celular)\b/.test(normalized)) {
     return baseOutput(phone ? "PROVIDES_PHONE" : "REQUESTS_CALL", extractedData, 0.8, false, null, internalNotes);
   }
 
@@ -239,11 +291,19 @@ function baseOutput(
   };
 }
 
-function extractPhone(normalized: string): string | null {
+function extractPhone(normalized: string, allowShortLocalNumbers = false): string | null {
   for (const pattern of phonePatterns) {
     const match = normalized.match(pattern);
     if (match) return match[0].replace(/\D/g, "");
   }
+
+  // Numeros locales cortos (7-8 digitos) solo si el mensaje habla explicitamente de telefono:
+  // sin ese contexto serian falsos positivos (precios, seguidores, fechas...).
+  if (allowShortLocalNumbers) {
+    const shortMatch = normalized.match(/(?<!\d)\d{7,8}(?!\d)/);
+    if (shortMatch) return shortMatch[0];
+  }
+
   return null;
 }
 

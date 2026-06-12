@@ -8,7 +8,7 @@ import type {
 } from "@/domain/candidate";
 import type { AutomationMode, DraftDeliveryStatus } from "@/domain/automation";
 import { createCandidate } from "@/domain/candidate";
-import { createTransition } from "@/domain/stateMachine";
+import { canTransition, createTransition } from "@/domain/stateMachine";
 import type { CandidateRepository } from "@/infrastructure/repositories/types";
 import type { ConversationExample } from "@/domain/conversationExample";
 import type { StyleEvaluation } from "@/domain/styleEvaluation";
@@ -16,11 +16,13 @@ import type { KnowledgeEntry, NegotiationDecision, ResponsePlan } from "@/domain
 import type { BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { LocalBusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { buildConsistentCandidatePatch } from "./dataConsistency";
+import { extractDeterministicUnderstanding } from "./dataExtractor";
 import type { ExampleRetriever } from "./exampleRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
 import { safeFactualFallback, validateFactualResponse, type FactualValidationResult } from "./factualValidator";
 import type {
   ConversationUnderstandingProvider,
+  ExtractedCandidateData,
   ModelConversationOutput,
   ResponseDraftOutput,
   ResponseDraftingProvider
@@ -122,12 +124,27 @@ export class ConversationEngine {
     await this.dependencies.repository.saveCandidate(activeCandidate);
 
     const recentMessages = await this.dependencies.repository.listMessages(activeCandidate.id, 8);
-    const understanding = await this.dependencies.understandingProvider.understand({
+    const modelUnderstanding = await this.dependencies.understandingProvider.understand({
       candidateState: activeCandidate.currentState,
       knownData: knownDataForModel(activeCandidate),
       recentMessages: recentMessages.map((message) => `${message.role}: ${message.content}`),
       inboundMessage: groupedMessage.content
     });
+    // Los datos voluntarios (telefono LATAM, pais, movil...) no pueden perderse aunque el modelo
+    // los omita: la extraccion deterministica rellena SOLO los campos que el modelo dejo vacios.
+    const escalationFilter = suppressBenignModelEscalation(
+      resolveContextualDecline(
+        mergeDeterministicExtraction(modelUnderstanding, groupedMessage.content),
+        lastAgentMessageContent(recentMessages),
+        groupedMessage.content
+      ),
+      groupedMessage.content
+    );
+    const understanding = escalationFilter.understanding;
+    // Primer turno del agente con un lead nuevo: toca el opener canonico (plantilla real de Alex),
+    // nunca una pregunta de cualificacion. Los leads sembrados a mitad de funnel no lo necesitan.
+    const isOpenerTurn =
+      !recentMessages.some((message) => message.role === "agent") && activeCandidate.currentState === "NEW_LEAD";
 
     const consistency = buildConsistentCandidatePatch({
       candidate: activeCandidate,
@@ -149,6 +166,8 @@ export class ConversationEngine {
       notes: [
         ...updatedCandidate.notes,
         ...commercialNotes,
+        // Una escalada suprimida nunca se pierde en silencio: Alex conserva el motivo original.
+        ...(escalationFilter.suppressedEscalationNote === null ? [] : [escalationFilter.suppressedEscalationNote]),
         ...consistency.contradictions.map((item) => `CONTRADICTION: ${item}`),
         ...consistency.corrections.map((item) => `CORRECTION: ${item}`)
       ],
@@ -170,7 +189,9 @@ export class ConversationEngine {
       understanding,
       inboundMessage: groupedMessage.content,
       knowledgeEntries,
-      hasApprovedNegotiationDecision: Boolean(approvedNegotiationDecision)
+      hasApprovedNegotiationDecision: Boolean(approvedNegotiationDecision),
+      recentAgentMessages: recentMessages.filter((message) => message.role === "agent").map((message) => message.content),
+      isOpenerTurn
     });
 
     let projectedCandidate = updatedCandidate;
@@ -178,6 +199,11 @@ export class ConversationEngine {
     for (let step = 0; step < 3; step += 1) {
       const nextState = decideNextState(projectedCandidate, understanding, responsePlan, criticalHumanReviewReason);
       if (!nextState || nextState === projectedCandidate.currentState) {
+        break;
+      }
+      // Un plan invalido (p. ej. CLOSED -> HUMAN_INTERVENTION_REQUIRED) nunca debe tumbar el
+      // turno con una excepcion: se ignora la transicion y se responde desde el estado actual.
+      if (!canTransition(projectedCandidate.currentState, nextState)) {
         break;
       }
 
@@ -215,20 +241,38 @@ export class ConversationEngine {
       responsePlan,
       allowedActions: allowedActionsFor(projectedCandidate.currentState),
       forbiddenActions: forbiddenActionsFor(projectedCandidate.currentState),
-      immediateObjective: immediateObjectiveFor(projectedCandidate.currentState, understanding.intent)
+      immediateObjective: immediateObjectiveFor(projectedCandidate.currentState, understanding.intent, isOpenerTurn)
     });
 
-    const deterministicResponse = generateResponse(projectedCandidate, understanding, responsePlan, approvedNegotiationDecision);
-    let draft = await this.draftResponse({
-      deterministicResponse,
+    const deterministicResponse = generateResponse(
       projectedCandidate,
-      recentMessages,
-      knowledgeEntries,
+      understanding,
       responsePlan,
-      retrievedExamples,
-      styleContext,
-      approvedNegotiationDecision
-    });
+      approvedNegotiationDecision,
+      isOpenerTurn
+    );
+    // El opener real de Alex es una plantilla pegada a mano: cuando no hay nada que responder,
+    // se envia la plantilla canonica tal cual (cero deriva del modelo, traza honesta: deterministico).
+    const useCanonicalOpenerTemplate =
+      isOpenerTurn &&
+      responsePlan.answerFacts.length === 0 &&
+      !responsePlan.uncoveredQuestion &&
+      !responsePlan.requiresHumanReview &&
+      (projectedCandidate.currentState === "QUALIFYING" ||
+        projectedCandidate.currentState === "NEW_LEAD" ||
+        projectedCandidate.currentState === "WAITING_PROFILE_ACCESS");
+    let draft = useCanonicalOpenerTemplate
+      ? deterministicDraftOutput(deterministicResponse)
+      : await this.draftResponse({
+          deterministicResponse,
+          projectedCandidate,
+          recentMessages,
+          knowledgeEntries,
+          responsePlan,
+          retrievedExamples,
+          styleContext,
+          approvedNegotiationDecision
+        });
     let response = draft.response;
     const validation = validateAgentResponse(response, projectedCandidate);
     if (!validation.valid) {
@@ -242,7 +286,7 @@ export class ConversationEngine {
     }
     let factualValidation = validateFactualResponse(response, responsePlan);
     if (!factualValidation.valid) {
-      response = rewriteFromPlan(responsePlan, projectedCandidate, approvedNegotiationDecision);
+      response = rewriteFromPlan(responsePlan, approvedNegotiationDecision);
       factualValidation = validateFactualResponse(response, responsePlan);
       if (!factualValidation.valid) {
         response = safeFactualFallback();
@@ -254,6 +298,14 @@ export class ConversationEngine {
         usedFallback: true,
         error: "factual-validator-fallback"
       };
+    }
+    // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
+    // Las variantes son estaticamente seguras (acuses o derivacion honesta al socio), por lo que
+    // no invalidan la validacion factual ya realizada.
+    const dedupedResponse = withoutVerbatimRepetition(response, lastAgentMessageContent(recentMessages), responsePlan);
+    if (dedupedResponse !== response) {
+      response = dedupedResponse;
+      draft = { ...draft, response };
     }
     const styleEvaluation = await this.styleEvaluator.evaluate({
       response,
@@ -293,6 +345,19 @@ export class ConversationEngine {
     const deliveryStatus = deliveryStatusFor(this.automationMode, responsePlan, projectedCandidate, factualValidation.valid);
     if (deliveryStatus === "DRAFT_ONLY" || deliveryStatus === "BLOCKED") {
       await this.dependencies.repository.saveCandidate(updatedCandidate);
+      // En DRAFT_ONLY (playback de evaluacion) el borrador SI se guarda como mensaje del agente:
+      // sin ese historial, el guard anti-repeticion y el "no" contextual no ven que pregunto el bot.
+      if (deliveryStatus === "DRAFT_ONLY" && response.trim().length > 0) {
+        await this.dependencies.repository.addMessage(
+          agentMessage(updatedCandidate.id, response, {
+            deliveryStatus,
+            automationMode: this.automationMode,
+            draftUsedFallback: draft.usedFallback,
+            requestedProvider: draft.requestedProvider,
+            actualProvider: draft.actualProvider
+          })
+        );
+      }
       return {
         candidate: updatedCandidate,
         response,
@@ -387,23 +452,7 @@ export class ConversationEngine {
     approvedNegotiationDecision: NegotiationDecision | null;
   }): Promise<ResponseDraftOutput> {
     if (!this.dependencies.draftingProvider) {
-      return {
-        response: input.deterministicResponse,
-        provider: "deterministic",
-        modelVersion: "deterministic-local-2026-06-08.1",
-        promptVersion: promptRegistry.drafting.version,
-        usedFallback: false,
-        requestedProvider: "DETERMINISTIC",
-        actualProvider: "deterministic",
-        requestedModel: "deterministic-local-2026-06-08.1",
-        actualModel: "deterministic-local-2026-06-08.1",
-        fallbackReason: null,
-        durationMs: 0,
-        retryCount: 0,
-        inputTokens: null,
-        outputTokens: null,
-        estimatedCostUsd: null
-      };
+      return deterministicDraftOutput(input.deterministicResponse);
     }
 
     const draft = await this.dependencies.draftingProvider.draft({
@@ -470,6 +519,26 @@ export class ConversationEngine {
   }
 }
 
+function deterministicDraftOutput(response: string): ResponseDraftOutput {
+  return {
+    response,
+    provider: "deterministic",
+    modelVersion: "deterministic-local-2026-06-08.1",
+    promptVersion: promptRegistry.drafting.version,
+    usedFallback: false,
+    requestedProvider: "DETERMINISTIC",
+    actualProvider: "deterministic",
+    requestedModel: "deterministic-local-2026-06-08.1",
+    actualModel: "deterministic-local-2026-06-08.1",
+    fallbackReason: null,
+    durationMs: 0,
+    retryCount: 0,
+    inputTokens: null,
+    outputTokens: null,
+    estimatedCostUsd: null
+  };
+}
+
 function applyExtractedData(
   candidate: Candidate,
   extractedData: CandidatePatch,
@@ -513,6 +582,11 @@ function decideNextState(
   responsePlan: ResponsePlan,
   criticalHumanReviewReason: string | null
 ): CandidateState | null {
+  // CLOSED es terminal: ningun plan posterior puede sacar a la candidata de ahi.
+  if (candidate.currentState === "CLOSED") {
+    return null;
+  }
+
   if (understanding.intent === "DECLINES") {
     return "CLOSED";
   }
@@ -570,7 +644,8 @@ function generateResponse(
   candidate: Candidate,
   understanding: ModelConversationOutput,
   responsePlan: ResponsePlan,
-  approvedNegotiationDecision: NegotiationDecision | null
+  approvedNegotiationDecision: NegotiationDecision | null,
+  isOpenerTurn = false
 ): string {
   if (candidate.currentState === "CLOSED" && candidate.age && candidate.age < 18) {
     return "Gracias por contestar. Ahora mismo solo podemos valorar perfiles de personas mayores de edad, asi que no podemos seguir con el proceso. Te deseo lo mejor.";
@@ -581,42 +656,7 @@ function generateResponse(
   }
 
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
-    if (approvedNegotiationDecision?.decision === "ALLOW_CUSTOM_TERMS") {
-      return `Lo he revisado con mi socio y podemos valorarlo con estas condiciones: ${approvedNegotiationDecision.approvedModelPercentage}% para ti y ${approvedNegotiationDecision.approvedAgencyPercentage}% para la agencia. En la llamada te lo explicamos bien.`;
-    }
-
-    if (responsePlan.humanReviewReason === "PERCENTAGE_NEGOTIATION") {
-      return "Eso se puede valorar segun el perfil y el potencial de la cuenta. Lo comento con mi socio y en la llamada te explicamos que condiciones podriamos ofrecerte.";
-    }
-
-    if (
-      understanding.humanReviewReason?.toLowerCase().includes("ia") ||
-      understanding.humanReviewReason?.toLowerCase().includes("bot")
-    ) {
-      return "Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso.";
-    }
-
-    if (candidate.deviceEligibility === "NOT_ELIGIBLE") {
-      return "Con un movil de mala calidad no podriamos avanzar con la incorporacion. Si tienes pensado cambiarlo pronto, dimelo y lo podemos valorar.";
-    }
-
-    if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
-      return "Ese movil tendria que revisarlo Alex con una prueba de calidad antes de confirmar incorporacion. Podemos seguir valorando el perfil y verlo bien.";
-    }
-
-    if (candidate.deviceEligibility === "PENDING_UPGRADE") {
-      return "Podemos hacer la llamada igualmente, pero la incorporacion quedaria pendiente hasta que tengas el dispositivo adecuado.";
-    }
-
-    if (responsePlan.uncoveredQuestion) {
-      return "Esa parte prefiero comentarla con mi socio para darte la informacion correcta. Se lo consulto y te digo.";
-    }
-
-    if (responsePlan.answerFacts.length > 0 && understanding.intent === "ASKS_ABOUT_PERCENTAGE") {
-      return businessResponseFromPlan(responsePlan, candidate);
-    }
-
-    return "Gracias por decirmelo. Esto prefiero revisarlo con mi socio antes de darte una respuesta, asi que lo miro y te escribo con calma.";
+    return humanInterventionResponse(candidate, understanding, responsePlan, approvedNegotiationDecision);
   }
 
   if (candidate.currentState === "WAITING_PROFILE_ACCESS") {
@@ -636,30 +676,121 @@ function generateResponse(
   }
 
   if (responsePlan.answerFacts.length > 0 && isBusinessAnswerIntent(understanding, responsePlan)) {
-    return businessResponseFromPlan(responsePlan, candidate);
+    return businessResponseFromPlan(responsePlan);
   }
 
+  // Opener canonico de Alex en tres pasos (identidad + validacion/gate + marco), SIN preguntas:
+  // el Alex real nunca cualifica antes de que la candidata acepte el marco o la solicitud.
+  if (isOpenerTurn) {
+    return canonicalOpener(candidate);
+  }
+
+  // La llamada es el objetivo del funnel: con edad confirmada se avanza hacia ella en vez de
+  // volver a cualificar (fallo real de iteracion 1: el bot ignoraba telefonos y propuestas de hora).
   if (understanding.intent === "REQUESTS_CALL" && candidate.currentState !== "APPROVED") {
-    return "Claro, podemos organizar una llamada mas adelante. Antes necesito hacerte una pregunta rapida para valorar si encaja bien. ¿Que edad tienes?";
+    if (candidate.age && candidate.isAdultConfirmed) {
+      return candidate.phone
+        ? "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada."
+        : `Perfecto, agendamos una llamada y te lo explicamos todo bien.\n\n${responsePlan.questionToAsk ?? "Me puedes pasar tu numero de telefono?"}`;
+    }
+    return "Claro, podemos agendar una llamada y te lo explico todo bien.\n\nAntes dime una cosa, que edad tienes?";
   }
 
-  if (understanding.intent === "PROVIDES_PHONE" && candidate.phone && !candidate.age) {
-    return "Perfecto, lo tengo. Podemos organizar una llamada mas adelante.\n\nAntes necesito valorar un poco el perfil. ¿Que edad tienes?";
+  if (understanding.intent === "PROVIDES_PHONE" && candidate.phone) {
+    return candidate.age && candidate.isAdultConfirmed
+      ? "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada."
+      : "Perfecto, lo apunto.\n\nAntes de organizar la llamada dime una cosa, que edad tienes?";
   }
 
   if (candidate.objections.length > 0 && !candidate.age) {
-    return "Lo entiendo, es normal querer mirarlo con calma.\n\nPara no hacerte perder el tiempo, primero dime una cosa: ¿que edad tienes?";
+    return "Lo entiendo, es normal querer mirarlo con calma.\n\nPara no hacerte perder el tiempo, primero dime una cosa: que edad tienes?";
   }
 
-  const missingQuestion = nextQualifyingQuestion(candidate);
-  if (missingQuestion) {
-    return missingQuestion;
+  if (responsePlan.questionToAsk) {
+    return `${acknowledgementFor(understanding)}\n\n${responsePlan.questionToAsk}`;
   }
 
-  return "Genial, gracias. Cuentame un poco que experiencia tienes creando contenido o usando redes.";
+  return "Perfecto. Cualquier duda que tengas me dices sin problema.";
 }
 
-function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candidate): string {
+/**
+ * Respuesta dentro de HUMAN_INTERVENTION_REQUIRED. El estado pausa DECISIONES (salir de el exige
+ * decision humana, invariante 4), pero el conocimiento aprobado se sigue respondiendo y la
+ * confirmacion de llamada sigue pidiendo el telefono. "Lo hablo con mi socio" queda solo para lo
+ * que de verdad esta pendiente (fallo real: bucle de socio-filler que mataba leads).
+ */
+function humanInterventionResponse(
+  candidate: Candidate,
+  understanding: ModelConversationOutput,
+  responsePlan: ResponsePlan,
+  approvedNegotiationDecision: NegotiationDecision | null
+): string {
+  if (approvedNegotiationDecision?.decision === "ALLOW_CUSTOM_TERMS") {
+    return `Lo he revisado con mi socio y podemos valorarlo con estas condiciones: ${approvedNegotiationDecision.approvedModelPercentage}% para ti y ${approvedNegotiationDecision.approvedAgencyPercentage}% para la agencia. En la llamada te lo explicamos bien.`;
+  }
+
+  if (responsePlan.humanReviewReason === "PERCENTAGE_NEGOTIATION") {
+    return "Eso se puede valorar segun el perfil y el potencial de la cuenta. Lo comento con mi socio y en la llamada te explicamos que condiciones podriamos ofrecerte.";
+  }
+
+  if (
+    understanding.humanReviewReason?.toLowerCase().includes("ia") ||
+    understanding.humanReviewReason?.toLowerCase().includes("bot")
+  ) {
+    return "Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso.";
+  }
+
+  if (candidate.deviceEligibility === "NOT_ELIGIBLE") {
+    return "Con un movil de mala calidad no podriamos avanzar con la incorporacion. Si tienes pensado cambiarlo pronto, dimelo y lo podemos valorar.";
+  }
+
+  if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
+    return "Ese movil tendriamos que revisarlo con una prueba de calidad antes de confirmar incorporacion. Podemos seguir valorando el perfil y verlo bien.";
+  }
+
+  if (candidate.deviceEligibility === "PENDING_UPGRADE") {
+    return "Podemos hacer la llamada igualmente, pero la incorporacion quedaria pendiente hasta que tengas el dispositivo adecuado.";
+  }
+
+  if (responsePlan.uncoveredQuestion) {
+    return "Esa parte prefiero comentarla con mi socio para darte la informacion correcta. Se lo consulto y te digo.";
+  }
+
+  // Conocimiento oficial respondible: se responde aunque el caso siga derivado al socio.
+  if (responsePlan.answerFacts.length > 0) {
+    return businessResponseFromPlan(responsePlan);
+  }
+
+  if (understanding.intent === "REQUESTS_CALL" || understanding.requestsCall) {
+    if (candidate.phone || !responsePlan.questionToAsk) {
+      return "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada.";
+    }
+    return `Perfecto, lo hablo con mi socio para agendar la llamada.\n\n${responsePlan.questionToAsk}`;
+  }
+
+  if (understanding.intent === "PROVIDES_PHONE" && candidate.phone) {
+    return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada.";
+  }
+
+  return "Gracias por decirmelo. Esto prefiero revisarlo con mi socio antes de darte una respuesta, asi que lo miro y te escribo con calma.";
+}
+
+/** Opener canonico (plantillas reales de Alex): identidad + validacion de perfil o gate + marco. */
+function canonicalOpener(candidate: Candidate): string {
+  if (candidate.declaredProfileVisibility === "PUBLIC") {
+    return "Hola, buenos dias soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.";
+  }
+
+  return "Hola, buenos dias soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.";
+}
+
+function acknowledgementFor(understanding: ModelConversationOutput): string {
+  if (understanding.intent === "UNCLEAR") return "Okeyy.";
+  if (Object.keys(understanding.extractedData).length > 0) return "Perfecto.";
+  return "Vale pues.";
+}
+
+function businessResponseFromPlan(responsePlan: ResponsePlan): string {
   if (
     responsePlan.knowledgeEntryIds.includes("commercial-revenue-share-general") &&
     responsePlan.answerFacts.some((fact) => fact.includes("70%"))
@@ -668,15 +799,14 @@ function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candida
       "El reparto estandar es 70% para Rose Models y 30% para ti.",
       "Se calcula sobre el neto despues de la comision de la plataforma."
     ];
-    if (responsePlan.questionToAsk && !candidate.age) parts.push(responsePlan.questionToAsk);
+    if (responsePlan.questionToAsk) parts.push(responsePlan.questionToAsk);
     return parts.join("\n\n");
   }
 
   if (responsePlan.knowledgeEntryIds.includes("commercial-no-fixed-salary")) {
     return withOptionalQuestion(
       "No funciona como un salario fijo.\n\nVa por reparto y los detalles se explican mejor en llamada para que quede claro.",
-      responsePlan,
-      candidate
+      responsePlan
     );
   }
 
@@ -688,18 +818,21 @@ function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candida
     const mentionsOldMaterial = responsePlan.answerFacts.some((fact) => fact.toLowerCase().includes("material antiguo"));
     return mentionsOldMaterial
       ? "Para Instagram necesitamos contenido nuevo. Para OnlyFans se puede aprovechar material antiguo si sirve, pero eso lo vemos segun el caso."
-      : withOptionalQuestion(
-          "Para Instagram necesitamos contenido nuevo y que no se haya publicado antes.",
-          responsePlan,
-          candidate
-        );
+      : withOptionalQuestion("Para Instagram necesitamos contenido nuevo y que no se haya publicado antes.", responsePlan);
   }
 
   if (responsePlan.knowledgeEntryIds.includes("content-boundaries-neutral-question")) {
     return "¿Hay algun tipo de contenido que no quieras hacer o algun limite que debamos tener en cuenta?";
   }
 
-  const firstFact = responsePlan.answerFacts[0] ?? "Te lo explico con calma.";
+  // Sin hechos respondibles no se promete una explicacion vacia ("Te lo explico con calma."
+  // era un fragmento nulo real que prometia y nunca entregaba): se avanza o se cierra suave.
+  const firstFact = responsePlan.answerFacts[0];
+  if (!firstFact) {
+    return responsePlan.questionToAsk
+      ? `Vale pues.\n\n${responsePlan.questionToAsk}`
+      : "Perfecto. Cualquier duda que tengas me dices sin problema.";
+  }
   const secondFact = responsePlan.answerFacts.find((fact) => fact !== firstFact);
   const parts = [firstFact];
 
@@ -707,23 +840,20 @@ function businessResponseFromPlan(responsePlan: ResponsePlan, candidate: Candida
     parts.push(secondFact);
   }
 
-  if (responsePlan.questionToAsk && !candidate.age) {
+  // Una sola pregunta por mensaje: si la respuesta de conocimiento ya pregunta algo, no se anade otra.
+  if (responsePlan.questionToAsk && !parts.some((part) => part.includes("?"))) {
     parts.push(responsePlan.questionToAsk);
   }
 
   return parts.join("\n\n");
 }
 
-function withOptionalQuestion(response: string, responsePlan: ResponsePlan, candidate: Candidate): string {
-  if (responsePlan.questionToAsk && !candidate.age) return `${response}\n\n${responsePlan.questionToAsk}`;
+function withOptionalQuestion(response: string, responsePlan: ResponsePlan): string {
+  if (responsePlan.questionToAsk && !response.includes("?")) return `${response}\n\n${responsePlan.questionToAsk}`;
   return response;
 }
 
-function rewriteFromPlan(
-  responsePlan: ResponsePlan,
-  candidate: Candidate,
-  approvedNegotiationDecision: NegotiationDecision | null
-): string {
+function rewriteFromPlan(responsePlan: ResponsePlan, approvedNegotiationDecision: NegotiationDecision | null): string {
   if (approvedNegotiationDecision?.decision === "ALLOW_CUSTOM_TERMS") {
     return `Lo he revisado con mi socio y podemos valorarlo con estas condiciones: ${approvedNegotiationDecision.approvedModelPercentage}% para ti y ${approvedNegotiationDecision.approvedAgencyPercentage}% para la agencia. En la llamada te lo explicamos bien.`;
   }
@@ -732,7 +862,7 @@ function rewriteFromPlan(
     return "Esa parte prefiero comentarla con mi socio para darte la informacion correcta. Se lo consulto y te digo.";
   }
 
-  return businessResponseFromPlan(responsePlan, candidate);
+  return businessResponseFromPlan(responsePlan);
 }
 
 function isBusinessAnswerIntent(understanding: ModelConversationOutput, responsePlan: ResponsePlan): boolean {
@@ -746,34 +876,6 @@ function isBusinessAnswerIntent(understanding: ModelConversationOutput, response
       understanding.intent === "ASKS_ABOUT_CONTRACT" ||
       understanding.intent === "ASKS_ABOUT_PERCENTAGE")
   );
-}
-
-function nextQualifyingQuestion(candidate: Candidate): string | null {
-  if (!candidate.age) {
-    return "Perfecto. Para situarme un poco, ¿que edad tienes?";
-  }
-
-  if (!candidate.isAdultConfirmed) {
-    return "Gracias por decirmelo. Ahora mismo solo podemos valorar perfiles de personas mayores de edad.";
-  }
-
-  if (!candidate.city && !candidate.country) {
-    return "Bien, gracias. ¿En que ciudad estas ahora?";
-  }
-
-  if (!candidate.experienceDescription && candidate.hasOnlyFans === undefined) {
-    return "Vale. ¿Tienes experiencia creando contenido o gestionando redes?";
-  }
-
-  if (!candidate.contentAvailability && !candidate.goals) {
-    return "Perfecto. ¿Que disponibilidad tendrias para crear contenido durante la semana?";
-  }
-
-  if (candidate.deviceEligibility === "UNKNOWN") {
-    return "Por cierto, una cosa importante: ¿que movil tienes?";
-  }
-
-  return null;
 }
 
 function transitionReason(
@@ -860,6 +962,460 @@ function tagsForRetrieval(candidate: Candidate, understanding: ModelConversation
   if (candidate.currentState === "WAITING_HUMAN_REVIEW") tags.push("human-review", "waiting-review");
 
   return tags;
+}
+
+/**
+ * Rellena con la extraccion deterministica SOLO los campos de alta precision que el modelo dejo
+ * vacios. Evita re-preguntar datos ya dados (movil, pais, telefono LATAM) cuando el modelo los omite.
+ */
+function mergeDeterministicExtraction(understanding: ModelConversationOutput, inboundMessage: string): ModelConversationOutput {
+  const deterministic = extractDeterministicUnderstanding(inboundMessage).extractedData;
+  const merged: ExtractedCandidateData = { ...understanding.extractedData };
+  let changed = false;
+  const fill = <K extends keyof ExtractedCandidateData>(key: K): void => {
+    if (merged[key] === undefined && deterministic[key] !== undefined) {
+      merged[key] = deterministic[key];
+      changed = true;
+    }
+  };
+
+  fill("firstName");
+  fill("age");
+  fill("country");
+  fill("city");
+  fill("phone");
+  fill("deviceType");
+  fill("deviceModel");
+  fill("deviceEligibility");
+  fill("hasOnlyFans");
+  fill("worksWithAnotherAgency");
+  fill("currentMonthlyRevenue");
+
+  if (!changed) {
+    return understanding;
+  }
+
+  return {
+    ...understanding,
+    extractedData: merged,
+    internalNotes: [...understanding.internalNotes, "Campos vacios completados con extraccion deterministica."]
+  };
+}
+
+// Senales deterministas que SI justifican una escalada a intervencion humana.
+const negotiationSignalPattern =
+  /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi|garantizado|garantizados|fijo al mes|adelantado)\b|\b\d{1,3}\s?%/;
+const contractSignalPattern = /\b(contrato|legal|abogado|clausula|permanencia)\b/;
+const distrustSignalPattern = /\b(estafa|estafo|enfadada|enfado|me molesta|me suena raro|no me fio|desconfianza|denuncia)\b/;
+const aiSignalPattern = /\b(eres ia|eres una ia|eres un bot|sois ia|hablo con una ia|hablo con un bot|inteligencia artificial)\b/;
+const humanSignalPattern = /\b(persona|alex|humano|hablar con alguien)\b/;
+const injectionSignalPattern = /\b(ignora|ignore|instrucciones|prompt|sistema|reglas internas)\b/;
+const ESCALATION_INTENTS = new Set<ModelConversationOutput["intent"]>([
+  "ASKS_ABOUT_CONTRACT",
+  "REQUESTS_HUMAN",
+  "PROMPT_INJECTION"
+]);
+
+// Lenguaje de duda de edad o de seguridad (menores, coaccion, terceros controlando la cuenta).
+// Si aparece en el motivo del modelo O en el mensaje, la escalada NUNCA se suprime: ni siquiera
+// una edad adulta limpia extraida neutraliza la duda (invariante 2).
+const ageDoubtOrSafetySignalPattern = new RegExp(
+  [
+    "\\bmenor(?:es|cita|citas)?\\b",
+    "\\bminors?\\b",
+    "\\bunder\\s?age[a-z]*\\b",
+    "\\bjoven(?:es|cita|citas)?\\b",
+    "\\badolescentes?\\b",
+    "\\binstis?\\b",
+    "\\binstitutos?\\b",
+    "\\bcoles?\\b",
+    "\\bcolegios?\\b",
+    "\\bpare(?:ce|ces|cen|zco|cia|cias|cer)\\s+de\\b",
+    "\\bdud(?:a|as|oso|osa|osos|osas)\\b",
+    "\\b18\\b",
+    "\\bcoaccion\\w*\\b",
+    "\\boblig\\w*\\b",
+    "\\bforz\\w*\\b",
+    "(?<!se\\s)\\btrata\\b",
+    "\\bcontrol(?:a|an|as|e|en|ar|aba|aban|ada|adas|ado|ados|ando)\\b",
+    "\\bgestion\\w*\\b[^.!?]{0,40}\\bcuentas?\\b",
+    "\\b(?:novio|novia|pareja|marido|esposo|esposa)\\b[^.!?]{0,40}\\b(?:gestion|controla|maneja|lleva)\\w*",
+    "\\bterceros?\\b"
+  ].join("|")
+);
+
+// Allowlist cerrado de motivos benignos: una escalada del modelo SOLO se suprime si su motivo,
+// normalizado, se compone unicamente de estas palabras (datos rutinarios del funnel: edad adulta
+// limpia, OnlyFans si/no, movil, pais/ciudad, experiencia o "datos proporcionados" genericos).
+// Cualquier palabra fuera del vocabulario (ingles, coaccion, redaccion desconocida, ambiguedad)
+// mantiene la escalada del modelo.
+const BENIGN_REASON_FILLER_WORDS = new Set([
+  "a",
+  "al",
+  "aunque",
+  "como",
+  "con",
+  "cual",
+  "de",
+  "del",
+  "dice",
+  "el",
+  "ella",
+  "en",
+  "entre",
+  "es",
+  "esa",
+  "ese",
+  "esta",
+  "este",
+  "estan",
+  "fue",
+  "ha",
+  "han",
+  "hay",
+  "la",
+  "las",
+  "le",
+  "lo",
+  "los",
+  "mas",
+  "me",
+  "mi",
+  "mis",
+  "muy",
+  "ni",
+  "no",
+  "nos",
+  "o",
+  "otra",
+  "otro",
+  "para",
+  "pero",
+  "por",
+  "porque",
+  "que",
+  "se",
+  "segun",
+  "ser",
+  "si",
+  "sin",
+  "sobre",
+  "solo",
+  "son",
+  "su",
+  "sus",
+  "te",
+  "tiene",
+  "tienen",
+  "tu",
+  "u",
+  "un",
+  "una",
+  "unas",
+  "unos",
+  "y",
+  "ya"
+]);
+const AGE_TOPIC_WORDS = new Set(["edad", "anos", "ano", "age"]);
+const BENIGN_REASON_TOPIC_WORDS = new Set([
+  // Edad adulta proporcionada (exige ademas edad numerica limpia >= 18 extraida).
+  ...AGE_TOPIC_WORDS,
+  "adulta",
+  "adulto",
+  "mayor",
+  "cumplidos",
+  "cumplio",
+  "cumple",
+  "numero",
+  "numerica",
+  "cifra",
+  "valida",
+  "valido",
+  "confirmada",
+  "confirmado",
+  "confirma",
+  "proporcionada",
+  "proporcionado",
+  "proporciona",
+  "facilitada",
+  "facilitado",
+  "facilita",
+  "indicada",
+  "indicado",
+  "indica",
+  "declarada",
+  "declarado",
+  "declara",
+  "dada",
+  "dado",
+  "respondida",
+  "respondido",
+  "responde",
+  "rango",
+  "habitual",
+  "fuera",
+  "normal",
+  // OnlyFans si/no.
+  "onlyfans",
+  "of",
+  "cuenta",
+  "cuentas",
+  "activa",
+  "activo",
+  "tenido",
+  "tuvo",
+  // Movil / dispositivo.
+  "movil",
+  "telefono",
+  "dispositivo",
+  "iphone",
+  "android",
+  "samsung",
+  "galaxy",
+  "modelo",
+  "marca",
+  "aprobado",
+  "aprobada",
+  "elegible",
+  "validar",
+  "calidad",
+  "pro",
+  "max",
+  "plus",
+  "gama",
+  "apto",
+  "apta",
+  // Pais / ciudad.
+  "pais",
+  "ciudad",
+  "origen",
+  "ubicacion",
+  "localizacion",
+  "reside",
+  "vive",
+  "procedencia",
+  "espana",
+  "espanola",
+  "latam",
+  // Nivel de experiencia y disponibilidad.
+  "experiencia",
+  "nivel",
+  "principiante",
+  "novata",
+  "experta",
+  "previa",
+  "disponibilidad",
+  "disponible",
+  // Genericos "datos proporcionados".
+  "datos",
+  "dato",
+  "basicos",
+  "basico",
+  "generales",
+  "general",
+  "proporcionados",
+  "facilitados",
+  "completos",
+  "completo",
+  "informacion",
+  "perfil"
+]);
+
+/**
+ * El motivo solo es benigno si TODAS sus palabras pertenecen al vocabulario cerrado. Cualquier
+ * mencion de edad (palabra o numero) exige ademas una edad numerica limpia >= 18 ya extraida.
+ */
+function isBenignOnlyEscalationReason(normalizedReason: string, extractedAge: number | undefined): boolean {
+  const tokens = normalizedReason.split(/[^a-z0-9]+/u).filter((token) => token.length > 0);
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  let mentionsAge = false;
+  for (const token of tokens) {
+    const isNumeric = /^\d{1,3}$/.test(token);
+    if (!isNumeric && !BENIGN_REASON_FILLER_WORDS.has(token) && !BENIGN_REASON_TOPIC_WORDS.has(token)) {
+      return false;
+    }
+    if (isNumeric || AGE_TOPIC_WORDS.has(token)) {
+      mentionsAge = true;
+    }
+  }
+
+  if (mentionsAge) {
+    return typeof extractedAge === "number" && extractedAge >= 18;
+  }
+
+  return true;
+}
+
+interface ModelEscalationFilterResult {
+  understanding: ModelConversationOutput;
+  suppressedEscalationNote: string | null;
+}
+
+/**
+ * Invariante 1 sin agujeros de seguridad: el filtro esta INVERTIDO. Solo se suprime la escalada
+ * del modelo cuando su motivo pertenece al allowlist cerrado de motivos benignos (edad adulta
+ * limpia, OF si/no, movil, pais/ciudad, experiencia, datos genericos) y ni el motivo ni el mensaje
+ * contienen lenguaje de duda de edad o de seguridad. Todo lo demas (coaccion, terceros, ingles,
+ * redaccion desconocida, motivo vacio) RESPETA la escalada. Las senales deterministas existentes
+ * solo pueden anadir escaladas, nunca quitarlas. Una supresion jamas es silenciosa: deja la traza
+ * "ESCALADA_SUPRIMIDA" para las notas de la candidata.
+ */
+function suppressBenignModelEscalation(
+  understanding: ModelConversationOutput,
+  inboundMessage: string
+): ModelEscalationFilterResult {
+  if (!understanding.requiresHumanReview) {
+    return { understanding, suppressedEscalationNote: null };
+  }
+
+  const message = normalizeText(inboundMessage);
+  const reason = normalizeText(understanding.humanReviewReason ?? "");
+  const deterministicallyCorroborated =
+    ESCALATION_INTENTS.has(understanding.intent) ||
+    understanding.requestsHuman ||
+    understanding.isNegotiation ||
+    understanding.requestedModelPercentage !== null ||
+    understanding.extractedData.requestedModelPercentage !== undefined ||
+    understanding.dataContradictions.length > 0 ||
+    negotiationSignalPattern.test(message) ||
+    contractSignalPattern.test(message) ||
+    distrustSignalPattern.test(message) ||
+    aiSignalPattern.test(message) ||
+    humanSignalPattern.test(message) ||
+    injectionSignalPattern.test(message);
+
+  if (deterministicallyCorroborated) {
+    return { understanding, suppressedEscalationNote: null };
+  }
+
+  if (ageDoubtOrSafetySignalPattern.test(reason) || ageDoubtOrSafetySignalPattern.test(message)) {
+    return { understanding, suppressedEscalationNote: null };
+  }
+
+  if (!isBenignOnlyEscalationReason(reason, understanding.extractedData.age)) {
+    return { understanding, suppressedEscalationNote: null };
+  }
+
+  return {
+    understanding: {
+      ...understanding,
+      requiresHumanReview: false,
+      humanReviewReason: null,
+      internalNotes: [
+        ...understanding.internalNotes,
+        "Escalada del modelo suprimida por motivo benigno del allowlist (invariante 1); traza en notas."
+      ]
+    },
+    suppressedEscalationNote: `ESCALADA_SUPRIMIDA: ${understanding.humanReviewReason}`
+  };
+}
+
+const acknowledgementTokens = ["Perfecto.", "Okeyy.", "Vale pues.", "Entiendo."];
+
+/**
+ * El Alex real nunca repite un mensaje caracter a caracter. Si la respuesta planificada es
+ * identica al ultimo mensaje del agente, se varia de forma determinista y segura: acuse
+ * alternativo si hay pregunta de slot, derivacion honesta si el plan exige socio, o un acuse
+ * corto en el resto de casos.
+ */
+function withoutVerbatimRepetition(response: string, lastAgentMessage: string | null, responsePlan: ResponsePlan): string {
+  if (!lastAgentMessage || normalizeText(response.trim()) !== normalizeText(lastAgentMessage.trim())) {
+    return response;
+  }
+
+  if (responsePlan.requiresHumanReview || responsePlan.uncoveredQuestion) {
+    return "Esto sigue pendiente con mi socio. En cuanto lo hable con el te digo, no te preocupes.";
+  }
+
+  if (responsePlan.questionToAsk && response.includes(responsePlan.questionToAsk)) {
+    const swapped = swapLeadingAcknowledgement(response);
+    if (normalizeText(swapped.trim()) !== normalizeText(lastAgentMessage.trim())) {
+      return swapped;
+    }
+  }
+
+  return normalizeText(lastAgentMessage).startsWith("okeyy") ? "Vale pues." : "Okeyy.";
+}
+
+function swapLeadingAcknowledgement(response: string): string {
+  for (const token of acknowledgementTokens) {
+    if (response.startsWith(token)) {
+      const replacement = token === "Okeyy." ? "Vale pues." : "Okeyy.";
+      return `${replacement}${response.slice(token.length)}`;
+    }
+  }
+
+  return `Okeyy.\n\n${response}`;
+}
+
+const explicitDeclinePattern =
+  /\b(no me interesa|no me interesa nada|no quiero seguir|no quiero continuar|no gracias|dejalo|olvidalo|no insistas|no quiero saber nada)\b/;
+const reEngagementQuestionPattern = /\b(sigues interesada|te interesa|quieres seguir|quieres continuar|seguimos)\b/;
+const onlyFansQuestionPattern = /\b(tienes of|has tenido of|tienes onlyfans|has tenido onlyfans|of activo)\b/;
+const agenciesQuestionPattern = /\botras? agencias?\b/;
+
+/**
+ * Un "no" que responde a la ultima pregunta cerrada del agente (OF, agencias, dudas) es un DATO,
+ * no un rechazo del proceso. Sin este guard, DECLINES cerraba candidatas que solo contestaban
+ * "no" a un slot y el siguiente turno reventaba con una transicion invalida desde CLOSED.
+ */
+function resolveContextualDecline(
+  understanding: ModelConversationOutput,
+  lastAgentMessage: string | null,
+  inboundMessage: string
+): ModelConversationOutput {
+  if (understanding.intent !== "DECLINES" || !lastAgentMessage) {
+    return understanding;
+  }
+
+  const normalizedInbound = normalizeText(inboundMessage);
+  if (explicitDeclinePattern.test(normalizedInbound)) {
+    return understanding;
+  }
+
+  const normalizedAgent = normalizeText(lastAgentMessage);
+  if (reEngagementQuestionPattern.test(normalizedAgent)) {
+    return understanding;
+  }
+
+  const extractedData: ExtractedCandidateData = { ...understanding.extractedData };
+  if (onlyFansQuestionPattern.test(normalizedAgent)) {
+    if (extractedData.hasOnlyFans === undefined) extractedData.hasOnlyFans = false;
+  } else if (agenciesQuestionPattern.test(normalizedAgent)) {
+    if (extractedData.worksWithAnotherAgency === undefined) extractedData.worksWithAnotherAgency = false;
+  } else if (!/[?]/.test(normalizedAgent)) {
+    return understanding;
+  }
+
+  return {
+    ...understanding,
+    intent: "OTHER",
+    extractedData,
+    internalNotes: [
+      ...understanding.internalNotes,
+      "El 'no' responde a la ultima pregunta del agente; no se interpreta como rechazo del proceso."
+    ]
+  };
+}
+
+function lastAgentMessageContent(recentMessages: ConversationMessage[]): string | null {
+  for (let index = recentMessages.length - 1; index >= 0; index -= 1) {
+    const message = recentMessages[index];
+    if (message?.role === "agent") {
+      return message.content;
+    }
+  }
+  return null;
+}
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
 }
 
 function criticalRestrictionReason(
@@ -1007,7 +1563,7 @@ function skippedResult(candidate: Candidate, response: string, duplicate: boolea
 function allowedActionsFor(state: CandidateState): string[] {
   if (state === "WAITING_PROFILE_ACCESS") return ["pedir aceptar solicitud de seguimiento", "esperar revision de perfil"];
   if (state === "WAITING_HUMAN_REVIEW") return ["pausar conversacion", "avisar de revision con socio"];
-  if (state === "HUMAN_INTERVENTION_REQUIRED") return ["derivar a Alex", "no resolver asunto sensible"];
+  if (state === "HUMAN_INTERVENTION_REQUIRED") return ["consultarlo con mi socio", "no resolver asunto sensible"];
   if (state === "CLOSED") return ["cerrar educadamente"];
   return ["hacer una pregunta principal de cualificacion", "guardar datos proporcionados"];
 }

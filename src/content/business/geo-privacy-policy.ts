@@ -30,13 +30,22 @@ const entries: KnowledgeEntryInput[] = [
       "La candidata exige garantias absolutas de anonimato.",
       "Hay un riesgo personal especifico (expareja, acoso, entorno familiar) que requiere criterio humano."
     ],
-    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    // Respondible tambien en HUMAN_INTERVENTION_REQUIRED: la pausa frena decisiones, no esta
+    // respuesta documentada (sin esto, bucle "lo hablo con mi socio" ante la objecion geografica).
+    allowedStates: [
+      "NEW_LEAD",
+      "WAITING_PROFILE_ACCESS",
+      "QUALIFYING",
+      "APPROVED",
+      "COLLECTING_CALL_DETAILS",
+      "HUMAN_INTERVENTION_REQUIRED"
+    ],
     tags: ["geo-privacy", "privacy", "country-block", "instagram", "onlyfans", "objection"],
     requiresHumanReview: false,
-    version: "geo-privacy-three-layers-2026-06-10.1",
+    version: "geo-privacy-three-layers-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-10"
+    updatedAt: "2026-06-12"
   }
 ];
 

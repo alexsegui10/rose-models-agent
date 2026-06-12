@@ -9,15 +9,30 @@ import { GoldenConversationTestSchema, type GoldenConversationTestInput } from "
 const rawGoldenTests: GoldenConversationTestInput[] = [
   {
     id: "golden-initial-contact",
-    title: "Primer contacto desde el anuncio (perfil publico)",
+    title: "Primer contacto desde el anuncio (perfil publico): opener canonico sin preguntas",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
     messages: ["¡Hola! Quiero más información."],
     expectedTransition: "QUALIFYING",
-    responseMustIncludeAny: ["edad", "experiencia", "ciudad"],
-    responseMustNotInclude: ["Comprendo perfectamente", "Estimada candidata"],
-    responseRequirements: ["mensaje breve", "una pregunta principal"],
-    acceptableResponsePatterns: ["pregunta de cualificacion"]
+    responseMustIncludeAny: ["Rose Models"],
+    responseMustNotInclude: ["Comprendo perfectamente", "Estimada candidata", "que edad tienes", "?"],
+    responseRequirements: [
+      "presentarse como Alex de Rose Models en el primer contacto",
+      "validar el perfil y encuadrar preguntas rapidas + llamada",
+      "ninguna pregunta de cualificacion antes del asentimiento"
+    ],
+    acceptableResponsePatterns: ["opener canonico de tres pasos sin pregunta"]
+  },
+  {
+    id: "golden-initial-contact-assent",
+    title: "Tras aceptar el marco del opener, la primera pregunta es el nombre",
+    initialCandidate: { profileVisibility: "PUBLIC" },
+    stateBefore: "NEW_LEAD",
+    messages: ["¡Hola! Quiero más información.", "Si, me parece bien"],
+    expectedTransition: "QUALIFYING",
+    responseMustIncludeAny: ["como te llamas"],
+    responseMustNotInclude: ["Rose Models", "que edad tienes"],
+    responseRequirements: ["el guion canonico arranca por el nombre, nunca por la edad"]
   },
   {
     id: "golden-ad-cta-profile-gate",
@@ -43,20 +58,20 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
   },
   {
     id: "golden-confirms-interest",
-    title: "Candidata responde si, me interesa",
+    title: "Candidata responde si, me interesa: opener primero y nombre tras el asentimiento",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
-    messages: ["Si, me interesa"],
+    messages: ["Si, me interesa", "Vale, dale"],
     expectedTransition: "QUALIFYING",
-    responseMustIncludeAny: ["edad"],
+    responseMustIncludeAny: ["como te llamas"],
     responseMustNotInclude: ["Gracias por ponerte en contacto"]
   },
   {
     id: "golden-provides-phone",
-    title: "Da telefono directamente (formato espanol)",
+    title: "Da telefono directamente (formato espanol) tras el opener",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
-    messages: ["Mi telefono es 612 345 678"],
+    messages: ["¡Hola! Quiero más información.", "Mi telefono es 612 345 678"],
     expectedTransition: "QUALIFYING",
     expectedExtractedFields: { phone: "612345678" },
     responseMustIncludeAny: ["edad", "Perfecto"],
@@ -64,10 +79,10 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
   },
   {
     id: "golden-provides-phone-argentina",
-    title: "Da telefono argentino con formato +54",
+    title: "Da telefono argentino con formato +54 tras el opener",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
-    messages: ["Mi telefono es +54 9 11 2345 6789"],
+    messages: ["¡Hola! Quiero más información.", "Mi telefono es +54 9 11 2345 6789"],
     expectedTransition: "QUALIFYING",
     expectedExtractedFields: { phone: "5491123456789" },
     responseMustIncludeAny: ["edad", "llamada"],
@@ -76,12 +91,12 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
   },
   {
     id: "golden-requests-call",
-    title: "Pide llamada inmediata",
+    title: "Pide llamada inmediata en el primer mensaje: opener canonico (la llamada ya esta en el marco)",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
     messages: ["Me llamas y me lo explicas?"],
     expectedTransition: "QUALIFYING",
-    responseMustIncludeAny: ["llamada", "edad"],
+    responseMustIncludeAny: ["llamada"],
     responseMustNotInclude: ["ahora mismo", "dos minutos"]
   },
   {
@@ -151,19 +166,20 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
   {
     id: "golden-already-answered",
     title: "Ya habia contestado una pregunta",
-    initialCandidate: { profileVisibility: "PUBLIC", age: 27 },
+    initialCandidate: { profileVisibility: "PUBLIC", firstName: "Carla", age: 27 },
     stateBefore: "QUALIFYING",
+    // Orden canonico del guion real: con nombre y edad conocidos, el siguiente slot es OF, no "ciudad".
     messages: ["Como te dije, tengo 27"],
-    responseMustIncludeAny: ["ciudad", "experiencia"],
+    responseMustIncludeAny: ["tienes of", "experiencia"],
     responseMustNotInclude: ["que edad tienes"]
   },
   {
     id: "golden-returning-lead",
     title: "Lead argentina vuelve despues de varios dias",
-    initialCandidate: { profileVisibility: "PUBLIC", age: 31, city: "Buenos Aires", country: "Argentina" },
+    initialCandidate: { profileVisibility: "PUBLIC", firstName: "Luz", age: 31, city: "Buenos Aires", country: "Argentina" },
     stateBefore: "QUALIFYING",
     messages: ["Perdona, recien veo tu mensaje, estuve a full estos dias"],
-    responseMustIncludeAny: ["no pasa nada", "experiencia", "disponibilidad"],
+    responseMustIncludeAny: ["tienes of", "experiencia", "disponibilidad"],
     responseMustNotInclude: ["empezamos de cero"]
   },
   {
@@ -180,33 +196,33 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
   {
     id: "golden-spanish-lead",
     title: "Cobertura de candidata espanola (Madrid)",
-    initialCandidate: { profileVisibility: "PUBLIC" },
+    initialCandidate: { profileVisibility: "PUBLIC", firstName: "Ana" },
     stateBefore: "QUALIFYING",
     messages: ["Tengo 24 y soy de Madrid"],
     expectedTransition: "QUALIFYING",
     expectedExtractedFields: { age: 24, city: "Madrid", country: "España" },
-    responseMustIncludeAny: ["experiencia"],
+    responseMustIncludeAny: ["tienes of", "experiencia"],
     responseMustNotInclude: ["que edad tienes"]
   },
   {
     id: "golden-colombian-lead",
-    title: "Lead colombiana responde al anuncio",
+    title: "Lead colombiana responde al anuncio: opener canonico primero",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
     messages: ["Hola! Soy de Medellin, Colombia, me interesa la propuesta"],
     expectedTransition: "QUALIFYING",
-    responseMustIncludeAny: ["edad"],
-    responseMustNotInclude: ["Comprendo perfectamente", "Estimada candidata"]
+    responseMustIncludeAny: ["Rose Models"],
+    responseMustNotInclude: ["Comprendo perfectamente", "Estimada candidata", "que edad tienes"]
   },
   {
     id: "golden-argentinian-spanish",
     title: "Candidata escribe con espanol argentino",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
-    messages: ["Si, me interesa, vos me contas?"],
+    messages: ["Si, me interesa, vos me contas?", "Dale, contame"],
     expectedTransition: "QUALIFYING",
-    responseMustIncludeAny: ["edad"],
-    responseMustNotInclude: ["vos", "queres", "tenes"]
+    responseMustIncludeAny: ["como te llamas"],
+    responseMustNotInclude: ["vos ", "queres", "tenes"]
   },
   {
     id: "golden-human-request",

@@ -73,6 +73,7 @@ function seedCandidate(id: string, initialCandidate: Record<string, unknown>, st
 
   return {
     ...candidate,
+    firstName: stringFrom(initialCandidate.firstName),
     age: numberFrom(initialCandidate.age),
     isAdultConfirmed: typeof initialCandidate.age === "number" ? initialCandidate.age >= 18 : candidate.isAdultConfirmed,
     city: stringFrom(initialCandidate.city),

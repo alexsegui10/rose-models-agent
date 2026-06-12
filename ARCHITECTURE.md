@@ -248,17 +248,32 @@ Para cada mensaje entrante:
 2. Comprueba idempotencia por `externalMessageId`.
 3. Agrupa mensajes consecutivos con politica de debounce.
 4. Guarda mensaje entrante y aumenta `generationCancellationVersion` para cancelar generaciones anteriores.
-5. Clasifica intencion y extrae datos estructurados.
+5. Clasifica intencion y extrae datos estructurados. Despues de la comprension se aplican dos
+   ajustes deterministas (anadidos 2026-06-11 tras la iteracion 1 de evaluacion): (a) la
+   extraccion deterministica rellena SOLO los campos de alta precision que el modelo dejo vacios
+   (telefonos LATAM, pais, movil, nombre), para no re-preguntar datos ya dados; (b) un "no" que
+   responde a la ultima pregunta cerrada del agente (OF, agencias, dudas) se reinterpreta como
+   dato y no como `DECLINES`, salvo rechazo explicito ("no me interesa").
 6. Aplica restricciones criticas y detecta contradicciones.
 7. Recupera conocimiento oficial relevante.
-8. Crea un `ResponsePlan` con hechos autorizados, claims permitidos, matices obligatorios y claims prohibidos.
-9. Planifica transiciones sin persistirlas todavia.
+8. Crea un `ResponsePlan` con hechos autorizados, claims permitidos, matices obligatorios y
+   claims prohibidos. El plan recibe los mensajes recientes del agente para decidir la UNICA
+   pregunta principal: orden canonico del guion real (edad → OF → agencias → movil → pais),
+   guard anti-repeticion (la misma pregunta nunca se hace mas de 2 veces) y sin preguntas antes
+   del gate de perfil ni en escalados.
+9. Planifica transiciones sin persistirlas todavia. Toda transicion planificada se valida con
+   `canTransition` antes de crearse: un plan invalido (p. ej. desde `CLOSED`) se ignora y el
+   turno responde desde el estado actual en vez de lanzar una excepcion (antes tumbaba el
+   playback con un 500).
 10. Recupera ejemplos de estilo relevantes.
 11. Construye contexto de estilo separado de los mensajes reales.
 12. Genera respuesta breve usando solo hechos autorizados. En `LLM_MODE=OPENAI`, la redaccion la realiza el adaptador OpenAI; en modo determinista, la redaccion es local.
 13. Valida factualidad y estilo. Si falla factualidad, se intenta una reescritura segura una sola vez y, si vuelve a fallar, se usa fallback factual seguro.
 14. Comprueba que la automatizacion sigue activa y que no hay control manual.
-15. Guarda mensaje del agente.
+15. Guarda mensaje del agente. En modo `DRAFT_ONLY` (playback de evaluacion) el borrador tambien
+    se guarda como mensaje del agente con `deliveryStatus: DRAFT_ONLY` (nunca `SENT`): sin ese
+    historial, el guard anti-repeticion y el "no" contextual no ven que pregunto el bot en turnos
+    anteriores.
 16. Aplica transiciones planificadas y registra metadatos de versiones.
 
 El contrato `ConversationUnderstandingProvider` permite usar comprension determinista u OpenAI. El contrato `ResponseDraftingProvider` permite redaccion determinista u OpenAI.
@@ -402,6 +417,14 @@ El proveedor de comprension devuelve intencion, datos extraidos, confianza, ries
 La redaccion recibe el objetivo inmediato, el perfil de estilo y los ejemplos recuperados. No puede modificar estado, datos ni decisiones de negocio.
 
 En `LLM_MODE=OPENAI`, el redactor OpenAI devuelve la respuesta y metadatos de traza validados. En `LLM_MODE=DETERMINISTIC` o si OpenAI falla, se usa redaccion local determinista. Nunca se presenta una respuesta determinista como si viniera de OpenAI: los metadatos guardan proveedor solicitado, proveedor real, modelo solicitado, modelo real, fallback, motivo, duracion, reintentos, tokens y coste estimado.
+
+Guardas deterministas del turno (iteracion 3, jun-2026), en el orden del pipeline:
+
+- **Filtro de escaladas del modelo** (tras la comprension y el merge determinista): el flag `requiresHumanReview` del modelo solo se respeta si una senal determinista lo corrobora (negociacion, contrato/legal, desconfianza, peticion de humano, inyeccion o edad dudosa sin cifra adulta limpia). Refuerza la invariante 1: el modelo no decide el flujo. (`suppressUncorroboratedModelEscalation`, `conversationEngine.ts`).
+- **Opener canonico determinista** (antes de la redaccion): en el primer turno de un lead `NEW_LEAD` sin nada que responder, se envia la plantilla canonica de Alex (identidad + validacion de perfil o gate de solicitud + marco) sin pasar por OpenAI y SIN pregunta de cualificacion; el planner suprime la pregunta principal en ese turno (`isOpenerTurn`).
+- **Guard anti-repeticion verbatim** (tras la validacion factual): si la respuesta final es identica al ultimo mensaje del agente, se varia con alternativas estaticamente seguras (acuse alternativo, derivacion honesta al socio o acuse corto).
+
+Ademas, dentro de `HUMAN_INTERVENTION_REQUIRED` el conocimiento aprobado sigue siendo respondible (el estado pausa decisiones, no respuestas documentadas) y al confirmar la llamada se pide siempre el telefono; salir del estado sigue exigiendo decision humana explicita (invariante 4).
 
 ## Feedback y aprendizaje
 

@@ -1,13 +1,15 @@
 export const promptRegistry = {
   understanding: {
     id: "rose-understanding",
-    version: "understanding-2026-06-11.1",
-    purpose: "Clasificar intencion, extraer datos y detectar riesgos sin decidir negocio. Esquema estricto: null = sin dato."
+    version: "understanding-2026-06-12.1",
+    purpose:
+      "Clasificar intencion, extraer datos y detectar riesgos sin decidir negocio. Esquema estricto: null = sin dato. requiresHumanReview solo con senal real, nunca por datos benignos de cualificacion."
   },
   drafting: {
     id: "rose-drafting",
-    version: "drafting-2026-06-08.1",
-    purpose: "Redactar la respuesta final usando ResponsePlan, estilo y ejemplos recuperados."
+    version: "drafting-2026-06-12.1",
+    purpose:
+      "Redactar la respuesta final como Alex en primera persona: responder primero con conocimiento aprobado (tambien en intervencion humana), socio solo para lo pendiente, una sola pregunta principal, sin repetir mensajes ni despedirse sin guion."
   },
   humanReview: {
     id: "rose-human-review",

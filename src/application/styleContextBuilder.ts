@@ -29,6 +29,7 @@ export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
   const context = [
     "### BUSINESS_RULES",
     "La logica de negocio ya ha decidido estado, acciones permitidas y objetivo. La redaccion no puede cambiar estados.",
+    "Responde primero a lo que la candidata acaba de decir o preguntar. Nunca repitas una pregunta que ya aparezca en RECENT_MESSAGES.",
     "",
     "### STYLE_PROFILE",
     `version: ${alexStyleProfile.version}`,
@@ -99,14 +100,19 @@ export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
   };
 }
 
-export function immediateObjectiveFor(state: CandidateState, intent: ConversationIntent): string {
+export function immediateObjectiveFor(state: CandidateState, intent: ConversationIntent, isOpenerTurn = false): string {
   if (state === "WAITING_PROFILE_ACCESS") return "Pedir que acepte la solicitud de seguimiento sin presionar.";
   if (state === "WAITING_HUMAN_REVIEW") return "Indicar que se comentara el perfil con el socio y que se respondera despues.";
-  if (state === "HUMAN_INTERVENTION_REQUIRED") return "Pausar la conversacion y derivar la cuestion a revision humana.";
+  if (state === "HUMAN_INTERVENTION_REQUIRED")
+    return "Hay un tema derivado al socio, pero responde IGUALMENTE a lo que la candidata pregunta usando el conocimiento oficial del plan. Usa 'lo hablo con mi socio' SOLO para lo que de verdad esta pendiente (agenda, condiciones). Nunca te despidas, nunca rechaces y nunca dejes de responder una pregunta con respuesta aprobada. Si confirma la llamada y falta el telefono, pidelo.";
   if (state === "CLOSED") return "Cerrar de forma educada y breve.";
-  if (intent === "REQUESTS_CALL") return "Reconocer la llamada, pero mantener una pregunta minima de cualificacion.";
-  if (intent === "PROVIDES_PHONE") return "Reconocer el telefono y avanzar sin repetir datos ya conocidos.";
-  return "Avanzar la cualificacion con una sola pregunta principal.";
+  if (isOpenerTurn)
+    return "Primer turno con la candidata: opener canonico de Alex en tres pasos (saludo + 'soy Alex de Rose Models', validar el perfil o pedir aceptar la solicitud de seguimiento, y el marco 'unas preguntas rapidas y luego una llamada'). PROHIBIDO hacer cualquier pregunta de cualificacion en este turno: espera a que ella acepte el marco.";
+  if (intent === "REQUESTS_CALL")
+    return "Aceptar la llamada como objetivo y avanzar hacia ella: si la edad esta confirmada, decir que lo hablas con tu socio para agendarla y pedir el numero de telefono si falta; si no, confirmar la edad primero.";
+  if (intent === "PROVIDES_PHONE")
+    return "Reconocer el telefono, decir que lo hablas con tu socio para la llamada y no repetir preguntas ya contestadas.";
+  return "Avanzar la cualificacion con una sola pregunta principal: responde primero a lo que diga, sin volcar conocimiento que no ha pedido.";
 }
 
 function memoryForContext(candidate: Candidate): Record<string, string | number | boolean | null | string[]> {

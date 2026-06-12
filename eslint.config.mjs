@@ -11,7 +11,9 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
-    ignores: [".next/**", "node_modules/**", "next-env.d.ts"]
+    // private-data/, real-data/ y backups/ son material local gitignorado (artefactos del loop
+    // de evaluacion); no deben poder romper el lint del proyecto.
+    ignores: [".next/**", "node_modules/**", "next-env.d.ts", "private-data/**", "real-data/**", "backups/**"]
   }
 ];
 

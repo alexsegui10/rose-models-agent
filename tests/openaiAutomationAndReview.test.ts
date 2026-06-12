@@ -187,14 +187,22 @@ describe("OpenAI adapter, automation and review", () => {
       })
     });
 
-    const result = await engine.handleIncomingMessage({
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "draft_fallback",
       profileVisibility: "PUBLIC",
       message: "Hola, me interesa"
     });
+    // El primer turno es la plantilla canonica deterministica (no pasa por OpenAI).
+    expect(opener.response).toContain("Rose Models");
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "draft_fallback",
+      message: "Vale, perfecto"
+    });
 
     expect(result.draft.usedFallback).toBe(true);
-    expect(result.response).toContain("edad");
+    expect(result.response.toLowerCase()).toContain("como te llamas");
   });
 
   it("blocks drafted percentages that are not allowed", async () => {
@@ -235,7 +243,9 @@ describe("OpenAI adapter, automation and review", () => {
     expect(result.response.toLowerCase()).not.toContain("fotograf");
   });
 
-  it("keeps DRAFT_ONLY responses out of outbound messages", async () => {
+  // Actualizado 2026-06-11: el borrador SI se guarda como historial marcado DRAFT_ONLY (lo necesita
+  // el guard anti-repeticion en playback); la garantia que se mantiene es que NUNCA se marca SENT.
+  it("keeps DRAFT_ONLY responses as drafts, never as sent outbound messages", async () => {
     const { engine, repository } = createEngine({ automationMode: "DRAFT_ONLY" });
     const result = await engine.handleIncomingMessage({
       instagramUsername: "draft_only",
@@ -244,8 +254,11 @@ describe("OpenAI adapter, automation and review", () => {
     });
 
     const messages = await repository.listMessages(result.candidate.id);
+    const agentMessages = messages.filter((message) => message.role === "agent");
     expect(result.deliveryStatus).toBe("DRAFT_ONLY");
-    expect(messages.filter((message) => message.role === "agent")).toHaveLength(0);
+    expect(agentMessages).toHaveLength(1);
+    expect(agentMessages[0]?.metadata?.deliveryStatus).toBe("DRAFT_ONLY");
+    expect(agentMessages.some((message) => message.metadata?.deliveryStatus === "SENT")).toBe(false);
   });
 
   it("stores HUMAN_APPROVAL responses as pending drafts", async () => {
