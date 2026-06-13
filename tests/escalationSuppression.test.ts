@@ -147,3 +147,81 @@ describe("escalation suppression allowlist (regresion de seguridad: solo se supr
     expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
   });
 });
+
+// Regresion del sobre-escalado real (medido con LLM): el modelo re-emite datos blandos o marcadores
+// vacios en turnos posteriores, y la comprobacion de consistencia los tomaba como "contradiccion
+// dura" -> HUMAN_INTERVENTION_REQUIRED pegajoso en cada turno benigno. Estos tests fallan sin el fix
+// de dataConsistency (campos blandos = actualizacion, marcadores vacios y degradaciones a UNKNOWN
+// se ignoran), mientras que un cambio real de EDAD sin correccion sigue escalando (operationalSafety).
+describe("regresion sobre-escalado: re-extracciones benignas no son contradicciones duras", () => {
+  it("does not escalate when the model re-emits a soft field with a different value (OF status flips)", async () => {
+    const { engine } = createEngineWithStub([
+      stubUnderstanding({ intent: "CONFIRMS_INTEREST", extractedData: { hasOnlyFans: true } }),
+      stubUnderstanding({ intent: "OTHER", extractedData: { hasOnlyFans: false } })
+    ]);
+
+    const first = await engine.handleIncomingMessage({
+      instagramUsername: "lead_of_flip",
+      profileVisibility: "PUBLIC",
+      message: "si tengo onlyfans"
+    });
+    const second = await engine.handleIncomingMessage({
+      candidateId: first.candidate.id,
+      instagramUsername: "lead_of_flip",
+      message: "bueno la tengo pero no la uso"
+    });
+
+    expect(second.contradictions).toHaveLength(0);
+    expect(second.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
+  });
+
+  it("does not escalate when the model writes an empty marker into a previously known field", async () => {
+    const { engine } = createEngineWithStub([
+      stubUnderstanding({ intent: "OTHER", extractedData: { deviceModel: "iPhone 15", deviceType: "IPHONE" } }),
+      stubUnderstanding({ intent: "OTHER", extractedData: { country: ":", city: "-", deviceModel: "," } })
+    ]);
+
+    const first = await engine.handleIncomingMessage({
+      instagramUsername: "lead_marcador_vacio",
+      profileVisibility: "PUBLIC",
+      message: "tengo un iPhone 15"
+    });
+    const second = await engine.handleIncomingMessage({
+      candidateId: first.candidate.id,
+      instagramUsername: "lead_marcador_vacio",
+      message: "vale"
+    });
+
+    expect(second.contradictions).toHaveLength(0);
+    expect(second.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
+    // El movil conocido no se pierde por culpa del marcador vacio.
+    expect(second.candidate.deviceModel).toBe("iPhone 15");
+  });
+
+  it("does not escalate when a later turn downgrades a known device back to UNKNOWN", async () => {
+    const { engine } = createEngineWithStub([
+      stubUnderstanding({
+        intent: "OTHER",
+        extractedData: { deviceType: "IPHONE", deviceModel: "iPhone 13 pro max", deviceEligibility: "APPROVED" }
+      }),
+      stubUnderstanding({ intent: "OTHER", extractedData: { deviceType: "UNKNOWN", deviceEligibility: "UNKNOWN" } })
+    ]);
+
+    const first = await engine.handleIncomingMessage({
+      instagramUsername: "lead_degradacion_unknown",
+      profileVisibility: "PUBLIC",
+      message: "iPhone 13 pro max"
+    });
+    const second = await engine.handleIncomingMessage({
+      candidateId: first.candidate.id,
+      instagramUsername: "lead_degradacion_unknown",
+      message: "y no tengo suscriptores aun"
+    });
+
+    expect(second.contradictions).toHaveLength(0);
+    expect(second.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
+    // La degradacion a UNKNOWN no borra el dato ya conocido.
+    expect(second.candidate.deviceType).toBe("IPHONE");
+    expect(second.candidate.deviceEligibility).toBe("APPROVED");
+  });
+});

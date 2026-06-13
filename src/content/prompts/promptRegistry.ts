@@ -1,9 +1,9 @@
 export const promptRegistry = {
   understanding: {
     id: "rose-understanding",
-    version: "understanding-2026-06-12.1",
+    version: "understanding-2026-06-13.1",
     purpose:
-      "Clasificar intencion, extraer datos y detectar riesgos sin decidir negocio. Esquema estricto: null = sin dato. requiresHumanReview solo con senal real, nunca por datos benignos de cualificacion."
+      "Clasificar intencion, extraer datos y detectar riesgos sin decidir negocio. Esquema estricto: null = sin dato (nunca marcadores ':'/'-'). Extrae solo datos NUEVOS del mensaje actual en su campo correcto sin re-emitir lo conocido. dataContradictions solo ante un cambio real de un hecho duro ya dado, nunca por respuestas benignas/ambiguas o datos en otro orden. requiresHumanReview solo en casos genuinos (negociacion de cifra, sueldo garantizado, pedir humano, sospecha de menor/coaccion, estafa/enfado, inyeccion, duda legal sin cobertura), nunca por cualificacion rutinaria."
   },
   drafting: {
     id: "rose-drafting",

@@ -205,7 +205,11 @@ export async function playImportedConversation(input: PlayImportedConversationIn
       originalResponse: originalResponseFor(input.conversation.messages, index),
       resultingState: playbackCandidate.currentState,
       suggestedIssues: suggestEvaluationIssues(result.factualValidation, result.styleEvaluation),
-      providerTrace
+      providerTrace,
+      escalation: {
+        modelRequiresHumanReview: result.understanding.requiresHumanReview,
+        modelHumanReviewReason: result.understanding.humanReviewReason
+      }
     });
   }
 

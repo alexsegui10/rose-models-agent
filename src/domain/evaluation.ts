@@ -72,6 +72,15 @@ export const EvaluationTurnFeedbackSchema = z.object({
 });
 export type EvaluationTurnFeedback = z.infer<typeof EvaluationTurnFeedbackSchema>;
 
+// Instrumentacion aditiva: por turno registramos POR QUE escalo (la senal de revision humana del
+// modelo de comprension tras el filtro de supresion benigna). Opcional/nullable para que los datos
+// de playback antiguos sigan parseando sin migracion.
+export const PlaybackTurnEscalationSchema = z.object({
+  modelRequiresHumanReview: z.boolean(),
+  modelHumanReviewReason: z.string().nullable()
+});
+export type PlaybackTurnEscalation = z.infer<typeof PlaybackTurnEscalationSchema>;
+
 export const PlaybackTurnSchema = z.object({
   turnIndex: z.number().int().nonnegative(),
   candidateMessage: z.string().min(1),
@@ -79,7 +88,8 @@ export const PlaybackTurnSchema = z.object({
   originalResponse: z.string().nullable(),
   resultingState: CandidateStateSchema,
   suggestedIssues: z.array(EvaluationIssueSchema).default([]),
-  providerTrace: ProviderCallTraceSchema
+  providerTrace: ProviderCallTraceSchema,
+  escalation: PlaybackTurnEscalationSchema.nullish()
 });
 export type PlaybackTurn = z.infer<typeof PlaybackTurnSchema>;
 
