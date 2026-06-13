@@ -87,6 +87,23 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("percentage", "revenue-share", "sensitive", "negotiation");
   if (/\b(que haceis|que hace la agencia|servicios|trafico|estrategia|monetizacion)\b/.test(message))
     tags.push("services", "agency", "strategy", "traffic", "monetization");
+  // El pitch operativo ("cual es su forma de trabajar?", "como me promocionan?") es la pregunta
+  // mas matadora de leads cuando se deriva al socio: debe recuperar SIEMPRE la entrada de servicios.
+  if (
+    /\bcomo trabaj|\bcomo se trabaja\b|\bforma de trabajar\b|\ben que consiste\b|\bque (?:me )?ofrec|\bcomo (?:me |la )?promocion|\bcomo (?:lo|la|se) manej|\bme la gestionen\b|\bcomo seria el trabajo\b/.test(
+      message
+    )
+  )
+    tags.push("services", "agency", "strategy");
+  // "Podrian explicarme todo por mensaje?" / "No quiero llamadas, me lo explicas por aqui?": tiene
+  // rama documentada (r12) y debe entregar el pitch operativo, no derivar al socio (iteracion 3).
+  if (
+    /\bexplic\w*\b[^.!?]{0,30}\b(?:por (?:aqui|mensaje|chat|escrito)|solo x mensaje|x mensaje|por dm|por instagram)\b/.test(
+      message
+    ) ||
+    /\bno quiero llamadas?\b/.test(message)
+  )
+    tags.push("services", "agency", "strategy");
   if (/\b(que hago yo|mi parte|modelo|contenido|crear contenido|enviar contenido|drive)\b/.test(message))
     tags.push("model-responsibilities", "content");
   if (/\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message))

@@ -158,6 +158,31 @@ describe("OPENAI_STRUCTURED_OUTPUT_SCHEMA", () => {
     expect(serialized).not.toContain('"default"');
   });
 
+  it("survives a salary demand mapped as an out-of-range percentage (regression replay-12 T5: 500 USD/semana crashed understanding)", async () => {
+    const provider = createProvider(
+      fakeRunner(
+        apiUnderstanding({
+          intent: "ASKS_ABOUT_PERCENTAGE",
+          isNegotiation: true,
+          requiresHumanReview: true,
+          humanReviewReason: "Negociacion salarial: pide 500 dolares por semana.",
+          requestedModelPercentage: 500,
+          extractedData: { ...apiExtractedDataAllNull(), requestedModelPercentage: 500 }
+        })
+      )
+    );
+
+    const result = await provider.understand(baseUnderstandingInput("500 dolares por semana"));
+
+    expect(result.usedFallback).toBe(false);
+    expect(result.actualProvider).toBe("openai");
+    expect(result.requestedModelPercentage).toBeNull();
+    expect(result.extractedData.requestedModelPercentage).toBeUndefined();
+    expect(result.isNegotiation).toBe(true);
+    expect(result.requiresHumanReview).toBe(true);
+    expect(result.internalNotes.join(" ")).toContain("fuera de rango");
+  });
+
   it("rejects out-of-range model values after mapping and falls back deterministically", async () => {
     const provider = createProvider(fakeRunner(apiUnderstanding({ confidence: 2 })));
 

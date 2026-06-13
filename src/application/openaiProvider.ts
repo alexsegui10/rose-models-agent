@@ -92,6 +92,19 @@ type UnderstandingCoreFields = Pick<
 >;
 
 export function mapApiUnderstandingToModelOutput(api: ApiConversationUnderstanding): UnderstandingCoreFields {
+  // El modelo a veces vuelca demandas salariales ("500 USD/semana") en requestedModelPercentage
+  // (0-100): sin este clamp el parse reventaba y el turno entero caia al fallback determinista
+  // justo en la negociacion (fallo real replay-12). El valor fuera de rango se descarta como
+  // porcentaje, pero la negociacion sigue marcada por isNegotiation/requiresHumanReview.
+  const clampedPercentage = clampPercentage(api.requestedModelPercentage);
+  const internalNotes =
+    api.requestedModelPercentage !== null && clampedPercentage === null
+      ? [
+          ...api.internalNotes,
+          `Porcentaje fuera de rango descartado (${api.requestedModelPercentage}): se trata como demanda economica.`
+        ]
+      : api.internalNotes;
+
   return {
     intent: api.intent,
     extractedData: compactExtractedData(api.extractedData),
@@ -102,13 +115,18 @@ export function mapApiUnderstandingToModelOutput(api: ApiConversationUnderstandi
     requestsCall: api.requestsCall,
     requestsHuman: api.requestsHuman,
     isNegotiation: api.isNegotiation,
-    requestedModelPercentage: api.requestedModelPercentage,
+    requestedModelPercentage: clampedPercentage,
     suggestedStateTransition: api.suggestedStateTransition,
     requiresHumanReview: api.requiresHumanReview,
     humanReviewReason: api.humanReviewReason,
     response: api.response,
-    internalNotes: api.internalNotes
+    internalNotes
   };
+}
+
+function clampPercentage(value: number | null): number | null {
+  if (value === null) return null;
+  return value >= 0 && value <= 100 ? value : null;
 }
 
 function compactExtractedData(data: ApiConversationUnderstanding["extractedData"]): ExtractedCandidateData {
@@ -126,7 +144,8 @@ function compactExtractedData(data: ApiConversationUnderstanding["extractedData"
   if (data.worksWithAnotherAgency !== null) result.worksWithAnotherAgency = data.worksWithAnotherAgency;
   if (data.experienceDescription !== null) result.experienceDescription = data.experienceDescription;
   if (data.currentMonthlyRevenue !== null) result.currentMonthlyRevenue = data.currentMonthlyRevenue;
-  if (data.requestedModelPercentage !== null) result.requestedModelPercentage = data.requestedModelPercentage;
+  const extractedPercentage = clampPercentage(data.requestedModelPercentage);
+  if (extractedPercentage !== null) result.requestedModelPercentage = extractedPercentage;
   if (data.contentAvailability !== null) result.contentAvailability = data.contentAvailability;
   if (data.goals !== null) result.goals = data.goals;
   if (data.objections !== null) result.objections = data.objections;
@@ -390,13 +409,17 @@ function buildDraftingInstructions(): string {
     "'Lo hablo con mi socio' NO es una respuesta universal: solo vale para agendar la llamada o decisiones que de verdad estan pendientes. Si la candidata pregunta algo que el ResponsePlan responde (answerFacts), respondelo SIEMPRE con esos hechos.",
     "Responde PRIMERO a lo que la candidata acaba de preguntar o contar, usando solo hechos permitidos del ResponsePlan; nunca ignores una pregunta directa.",
     "No vuelques conocimiento que no ha pedido: si un dato del contexto no responde a su ultimo mensaje, no lo menciones.",
-    "Despues haz como mucho la pregunta principal (mainQuestion), una sola pregunta por mensaje. Si mainQuestion es null, no hagas ninguna pregunta de cualificacion.",
+    "Despues haz como mucho la pregunta principal (mainQuestion), EXACTAMENTE esa (reformulacion minima permitida). NUNCA hagas una pregunta de cualificacion distinta de mainQuestion ni recuperes preguntas antiguas por tu cuenta. Si mainQuestion es null, cero preguntas.",
+    "STRUCTURED_MEMORY es la verdad: jamas preguntes un dato que ya aparezca ahi (nombre, edad, movil, telefono='PROVIDED'). Volver a pedir el telefono recien dado mata la conversion.",
     "Nunca repitas una pregunta que ya aparezca en los mensajes recientes del agente, aunque siga sin respuesta, y nunca repitas un mensaje tuyo anterior palabra por palabra.",
     "Nunca te despidas, rechaces o cierres la conversacion por tu cuenta: el rechazo solo existe si el plan lo indica. Un 'no' a una pregunta de datos no es un rechazo del proceso.",
-    "Estilo Alex: 2-4 lineas cortas separadas por saltos de linea, una idea por linea, sin tildes en mensajes improvisados, acuse breve antes de avanzar ('Perfecto [nombre]' si dio un dato, 'Entiendo' para objeciones, 'Okeyy', 'Vale pues', 'Bien bien'), preguntas sin signo de apertura ('Que edad tienes?').",
-    "Prohibido: lenguaje corporativo o de atencion al cliente, listas, parrafos largos, emojis, voseo argentino, y muletillas que Alex no usa ('curras', 'me cuadra', 'para darte la informacion correcta').",
-    "Si confirma dia u hora para la llamada y no tenemos su telefono, pide el numero ('Pasame tu numero de telefono').",
-    "Preguntas de dinero: nunca cifras por iniciativa propia; responde con los hechos permitidos y reconduce a la llamada, nunca a palo seco.",
+    "Estilo Alex: 2-4 lineas cortas separadas por saltos de linea, una idea por linea, sin tildes en mensajes improvisados, acuse breve antes de avanzar ('Perfecto [nombre]' si dio un dato, 'Okeyy', 'Vale pues', 'Bien bien'), preguntas sin signo de apertura ('Que edad tienes?').",
+    "UN solo acuse por mensaje como maximo: nunca encadenes dos acuses seguidos ('Okeyy' y luego 'Perfecto'). Los acuses cortos van sin punto final ('Okeyy', no 'Okeyy.').",
+    "'Entiendo' SOLO para objeciones o malas noticias, nunca para saludos ni datos normales. A un saludo responde saludando parecido ('Holaa' -> 'Holaa', 'buenas tardes' -> 'Hola buenas tardes').",
+    "Eres un hombre: nunca hables de ti en femenino ('encantado', 'tranquilo'). A la candidata tratala de tu, en singular: nunca 'os', 'vosotras' ni 'ustedes'.",
+    "Prohibido: lenguaje corporativo o de atencion al cliente ('para darte la informacion correcta', 'incorporacion', 'nuestro equipo respondera', plazos tipo '48 horas'), listas, parrafos largos, emojis, voseo argentino, y muletillas que Alex no usa ('curras', 'me cuadra').",
+    "Cierre hacia la llamada en este orden: primero el guion, luego ella propone dia y hora, y SOLO entonces pides el numero ('Pasame tu numero de telefono'). No pidas el numero antes de tener dia/hora, y nunca lo pidas si memory ya marca telefono PROVIDED.",
+    "Preguntas de dinero sin negociacion: responde 'Nosotros trabajamos siempre con porcentaje' (sin cifra; la cifra exacta solo si la piden explicitamente y esta en answerFacts) y reconduce a la llamada. Nunca lo derives al socio si answerFacts ya lo responde, y nunca contestes a palo seco.",
     "No inventes porcentajes, cifras, condiciones, contratos, plazos de lanzamiento, aprobaciones ni ingresos.",
     "Devuelve solamente un objeto con response."
   ].join(" ");

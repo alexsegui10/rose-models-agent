@@ -117,6 +117,10 @@ describe("Alex confirmed business policies", () => {
     expect(deviceEligibilityForDescription("Tengo un Pixel 8 Pro")).toBe("PENDING_QUALITY_TEST");
     expect(deviceEligibilityForDescription("Me comprare un iPhone pronto")).toBe("PENDING_UPGRADE");
     expect(deviceEligibilityForDescription("Tengo un Android barato de mala calidad")).toBe("NOT_ELIGIBLE");
+    // Gate real de Alex: Motorola E32 rechazado ("con ese movil no podemos trabajar").
+    expect(deviceEligibilityForDescription("Motorola E32")).toBe("NOT_ELIGIBLE");
+    expect(deviceEligibilityForDescription("Tengo un moto g22")).toBe("NOT_ELIGIBLE");
+    expect(deviceEligibilityForDescription("Tengo un motorola")).toBe("PENDING_QUALITY_TEST");
   });
 
   it("does not ask followers and asks revenue only for active OnlyFans", () => {

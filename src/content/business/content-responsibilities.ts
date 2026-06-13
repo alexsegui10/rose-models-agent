@@ -21,16 +21,20 @@ const entries: KnowledgeEntryInput[] = [
       "Nosotros nos encargamos de la parte operativa: cuentas, estrategia, publicacion, trafico, chatting y monetizacion.",
       "No usamos tu Instagram personal como cuenta principal del proyecto."
     ],
-    prohibitedClaims: ["Pedir contrasenas por chat.", "Guardar contrasenas en prompts o logs.", "Prometer una fecha exacta de ingresos."],
+    prohibitedClaims: [
+      "Pedir contrasenas por chat.",
+      "Guardar contrasenas en prompts o logs.",
+      "Prometer una fecha exacta de ingresos."
+    ],
     mandatoryNuances: ["Responder breve por chat y dejar detalles para llamada."],
     escalationConditions: ["Preguntas de acceso, contrasenas o dudas contractuales."],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["agency-responsibilities", "instagram", "onlyfans", "operations"],
     requiresHumanReview: false,
-    version: "content-agency-responsibilities-2026-06-09.1",
+    version: "content-agency-responsibilities-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-06-12"
   },
   {
     id: "content-model-responsibilities",
@@ -47,18 +51,24 @@ const entries: KnowledgeEntryInput[] = [
     ],
     approvedAnswerPoints: [
       "Tu parte seria crear contenido, subirlo a Drive, seguir referencias o guiones y decirnos tus limites.",
-      "Lo normal es responder al equipo en unas 48 horas."
+      // Sin SLA corporativo ("responder al equipo en unas 48 horas" era el mensaje mas fuera de voz
+      // segun los jueces): misma politica, registro de Alex.
+      "Lo unico es no tardar mucho en contestar, un dia o dos como mucho."
     ],
-    prohibitedClaims: ["Presionarla para cambiar limites.", "Rechazarla por un retraso aislado.", "Pedir contenido intimo por Instagram."],
+    prohibitedClaims: [
+      "Presionarla para cambiar limites.",
+      "Rechazarla por un retraso aislado.",
+      "Pedir contenido intimo por Instagram."
+    ],
     mandatoryNuances: ["No decir que la modelo solo envia contenido.", "Los detalles completos se explican mejor en llamada."],
     escalationConditions: ["Retrasos repetidos.", "Dudas sobre limites o condiciones especiales."],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["model-responsibilities", "content", "availability", "drive"],
     requiresHumanReview: false,
-    version: "content-model-responsibilities-2026-06-09.2",
+    version: "content-model-responsibilities-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-06-12"
   },
   {
     id: "content-production-volume",
@@ -70,7 +80,10 @@ const entries: KnowledgeEntryInput[] = [
       `El objetivo orientativo posterior es de ${contentProductionPolicy.targetReelsPerWeekMin} a ${contentProductionPolicy.targetReelsPerWeekMax} Reels semanales.`,
       "Ese rango no esta confirmado como minimo contractual rigido."
     ],
-    approvedAnswerPoints: ["Al principio suelen ser unos cinco dias con 2 o 3 fotos diarias.", "Despues el objetivo orientativo es 10 a 20 Reels semanales, pero no lo trataria como minimo contractual cerrado por chat."],
+    approvedAnswerPoints: [
+      "Al principio suelen ser unos cinco dias con 2 o 3 fotos diarias.",
+      "Despues el objetivo orientativo es 10 a 20 Reels semanales, pero no lo trataria como minimo contractual cerrado por chat."
+    ],
     prohibitedClaims: ["Presentar 10-20 Reels como obligacion contractual rigida.", "Cerrar condiciones contractuales por chat."],
     mandatoryNuances: ["Puede ir preparando Reels desde el principio.", "Alex organiza los detalles despues de la llamada."],
     escalationConditions: ["Quiere cerrar obligaciones contractuales exactas."],
@@ -86,8 +99,15 @@ const entries: KnowledgeEntryInput[] = [
     id: "content-new-and-old-material",
     category: "CONTENT_RESPONSIBILITIES",
     title: "Contenido nuevo y material antiguo",
-    facts: ["Para Instagram el contenido debe ser nuevo y no publicado antes.", "Para OnlyFans pueden reutilizarse fotos, videos o sextings antiguos si sirven.", "La reutilizacion de material antiguo solo se menciona si la candidata pregunta."],
-    approvedAnswerPoints: ["Para Instagram necesitamos contenido nuevo.", "Para OnlyFans se puede aprovechar material antiguo si sirve, pero eso lo vemos segun el caso."],
+    facts: [
+      "Para Instagram el contenido debe ser nuevo y no publicado antes.",
+      "Para OnlyFans pueden reutilizarse fotos, videos o sextings antiguos si sirven.",
+      "La reutilizacion de material antiguo solo se menciona si la candidata pregunta."
+    ],
+    approvedAnswerPoints: [
+      "Para Instagram necesitamos contenido nuevo.",
+      "Para OnlyFans se puede aprovechar material antiguo si sirve, pero eso lo vemos segun el caso."
+    ],
     prohibitedClaims: ["Usar material antiguo en Instagram.", "Mencionar material antiguo de OnlyFans de forma proactiva."],
     mandatoryNuances: ["Solo explicar reutilizacion si pregunta."],
     escalationConditions: ["Dudas sobre derechos de contenido o contrato."],
@@ -103,7 +123,11 @@ const entries: KnowledgeEntryInput[] = [
     id: "content-boundaries-neutral-question",
     category: "CONTENT_RESPONSIBILITIES",
     title: "Limites de contenido",
-    facts: ["Los limites se preguntan de forma neutral.", "No se presiona a la modelo para cambiarlos.", "Los detalles completos se tratan en llamada y Alex gestiona guiones despues."],
+    facts: [
+      "Los limites se preguntan de forma neutral.",
+      "No se presiona a la modelo para cambiarlos.",
+      "Los detalles completos se tratan en llamada y Alex gestiona guiones despues."
+    ],
     approvedAnswerPoints: ["Hay algun tipo de contenido que no quieras hacer o algun limite que debamos tener en cuenta?"],
     prohibitedClaims: ["Presionar para cambiar limites.", "Entrar en descripciones innecesariamente explicitas por Instagram."],
     mandatoryNuances: ["Registrar limites.", "Si necesita ejemplos, usar categorias profesionales y breves."],

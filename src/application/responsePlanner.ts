@@ -1,6 +1,7 @@
 import { activeRevenueSharePolicy } from "@/content/business";
 import type { Candidate } from "@/domain/candidate";
 import { ResponsePlanSchema, type KnowledgeEntry, type ResponsePlan } from "@/domain/businessKnowledge";
+import { guaranteedMoneyDemandPattern } from "./dataExtractor";
 import type { ModelConversationOutput } from "./llmProvider";
 
 export interface BuildResponsePlanInput {
@@ -21,11 +22,23 @@ export interface BuildResponsePlanInput {
 /** Una misma pregunta de cualificacion nunca se repite mas de 2 veces (el Alex real tampoco lo hace). */
 const MAX_SAME_QUESTION_ASKS = 2;
 
+// Cierre hacia la llamada (playbook 1.7): pitch -> la candidata propone dia/hora -> ENTONCES el
+// telefono. Pedir el numero nada mas oir "llamada" era el fallo nº1 de la iteracion 1.
+export const PHONE_QUESTION = "Me puedes pasar tu numero de telefono?";
+export const SCHEDULE_QUESTION = "Que dia y hora te viene bien para la llamada?";
+const phoneAskPattern = /pasa(?:me)?\s?tu numero|numero de telefono/;
+const scheduleAskPattern = /que dia y hora/;
+// Propuesta de momento concreto (dia, hora o "cuando quieras") en el mensaje de la candidata.
+const timeProposalPattern =
+  /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo|hoy|manana|mediodia|tarde|noche|madrugada|ahora)\b|\b\d{1,2}[:.]\d{2}\b|\b\d{1,2}\s?(?:am|pm|hs|h|horas)\b|\ba las \d{1,2}\b|\bcuando (?:quieras|quieran|puedas|puedan|sea)\b/;
+
 interface QualificationSlot {
   id: string;
   question: string;
   alreadyAskedPattern: RegExp;
   isMissing: (candidate: Candidate) => boolean;
+  /** Slot tardio opcional (pais, disponibilidad): nunca bloquea el cierre de la llamada. */
+  optional?: boolean;
 }
 
 // Orden canonico del guion real de Alex (analisis 2026-06-10): nombre -> edad -> OF -> agencias -> movil.
@@ -65,13 +78,17 @@ const qualificationSlots: QualificationSlot[] = [
     id: "country",
     question: "Por cierto, de que pais eres?",
     alreadyAskedPattern: /que pais eres|en que ciudad/,
-    isMissing: (candidate) => !candidate.country && !candidate.city
+    isMissing: (candidate) => !candidate.country && !candidate.city,
+    optional: true
   },
   {
     id: "availability",
-    question: "Que disponibilidad tendrias para crear contenido durante la semana?",
-    alreadyAskedPattern: /que disponibilidad/,
-    isMissing: (candidate) => !candidate.contentAvailability && !candidate.goals
+    // Reformulado al registro de Alex (juez iteracion 3): nada de "disponibilidad ... crear
+    // contenido durante la semana" corporativo.
+    question: "Cuanto tiempo le podrias dedicar a esto a la semana?",
+    alreadyAskedPattern: /cuanto tiempo le podrias dedicar|que disponibilidad/,
+    isMissing: (candidate) => !candidate.contentAvailability && !candidate.goals,
+    optional: true
   }
 ];
 
@@ -175,9 +192,9 @@ function acknowledgedFactsFor(input: BuildResponsePlanInput): string[] {
 /**
  * Decide la UNICA pregunta principal del turno, o ninguna.
  * Reglas: nada de preguntas en el turno del opener canonico ni antes del gate de perfil, ni en
- * escalados/revision humana; orden canonico de slots; cap anti-bucle de 2 intentos por pregunta;
- * si la candidata pide llamada o da telefono con edad confirmada, la pregunta pasa a ser el
- * numero de telefono (playbook 1.7: al confirmar la llamada se pide SIEMPRE el numero).
+ * escalados/revision humana; orden canonico de slots; cap anti-bucle de 2 intentos por pregunta.
+ * Cierre hacia la llamada (playbook 1.7): si la candidata propone un dia/hora concreto se pide
+ * SIEMPRE el numero; si solo pide la llamada, primero se termina el guion y despues el dia/hora.
  */
 function questionToAskFor(
   input: BuildResponsePlanInput,
@@ -186,17 +203,32 @@ function questionToAskFor(
 ): string | null {
   const candidate = input.candidate;
   const intent = input.understanding.intent;
+  const message = normalize(input.inboundMessage);
+  const recentAgentMessages = (input.recentAgentMessages ?? []).map(normalize);
   const adultConfirmed = Boolean(candidate.age && candidate.isAdultConfirmed);
-  const confirmsCall = intent === "REQUESTS_CALL" || intent === "PROVIDES_PHONE" || input.understanding.requestsCall;
+  const proposesTime = timeProposalPattern.test(message);
+  // El "Domingo 11 am?" suelto tras proponer el agente la llamada ES una confirmacion de llamada,
+  // aunque el modelo clasifique OTHER (fallo real: se perdia la propuesta de hora de la candidata).
+  // Solo cuenta el ULTIMO mensaje del agente: un "manana" suelto turnos despues no es una hora.
+  const lastAgentMessage = recentAgentMessages[recentAgentMessages.length - 1] ?? "";
+  const agentProposedCall = /llamada|dia y hora/.test(lastAgentMessage);
+  const confirmsCall =
+    intent === "REQUESTS_CALL" ||
+    intent === "PROVIDES_PHONE" ||
+    input.understanding.requestsCall ||
+    (agentProposedCall && proposesTime);
 
   if (requiresHumanReview || uncoveredQuestion) return null;
   // Opener canonico (primer turno de un lead nuevo): presentacion + gate/marco, sin preguntas.
   if (input.isOpenerTurn && candidate.currentState === "NEW_LEAD") return null;
   if (candidate.age && candidate.age < 18) return null;
-  // En intervencion humana no se cualifica, pero pedir el numero al confirmar la llamada no
-  // decide nada de negocio y es obligatorio en el guion real (se le olvido dos veces a Alex).
+  // En intervencion humana no se cualifica, pero cerrar la llamada (dia/hora y despues el numero)
+  // no decide nada de negocio y es obligatorio en el guion real (se le olvido dos veces a Alex).
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
-    return adultConfirmed && confirmsCall && !candidate.phone ? "Me puedes pasar tu numero de telefono?" : null;
+    if (!adultConfirmed || candidate.phone || !confirmsCall) return null;
+    return proposesTime
+      ? askWithCap(PHONE_QUESTION, phoneAskPattern, recentAgentMessages)
+      : askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
   }
   if (
     candidate.currentState === "CLOSED" ||
@@ -207,29 +239,48 @@ function questionToAskFor(
   }
   if (profileGatePending(candidate)) return null;
 
-  if (adultConfirmed && confirmsCall) {
-    return candidate.phone ? null : "Me puedes pasar tu numero de telefono?";
-  }
-
-  const recentAgentMessages = (input.recentAgentMessages ?? []).map(normalize);
-
   // Una llamada sin edad confirmada no avanza (invariante 2): la edad pasa por delante del nombre.
   if (confirmsCall && !candidate.age) {
     const ageSlot = qualificationSlots.find((slot) => slot.id === "age");
     if (ageSlot) {
-      const timesAsked = recentAgentMessages.filter((message) => ageSlot.alreadyAskedPattern.test(message)).length;
-      if (timesAsked < MAX_SAME_QUESTION_ASKS) return ageSlot.question;
+      const capped = askWithCap(ageSlot.question, ageSlot.alreadyAskedPattern, recentAgentMessages);
+      if (capped) return capped;
     }
   }
 
-  for (const slot of qualificationSlots) {
-    if (!slot.isMissing(candidate)) continue;
-    const timesAsked = recentAgentMessages.filter((message) => slot.alreadyAskedPattern.test(message)).length;
-    if (timesAsked >= MAX_SAME_QUESTION_ASKS) continue;
-    return slot.question;
+  if (adultConfirmed && confirmsCall) {
+    if (candidate.phone) return null;
+    // Dia/hora concreto sobre la mesa: se pide el numero YA y no se reabre la cualificacion
+    // (fallo real: "Como te llamas?" justo despues de recibir el telefono mataba el cierre).
+    if (proposesTime) return askWithCap(PHONE_QUESTION, phoneAskPattern, recentAgentMessages);
+    // Pide la llamada sin proponer momento: primero se termina el guion ESENCIAL; los slots
+    // tardios opcionales (pais, disponibilidad) no bloquean el cierre y se cubren en la llamada
+    // (regresion stall-loop iteracion 3, r14/r15). Si el guion esencial esta completo, que ella
+    // proponga el dia y la hora (orden real: pitch -> dia/hora -> telefono).
+    const slotQuestion = nextSlotQuestion(candidate, recentAgentMessages, { skipOptional: true });
+    return slotQuestion ?? askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
   }
 
+  return nextSlotQuestion(candidate, recentAgentMessages);
+}
+
+function nextSlotQuestion(
+  candidate: Candidate,
+  recentAgentMessages: string[],
+  options: { skipOptional?: boolean } = {}
+): string | null {
+  for (const slot of qualificationSlots) {
+    if (options.skipOptional && slot.optional) continue;
+    if (!slot.isMissing(candidate)) continue;
+    const capped = askWithCap(slot.question, slot.alreadyAskedPattern, recentAgentMessages);
+    if (capped) return capped;
+  }
   return null;
+}
+
+function askWithCap(question: string, alreadyAskedPattern: RegExp, recentAgentMessages: string[]): string | null {
+  const timesAsked = recentAgentMessages.filter((message) => alreadyAskedPattern.test(message)).length;
+  return timesAsked >= MAX_SAME_QUESTION_ASKS ? null : question;
 }
 
 function profileGatePending(candidate: Candidate): boolean {
@@ -262,8 +313,11 @@ function isBusinessQuestionWithoutCoverage(input: BuildResponsePlanInput): boole
 function asksUnsupportedSpecificQuestion(message: string, knowledgeEntries: KnowledgeEntry[]): boolean {
   if (/\b(impuestos|fiscal|hacienda|publicidad|exclusividad)\b/.test(message)) return true;
 
+  // Solo formulaciones en primera persona sobre SU parte del trabajo. La palabra "modelo" suelta
+  // ("como promocionan a la modelo?") mandaba el pitch operativo al socio (fallo real replay-6).
   const asksModelResponsibility =
-    /\b(que hago yo|que tendria que hacer yo|mi parte|modelo|enviar contenido|crear contenido)\b/.test(message);
+    /\b(que hago yo|que tendria que hacer yo|que tengo que hacer yo|que me toca|mi parte)\b/.test(message) ||
+    /\b(enviar|mandar|crear|grabar)\b[^.!?]{0,25}\bcontenido\b/.test(message);
   if (!asksModelResponsibility) return false;
 
   return !knowledgeEntries.some((entry) => entry.category === "CONTENT_RESPONSIBILITIES" && entry.status === "ACTIVE");
@@ -279,6 +333,7 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
   return (
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
     (/\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(message) ||
+      guaranteedMoneyDemandPattern.test(message) ||
       (/\b\d{1,3}\s?%/.test(message) && !/(70\s?%|30\s?%|70\/30)/.test(message)))
   );
 }

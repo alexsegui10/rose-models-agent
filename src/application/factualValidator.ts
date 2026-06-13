@@ -28,7 +28,9 @@ export function validateFactualResponse(response: string, plan: ResponsePlan): F
 
   if (/(?:\d{1,3}\s?%)/.test(response) && !plan.hasApprovedNegotiationDecision) {
     const percentages = [...response.matchAll(/(\d{1,3})\s?%/g)].map((match) => Number(match[1]));
-    const allowed = [activeRevenueSharePolicy.agencyPercentage, activeRevenueSharePolicy.modelPercentage].filter((value): value is number => typeof value === "number");
+    const allowed = [activeRevenueSharePolicy.agencyPercentage, activeRevenueSharePolicy.modelPercentage].filter(
+      (value): value is number => typeof value === "number"
+    );
     if (percentages.some((percentage) => !allowed.includes(percentage))) {
       reasons.push("La respuesta incluye porcentajes fuera de la politica aprobada.");
     }
@@ -66,7 +68,7 @@ export function validateFactualResponse(response: string, plan: ResponsePlan): F
 }
 
 export function safeFactualFallback(): string {
-  return "Esa parte prefiero comentarla con mi socio para darte la informacion correcta. Se lo consulto y te digo.";
+  return "Eso dejame que lo hable con mi socio y te digo.";
 }
 
 function hasAllowedContractClaim(plan: ResponsePlan): boolean {

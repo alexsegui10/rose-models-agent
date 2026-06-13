@@ -74,6 +74,36 @@ describe("dataExtractor LATAM phone extraction", () => {
     expect(result.extractedData.currentMonthlyRevenue).toBe(1200);
   });
 
+  describe("context-aware capture: bare number answering the agent's phone request (regression replay-14 T9)", () => {
+    const agentAskedPhone = { lastAgentMessage: "Me puedes pasar tu numero de telefono?" };
+
+    it("captures a bare 7-digit local number when the agent just asked for the phone", () => {
+      const result = extractDeterministicUnderstanding("5550147", agentAskedPhone);
+      expect(result.extractedData.phone).toBe("5550147");
+      expect(result.intent).toBe("PROVIDES_PHONE");
+    });
+
+    it("captures a bare 8-digit number with spaces when the agent just asked for the phone", () => {
+      const result = extractDeterministicUnderstanding("5550 1473", agentAskedPhone);
+      expect(result.extractedData.phone).toBe("55501473");
+    });
+
+    it("does not capture a bare short number without the agent context", () => {
+      const result = extractDeterministicUnderstanding("5550147");
+      expect(result.extractedData.phone).toBeUndefined();
+    });
+
+    it("does not read follower counts as a phone even with the agent context", () => {
+      const result = extractDeterministicUnderstanding("tengo 1500000 seguidores", agentAskedPhone);
+      expect(result.extractedData.phone).toBeUndefined();
+    });
+
+    it("does not capture anything when the agent asked something unrelated", () => {
+      const result = extractDeterministicUnderstanding("5550147", { lastAgentMessage: "Que edad tienes?" });
+      expect(result.extractedData.phone).toBeUndefined();
+    });
+  });
+
   describe("phone digits never leak into the age (regression: adult closed as minor)", () => {
     it("does not read 'tengo 11 2345 6789' as age 11", () => {
       const result = extractDeterministicUnderstanding("tengo 11 2345 6789");

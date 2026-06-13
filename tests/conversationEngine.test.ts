@@ -520,6 +520,127 @@ describe("ConversationEngine answers documented knowledge inside HUMAN_INTERVENT
   });
 });
 
+describe("ConversationEngine conversion moment (regresiones de amnesia de datos de iteracion 1)", () => {
+  // Sin contentAvailability: una candidata 100% completa saltaria a WAITING_HUMAN_REVIEW y el
+  // turno respondria la plantilla de revision en vez de cerrar la llamada.
+  async function qualifiedCandidate(repository: InMemoryCandidateRepository, username: string) {
+    return repository.saveCandidate({
+      ...createCandidate({ instagramUsername: username, profileVisibility: "PUBLIC" }),
+      currentState: "QUALIFYING",
+      firstName: "Noelia",
+      age: 27,
+      isAdultConfirmed: true,
+      hasOnlyFans: false,
+      worksWithAnotherAgency: false,
+      deviceEligibility: "APPROVED",
+      country: "Colombia"
+    });
+  }
+
+  it("captures a bare short number after asking for the phone and never re-asks it (replay-14 T9)", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
+    const seeded = await qualifiedCandidate(repository, "lead_numero_pelado");
+
+    const askPhone = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_numero_pelado",
+      message: "Podemos hacer la llamada el domingo a las 11?"
+    });
+    expect(askPhone.response.toLowerCase()).toContain("numero de telefono");
+
+    const givesPhone = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_numero_pelado",
+      message: "5550147"
+    });
+
+    expect(givesPhone.candidate.phone).toBe("5550147");
+    expect(givesPhone.response.toLowerCase()).not.toContain("numero de telefono");
+    expect(givesPhone.response.toLowerCase()).toContain("lo apunto");
+  });
+
+  it("does not resurrect an already-capped question turns later (ventana ancha anti-bucle, replay-10)", async () => {
+    const { engine } = createEngine();
+
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "lead_bucle_nombre",
+      profileVisibility: "PUBLIC",
+      message: "Hola, quiero informacion"
+    });
+
+    const noise = ["Ok", "Genial", "Bueno", "Aja", "Lo pienso", "Ya te dire", "Mmm", "Vale"];
+    const responses: string[] = [];
+    for (const message of noise) {
+      const result = await engine.handleIncomingMessage({
+        candidateId: opener.candidate.id,
+        instagramUsername: "lead_bucle_nombre",
+        message
+      });
+      responses.push(result.response);
+    }
+
+    const nameAsks = responses.filter((response) => /como te llamas/i.test(response)).length;
+    expect(nameAsks).toBeLessThanOrEqual(2);
+  });
+
+  // Cierre de agenda (taxonomia 3 de iteracion 3): a la propuesta de hora se responde confirmando
+  // el momento y pidiendo el numero, nunca re-cualificando ni con un acuse vacio.
+  it("confirms the agreed time and asks for the phone when she proposes a time (replay-13 T11)", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
+    const seeded = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: "lead_quedamos", profileVisibility: "PUBLIC" }),
+      currentState: "QUALIFYING",
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      hasOnlyFans: false,
+      worksWithAnotherAgency: false,
+      deviceEligibility: "APPROVED"
+    });
+
+    const askSchedule = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_quedamos",
+      message: "Podemos hacer una llamada?"
+    });
+    expect(askSchedule.response.toLowerCase()).toContain("que dia y hora");
+    expect(askSchedule.response.toLowerCase()).not.toContain("disponibilidad");
+
+    const proposesTime = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_quedamos",
+      message: "El domingo tipo 11 entonces"
+    });
+    expect(proposesTime.response.toLowerCase()).toContain("quedamos");
+    expect(proposesTime.response.toLowerCase()).toContain("numero de telefono");
+  });
+
+  it("enforces the device gate on a budget Motorola (replay-10 T1: 'Perfecto' a un Motorola E32)", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
+    const seeded = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: "lead_motorola", profileVisibility: "PUBLIC" }),
+      currentState: "QUALIFYING",
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true
+    });
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_motorola",
+      message: "Tengo un Motorola E32"
+    });
+
+    expect(result.candidate.deviceEligibility).toBe("NOT_ELIGIBLE");
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.response.toLowerCase()).toContain("movil");
+    expect(result.response.toLowerCase()).not.toContain("perfecto");
+  });
+});
+
 describe("ConversationEngine contextual decline (un 'no' es un dato, no un rechazo)", () => {
   it("treats 'No' answering the OnlyFans question as data and keeps qualifying", async () => {
     const { engine, repository } = createEngineWithStub([

@@ -12,7 +12,20 @@ const phonePatterns: readonly RegExp[] = [
   /(?<!\d)(?:\d{2}[\s.-]?\d{4}[\s.-]?\d{4}|\d{3}[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/
 ];
 // (?!\d) evita leer "tengo 1500000 seguidores" como edad 15 (invariante 2: una edad fantasma cierra adultas).
-const agePattern = /\b(?:(?:tengo|edad)\s+(\d{1,2})(?!\d)|(\d{1,2})\s*(?:anos|años|a\b))/i;
+// El lookahead de sustantivos contables impide leer "tengo 2 cuentas" como edad 2: "tengo N" solo
+// es edad si N no va seguido de un contable ("cuentas", "seguidores", "hijos"...). "N años" se sigue
+// resolviendo por la segunda rama.
+const ageCountNounLookahead = "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|anos|años|a\\b))";
+const agePattern = new RegExp(
+  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años|a\\b))`,
+  "i"
+);
+
+// Demanda de dinero garantizado: cifra + moneda + periodicidad ("500 dolares por semana"),
+// cifra + "garantizados", o verbo de exigencia + cifra + periodicidad. NO matchea declaraciones
+// de facturacion propia ("facturo 1200 al mes"). Compartido con el planner (escalada comercial).
+export const guaranteedMoneyDemandPattern =
+  /\b\d{2,6}\s?(?:dolares|euros|usd|eur|\$|€)\s*(?:por semana|a la semana|semanal(?:es)?|al mes|por mes|mensual(?:es)?|garantizad[oa]s?|fijos?)\b|\b\d{2,6}\s?garantizad[oa]s?\b|\b(?:quiero|pido|necesito|exijo)\s+(?:un minimo de\s+)?\d{2,6}\b[^.!?]{0,25}\b(?:por semana|a la semana|al mes|por mes|por adelantado)\b/;
 
 function stripPhoneSpans(text: string): string {
   let result = text;
@@ -101,23 +114,139 @@ function extractFirstName(normalized: string): string | undefined {
   return candidateName.charAt(0).toUpperCase() + candidateName.slice(1);
 }
 
+export interface DeterministicExtractionContext {
+  /** Ultimo mensaje del agente: si pidio el telefono, un numero pelado ("5550147") ES el telefono. */
+  lastAgentMessage?: string | null;
+}
+
 export class DeterministicUnderstandingProvider implements ConversationUnderstandingProvider {
   async understand(input: ConversationUnderstandingInput): Promise<ModelConversationOutput> {
-    return extractDeterministicUnderstanding(input.inboundMessage);
+    return extractDeterministicUnderstanding(input.inboundMessage, {
+      lastAgentMessage: lastAgentLineFromRecentMessages(input.recentMessages)
+    });
   }
 }
 
-export function extractDeterministicUnderstanding(message: string): ModelConversationOutput {
+function lastAgentLineFromRecentMessages(recentMessages: readonly string[]): string | null {
+  for (let index = recentMessages.length - 1; index >= 0; index -= 1) {
+    const line = recentMessages[index];
+    if (line?.startsWith("agent: ")) return line.slice("agent: ".length);
+  }
+  return null;
+}
+
+const agentAskedPhonePattern = /\b(numero|telefono|whatsapp|wassap|wasap)\b/;
+// Mensaje compuesto solo por digitos y separadores: la respuesta tipica a "pasame tu numero".
+const bareNumberMessagePattern = /^[\s\d+().-]{6,24}$/;
+
+// Patrones del ULTIMO mensaje del agente que abren un slot concreto: una respuesta pelada de la
+// candidata (nombre suelto, numero suelto, si/no) consume ese slot. Sin este contexto, una palabra
+// suelta no es un nombre ni un si/no es un dato (regresion answer-slot blindness, iteracion 3).
+const agentAskedNamePattern = /\b(como te llamas|cual es tu nombre|tu nombre|te llamas)\b/;
+const agentAskedAgePattern = /\b(que edad tienes|cuantos anos|tu edad)\b/;
+const agentAskedOnlyFansPattern = /\b(tienes of|has tenido of|tienes onlyfans|has tenido onlyfans|of activo)\b/;
+const agentAskedAgenciesPattern = /\botras? agencias?\b/;
+
+// Una edad pelada es exactamente uno o dos digitos (con ruido de puntuacion opcional), nunca un
+// numero embebido en una frase ("tengo 2 cuentas"): eso evita edades fantasma (invariante 2).
+const bareAgeMessagePattern = /^\s*(\d{1,2})\s*$/;
+
+// Respuestas afirmativas/negativas peladas a una pregunta cerrada del agente.
+const bareYesPattern = /^\s*(si+|sii*|claro|por supuesto|asi es|correcto|afirmativo|exacto)\b/;
+const bareNoPattern = /^\s*(no+|nop|nunca|jamas|negativo|para nada|que va|nop)\b/;
+
+// Fillers, saludos y dias de la semana que NUNCA son un nombre aunque el agente lo pida.
+const nameRejectWords = new Set([
+  "vale",
+  "hola",
+  "holaa",
+  "buenas",
+  "jaja",
+  "jajaja",
+  "jeje",
+  "claro",
+  "gracias",
+  "bueno",
+  "ok",
+  "okey",
+  "okay",
+  "si",
+  "sii",
+  "no",
+  "nop",
+  "lunes",
+  "martes",
+  "miercoles",
+  "jueves",
+  "viernes",
+  "sabado",
+  "domingo",
+  "manana",
+  "hoy",
+  "ahora",
+  "perfecto",
+  "genial"
+]);
+
+/**
+ * Lee un nombre pelado ("Noelia", "gisell torres") cuando el agente acaba de pedir el nombre.
+ * Toma solo la primera palabra, rechaza fillers/saludos/dias y exige caracteres alfabeticos.
+ */
+function bareNameFromReply(normalized: string): string | undefined {
+  const trimmed = normalized.trim();
+  // Solo letras y espacios, una o dos palabras: una respuesta pelada de nombre, no una frase.
+  if (!/^[a-zñ]{2,}(?:\s+[a-zñ]{2,})?$/.test(trimmed)) return undefined;
+  const firstWord = trimmed.split(/\s+/)[0];
+  if (nameRejectWords.has(firstWord)) return undefined;
+  if (nameStopwords.has(firstWord)) return undefined;
+  if (locationKeywords.some((entry) => entry.keyword === firstWord)) return undefined;
+  return firstWord.charAt(0).toUpperCase() + firstWord.slice(1);
+}
+
+export function extractDeterministicUnderstanding(
+  message: string,
+  context: DeterministicExtractionContext = {}
+): ModelConversationOutput {
   const normalized = normalize(message);
   const extractedData: ModelConversationOutput["extractedData"] = {};
   const internalNotes: string[] = [];
 
-  const mentionsPhoneContext = /\b(numero|telefono|whatsapp|wassap|wasap|movil|celular|cel)\b/.test(normalized);
+  // El agente acaba de pedir el numero y la candidata responde solo con digitos: es el telefono
+  // (fallo real de iteracion 1: numeros locales cortos tipo "5550147" se ignoraban y el bot
+  // volvia a pedir el numero recien recibido).
+  const agentAskedPhone =
+    typeof context.lastAgentMessage === "string" && agentAskedPhonePattern.test(normalize(context.lastAgentMessage));
+  const inboundIsBareNumber = bareNumberMessagePattern.test(normalized.trim());
+  const mentionsPhoneContext =
+    /\b(numero|telefono|whatsapp|wassap|wasap|movil|celular|cel)\b/.test(normalized) || (agentAskedPhone && inboundIsBareNumber);
   const phone = extractPhone(normalized, mentionsPhoneContext);
   if (phone) extractedData.phone = phone;
 
-  const firstName = extractFirstName(normalized);
+  // Contexto del ultimo mensaje del agente: una respuesta pelada consume el slot que el agente
+  // acaba de abrir (nombre, edad, OF, agencias). Determinista al 100%, jamas controla el flujo.
+  const lastAgent = typeof context.lastAgentMessage === "string" ? normalize(context.lastAgentMessage) : "";
+  const agentAskedName = agentAskedNamePattern.test(lastAgent);
+  const agentAskedAge = agentAskedAgePattern.test(lastAgent);
+  const agentAskedOnlyFans = agentAskedOnlyFansPattern.test(lastAgent);
+  const agentAskedAgencies = agentAskedAgenciesPattern.test(lastAgent);
+
+  const firstName = extractFirstName(normalized) ?? (agentAskedName ? bareNameFromReply(normalized) : undefined);
   if (firstName) extractedData.firstName = firstName;
+
+  // Numero pelado de una o dos cifras como respuesta a "que edad tienes?": esa SI es la edad.
+  // Un numero embebido en una frase ("tengo 2 cuentas") nunca se lee como edad (invariante 2).
+  const bareAgeMatch = agentAskedAge ? bareAgeMessagePattern.exec(normalized) : null;
+  if (bareAgeMatch) extractedData.age = Number(bareAgeMatch[1]);
+
+  // Si/no pelado a la pregunta de OF o de agencias: consume ese slot concreto.
+  if (extractedData.hasOnlyFans === undefined && agentAskedOnlyFans) {
+    if (bareYesPattern.test(normalized)) extractedData.hasOnlyFans = true;
+    else if (bareNoPattern.test(normalized)) extractedData.hasOnlyFans = false;
+  }
+  if (extractedData.worksWithAnotherAgency === undefined && agentAskedAgencies) {
+    if (bareYesPattern.test(normalized)) extractedData.worksWithAnotherAgency = true;
+    else if (bareNoPattern.test(normalized)) extractedData.worksWithAnotherAgency = false;
+  }
 
   const deviceEligibility = deviceEligibilityForDescription(normalized);
   if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
@@ -130,7 +259,7 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
     extractedData.deviceType = "IPHONE";
   }
 
-  if (/\b(android|samsung|xiaomi|huawei|oppo|realme|pixel|galaxy)\b/.test(normalized)) {
+  if (/\b(android|samsung|xiaomi|huawei|oppo|realme|pixel|galaxy|motorola|moto)\b/.test(normalized)) {
     extractedData.deviceType = /\b(samsung|galaxy)\b/.test(normalized) ? "SAMSUNG" : "OTHER";
   }
 
@@ -165,10 +294,11 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
     }
   }
 
-  if (/\b(onlyfans|of)\b/.test(normalized)) extractedData.hasOnlyFans = true;
-  // Negacion antes de la mencion ("no tengo of", "nunca tuve onlyfans", "no, jamas he usado of").
+  // "only" es la abreviatura coloquial real de OnlyFans ("es la primera vez que uso only").
+  if (/\b(onlyfans|only|of)\b/.test(normalized)) extractedData.hasOnlyFans = true;
+  // Negacion antes de la mencion ("no tengo of", "nunca tuve onlyfans", "no, jamas use only").
   if (/\b(no tengo onlyfans|sin onlyfans|no tengo of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
-  if (/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\b(?:onlyfans|of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
+  if (/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\b(?:onlyfans|only|of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
 
   if (/\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized))
     extractedData.worksWithAnotherAgency = true;
@@ -201,15 +331,20 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
   const requestedPercentageMatch = normalized.match(/\b(\d{1,3})\s?%/);
   if (requestedPercentageMatch) extractedData.requestedModelPercentage = Number(requestedPercentageMatch[1]);
 
+  // Demanda de dinero garantizado ("500 dolares por semana", "quiero 800 garantizados al mes"):
+  // negociacion salarial real que debe escalar a revision humana, nunca acabar en un "Okeyy".
+  const demandsGuaranteedMoney = guaranteedMoneyDemandPattern.test(normalized);
+
   if (
-    /\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo|cuanto pagan|cuanto pagais|cuanto me pagan|cuanto se gana|cuanto ganaria|cuanto cobraria|cuanto cobrar[ie]a)\b/.test(
+    /\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo|cuanto pagan|cuanto pagais|cuanto me pagan|me pagan|nos pagan|cuando pagan|cuando cobro|como son los pagos|me pagarian|cuanto se gana|cuanto ganaria|cuanto cobraria|cuanto cobrar[ie]a)\b/.test(
       normalized
     ) ||
-    /\b\d{1,3}\s?%/.test(normalized)
+    /\b\d{1,3}\s?%/.test(normalized) ||
+    demandsGuaranteedMoney
   ) {
     const asksForException = /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(normalized);
     const asksNonStandardNumber = /\b\d{1,3}\s?%/.test(normalized) && !/(70\s?%|30\s?%|70\/30)/.test(normalized);
-    const requiresHumanReview = asksForException || asksNonStandardNumber;
+    const requiresHumanReview = asksForException || asksNonStandardNumber || demandsGuaranteedMoney;
     return baseOutput(
       "ASKS_ABOUT_PERCENTAGE",
       extractedData,
@@ -224,7 +359,7 @@ export function extractDeterministicUnderstanding(message: string): ModelConvers
     return baseOutput("ASKS_ABOUT_CONTRACT", extractedData, 0.86, true, "Pregunta contractual o legal.", internalNotes);
   }
 
-  if (/\b(llamada|llamar|llamame|telefono|whatsapp|numero|celular)\b/.test(normalized)) {
+  if (/\b(llamada|llamar|llamame|telefono|whatsapp|numero|celular)\b/.test(normalized) || (phone !== null && agentAskedPhone)) {
     return baseOutput(phone ? "PROVIDES_PHONE" : "REQUESTS_CALL", extractedData, 0.8, false, null, internalNotes);
   }
 
@@ -297,11 +432,12 @@ function extractPhone(normalized: string, allowShortLocalNumbers = false): strin
     if (match) return match[0].replace(/\D/g, "");
   }
 
-  // Numeros locales cortos (7-8 digitos) solo si el mensaje habla explicitamente de telefono:
-  // sin ese contexto serian falsos positivos (precios, seguidores, fechas...).
+  // Numeros locales cortos (7-8 digitos) solo si el mensaje habla explicitamente de telefono
+  // o responde a la peticion del agente: sin ese contexto serian falsos positivos (precios,
+  // seguidores, fechas...).
   if (allowShortLocalNumbers) {
-    const shortMatch = normalized.match(/(?<!\d)\d{7,8}(?!\d)/);
-    if (shortMatch) return shortMatch[0];
+    const shortMatch = normalized.match(/(?<!\d)\d{7,8}(?!\d)/) ?? normalized.match(/(?<!\d)\d{3,4}[\s.-]\d{4}(?!\d)/);
+    if (shortMatch) return shortMatch[0].replace(/\D/g, "");
   }
 
   return null;

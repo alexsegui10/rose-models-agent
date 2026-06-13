@@ -40,13 +40,15 @@ const entries: KnowledgeEntryInput[] = [
       "Dar cifras de ganancias.",
       "Ofrecer proactivamente un salario fijo o un rango de sueldo (anomalia real de un chat que no debe repetirse): toda negociacion salarial se escala a revision humana."
     ],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    // Respondible tambien en HUMAN_INTERVENTION_REQUIRED: la pausa frena decisiones, no la
+    // respuesta canonica de dinero (sin esto, "lo hablo con mi socio" mataba leads escalados).
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["salary", "commercial", "payment"],
     requiresHumanReview: false,
-    version: "commercial-no-fixed-salary-2026-06-10.1",
+    version: "commercial-no-fixed-salary-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-10"
+    updatedAt: "2026-06-12"
   },
   {
     id: "commercial-revenue-share-general",
@@ -66,9 +68,10 @@ const entries: KnowledgeEntryInput[] = [
       "El agente no puede negociar porcentajes por chat."
     ],
     approvedAnswerPoints: [
-      "Va por reparto, no por salario fijo.",
-      "Si preguntas por la cifra exacta: 70% para Rose Models y 30% para ti.",
-      "Se calcula sobre el neto despues de la comision de la plataforma."
+      // Respuesta general canonica (analisis 2026-06-10): "Solemos trabajar a porcentaje", sin
+      // cifra y sin tecnicismos de liquidacion. La cifra exacta queda condicionada a la pregunta.
+      "Solemos trabajar a porcentaje, no con salario fijo.",
+      "Si preguntas por la cifra exacta: 70% para Rose Models y 30% para ti."
     ],
     prohibitedClaims: [
       "Mencionar el porcentaje de forma proactiva.",
@@ -78,7 +81,7 @@ const entries: KnowledgeEntryInput[] = [
       "Repetir la anomalia real '75% agencia / 25% para ti': ese reparto no existe y nunca debe mencionarse.",
       "Ofrecer proactivamente un salario fijo o cifras de sueldo."
     ],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["percentage", "revenue-share"],
     mandatoryNuances: [
       "No mencionar porcentajes si la candidata no pregunta.",
@@ -91,10 +94,10 @@ const entries: KnowledgeEntryInput[] = [
       "La candidata pide condiciones fuera de la politica."
     ],
     requiresHumanReview: false,
-    version: "commercial-revenue-share-general-2026-06-10.1",
+    version: "commercial-revenue-share-general-2026-06-12.2",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-10"
+    updatedAt: "2026-06-12"
   },
   {
     id: "commercial-revenue-share-settlement",
@@ -107,24 +110,25 @@ const entries: KnowledgeEntryInput[] = [
       "Alex calcula manualmente cada liquidacion."
     ],
     approvedAnswerPoints: [
+      // Solo la cadencia general (analisis 2026-06-10): el metodo de pago concreto (Skrill) y el
+      // calculo manual son tecnicismos de liquidacion que salen de los puntos de cara a la candidata.
       "La liquidacion va cada 14 dias desde que la cuenta genera ingresos.",
-      "La plataforma te paga a ti y despues se paga a Rose Models por Skrill.",
-      "Alex calcula cada liquidacion manualmente."
+      "La plataforma te paga a ti directamente y despues se hace la liquidacion con la agencia."
     ],
     prohibitedClaims: [
       "Prometer automatizacion de pagos.",
       "Pedir datos de pago sensibles por chat inicial.",
       "Prometer una fecha exacta de ingresos."
     ],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["settlement", "skrill", "payment", "revenue-share"],
     mandatoryNuances: ["Explicar solo si pregunta.", "No pedir informacion sensible de pago en esta fase."],
     escalationConditions: ["Pide excepciones de pago.", "Pide condiciones no previstas."],
     requiresHumanReview: false,
-    version: "commercial-revenue-share-settlement-2026-06-09.1",
+    version: "commercial-revenue-share-settlement-2026-06-12.2",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-06-12"
   },
   {
     id: "commercial-why-agency-70",
@@ -137,15 +141,15 @@ const entries: KnowledgeEntryInput[] = [
       "Porque Rose Models se encarga de la parte operativa: cuentas, trafico, publicacion, chatting, monetizacion y estrategia."
     ],
     prohibitedClaims: ["Dar una explicacion excesivamente larga.", "Prometer resultados concretos."],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["percentage", "why-70", "services"],
     mandatoryNuances: ["Responder breve.", "No prometer ingresos."],
     escalationConditions: ["La candidata discute o negocia condiciones."],
     requiresHumanReview: false,
-    version: "commercial-why-agency-70-2026-06-09.1",
+    version: "commercial-why-agency-70-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-06-12"
   },
   {
     id: "commercial-non-payment",

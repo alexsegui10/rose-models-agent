@@ -151,6 +151,43 @@ describe("new knowledge entries from real conversation synthesis (2026-06-10)", 
     expect(withDrafts.map((entry) => entry.id)).toContain("faq-synthetic-draft");
   });
 
+  // Iteracion 3, taxonomia 6: la CTA de llamada con cobertura ("si vemos que encaja", "2 a 10
+  // minutos") es anti-canon. El Alex real agenda directo: "si me dices un dia y una hora lo agendamos".
+  it("uses a direct scheduling CTA in the call entry, never the hedged corporate one", () => {
+    const entry = businessKnowledgeEntries.find((candidate) => candidate.id === "call-details-after-review");
+    expect(entry).toBeDefined();
+    expect(entry?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("si vemos que encaja"))).toBe(false);
+    expect(entry?.approvedAnswerPoints.some((point) => point.includes("2 a 10 minutos"))).toBe(false);
+    expect(entry?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("whatsapp"))).toBe(true);
+  });
+
+  // Iteracion 3, taxonomia 4: la linea tecnica del neto y la tercera persona ("Alex calcula...")
+  // salen de los puntos aprobados; la respuesta general canonica es "Solemos trabajar a porcentaje".
+  it("keeps the general money answer canonical and the technical settlement details out of approved points", () => {
+    const general = businessKnowledgeEntries.find((candidate) => candidate.id === "commercial-revenue-share-general");
+    expect(general?.approvedAnswerPoints.some((point) => point.includes("Solemos trabajar a porcentaje"))).toBe(true);
+    expect(general?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("neto despues de la comision"))).toBe(
+      false
+    );
+    // La cifra exacta sigue disponible SOLO como punto condicionado a la pregunta explicita.
+    expect(general?.approvedAnswerPoints.some((point) => point.includes("70%") && point.includes("30%"))).toBe(true);
+
+    const settlement = businessKnowledgeEntries.find((candidate) => candidate.id === "commercial-revenue-share-settlement");
+    expect(settlement?.approvedAnswerPoints.some((point) => point.includes("Alex"))).toBe(false);
+    expect(settlement?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("skrill"))).toBe(false);
+    expect(settlement?.approvedAnswerPoints.some((point) => point.includes("14 dias"))).toBe(true);
+  });
+
+  // Iteracion 3, taxonomia 2 (r11-t1/t2): "Podrian explicar solo x mensaje?" tiene rama documentada
+  // (r12: "Claro! Te explico todo por aqui sin problema") y debe recuperar el pitch operativo.
+  it("retrieves the services pitch when she asks to be told everything by message instead of a call", async () => {
+    const byMessage = await retrieveFor("Podrian explicarme todo solo x mensaje?");
+    expect(byMessage.map((entry) => entry.id)).toContain("services-agency-management");
+
+    const noCalls = await retrieveFor("No quiero llamadas, me lo puedes explicar por aqui?");
+    expect(noCalls.map((entry) => entry.id)).toContain("services-agency-management");
+  });
+
   it("forbids repeating the real 75/25 anomaly and proactive salary offers in the commercial policy", () => {
     const revenueShare = businessKnowledgeEntries.find((entry) => entry.id === "commercial-revenue-share-general");
     expect(revenueShare?.prohibitedClaims.some((claim) => claim.includes("75% agencia / 25% para ti"))).toBe(true);

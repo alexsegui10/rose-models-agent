@@ -17,13 +17,13 @@ const entries: KnowledgeEntryInput[] = [
     prohibitedClaims: ["Prometer aceptacion automatica.", "Detallar criterios fisicos de seleccion."],
     mandatoryNuances: ["La valoracion del perfil la hace el equipo humano, no se comunica un criterio fisico."],
     escalationConditions: ["La candidata pide los criterios exactos de seleccion o discute una valoracion."],
-    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING"],
+    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["faq", "process", "selection"],
     requiresHumanReview: false,
-    version: "faq-selection-process-2026-06-11.1",
+    version: "faq-selection-process-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-11"
+    updatedAt: "2026-06-12"
   },
   {
     id: "faq-target-countries",
@@ -43,13 +43,13 @@ const entries: KnowledgeEntryInput[] = [
       "El espanol se refiere al publico comprador; las candidatas pueden ser de cualquier pais hispanohablante."
     ],
     escalationConditions: ["La candidata pide garantias contractuales sobre el origen del trafico."],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["faq", "countries", "market"],
     requiresHumanReview: false,
-    version: "faq-target-countries-2026-06-11.1",
+    version: "faq-target-countries-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-11"
+    updatedAt: "2026-06-12"
   }
 ];
 

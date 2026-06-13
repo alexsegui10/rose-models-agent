@@ -29,7 +29,7 @@ import type {
 } from "./llmProvider";
 import { promptRegistry } from "./promptRegistry";
 import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
-import { buildResponsePlan } from "./responsePlanner";
+import { buildResponsePlan, PHONE_QUESTION } from "./responsePlanner";
 import { safeFallbackResponse, validateAgentResponse } from "./responseValidator";
 import { buildStyleContext, immediateObjectiveFor, type BuiltStyleContext } from "./styleContextBuilder";
 import { DeterministicResponseStyleEvaluator, type ResponseStyleEvaluator } from "./styleEvaluator";
@@ -124,6 +124,9 @@ export class ConversationEngine {
     await this.dependencies.repository.saveCandidate(activeCandidate);
 
     const recentMessages = await this.dependencies.repository.listMessages(activeCandidate.id, 8);
+    // Ventana ancha SOLO para el guard anti-repeticion del planner: con 8 mensajes una pregunta
+    // capada "resucitaba" en cuanto salia de la ventana (bucle real de "Como te llamas?" x11).
+    const plannerHistory = await this.dependencies.repository.listMessages(activeCandidate.id, 30);
     const modelUnderstanding = await this.dependencies.understandingProvider.understand({
       candidateState: activeCandidate.currentState,
       knownData: knownDataForModel(activeCandidate),
@@ -134,7 +137,7 @@ export class ConversationEngine {
     // los omita: la extraccion deterministica rellena SOLO los campos que el modelo dejo vacios.
     const escalationFilter = suppressBenignModelEscalation(
       resolveContextualDecline(
-        mergeDeterministicExtraction(modelUnderstanding, groupedMessage.content),
+        mergeDeterministicExtraction(modelUnderstanding, groupedMessage.content, lastAgentMessageContent(recentMessages)),
         lastAgentMessageContent(recentMessages),
         groupedMessage.content
       ),
@@ -190,7 +193,7 @@ export class ConversationEngine {
       inboundMessage: groupedMessage.content,
       knowledgeEntries,
       hasApprovedNegotiationDecision: Boolean(approvedNegotiationDecision),
-      recentAgentMessages: recentMessages.filter((message) => message.role === "agent").map((message) => message.content),
+      recentAgentMessages: plannerHistory.filter((message) => message.role === "agent").map((message) => message.content),
       isOpenerTurn
     });
 
@@ -672,7 +675,7 @@ function generateResponse(
   }
 
   if (responsePlan.uncoveredQuestion) {
-    return "Esa parte prefiero comentarla con mi socio para darte la informacion correcta. Se lo consulto y te digo.";
+    return "Eso dejame que lo hable con mi socio y te digo.";
   }
 
   if (responsePlan.answerFacts.length > 0 && isBusinessAnswerIntent(understanding, responsePlan)) {
@@ -687,11 +690,13 @@ function generateResponse(
 
   // La llamada es el objetivo del funnel: con edad confirmada se avanza hacia ella en vez de
   // volver a cualificar (fallo real de iteracion 1: el bot ignoraba telefonos y propuestas de hora).
+  // La pregunta la decide el plan (guion pendiente, dia/hora o telefono); aqui no se inventa otra.
   if (understanding.intent === "REQUESTS_CALL" && candidate.currentState !== "APPROVED") {
     if (candidate.age && candidate.isAdultConfirmed) {
-      return candidate.phone
-        ? "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada."
-        : `Perfecto, agendamos una llamada y te lo explicamos todo bien.\n\n${responsePlan.questionToAsk ?? "Me puedes pasar tu numero de telefono?"}`;
+      if (candidate.phone) return "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada.";
+      return responsePlan.questionToAsk
+        ? `Perfecto, agendamos una llamada y te lo explicamos todo bien.\n\n${responsePlan.questionToAsk}`
+        : "Perfecto, agendamos una llamada y te lo explicamos todo bien.";
     }
     return "Claro, podemos agendar una llamada y te lo explico todo bien.\n\nAntes dime una cosa, que edad tienes?";
   }
@@ -706,11 +711,18 @@ function generateResponse(
     return "Lo entiendo, es normal querer mirarlo con calma.\n\nPara no hacerte perder el tiempo, primero dime una cosa: que edad tienes?";
   }
 
+  // Cierre de agenda: el plan pide el telefono SOLO cuando la candidata ya propuso un dia/hora
+  // concreto. Se confirma el momento ("quedamos") y se pide el numero, nunca un acuse vacio
+  // (regresion taxonomia 3 iteracion 3: a la propuesta de hora se respondia re-cualificando).
+  if (responsePlan.questionToAsk === PHONE_QUESTION) {
+    return `Perfecto, quedamos asi entonces.\n\n${responsePlan.questionToAsk}`;
+  }
+
   if (responsePlan.questionToAsk) {
     return `${acknowledgementFor(understanding)}\n\n${responsePlan.questionToAsk}`;
   }
 
-  return "Perfecto. Cualquier duda que tengas me dices sin problema.";
+  return "Perfecto, cualquier duda que tengas me dices sin problema.";
 }
 
 /**
@@ -740,20 +752,22 @@ function humanInterventionResponse(
     return "Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso.";
   }
 
+  // Guion real del gate de movil (halago/obstaculo/solucion, sin lenguaje corporativo tipo
+  // "incorporacion"): "con ese movil no podemos trabajar / no has pensado en cambiartelo".
   if (candidate.deviceEligibility === "NOT_ELIGIBLE") {
-    return "Con un movil de mala calidad no podriamos avanzar con la incorporacion. Si tienes pensado cambiarlo pronto, dimelo y lo podemos valorar.";
+    return "Lamentablemente con ese movil no podemos trabajar, es muy importante la calidad de fotos y videos.\n\nNo has pensado en cambiarte el movil? Si lo consigues estariamos encantados.";
   }
 
   if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
-    return "Ese movil tendriamos que revisarlo con una prueba de calidad antes de confirmar incorporacion. Podemos seguir valorando el perfil y verlo bien.";
+    return "Ese movil lo tendriamos que valorar bien, Instagram penaliza mucho la calidad de las fotos.\n\nPodemos seguir viendo tu perfil igualmente y lo miramos.";
   }
 
   if (candidate.deviceEligibility === "PENDING_UPGRADE") {
-    return "Podemos hacer la llamada igualmente, pero la incorporacion quedaria pendiente hasta que tengas el dispositivo adecuado.";
+    return "Podemos hacer la llamada igualmente y cuando tengas el movil nuevo lo vemos.";
   }
 
   if (responsePlan.uncoveredQuestion) {
-    return "Esa parte prefiero comentarla con mi socio para darte la informacion correcta. Se lo consulto y te digo.";
+    return "Eso dejame que lo hable con mi socio y te digo.";
   }
 
   // Conocimiento oficial respondible: se responde aunque el caso siga derivado al socio.
@@ -784,10 +798,11 @@ function canonicalOpener(candidate: Candidate): string {
   return "Hola, buenos dias soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.";
 }
 
+// Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.
 function acknowledgementFor(understanding: ModelConversationOutput): string {
-  if (understanding.intent === "UNCLEAR") return "Okeyy.";
-  if (Object.keys(understanding.extractedData).length > 0) return "Perfecto.";
-  return "Vale pues.";
+  if (understanding.intent === "UNCLEAR") return "Okeyy";
+  if (Object.keys(understanding.extractedData).length > 0) return "Perfecto";
+  return "Vale pues";
 }
 
 function businessResponseFromPlan(responsePlan: ResponsePlan): string {
@@ -795,17 +810,19 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
     responsePlan.knowledgeEntryIds.includes("commercial-revenue-share-general") &&
     responsePlan.answerFacts.some((fact) => fact.includes("70%"))
   ) {
-    const parts = [
-      "El reparto estandar es 70% para Rose Models y 30% para ti.",
-      "Se calcula sobre el neto despues de la comision de la plataforma."
-    ];
+    // Solo se llega aqui ante la pregunta de la cifra EXACTA (invariante 3). Se da el reparto sin
+    // los tecnicismos de liquidacion (neto/comision), que salieron de los puntos de cara a la
+    // candidata en el contenido versionado: el detalle fino se explica en la llamada.
+    const parts = ["El reparto estandar es 70% para Rose Models y 30% para ti."];
     if (responsePlan.questionToAsk) parts.push(responsePlan.questionToAsk);
     return parts.join("\n\n");
   }
 
+  // Respuesta canonica de dinero sin cifra (analisis 2026-06-10): "trabajamos con porcentaje" +
+  // reconducir a la llamada, nunca a palo seco ni derivado al socio (eso provocaba ghosting).
   if (responsePlan.knowledgeEntryIds.includes("commercial-no-fixed-salary")) {
     return withOptionalQuestion(
-      "No funciona como un salario fijo.\n\nVa por reparto y los detalles se explican mejor en llamada para que quede claro.",
+      "Nosotros trabajamos siempre con porcentaje, no con salario fijo.\n\nVa por reparto y en la llamada te lo explicamos todo mejor.",
       responsePlan
     );
   }
@@ -830,8 +847,8 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
   const firstFact = responsePlan.answerFacts[0];
   if (!firstFact) {
     return responsePlan.questionToAsk
-      ? `Vale pues.\n\n${responsePlan.questionToAsk}`
-      : "Perfecto. Cualquier duda que tengas me dices sin problema.";
+      ? `Vale pues\n\n${responsePlan.questionToAsk}`
+      : "Perfecto, cualquier duda que tengas me dices sin problema.";
   }
   const secondFact = responsePlan.answerFacts.find((fact) => fact !== firstFact);
   const parts = [firstFact];
@@ -859,7 +876,7 @@ function rewriteFromPlan(responsePlan: ResponsePlan, approvedNegotiationDecision
   }
 
   if (responsePlan.requiresHumanReview || responsePlan.uncoveredQuestion) {
-    return "Esa parte prefiero comentarla con mi socio para darte la informacion correcta. Se lo consulto y te digo.";
+    return "Eso dejame que lo hable con mi socio y te digo.";
   }
 
   return businessResponseFromPlan(responsePlan);
@@ -967,9 +984,15 @@ function tagsForRetrieval(candidate: Candidate, understanding: ModelConversation
 /**
  * Rellena con la extraccion deterministica SOLO los campos de alta precision que el modelo dejo
  * vacios. Evita re-preguntar datos ya dados (movil, pais, telefono LATAM) cuando el modelo los omite.
+ * El ultimo mensaje del agente da contexto: si acaba de pedir el telefono, un numero pelado
+ * ("5550147") es el telefono y no puede volver a pedirse (fallo real del momento de conversion).
  */
-function mergeDeterministicExtraction(understanding: ModelConversationOutput, inboundMessage: string): ModelConversationOutput {
-  const deterministic = extractDeterministicUnderstanding(inboundMessage).extractedData;
+function mergeDeterministicExtraction(
+  understanding: ModelConversationOutput,
+  inboundMessage: string,
+  lastAgentMessage: string | null
+): ModelConversationOutput {
+  const deterministic = extractDeterministicUnderstanding(inboundMessage, { lastAgentMessage }).extractedData;
   const merged: ExtractedCandidateData = { ...understanding.extractedData };
   let changed = false;
   const fill = <K extends keyof ExtractedCandidateData>(key: K): void => {
@@ -1313,13 +1336,14 @@ function suppressBenignModelEscalation(
   };
 }
 
-const acknowledgementTokens = ["Perfecto.", "Okeyy.", "Vale pues.", "Entiendo."];
+const leadingAcknowledgementPattern = /^(Perfecto|Okeyy|Vale pues|Entiendo)\.?/;
 
 /**
  * El Alex real nunca repite un mensaje caracter a caracter. Si la respuesta planificada es
- * identica al ultimo mensaje del agente, se varia de forma determinista y segura: acuse
- * alternativo si hay pregunta de slot, derivacion honesta si el plan exige socio, o un acuse
- * corto en el resto de casos.
+ * identica al ultimo mensaje del agente, se varia de forma determinista y segura: respuesta de
+ * negocio del plan si hay hechos aprobados (nunca un "Okeyy" vacio ante una pregunta respondible),
+ * acuse alternativo si hay pregunta de slot, derivacion honesta si el plan exige socio, o un
+ * acuse corto en el resto de casos.
  */
 function withoutVerbatimRepetition(response: string, lastAgentMessage: string | null, responsePlan: ResponsePlan): string {
   if (!lastAgentMessage || normalizeText(response.trim()) !== normalizeText(lastAgentMessage.trim())) {
@@ -1337,18 +1361,26 @@ function withoutVerbatimRepetition(response: string, lastAgentMessage: string | 
     }
   }
 
-  return normalizeText(lastAgentMessage).startsWith("okeyy") ? "Vale pues." : "Okeyy.";
-}
-
-function swapLeadingAcknowledgement(response: string): string {
-  for (const token of acknowledgementTokens) {
-    if (response.startsWith(token)) {
-      const replacement = token === "Okeyy." ? "Vale pues." : "Okeyy.";
-      return `${replacement}${response.slice(token.length)}`;
+  // Con hechos aprobados en el plan, la variante segura es responderlos (fallo real: "Okeyy."
+  // vacio justo cuando preguntaba por los pagos).
+  if (responsePlan.answerFacts.length > 0) {
+    const planAnswer = businessResponseFromPlan(responsePlan);
+    if (normalizeText(planAnswer.trim()) !== normalizeText(lastAgentMessage.trim())) {
+      return planAnswer;
     }
   }
 
-  return `Okeyy.\n\n${response}`;
+  return normalizeText(lastAgentMessage).startsWith("okeyy") ? "Vale pues" : "Okeyy";
+}
+
+function swapLeadingAcknowledgement(response: string): string {
+  const match = response.match(leadingAcknowledgementPattern);
+  if (match) {
+    const replacement = match[1] === "Okeyy" ? "Vale pues" : "Okeyy";
+    return `${replacement}${response.slice(match[0].length)}`;
+  }
+
+  return `Okeyy\n\n${response}`;
 }
 
 const explicitDeclinePattern =

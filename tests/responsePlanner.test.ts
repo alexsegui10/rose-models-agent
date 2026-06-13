@@ -81,6 +81,23 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
     });
     expect(planFor({ candidate }).questionToAsk).toBe("Por cierto, de que pais eres?");
   });
+
+  // El "Que disponibilidad tendrias para crear contenido durante la semana?" corporativo no existe
+  // en el canon de Alex (juez iteracion 3): la pregunta de tiempo se reformula en su registro.
+  it("asks availability with Alex-like phrasing, never the corporate wording", () => {
+    const candidate = candidateWith({
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      hasOnlyFans: true,
+      worksWithAnotherAgency: false,
+      deviceEligibility: "APPROVED",
+      country: "Argentina"
+    });
+    const plan = planFor({ candidate });
+    expect(plan.questionToAsk).toBe("Cuanto tiempo le podrias dedicar a esto a la semana?");
+    expect(plan.questionToAsk).not.toContain("disponibilidad");
+  });
 });
 
 describe("responsePlanner no-repeat guard (mata el bucle degenerado de iteracion 1)", () => {
@@ -138,7 +155,9 @@ describe("responsePlanner opener turn (gate-first: nada de preguntas antes del o
 });
 
 describe("responsePlanner phone ask in HUMAN_INTERVENTION_REQUIRED (playbook 1.7)", () => {
-  it("asks for the phone when an adult confirms the call while waiting on the socio", () => {
+  // Actualizado 2026-06-12: el test anterior validaba el comportamiento BUGGY (pedir el numero
+  // sin dia/hora acordado). El guion real es pitch -> dia/hora -> telefono.
+  it("asks for the day and hour first when an adult confirms the call without proposing a time", () => {
     const candidate = candidateWith({
       currentState: "HUMAN_INTERVENTION_REQUIRED",
       firstName: "Carla",
@@ -149,6 +168,21 @@ describe("responsePlanner phone ask in HUMAN_INTERVENTION_REQUIRED (playbook 1.7
       candidate,
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "Si, me gustaria hacer la llamada"
+    });
+    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
+  });
+
+  it("asks for the phone once the candidate proposes a concrete time while waiting on the socio", () => {
+    const candidate = candidateWith({
+      currentState: "HUMAN_INTERVENTION_REQUIRED",
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
+      inboundMessage: "Si, me gustaria hacer la llamada manana a las 11"
     });
     expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
   });
@@ -196,7 +230,9 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBeNull();
   });
 
-  it("asks for the phone number when an adult candidate requests the call", () => {
+  // Actualizado 2026-06-12: pedir el numero nada mas oir "llamada" era el fallo nº1 de los jueces
+  // (acoso telefonico prematuro). El orden real: guion -> dia/hora -> telefono.
+  it("keeps the qualification script when the call is requested without a time and slots are missing", () => {
     const candidate = candidateWith({ age: 27, isAdultConfirmed: true });
     const plan = planFor({
       candidate,
@@ -205,7 +241,96 @@ describe("responsePlanner question gating", () => {
       knowledgeEntries: [entryById("call-details-after-review")]
     });
     expect(plan.requiresHumanReview).toBe(false);
+    expect(plan.questionToAsk).toBe("Como te llamas?");
+  });
+
+  it("asks for day and hour when the call is requested and the script is complete", () => {
+    const candidate = candidateWith({
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      hasOnlyFans: true,
+      worksWithAnotherAgency: false,
+      deviceEligibility: "APPROVED",
+      country: "Argentina",
+      contentAvailability: "Por las tardes"
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
+      inboundMessage: "Podemos hacer la llamada?",
+      knowledgeEntries: [entryById("call-details-after-review")]
+    });
+    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
+  });
+
+  it("asks for the phone as soon as the candidate proposes a concrete day or hour", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
+      inboundMessage: "El domingo a las 11 am me viene bien"
+    });
     expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
+  });
+
+  it("treats a bare time proposal as call confirmation when the agent already proposed the call", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "OTHER" }),
+      inboundMessage: "Domingo 11 am?",
+      recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+    });
+    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
+  });
+
+  // Regresion del stall-loop de la iteracion 3 (r14-t7/t8, r15-t11/t12): con el si a la llamada
+  // sobre la mesa, los slots tardios opcionales (pais, disponibilidad) NUNCA bloquean el cierre;
+  // se cubren en la propia llamada.
+  it("skips the optional late slots and asks for day and hour once the call is confirmed", () => {
+    const candidate = candidateWith({
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      hasOnlyFans: true,
+      worksWithAnotherAgency: false,
+      deviceEligibility: "APPROVED"
+      // pais y disponibilidad ausentes a proposito: no deben preguntarse aqui
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
+      inboundMessage: "Si, hagamos la llamada"
+    });
+    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
+  });
+
+  it("still finishes the essential script (OF pendiente) before scheduling the call", () => {
+    const candidate = candidateWith({
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      worksWithAnotherAgency: false,
+      deviceEligibility: "APPROVED"
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
+      inboundMessage: "Si, hagamos la llamada"
+    });
+    expect(plan.questionToAsk).toBe("Tienes of o has tenido alguna vez?");
+  });
+
+  it("never asks for the phone more than twice (anti acoso telefonico)", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
+      inboundMessage: "Hoy a las 18 mejor",
+      recentAgentMessages: ["Me puedes pasar tu numero de telefono?", "Pasame tu numero de telefono"]
+    });
+    expect(plan.questionToAsk).toBeNull();
   });
 
   it("asks nothing more when the call is requested and the phone is already saved", () => {

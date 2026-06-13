@@ -24,13 +24,20 @@ const entries: KnowledgeEntryInput[] = [
     ],
     mandatoryNuances: ["El plazo es orientativo y depende del crecimiento de la cuenta."],
     escalationConditions: ["La candidata exige compromisos de fechas o de ingresos por escrito."],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE"],
+    allowedStates: [
+      "NEW_LEAD",
+      "QUALIFYING",
+      "APPROVED",
+      "COLLECTING_CALL_DETAILS",
+      "READY_TO_SCHEDULE",
+      "HUMAN_INTERVENTION_REQUIRED"
+    ],
     tags: ["launch", "timeline", "warmup"],
     requiresHumanReview: false,
-    version: "launch-timeline-2026-06-11.1",
+    version: "launch-timeline-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-11"
+    updatedAt: "2026-06-12"
   }
 ];
 

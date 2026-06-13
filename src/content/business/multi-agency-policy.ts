@@ -30,13 +30,13 @@ const entries: KnowledgeEntryInput[] = [
       "La otra agencia trabaja trafico espanol: conflicto de mercado que decide Alex.",
       "Dudas de exclusividad o de condiciones contractuales con la otra agencia."
     ],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["multi-agency", "agencies", "market-conflict", "qualification"],
     requiresHumanReview: false,
-    version: "multi-agency-different-traffic-2026-06-10.1",
+    version: "multi-agency-different-traffic-2026-06-12.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-10"
+    updatedAt: "2026-06-12"
   }
 ];
 

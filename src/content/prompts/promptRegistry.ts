@@ -7,9 +7,9 @@ export const promptRegistry = {
   },
   drafting: {
     id: "rose-drafting",
-    version: "drafting-2026-06-12.1",
+    version: "drafting-2026-06-12.2",
     purpose:
-      "Redactar la respuesta final como Alex en primera persona: responder primero con conocimiento aprobado (tambien en intervencion humana), socio solo para lo pendiente, una sola pregunta principal, sin repetir mensajes ni despedirse sin guion."
+      "Redactar la respuesta final como Alex en primera persona: responder primero con conocimiento aprobado (tambien en intervencion humana), socio solo para lo pendiente, exactamente la pregunta principal del plan sin re-preguntar memoria, telefono solo tras dia/hora, un solo acuse sin punto y dinero con 'trabajamos con porcentaje' sin cifra."
   },
   humanReview: {
     id: "rose-human-review",

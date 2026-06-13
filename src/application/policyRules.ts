@@ -68,13 +68,17 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
   )
     return "PENDING_UPGRADE";
   if (/\b(viejo|malo|mala calidad|roto|gama baja|android barato|redmi antiguo)\b/.test(normalized)) return "NOT_ELIGIBLE";
+  // Gate real de Alex: Motorola E32 rechazado ("con ese movil no podemos trabajar"). Las familias
+  // moto e/g son gama de entrada; un motorola sin modelo pasa a prueba de calidad.
+  if (/\b(?:motorola|moto)\s?[eg]\s?\d{1,2}(?!\d)/.test(normalized)) return "NOT_ELIGIBLE";
   // (?!\d) en vez de \b: "iphone 13pro max" pega el sufijo al numero y \b no corta entre "13" y "pro".
   if (/\biphone\s?(1[3-9]|[2-9]\d)(?!\d)/.test(normalized)) return "APPROVED";
   if (/\biphone\s?([1-9]|1[0-2])(?!\d)/.test(normalized)) return "PENDING_QUALITY_TEST";
   if (/\b(galaxy\s?s2[3-9]|samsung\s?s2[3-9])\b/.test(normalized)) return "APPROVED";
   if (/\b(pro|max|ultra|gama alta|high end|xiaomi 14|xiaomi 15|pixel 8|pixel 9)\b/.test(normalized))
     return "PENDING_QUALITY_TEST";
-  if (/\b(iphone|samsung|galaxy|android|xiaomi|huawei|oppo|realme|pixel)\b/.test(normalized)) return "PENDING_QUALITY_TEST";
+  if (/\b(iphone|samsung|galaxy|android|xiaomi|huawei|oppo|realme|pixel|motorola|moto)\b/.test(normalized))
+    return "PENDING_QUALITY_TEST";
 
   return "UNKNOWN";
 }
@@ -83,7 +87,7 @@ export function deviceTypeForDescription(description: string): DeviceType {
   const normalized = normalize(description);
   if (/\b(iphone|i phone|ios)\b/.test(normalized)) return "IPHONE";
   if (/\b(samsung|galaxy)\b/.test(normalized)) return "SAMSUNG";
-  if (/\b(android|xiaomi|huawei|oppo|realme|pixel|movil|telefono)\b/.test(normalized)) return "OTHER";
+  if (/\b(android|xiaomi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono)\b/.test(normalized)) return "OTHER";
   return "UNKNOWN";
 }
 
