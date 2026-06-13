@@ -284,21 +284,24 @@ const rawExamples: ConversationExampleInput[] = [
     id: "example-real-provides-phone-early-1",
     category: "provides-phone",
     sourceType: "ALEX_APPROVED",
-    title: "La candidata da el telefono antes de tiempo",
+    title: "La candidata da el telefono",
     description:
-      "Ensamblado con muletillas y marco reales de Alex (acuse corto + 'preguntas rapidas y luego agendamos la llamada'): reconoce el dato sin perderlo y mantiene el orden del proceso. Telefono falso con formato argentino realista.",
+      "Con el telefono ya apuntado, Alex confirma y deriva al socio para agendar; nunca reabre el guion de cualificacion (fallo real corregido: 'preguntas rapidas... Como te llamas?' reiniciaba el funnel tras tener el dato que lo cierra). Telefono falso con formato argentino realista.",
     candidateContext: { profileVisibility: "PUBLIC", phone: "ANON_PHONE" },
     stateBefore: "QUALIFYING",
     intents: ["PROVIDES_PHONE", "REQUESTS_CALL"],
     messages: [{ role: "candidate", content: "Dale, te dejo mi numero asi me llaman: +54 9 11 5555 0134" }],
-    idealNextResponse:
-      "Okeyy lo apunto\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos la llamada con mi socio\n\nComo te llamas?",
+    idealNextResponse: "Perfecto, lo apunto\n\nLo hablo con mi socio y te digo para agendar la llamada",
     whyItIsGood: [
       "Reconoce el telefono y no lo pierde.",
-      "Mantiene el flujo real: preguntas rapidas primero, la llamada como objetivo inmediato despues.",
+      "Cierra hacia la llamada: confirma y deriva al socio, sin reabrir el guion ya superado.",
       "La llamada la hace el socio, como en el proceso real."
     ],
-    undesirablePatterns: ["ignorar el telefono", "prometer llamada inmediata sin cualificar"],
+    undesirablePatterns: [
+      "ignorar el telefono",
+      "prometer llamada inmediata sin cualificar",
+      "reiniciar la cualificacion ('te hago unas preguntas rapidas', 'Como te llamas?') tras tener el telefono"
+    ],
     tags: ["phone", "call", "qualifying"],
     approvedByAlex: true,
     qualityScore: 0.9,

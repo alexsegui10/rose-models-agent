@@ -203,9 +203,13 @@ function createAnonymizer(participantName, folderName) {
     text = text.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[enlace]");
     text = text.replace(/@[A-Za-z0-9._]{2,}/g, "");
     for (const regex of replacers) text = text.replace(regex, inventedName);
-    text = text.replace(/\+?\d(?:[\s().\-]?\d){6,}/g, (match) => {
-      const fakeTail = String((seed + 17 * phoneCount++) % 100).padStart(2, "0");
-      return /[^\d]/.test(match) ? `555-01${fakeTail}` : `55501${fakeTail}`;
+    // Telefono falso PERO con longitud/prefijo validos para el extractor del bot (Argentina
+    // +54 9 11 5550 1XX = 10 digitos tras el prefijo). El "55501" mantiene el marcador "obviamente
+    // falso" dentro de un numero que el funnel acepta como telefono real. Un 7-digitos pelado
+    // ("5550107") era demasiado corto y el bot lo rechazaba ("no me cuadra para llamarte").
+    text = text.replace(/\+?\d(?:[\s().\-]?\d){6,}/g, () => {
+      const fakeTail = String((seed + 17 * phoneCount++) % 1000).padStart(3, "0");
+      return `+54 9 11 5550 1${fakeTail}`;
     });
     return text.replace(/[ \t]{3,}/g, " ").trim();
   };

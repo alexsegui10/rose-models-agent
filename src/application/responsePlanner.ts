@@ -232,6 +232,13 @@ function questionToAskFor(
   // Opener canonico (primer turno de un lead nuevo): presentacion + gate/marco, sin preguntas.
   if (input.isOpenerTurn && candidate.currentState === "NEW_LEAD") return null;
   if (candidate.age && candidate.age < 18) return null;
+  // BUG A (replay-1 T22, replay-3 T15, replay-14 T9): una vez capturado el telefono el funnel NO
+  // se reabre. Sin esto el planner seguia pidiendo slots pendientes (OF, agencias, movil) o incluso
+  // el nombre, reiniciando el guion despues de tener el dato que cierra la conversacion hacia la
+  // llamada. El cierre (confirmar + derivar al socio) lo redacta el motor; aqui solo se silencia
+  // cualquier pregunta de cualificacion. No debilita ninguna escalada: si el turno requiere humano
+  // ya retorno null arriba.
+  if (candidate.phone) return null;
   // En intervencion humana no se cualifica, pero cerrar la llamada (dia/hora y despues el numero)
   // no decide nada de negocio y es obligatorio en el guion real (se le olvido dos veces a Alex).
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {

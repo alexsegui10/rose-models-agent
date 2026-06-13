@@ -381,6 +381,50 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBeNull();
   });
 
+  // Regresion BUG A (replay-1 T22, replay-3 T15, replay-14 T9): una vez capturado el telefono de
+  // una adulta confirmada, el bot NUNCA reabre el guion de cualificacion (nombre, edad, slots).
+  // Antes seguia preguntando slots pendientes y reiniciaba el funnel.
+  it("never reopens qualification slots once the phone is captured for an adult (QUALIFYING)", () => {
+    // Candidata adulta con telefono pero con slots aun pendientes (sin OF, sin agencias, sin movil):
+    // el telefono cierra el guion, no se vuelve a preguntar nada.
+    const candidate = candidateWith({
+      age: 31,
+      isAdultConfirmed: true,
+      phone: "5491123456789"
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "OTHER" }),
+      inboundMessage: "Si"
+    });
+    expect(plan.questionToAsk).toBeNull();
+  });
+
+  it("never asks the name again after the phone is captured even if firstName is still empty", () => {
+    const candidate = candidateWith({ age: 31, isAdultConfirmed: true, phone: "5491123456789" });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "OTHER" }),
+      inboundMessage: "Listo"
+    });
+    expect(plan.questionToAsk).toBeNull();
+  });
+
+  it("never asks slots once the phone is captured in HUMAN_INTERVENTION_REQUIRED", () => {
+    const candidate = candidateWith({
+      currentState: "HUMAN_INTERVENTION_REQUIRED",
+      age: 31,
+      isAdultConfirmed: true,
+      phone: "5491123456789"
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "OTHER" }),
+      inboundMessage: "Si gracias"
+    });
+    expect(plan.questionToAsk).toBeNull();
+  });
+
   it("keeps asking the age before any call when age is unknown", () => {
     const plan = planFor({
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),

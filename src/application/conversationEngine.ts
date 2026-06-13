@@ -707,6 +707,15 @@ function generateResponse(
       : "Perfecto, lo apunto.\n\nAntes de organizar la llamada dime una cosa, que edad tienes?";
   }
 
+  // BUG A: con el telefono de una adulta ya capturado y sin pregunta pendiente, el cierre es
+  // confirmar y derivar al socio, NUNCA reabrir el guion ("Como te llamas?" / "preguntas rapidas").
+  // Si todavia falta la edad, no se cierra: se pide la edad (invariante 2).
+  if (candidate.phone && !responsePlan.questionToAsk) {
+    return candidate.age && candidate.isAdultConfirmed
+      ? "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada."
+      : "Perfecto, lo apunto.\n\nAntes de organizar la llamada dime una cosa, que edad tienes?";
+  }
+
   if (candidate.objections.length > 0 && !candidate.age) {
     return "Lo entiendo, es normal querer mirarlo con calma.\n\nPara no hacerte perder el tiempo, primero dime una cosa: que edad tienes?";
   }
@@ -795,6 +804,13 @@ function humanInterventionResponse(
 
   if (understanding.intent === "PROVIDES_PHONE" && candidate.phone) {
     return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada.";
+  }
+
+  // BUG A: el telefono ya esta apuntado; el cierre es confirmar y derivar al socio, jamas reabrir
+  // el guion de cualificacion (replay-1 T22, replay-3 T15, replay-14 T9). No saca de HIR: solo
+  // redacta el acuse de cierre mientras el caso sigue pendiente con el socio.
+  if (candidate.phone && candidate.age && candidate.isAdultConfirmed) {
+    return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada.";
   }
 
   return "Vale, esto lo hablo con mi socio y te digo, no te preocupes.";

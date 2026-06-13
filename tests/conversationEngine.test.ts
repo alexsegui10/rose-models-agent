@@ -787,6 +787,67 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
     expect(result.response.toLowerCase()).not.toContain("cualquier duda");
   });
 
+  // Regresion BUG A (replay-1 T22, replay-3 T15, replay-14 T9): tras capturar el telefono el bot
+  // reiniciaba la cualificacion ("te hago unas preguntas rapidas... Como te llamas?") en vez de
+  // cerrar hacia la llamada. Una vez con telefono, confirma y deriva, sin reabrir el guion.
+  it("does not restart qualification after the phone is captured (confirms and hands off)", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
+    // Adulta con slots aun pendientes (sin OF/agencias/movil): el telefono igualmente cierra el guion.
+    const seeded = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: "lead_no_reinicio", profileVisibility: "PUBLIC" }),
+      currentState: "QUALIFYING",
+      firstName: "Veronica",
+      age: 31,
+      isAdultConfirmed: true
+    });
+
+    const givesPhone = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_no_reinicio",
+      message: "Mi numero es +54 9 11 2345 6789"
+    });
+    expect(givesPhone.candidate.phone).toBe("5491123456789");
+    expect(givesPhone.response.toLowerCase()).toContain("lo apunto");
+    expect(givesPhone.response.toLowerCase()).not.toContain("como te llamas");
+    expect(givesPhone.response.toLowerCase()).not.toContain("preguntas rapidas");
+
+    // Turno siguiente: la candidata responde algo benigno; el bot NO reabre el guion.
+    const followUp = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_no_reinicio",
+      message: "Si gracias"
+    });
+    expect(followUp.response.toLowerCase()).not.toContain("como te llamas");
+    expect(followUp.response.toLowerCase()).not.toContain("preguntas rapidas");
+    expect(followUp.response.toLowerCase()).not.toContain("que edad tienes");
+    expect(followUp.responsePlan.questionToAsk).toBeNull();
+  });
+
+  it("does not restart qualification after the phone is captured in HUMAN_INTERVENTION_REQUIRED", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
+    const seeded = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: "lead_hir_no_reinicio", profileVisibility: "PUBLIC" }),
+      currentState: "HUMAN_INTERVENTION_REQUIRED",
+      firstName: "Veronica",
+      age: 31,
+      isAdultConfirmed: true,
+      phone: "5491123456789"
+    });
+
+    const followUp = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_hir_no_reinicio",
+      message: "Si gracias"
+    });
+
+    expect(followUp.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(followUp.response.toLowerCase()).not.toContain("como te llamas");
+    expect(followUp.response.toLowerCase()).not.toContain("preguntas rapidas");
+    expect(followUp.responsePlan.questionToAsk).toBeNull();
+  });
+
   it("persists DRAFT_ONLY drafts as agent history so playback sees its own questions", async () => {
     const repository = new InMemoryCandidateRepository();
     const engine = new ConversationEngine({
