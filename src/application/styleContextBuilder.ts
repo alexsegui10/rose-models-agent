@@ -36,7 +36,14 @@ export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
     `identidad: ${alexStyleProfile.identity.join(" | ")}`,
     `tono: ${alexStyleProfile.tone.join(", ")}`,
     `forma: ${alexStyleProfile.writingRules.join(" | ")}`,
+    // El doble registro y los typos habituales SON identidad de Alex (decision 2026-06-10). Sin
+    // surfacearlos al prompt la voz quedaba demasiado pulida (juez iteracion 1: "too polished").
+    `registro_vivo: ${alexStyleProfile.registers.live.join(" | ")}`,
+    `registro_plantilla: ${alexStyleProfile.registers.template.join(" | ")}`,
+    `typos_habituales: ${alexStyleProfile.habitualTypos.join(" | ")}`,
+    `muletillas: ${alexStyleProfile.signatureExpressions.join(" | ")}`,
     `prohibido: ${alexStyleProfile.forbiddenExpressions.join(" | ")}`,
+    `evitar: ${alexStyleProfile.undesiredPatterns.join(" | ")}`,
     "",
     "### CURRENT_STATE",
     input.candidate.currentState,
@@ -117,6 +124,10 @@ export function immediateObjectiveFor(state: CandidateState, intent: Conversatio
 
 function memoryForContext(candidate: Candidate): Record<string, string | number | boolean | null | string[]> {
   return {
+    // El nombre conocido DEBE viajar en el contexto: sin el, el modelo re-preguntaba el nombre
+    // (reset de funnel r14/r15) e inventaba la plantilla de rechazo "Si no quieres darme el nombre"
+    // (r11/r12). Tambien habilita el acuse personalizado "Perfecto [nombre]".
+    firstName: candidate.firstName ?? null,
     age: candidate.age ?? null,
     city: candidate.city ?? null,
     country: candidate.country ?? null,

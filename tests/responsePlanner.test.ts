@@ -285,6 +285,44 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
   });
 
+  // Regresion taxonomia nº1/nº6 iteracion 2 (r3 T14, lead-killing): "no ahora no" tras proponer
+  // la llamada es un RECHAZO del momento, no una propuesta de hora. Disparar "Pasame tu numero"
+  // ahi mataba leads vivos. Una hora negada nunca cuenta como propuesta de momento.
+  it("does not treat a negated time ('no ahora no') as a time proposal after the agent proposed the call", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "UNCLEAR" }),
+      inboundMessage: "no ahora no",
+      recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+    });
+    expect(plan.questionToAsk).not.toBe("Me puedes pasar tu numero de telefono?");
+  });
+
+  it("does not treat 'ahora no puedo' or 'hoy no' as a concrete time proposal", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+    for (const message of ["ahora no puedo", "hoy no", "manana no me viene bien"]) {
+      const plan = planFor({
+        candidate,
+        understanding: understandingWith({ intent: "UNCLEAR" }),
+        inboundMessage: message,
+        recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+      });
+      expect(plan.questionToAsk).not.toBe("Me puedes pasar tu numero de telefono?");
+    }
+  });
+
+  it("still treats a real affirmative time ('manana a las 11 si') as a proposal", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "OTHER" }),
+      inboundMessage: "manana a las 11 si",
+      recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+    });
+    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
+  });
+
   // Regresion del stall-loop de la iteracion 3 (r14-t7/t8, r15-t11/t12): con el si a la llamada
   // sobre la mesa, los slots tardios opcionales (pais, disponibilidad) NUNCA bloquean el cierre;
   // se cubren en la propia llamada.

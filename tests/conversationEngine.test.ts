@@ -754,6 +754,39 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
     expect(second.response.toLowerCase()).not.toContain("que edad tienes");
   });
 
+  // Regresion taxonomia nº6 iteracion 2 (r4 T18): cuando la candidata senala que esta lista YA
+  // ("ahora si") y el telefono ya esta guardado, el bot bucleaba "dime dia y hora" o respondia el
+  // dead-end "cualquier duda me dices". El cierre real es el handoff inmediato al socio.
+  it("hands off to the socio when the candidate signals readiness now and the phone is already saved", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: "lead_ahora_si", profileVisibility: "PUBLIC" }),
+      currentState: "QUALIFYING",
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      phone: "5491123456789"
+    });
+    await repository.addMessage({
+      id: crypto.randomUUID(),
+      candidateId: seeded.id,
+      role: "agent",
+      author: "AI_AGENT",
+      content: "Que dia y hora te viene bien para la llamada?",
+      createdAt: new Date()
+    });
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_ahora_si",
+      message: "ahora si"
+    });
+
+    expect(result.response.toLowerCase()).toContain("socio");
+    expect(result.response.toLowerCase()).toContain("llamada");
+    expect(result.response.toLowerCase()).not.toContain("cualquier duda");
+  });
+
   it("persists DRAFT_ONLY drafts as agent history so playback sees its own questions", async () => {
     const repository = new InMemoryCandidateRepository();
     const engine = new ConversationEngine({

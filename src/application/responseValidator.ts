@@ -43,6 +43,9 @@ export function validateAgentResponse(response: string, candidate: Candidate): R
   };
 }
 
+// Registro de Alex (no atencion al cliente): corto, informal, derivando honestamente al socio.
+// El "Gracias por escribirme. Lo reviso un momento y te contesto con calma." anterior rompia el
+// registro y no contestaba nada (taxonomia nº7 iteracion 2, r5 T3).
 export function safeFallbackResponse(): string {
-  return "Gracias por escribirme. Lo reviso un momento y te contesto con calma.";
+  return "Vale, dejame que lo hable con mi socio y te digo.";
 }

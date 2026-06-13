@@ -722,6 +722,17 @@ function generateResponse(
     return `${acknowledgementFor(understanding)}\n\n${responsePlan.questionToAsk}`;
   }
 
+  // Lista YA con el telefono guardado (r4 T18 "ahora si"): el cierre real es el handoff inmediato
+  // al socio, nunca el dead-end "cualquier duda me dices" que dejaba el lead colgado.
+  if (
+    candidate.age &&
+    candidate.isAdultConfirmed &&
+    candidate.phone &&
+    (understanding.intent === "CONFIRMS_INTEREST" || understanding.intent === "REQUESTS_CALL" || understanding.requestsCall)
+  ) {
+    return "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada.";
+  }
+
   return "Perfecto, cualquier duda que tengas me dices sin problema.";
 }
 
@@ -786,7 +797,7 @@ function humanInterventionResponse(
     return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada.";
   }
 
-  return "Gracias por decirmelo. Esto prefiero revisarlo con mi socio antes de darte una respuesta, asi que lo miro y te escribo con calma.";
+  return "Vale, esto lo hablo con mi socio y te digo, no te preocupes.";
 }
 
 /** Opener canonico (plantillas reales de Alex): identidad + validacion de perfil o gate + marco. */
@@ -823,6 +834,21 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
   if (responsePlan.knowledgeEntryIds.includes("commercial-no-fixed-salary")) {
     return withOptionalQuestion(
       "Nosotros trabajamos siempre con porcentaje, no con salario fijo.\n\nVa por reparto y en la llamada te lo explicamos todo mejor.",
+      responsePlan
+    );
+  }
+
+  // Mercado objetivo ("trabajais con trafico de Espana?", r3 T18): la rationale es el publico
+  // comprador espanol por su poder adquisitivo, NUNCA el fragmento corporativo why-70 ni la
+  // formulacion discriminatoria "solo espanolas". Se exige que la FAQ how-it-works NO este en
+  // juego: "Como funciona el proceso?" arrastraba faq-target-countries como entrada secundaria y
+  // devolvia la rationale de mercado en vez del como-funciona.
+  if (
+    responsePlan.knowledgeEntryIds.includes("faq-target-countries") &&
+    !responsePlan.knowledgeEntryIds.includes("faq-how-it-works-covered")
+  ) {
+    return withOptionalQuestion(
+      "Si, trabajamos sobre todo con trafico espanol porque el publico de Espana tiene mas poder adquisitivo.\n\nTu puedes ser de cualquier pais, el espanol es el comprador.",
       responsePlan
     );
   }

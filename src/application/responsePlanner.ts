@@ -31,6 +31,16 @@ const scheduleAskPattern = /que dia y hora/;
 // Propuesta de momento concreto (dia, hora o "cuando quieras") en el mensaje de la candidata.
 const timeProposalPattern =
   /\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo|hoy|manana|mediodia|tarde|noche|madrugada|ahora)\b|\b\d{1,2}[:.]\d{2}\b|\b\d{1,2}\s?(?:am|pm|hs|h|horas)\b|\ba las \d{1,2}\b|\bcuando (?:quieras|quieran|puedas|puedan|sea)\b/;
+// Rechazo del momento propuesto ("no ahora", "ahora no", "hoy no", "manana no me viene bien"): la
+// palabra de tiempo va negada y NO es una propuesta. Sin esto, "no ahora no" disparaba "Pasame tu
+// numero" y mataba leads vivos (taxonomia nº1/nº6 iteracion 2, r3 T14).
+const negatedTimePattern =
+  /\bno\b[^.!?]{0,12}\b(ahora|hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|mediodia)\b|\b(ahora|hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|mediodia)\b[^.!?]{0,15}\bno\b/;
+
+/** Una propuesta de momento real: hay palabra de tiempo y no esta negada. */
+function proposesConcreteTime(message: string): boolean {
+  return timeProposalPattern.test(message) && !negatedTimePattern.test(message);
+}
 
 interface QualificationSlot {
   id: string;
@@ -206,7 +216,7 @@ function questionToAskFor(
   const message = normalize(input.inboundMessage);
   const recentAgentMessages = (input.recentAgentMessages ?? []).map(normalize);
   const adultConfirmed = Boolean(candidate.age && candidate.isAdultConfirmed);
-  const proposesTime = timeProposalPattern.test(message);
+  const proposesTime = proposesConcreteTime(message);
   // El "Domingo 11 am?" suelto tras proponer el agente la llamada ES una confirmacion de llamada,
   // aunque el modelo clasifique OTHER (fallo real: se perdia la propuesta de hora de la candidata).
   // Solo cuenta el ULTIMO mensaje del agente: un "manana" suelto turnos despues no es una hora.

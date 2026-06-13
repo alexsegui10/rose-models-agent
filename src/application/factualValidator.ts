@@ -56,6 +56,16 @@ export function validateFactualResponse(response: string, plan: ResponsePlan): F
     }
   }
 
+  // Guard semantico de la politica de cara (invariante de negocio innegociable). Los prohibitedClaims
+  // de la entrada de cara DESCRIBEN la conducta prohibida ("Prometer difuminar, tapar o recortar la
+  // cara como alternativa"), no son frases que el modelo vaya a copiar literalmente, asi que el
+  // containsLoose nunca cazaba la violacion real de replay-4 T12 ("para que no salga tu cara").
+  // Cuando la entrada de cara esta en juego, una promesa de ocultar/difuminar la cara o de trabajar
+  // en anonimato contradice "la cara es imprescindible" y debe fallar la validacion factual.
+  if (facePolicyInPlay(plan) && promisesFaceConcealment(response)) {
+    reasons.push("La respuesta contradice la politica de cara imprescindible (promete ocultar la cara o anonimato).");
+  }
+
   if (plan.uncoveredQuestion && !/socio|consult/i.test(response)) {
     reasons.push("La pregunta no cubierta debe derivarse a revision humana.");
   }
@@ -77,4 +87,37 @@ function hasAllowedContractClaim(plan: ResponsePlan): boolean {
 
 function containsLoose(response: string, claim: string): boolean {
   return response.toLowerCase().includes(claim.toLowerCase());
+}
+
+function facePolicyInPlay(plan: ResponsePlan): boolean {
+  return (
+    plan.knowledgeEntryIds.includes("face-requirement-mandatory") ||
+    plan.prohibitedClaims.some((claim) => /cara/i.test(claim) && /(difuminar|anonim|recortar|tapar)/i.test(claim))
+  );
+}
+
+/**
+ * Detecta una promesa de ocultar la cara o trabajar en anonimato, sea cual sea la formulacion exacta
+ * del modelo: "para que no salga tu cara", "sin mostrar la cara", "difuminamos tu cara", "anonimato".
+ */
+function promisesFaceConcealment(response: string): boolean {
+  const normalized = response
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+
+  if (/\banonimat[oa]\b/.test(normalized)) return true;
+  if (
+    /\b(difumin|pixel|tap(?:ar|amos)|recort|oscurec|borr(?:ar|amos)|ocult(?:ar|amos))\w*\b[^.!?]{0,30}\bcara\b/.test(normalized)
+  ) {
+    return true;
+  }
+  if (/\bcara\b[^.!?]{0,30}\b(difumin|pixel|tapad|recortad|oscurecid|borrad|ocult)\w*/.test(normalized)) return true;
+  // Promesas de que la cara no aparece / no se ve / no hace falta mostrarla.
+  if (/\b(no\s+(?:saldra|sale|salga|aparece|aparecera|se\s+ve|se\s+vera))\b[^.!?]{0,20}\bcara\b/.test(normalized)) return true;
+  if (/\bcara\b[^.!?]{0,20}\bno\s+(?:saldra|sale|salga|aparece|aparecera|se\s+ve|se\s+vera)\b/.test(normalized)) return true;
+  if (/\bsin\s+(?:mostrar|ensenar|que\s+se\s+vea)\b[^.!?]{0,15}\bcara\b/.test(normalized)) return true;
+  if (/\bno\s+(?:hace\s+falta|necesitas|tienes\s+que)\s+(?:mostrar|ensenar)\b[^.!?]{0,15}\bcara\b/.test(normalized)) return true;
+
+  return false;
 }

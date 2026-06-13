@@ -68,6 +68,21 @@ describe("knowledge retrieval for the operational pitch", () => {
     });
     expect(entries.map((entry) => entry.id)).toContain("commercial-no-fixed-salary");
   });
+
+  // Regresion taxonomia nº2 iteracion 2 (r3 T18): "trabajan con trafico de espana?" recuperaba la
+  // entrada corporativa commercial-why-agency-70 y contestaba "Rose Models se encarga de la parte
+  // operativa..." en vez de la rationale de mercado (publico espanol, mayor poder adquisitivo).
+  it("retrieves the target-countries FAQ for a Spain-traffic question, not the why-70 corporate entry", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const entries = await retriever.retrieve({
+      candidate: { ...createCandidate({ instagramUsername: "lead_trafico" }), currentState: "QUALIFYING" },
+      intent: "REQUESTS_INFORMATION",
+      question: "trabajan con trafico de espana?"
+    });
+    const ids = entries.map((entry) => entry.id);
+    expect(ids).toContain("faq-target-countries");
+    expect(ids[0]).not.toBe("commercial-why-agency-70");
+  });
 });
 
 describe("engine money and pitch behavior", () => {
@@ -133,5 +148,20 @@ describe("engine money and pitch behavior", () => {
     expect(result.responsePlan.uncoveredQuestion).toBe(false);
     expect(result.response.toLowerCase()).toMatch(/trafico|contenido|estrategia/);
     expect(result.response.toLowerCase()).not.toContain("se lo consulto");
+  });
+
+  it("answers the Spain-traffic question with the market rationale, not the why-70 corporate line (replay-3 T18)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seededCandidate(repository, { instagramUsername: "lead_trafico_espana" });
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_trafico_espana",
+      message: "trabajan con trafico de espana?"
+    });
+
+    expect(result.responsePlan.uncoveredQuestion).toBe(false);
+    expect(result.response.toLowerCase()).toContain("espanol");
+    expect(result.response.toLowerCase()).not.toContain("parte operativa");
   });
 });

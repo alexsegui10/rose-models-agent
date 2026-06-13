@@ -7,9 +7,9 @@ export const promptRegistry = {
   },
   drafting: {
     id: "rose-drafting",
-    version: "drafting-2026-06-12.2",
+    version: "drafting-2026-06-13.2",
     purpose:
-      "Redactar la respuesta final como Alex en primera persona: responder primero con conocimiento aprobado (tambien en intervencion humana), socio solo para lo pendiente, exactamente la pregunta principal del plan sin re-preguntar memoria, telefono solo tras dia/hora, un solo acuse sin punto y dinero con 'trabajamos con porcentaje' sin cifra."
+      "Redactar la respuesta final como Alex en primera persona: responder primero con conocimiento aprobado (tambien en intervencion humana), socio solo para lo pendiente, objeciones de geo-privacidad/multi-agencia/metodo se responden con answerFacts y NUNCA se derivan al socio, la plantilla de rechazo es solo para la cara con rechazo en plan (jamas ante agenda/privacidad), exactamente la pregunta principal del plan sin re-preguntar memoria (nunca re-pedir el nombre ya conocido ni reiniciar el funnel tras el telefono), telefono solo tras dia/hora, registro vivo con typos habituales y una idea por mensaje, retroceso ante cierre educado, un solo acuse sin punto y dinero con 'trabajamos con porcentaje' sin cifra."
   },
   humanReview: {
     id: "rose-human-review",
@@ -23,8 +23,9 @@ export const promptRegistry = {
   },
   factualValidation: {
     id: "rose-factual-validation",
-    version: "factual-validation-2026-06-08.1",
-    purpose: "Comprobar que la respuesta no contradice conocimiento oficial ni politicas."
+    version: "factual-validation-2026-06-13.1",
+    purpose:
+      "Comprobar que la respuesta no contradice conocimiento oficial ni politicas, incluido el guard semantico de la cara imprescindible (rechaza promesas de ocultar la cara o anonimato)."
   }
 } as const;
 

@@ -135,6 +135,15 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("launch", "timeline", "warmup");
   if (/\b(paises|que pais|vendeis|venden|mercado|compradores|poder adquisitivo)\b/.test(message))
     tags.push("countries", "market", "faq");
+  // "Trabajais con trafico de Espana?" / "el trafico es espanol?" pregunta por el MERCADO objetivo,
+  // no por el pitch operativo: debe recuperar la FAQ de paises (publico espanol, poder adquisitivo)
+  // y no contestar con la entrada corporativa why-70 (r3 T18). Excluye el conflicto multi-agencia.
+  if (
+    /\btrafico\b[^.!?]{0,20}\b(espan|espana|espanol|argentin|colombian|latam|paises?|pais)\b/.test(message) ||
+    /\b(espan|espanol)\w*\b[^.!?]{0,15}\btrafico\b/.test(message)
+  ) {
+    tags.push("countries", "market", "faq");
+  }
   if (/\b(seleccion|requisitos para entrar|como entro|que buscais)\b/.test(message)) tags.push("selection", "process", "faq");
   if (
     /\b(bloquear|bloqueo|bloqueen|que no me vean|me reconozcan|me vea alguien|privacidad|anonimato|mi pais|conocidos)\b/.test(
