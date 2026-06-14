@@ -91,6 +91,9 @@ export const CandidateSchema = z.object({
   currentMonthlyRevenue: z.number().nonnegative().optional(),
   contentAvailability: z.string().optional(),
   goals: z.string().optional(),
+  // Franja propuesta/acordada para la llamada (texto libre, p. ej. "el lunes a las 18h"). La fija Alex
+  // al confirmar la llamada desde el CRM; el bot la usa para confirmar a la candidata.
+  scheduledCallSlot: z.string().optional(),
   interestLevel: InterestLevelSchema.default("UNKNOWN"),
   objections: z.array(z.string()).default([]),
   // Cuantas veces la candidata ha objetado/dudado de mostrar la cara. La 1a vez se reconduce; si
@@ -175,6 +178,7 @@ export interface CandidatePatch {
   currentMonthlyRevenue?: number;
   contentAvailability?: string;
   goals?: string;
+  scheduledCallSlot?: string;
   interestLevel?: InterestLevel;
   objections?: string[];
   faceObjectionCount?: number;

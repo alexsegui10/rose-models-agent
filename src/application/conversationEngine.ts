@@ -162,6 +162,103 @@ export class ConversationEngine {
     return { candidate, transitions, proposedMessage };
   }
 
+  /**
+   * Verificacion humana del perfil (cierra el hueco de PROFILE_READY_FOR_REVIEW). Alex mira el perfil
+   * y decide: encaja -> sigue la cualificacion (QUALIFYING), reanuda automatizacion y el bot retoma
+   * con una pregunta; no encaja -> REJECTED. Si el estado no lo admite, no fuerza nada.
+   */
+  async applyProfileReviewDecision(input: {
+    candidateId: string;
+    fits: boolean;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    const targetState: CandidateState = input.fits ? "QUALIFYING" : "REJECTED";
+    if (existing.currentState !== "PROFILE_READY_FOR_REVIEW" || !canTransition(existing.currentState, targetState)) {
+      return { candidate: existing, transitions: [], proposedMessage: null };
+    }
+
+    const transition = createTransition({
+      candidate: existing,
+      toState: targetState,
+      trigger: input.fits ? "HUMAN_PROFILE_FIT" : "HUMAN_PROFILE_NO_FIT",
+      reason: input.fits ? "Alex verifico el perfil: encaja, sigue la cualificacion." : "Alex verifico el perfil: no encaja."
+    });
+
+    let candidate: Candidate = {
+      ...existing,
+      currentState: targetState,
+      humanVerifiedProfileAccess: input.fits ? true : existing.humanVerifiedProfileAccess,
+      humanProfileReviewStatus: input.fits ? "POTENTIAL_FIT" : "NOT_A_FIT",
+      humanFitDecision: input.fits ? existing.humanFitDecision : "REJECTED",
+      updatedAt: new Date()
+    };
+
+    let proposedMessage: string | null = null;
+    if (input.fits) {
+      candidate = { ...candidate, manualControlActive: false, automationPaused: false };
+      proposedMessage =
+        "Perfecto, ya he visto tu perfil y nos encaja.\n\nPara seguir cuentame un poco, como te llamas y que edad tienes?";
+    }
+
+    await this.dependencies.repository.saveCandidate(candidate);
+    await this.dependencies.repository.addTransition(transition);
+    if (proposedMessage) {
+      await this.dependencies.repository.addMessage(
+        agentMessage(candidate.id, proposedMessage, { provider: "deterministic", trigger: "HUMAN_PROFILE_FIT", proactive: true })
+      );
+    }
+
+    return { candidate, transitions: [transition], proposedMessage };
+  }
+
+  /**
+   * Confirmacion humana de la llamada (cierra el hueco de COLLECTING_CALL_DETAILS). Alex confirma el
+   * momento acordado y el bot se lo confirma a la candidata; pasa a CALL_SCHEDULED. Si el estado no
+   * admite la transicion, no fuerza nada.
+   */
+  async confirmScheduledCall(input: {
+    candidateId: string;
+    slot?: string;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    if (!canTransition(existing.currentState, "CALL_SCHEDULED")) {
+      return { candidate: existing, transitions: [], proposedMessage: null };
+    }
+
+    const slot = input.slot?.trim() ? input.slot.trim() : undefined;
+    const transition = createTransition({
+      candidate: existing,
+      toState: "CALL_SCHEDULED",
+      trigger: "HUMAN_CONFIRM_CALL",
+      reason: slot ? `Alex confirmo la llamada: ${slot}.` : "Alex confirmo la llamada."
+    });
+
+    const candidate: Candidate = {
+      ...existing,
+      currentState: "CALL_SCHEDULED",
+      scheduledCallSlot: slot ?? existing.scheduledCallSlot,
+      updatedAt: new Date()
+    };
+
+    const proposedMessage = slot
+      ? `Genial, te confirmo la llamada ${slot}. Cualquier cosa me dices, hablamos pronto!`
+      : "Genial, te confirmo la llamada. En breve hablamos, cualquier cosa me dices!";
+
+    await this.dependencies.repository.saveCandidate(candidate);
+    await this.dependencies.repository.addTransition(transition);
+    await this.dependencies.repository.addMessage(
+      agentMessage(candidate.id, proposedMessage, { provider: "deterministic", trigger: "HUMAN_CONFIRM_CALL", proactive: true })
+    );
+
+    return { candidate, transitions: [transition], proposedMessage };
+  }
+
   async handleIncomingTurn(
     input: CandidateLookupInput & { messages: IncomingTurnMessage[] }
   ): Promise<HandleIncomingMessageResult> {
@@ -848,6 +945,13 @@ function generateResponse(
   // "cualquier duda me dices" (que invitaba a seguir escribiendo a un proceso ya cerrado).
   if (candidate.currentState === "REJECTED") {
     return "Gracias por tu tiempo y por el interes. De momento no podemos seguir adelante, pero te deseo lo mejor.";
+  }
+
+  // Llamada ya confirmada por Alex: el bot mantiene la cita, no reabre el guion ni cae al dead-end.
+  if (candidate.currentState === "CALL_SCHEDULED") {
+    return candidate.scheduledCallSlot
+      ? `Todo listo, te llamo ${candidate.scheduledCallSlot}. Si necesitas cambiar algo me dices.`
+      : "Todo listo con la llamada. Si necesitas cambiar algo me dices.";
   }
 
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {

@@ -119,6 +119,7 @@ export const candidates = pgTable("candidates", {
   contentAvailability: text("content_availability"),
   goals: text("goals"),
   interestLevel: text("interest_level", { enum: InterestLevelSchema.options }).notNull().default("UNKNOWN"),
+  scheduledCallSlot: text("scheduled_call_slot"),
   objections: jsonb("objections").$type<string[]>().notNull().default([]),
   faceObjectionCount: integer("face_objection_count").notNull().default(0),
   notes: jsonb("notes").$type<string[]>().notNull().default([]),

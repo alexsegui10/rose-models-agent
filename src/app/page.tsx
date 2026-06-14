@@ -333,6 +333,37 @@ export default function Home() {
     await refreshCandidates();
   }
 
+  async function advanceStage(candidate: Candidate, action: "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL") {
+    // Cierra los huecos del funnel: verificar perfil (seguir/rechazar) y confirmar la llamada.
+    let slot: string | undefined;
+    if (action === "CONFIRM_CALL") {
+      const entered = window.prompt("Hora acordada para la llamada (opcional, p. ej. 'el lunes a las 18h'):") ?? "";
+      slot = entered.trim() || undefined;
+    }
+    const response = await fetch("/api/simulator/advance-stage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: candidate.id, action, slot })
+    });
+    if (!response.ok) {
+      setCrmNotice("No se pudo aplicar la accion.");
+      return;
+    }
+    const data = (await response.json()) as { candidate: Candidate; proposedMessage: string | null };
+    const labels: Record<typeof action, string> = {
+      PROFILE_FIT: `Perfil de @${candidate.instagramUsername} verificado: sigue la cualificacion.`,
+      PROFILE_NO_FIT: `@${candidate.instagramUsername} descartada en la revision de perfil.`,
+      CONFIRM_CALL: `Llamada confirmada para @${candidate.instagramUsername}.`
+    };
+    setCrmNotice(
+      data.proposedMessage ? `${labels[action]} El bot escribio: "${data.proposedMessage.replace(/\n+/g, " ")}"` : labels[action]
+    );
+    if (selectedCandidate?.id === candidate.id) {
+      setSelectedCandidate(data.candidate);
+    }
+    await refreshCandidates();
+  }
+
   async function runABComparison() {
     const messagesForRun = abMessages
       .split("\n")
@@ -924,6 +955,9 @@ export default function Home() {
                   const paused = candidate.manualControlActive || candidate.automationPaused;
                   const awaitingDecision =
                     candidate.currentState === "WAITING_HUMAN_REVIEW" || candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
+                  const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
+                  const awaitingCallConfirm =
+                    candidate.currentState === "COLLECTING_CALL_DETAILS" || candidate.currentState === "READY_TO_SCHEDULE";
                   return (
                     <tr key={candidate.id}>
                       <td>
@@ -953,6 +987,29 @@ export default function Home() {
                         >
                           Rechazar
                         </button>
+                        {awaitingProfileReview ? (
+                          <>
+                            <button
+                              className="secondary"
+                              type="button"
+                              onClick={() => void advanceStage(candidate, "PROFILE_FIT")}
+                            >
+                              Perfil encaja
+                            </button>
+                            <button
+                              className="danger"
+                              type="button"
+                              onClick={() => void advanceStage(candidate, "PROFILE_NO_FIT")}
+                            >
+                              Perfil no encaja
+                            </button>
+                          </>
+                        ) : null}
+                        {awaitingCallConfirm ? (
+                          <button className="primary" type="button" onClick={() => void advanceStage(candidate, "CONFIRM_CALL")}>
+                            Confirmar llamada
+                          </button>
+                        ) : null}
                       </td>
                     </tr>
                   );
