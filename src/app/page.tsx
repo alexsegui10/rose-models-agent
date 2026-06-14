@@ -337,7 +337,9 @@ export default function Home() {
     // Cierra los huecos del funnel: verificar perfil (seguir/rechazar) y confirmar la llamada.
     let slot: string | undefined;
     if (action === "CONFIRM_CALL") {
-      const entered = window.prompt("Hora acordada para la llamada (opcional, p. ej. 'el lunes a las 18h'):") ?? "";
+      const entered = window.prompt("Hora acordada para la llamada (opcional, p. ej. 'el lunes a las 18h'):");
+      // Cancelar/Escape (null) ABORTA: no se confirma la llamada por error. Vacio = confirmar sin hora.
+      if (entered === null) return;
       slot = entered.trim() || undefined;
     }
     const response = await fetch("/api/simulator/advance-stage", {
@@ -355,9 +357,16 @@ export default function Home() {
       PROFILE_NO_FIT: `@${candidate.instagramUsername} descartada en la revision de perfil.`,
       CONFIRM_CALL: `Llamada confirmada para @${candidate.instagramUsername}.`
     };
-    setCrmNotice(
-      data.proposedMessage ? `${labels[action]} El bot escribio: "${data.proposedMessage.replace(/\n+/g, " ")}"` : labels[action]
-    );
+    // Si el motor no aplico nada (estado incompatible), no mentir con un aviso de exito.
+    if (!data.proposedMessage && data.candidate.currentState === candidate.currentState) {
+      setCrmNotice(`Sin cambios para @${candidate.instagramUsername}: la accion no aplica en su estado actual.`);
+    } else {
+      setCrmNotice(
+        data.proposedMessage
+          ? `${labels[action]} El bot escribio: "${data.proposedMessage.replace(/\n+/g, " ")}"`
+          : labels[action]
+      );
+    }
     if (selectedCandidate?.id === candidate.id) {
       setSelectedCandidate(data.candidate);
     }

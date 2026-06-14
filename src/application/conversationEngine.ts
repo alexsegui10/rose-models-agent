@@ -227,7 +227,10 @@ export class ConversationEngine {
     if (!existing) {
       throw new Error("Candidate not found.");
     }
-    if (!canTransition(existing.currentState, "CALL_SCHEDULED")) {
+    // Guarda de ORIGEN explicita (no solo canTransition): confirmar la llamada solo tiene sentido
+    // mientras se recogen los detalles. Sin esto, como el grafo permite HIR -> CALL_SCHEDULED, una
+    // confirmacion sacaria de HUMAN_INTERVENTION_REQUIRED sin la decision humana designada (invariante 4).
+    if (existing.currentState !== "COLLECTING_CALL_DETAILS" && existing.currentState !== "READY_TO_SCHEDULE") {
       return { candidate: existing, transitions: [], proposedMessage: null };
     }
 
@@ -243,6 +246,10 @@ export class ConversationEngine {
       ...existing,
       currentState: "CALL_SCHEDULED",
       scheduledCallSlot: slot ?? existing.scheduledCallSlot,
+      // Coherencia con APPROVE/PROFILE_FIT: una accion humana que avanza el funnel reanuda la
+      // automatizacion; si no, el bot enmudeceria ante el siguiente mensaje de la candidata.
+      manualControlActive: false,
+      automationPaused: false,
       updatedAt: new Date()
     };
 
@@ -317,6 +324,19 @@ export class ConversationEngine {
     if (faceConcern) {
       understanding = applyFaceConcern(understanding, faceConcern, faceObjectionCountBefore);
     }
+    // Llamada ya agendada y la candidata quiere cambiarla/cancelarla: NO se reconfirma la hora vieja
+    // en silencio (se perdia el lead en la meta). Se escala a Alex para que reprograme o cancele.
+    const wantsToChangeScheduledCall =
+      activeCandidate.currentState === "CALL_SCHEDULED" &&
+      (understanding.intent === "REQUESTS_CALL" || wantsCallChangePattern.test(normalizeText(groupedMessage.content)));
+    if (wantsToChangeScheduledCall) {
+      understanding = {
+        ...understanding,
+        requiresHumanReview: true,
+        humanReviewReason: understanding.humanReviewReason ?? "La candidata quiere cambiar o cancelar la llamada ya agendada.",
+        internalNotes: [...understanding.internalNotes, "Cambio/cancelacion de llamada agendada: lo decide Alex."]
+      };
+    }
     // Primer turno del agente con un lead nuevo: toca el opener canonico (plantilla real de Alex),
     // nunca una pregunta de cualificacion. Los leads sembrados a mitad de funnel no lo necesitan.
     const isOpenerTurn =
@@ -342,6 +362,8 @@ export class ConversationEngine {
           ? [`PERCENTAGE_NEGOTIATION_REQUEST: ${groupedMessage.content}`]
           : [`PERCENTAGE_QUESTION_ASKED: ${groupedMessage.content}`]
         : [];
+    // Aviso para Alex cuando una candidata pide cambiar/cancelar una llamada ya agendada.
+    const callChangeNotes = wantsToChangeScheduledCall ? [`CALL_CHANGE_REQUEST: ${groupedMessage.content}`] : [];
     // La objecion/duda de cara (no las propuestas parciales, que van a Alex) incrementa el contador
     // que decide reconducir-vs-cerrar, y deja aviso para que Alex lo vea en el CRM.
     const faceCountsAsObjection = faceConcern !== null && faceConcern !== "partial";
@@ -362,6 +384,7 @@ export class ConversationEngine {
         ...updatedCandidate.notes,
         ...commercialNotes,
         ...faceObjectionNotes,
+        ...callChangeNotes,
         // Una escalada suprimida nunca se pierde en silencio: Alex conserva el motivo original.
         ...(escalationFilter.suppressedEscalationNote === null ? [] : [escalationFilter.suppressedEscalationNote]),
         ...consistency.contradictions.map((item) => `CONTRADICTION: ${item}`),
@@ -534,7 +557,12 @@ export class ConversationEngine {
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
     // Las variantes son estaticamente seguras (acuses o derivacion honesta al socio), por lo que
     // no invalidan la validacion factual ya realizada.
-    const dedupedResponse = withoutVerbatimRepetition(response, lastAgentMessageContent(recentMessages), responsePlan);
+    const dedupedResponse = withoutVerbatimRepetition(
+      response,
+      lastAgentMessageContent(recentMessages),
+      responsePlan,
+      projectedCandidate.currentState
+    );
     if (dedupedResponse !== response) {
       response = dedupedResponse;
       draft = { ...draft, response };
@@ -1763,8 +1791,18 @@ const leadingAcknowledgementPattern = /^(Perfecto|Okeyy|Vale pues|Entiendo)\.?/;
  * acuse alternativo si hay pregunta de slot, derivacion honesta si el plan exige socio, o un
  * acuse corto en el resto de casos.
  */
-function withoutVerbatimRepetition(response: string, lastAgentMessage: string | null, responsePlan: ResponsePlan): string {
+function withoutVerbatimRepetition(
+  response: string,
+  lastAgentMessage: string | null,
+  responsePlan: ResponsePlan,
+  currentState?: CandidateState
+): string {
   if (!lastAgentMessage || normalizeText(response.trim()) !== normalizeText(lastAgentMessage.trim())) {
+    return response;
+  }
+  // En estados terminales / de cita cerrada, repetir el cierre o la confirmacion es preferible a
+  // degradar a un "Okeyy" suelto (que reabre la conversacion o deja la cita en el aire).
+  if (currentState === "REJECTED" || currentState === "CLOSED" || currentState === "CALL_SCHEDULED") {
     return response;
   }
 
@@ -1952,6 +1990,10 @@ const faceRefusalSignalPattern =
   /\b(no quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar)\b/;
 const facePartialPattern =
   /\b(solo (en )?(algun|alguna|algunas|algunos|parte|ciertas?|ratos?|a veces)|en algunas fotos|media cara|de espaldas|solo el cuerpo|parcial|sin que se vea del todo|a medias)\b/;
+// La candidata quiere mover/cancelar una llamada YA agendada (se evalua solo en CALL_SCHEDULED).
+const wantsCallChangePattern =
+  /\b(cambiar|cambio|cancelar|cancela|anular|reprogram|aplaz|posponer|mover|otra hora|otro dia|otra fecha|no me viene bien|no puedo el)\b/;
+
 const faceRecognitionPattern =
   /\b(me reconozca|me reconozcan|que me vean|me vea alguien|me vean en mi pais|en mi pais|conocidos|gente que conozco|me da miedo que me|privacidad|que no me vea)\b/;
 

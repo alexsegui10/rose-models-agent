@@ -120,6 +120,30 @@ describe("Cierre del funnel: confirmacion de llamada (-> CALL_SCHEDULED)", () =>
     expect(result.proposedMessage).toBeNull();
   });
 
+  it("confirmar la llamada NO saca de HUMAN_INTERVENTION_REQUIRED (invariante 4)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "HUMAN_INTERVENTION_REQUIRED");
+    const result = await engine.confirmScheduledCall({ candidateId: seeded.id, slot: "el lunes" });
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.proposedMessage).toBeNull();
+  });
+
+  it("confirmar la llamada reanuda la automatizacion (el bot no enmudece despues)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "COLLECTING_CALL_DETAILS", { phone: "612345678" });
+    const result = await engine.confirmScheduledCall({ candidateId: seeded.id, slot: "el lunes a las 18h" });
+    expect(result.candidate.automationPaused).toBe(false);
+    expect(result.candidate.manualControlActive).toBe(false);
+
+    const reply = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "funnel_case",
+      message: "vale gracias"
+    });
+    expect(reply.response.length).toBeGreaterThan(0);
+    expect(reply.automationBlocked).not.toBe(true);
+  });
+
   it("en CALL_SCHEDULED el bot responde con confirmacion, no con el dead-end generico", async () => {
     const { engine, repository } = createEngine();
     const seeded = await seed(repository, "CALL_SCHEDULED", {
@@ -136,5 +160,46 @@ describe("Cierre del funnel: confirmacion de llamada (-> CALL_SCHEDULED)", () =>
 
     expect(reply.response.toLowerCase()).not.toContain("cualquier duda que tengas me dices");
     expect(reply.response.length).toBeGreaterThan(0);
+  });
+
+  it("si la candidata pide cambiar/cancelar la llamada ya agendada, escala a Alex (no reconfirma)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED", {
+      scheduledCallSlot: "el martes a las 17h",
+      automationPaused: false,
+      manualControlActive: false
+    });
+
+    const reply = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "funnel_case",
+      message: "necesito cambiar la llamada al jueves, el martes no puedo"
+    });
+
+    expect(reply.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(reply.candidate.notes.some((note) => note.startsWith("CALL_CHANGE_REQUEST"))).toBe(true);
+    // No reconfirma la hora vieja como si nada.
+    expect(reply.response.toLowerCase()).not.toContain("todo listo, te llamo el martes");
+  });
+
+  it("un 2o mensaje en REJECTED no degrada a un 'Okeyy' suelto", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "REJECTED", { automationPaused: false, manualControlActive: false });
+
+    const first = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "funnel_case",
+      message: "por que no?"
+    });
+    const second = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "funnel_case",
+      message: "porfa dame una oportunidad"
+    });
+
+    expect(first.response.length).toBeGreaterThan(0);
+    const reply = second.response.trim().toLowerCase();
+    expect(reply).not.toBe("okeyy");
+    expect(reply).not.toBe("vale pues");
   });
 });
