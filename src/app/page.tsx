@@ -652,6 +652,23 @@ export default function Home() {
                   <option value="PRIVATE">Privado</option>
                   <option value="UNKNOWN">Desconocido</option>
                 </select>
+                <button
+                  className="secondary"
+                  type="button"
+                  title="Empieza una conversacion desde cero (candidata nueva) para ver el saludo inicial"
+                  onClick={() => {
+                    setInstagramUsername(`candidata_${Math.floor(Math.random() * 100000)}`);
+                    setSelectedCandidate(null);
+                    setMessages([]);
+                    setTransitions([]);
+                    setLastResult(null);
+                    setFeedbackStatus(null);
+                    setProfileVisibility("PUBLIC");
+                    setMessage("Hola, me interesa");
+                  }}
+                >
+                  Candidata nueva
+                </button>
               </div>
               <textarea className="textarea" value={message} onChange={(event) => setMessage(event.target.value)} />
               <button className="primary" disabled={loading || !message.trim()} type="submit">
