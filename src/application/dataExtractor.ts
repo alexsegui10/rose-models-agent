@@ -251,12 +251,17 @@ export function extractDeterministicUnderstanding(
     else if (bareNoPattern.test(normalized)) extractedData.worksWithAnotherAgency = false;
   }
 
-  const deviceEligibility = deviceEligibilityForDescription(normalized);
-  if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
   const deviceType = deviceTypeForDescription(normalized);
   if (deviceType !== "UNKNOWN") extractedData.deviceType = deviceType;
   const deviceModel = deviceModelForDescription(normalized);
   if (deviceModel) extractedData.deviceModel = deviceModel;
+  // La elegibilidad solo se clasifica si el mensaje menciona un movil de verdad (marca/tipo/modelo):
+  // 'malo'/'viejo'/'roto' en un contexto NO-movil (sobre la persona, "estoy malo y viejo") no debe
+  // disparar NOT_ELIGIBLE. Los moviles malos reales SIEMPRE nombran el dispositivo (samsung viejo,
+  // redmi antiguo, movil roto), asi que mentionsDevice los cubre.
+  const mentionsDevice = deviceType !== "UNKNOWN" || Boolean(deviceModel);
+  const deviceEligibility = mentionsDevice ? deviceEligibilityForDescription(normalized) : "UNKNOWN";
+  if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
 
   if (/\b(iphone|i phone|ios)\b/.test(normalized)) {
     extractedData.deviceType = "IPHONE";

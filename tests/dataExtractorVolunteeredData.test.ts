@@ -21,6 +21,28 @@ describe("dataExtractor volunteered first name", () => {
   });
 });
 
+describe("dataExtractor device eligibility is gated on actually mentioning a device", () => {
+  it("classifies a genuinely bad phone as NOT_ELIGIBLE when the device is named", () => {
+    expect(extractDeterministicUnderstanding("tengo un samsung viejo").extractedData.deviceEligibility).toBe("NOT_ELIGIBLE");
+    expect(extractDeterministicUnderstanding("tengo un redmi antiguo").extractedData.deviceEligibility).toBe("NOT_ELIGIBLE");
+    expect(extractDeterministicUnderstanding("mi movil esta roto").extractedData.deviceEligibility).toBe("NOT_ELIGIBLE");
+  });
+
+  it("does NOT flag eligibility from 'malo'/'viejo' when no device is mentioned (sobre la persona)", () => {
+    expect(
+      extractDeterministicUnderstanding("perdona estoy un poco malo y viejo, tengo 38").extractedData.deviceEligibility
+    ).toBeUndefined();
+    expect(
+      extractDeterministicUnderstanding("hoy me siento vieja y de mala leche").extractedData.deviceEligibility
+    ).toBeUndefined();
+  });
+
+  it("still classifies a good phone as before", () => {
+    expect(extractDeterministicUnderstanding("tengo un iphone 14").extractedData.deviceEligibility).toBe("APPROVED");
+    expect(extractDeterministicUnderstanding("ipone 13").extractedData.deviceEligibility).toBe("APPROVED");
+  });
+});
+
 describe("dataExtractor OnlyFans negation", () => {
   it("keeps hasOnlyFans true for plain mentions", () => {
     expect(extractDeterministicUnderstanding("Tengo of verificado").extractedData.hasOnlyFans).toBe(true);

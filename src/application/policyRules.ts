@@ -95,7 +95,7 @@ export function deviceTypeForDescription(description: string): DeviceType {
   const normalized = normalize(description);
   if (new RegExp(`\\b(?:${IPHONE_TYPO}|i phone|ios)\\b`).test(normalized)) return "IPHONE";
   if (/\b(samsung|galaxy)\b/.test(normalized)) return "SAMSUNG";
-  if (/\b(android|xiaomi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono)\b/.test(normalized)) return "OTHER";
+  if (/\b(android|xiaomi|redmi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono|celular)\b/.test(normalized)) return "OTHER";
   return "UNKNOWN";
 }
 
