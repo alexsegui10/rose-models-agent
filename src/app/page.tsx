@@ -205,15 +205,18 @@ export default function Home() {
     setSendError(null);
 
     try {
+      // La candidata puede escribir varios mensajes en un turno separandolos con una linea en blanco;
+      // se envian como varios y el motor los agrupa (responde una vez). Uno solo = caso normal.
+      const parts = message
+        .split(/\n{2,}/)
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
+      const base = { candidateId: selectedCandidate?.id, instagramUsername, profileVisibility };
+      const payload = parts.length > 1 ? { ...base, messages: parts } : { ...base, message };
       const response = await fetch("/api/simulator/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          candidateId: selectedCandidate?.id,
-          instagramUsername,
-          profileVisibility,
-          message
-        })
+        body: JSON.stringify(payload)
       });
       const data = (await response.json()) as Partial<SimulatorResponse> & { error?: string };
 

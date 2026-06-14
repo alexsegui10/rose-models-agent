@@ -115,9 +115,13 @@ export class ConversationEngine {
       }
     }
 
-    await this.dependencies.repository.addMessage(
-      candidateMessage(candidate.id, groupedMessage.content, groupedMessage.externalMessageId)
-    );
+    // La candidata puede escribir VARIOS mensajes seguidos: se guardan por separado (se ven como
+    // varias burbujas) pero el turno se procesa sobre el contenido agrupado, asi el bot responde UNA
+    // vez (no a cada fragmento). Si solo hay uno, es el caso normal de un mensaje.
+    const candidateTurnMessages = input.messages.filter((message) => message.content.trim().length > 0);
+    for (const message of candidateTurnMessages.length > 0 ? candidateTurnMessages : [{ content: groupedMessage.content }]) {
+      await this.dependencies.repository.addMessage(candidateMessage(candidate.id, message.content, message.externalMessageId));
+    }
     const activeCandidate: Candidate = {
       ...candidate,
       generationCancellationVersion: candidate.generationCancellationVersion + 1,

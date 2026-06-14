@@ -24,7 +24,10 @@ describe("operational safety", () => {
       messages: [
         { content: "Tengo 23", externalMessageId: "debounce-1" },
         { content: "Soy de Madrid", externalMessageId: "debounce-2" },
-        { content: "Tengo experiencia creando contenido, estoy disponible por las tardes y tengo iPhone 13", externalMessageId: "debounce-3" }
+        {
+          content: "Tengo experiencia creando contenido, estoy disponible por las tardes y tengo iPhone 13",
+          externalMessageId: "debounce-3"
+        }
       ]
     });
 
@@ -32,7 +35,10 @@ describe("operational safety", () => {
     expect(result.candidate.age).toBe(23);
     expect(result.candidate.city).toBe("Madrid");
     expect(result.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
-    expect(messages.filter((message) => message.role === "candidate")).toHaveLength(1);
+    // Los 3 mensajes de la candidata se guardan por separado (se ven como varias burbujas), pero el
+    // turno es UNO: el bot responde una sola vez al contenido agrupado (no a cada fragmento).
+    expect(messages.filter((message) => message.role === "candidate")).toHaveLength(3);
+    expect(messages.filter((message) => message.role === "agent")).toHaveLength(1);
   });
 
   it("ignores a duplicated externalMessageId without adding response or transition", async () => {

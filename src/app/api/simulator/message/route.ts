@@ -5,14 +5,20 @@ import { promptRegistry } from "@/application/promptRegistry";
 import { normalizeCandidate, ProfileVisibilitySchema } from "@/domain/candidate";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 
-const SendMessageSchema = z.object({
-  candidateId: z.string().optional(),
-  instagramUsername: z.string().min(1),
-  displayName: z.string().optional(),
-  profileVisibility: ProfileVisibilitySchema.optional(),
-  message: z.string().min(1),
-  externalMessageId: z.string().optional()
-});
+const SendMessageSchema = z
+  .object({
+    candidateId: z.string().optional(),
+    instagramUsername: z.string().min(1),
+    displayName: z.string().optional(),
+    profileVisibility: ProfileVisibilitySchema.optional(),
+    // La candidata puede mandar uno o varios mensajes seguidos: el motor los agrupa en un turno.
+    message: z.string().min(1).optional(),
+    messages: z.array(z.string().min(1)).optional(),
+    externalMessageId: z.string().optional()
+  })
+  .refine((data) => Boolean(data.message) || (data.messages?.length ?? 0) > 0, {
+    message: "Se requiere 'message' o 'messages'."
+  });
 
 export async function POST(request: Request) {
   const parsed = SendMessageSchema.safeParse(await request.json());
@@ -23,7 +29,12 @@ export async function POST(request: Request) {
 
   const engine = getSimulatorEngine();
   const repository = getSimulatorRepository();
-  const result = await engine.handleIncomingMessage(parsed.data);
+  const { message, messages: inputMessages, externalMessageId, ...lookup } = parsed.data;
+  const turnMessages =
+    inputMessages && inputMessages.length > 0
+      ? inputMessages.map((content) => ({ content }))
+      : [{ content: message as string, externalMessageId }];
+  const result = await engine.handleIncomingTurn({ ...lookup, messages: turnMessages });
   const candidate = await repository.saveCandidate(normalizeCandidate(result.candidate));
   const draft = result.draft ?? missingDraftTrace(result.response);
   const messages = await repository.listMessages(result.candidate.id);
