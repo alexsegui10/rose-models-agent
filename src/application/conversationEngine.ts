@@ -979,7 +979,12 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
     // Solo se llega aqui ante la pregunta de la cifra EXACTA (invariante 3). Se da el reparto sin
     // los tecnicismos de liquidacion (neto/comision), que salieron de los puntos de cara a la
     // candidata en el contenido versionado: el detalle fino se explica en la llamada.
-    const parts = ["El reparto estandar es 70% para Rose Models y 30% para ti."];
+    // Decision de Alex (14-jun): al preguntar la cifra se da el 70/30 y se explica BREVE el porque
+    // (nos encargamos de todo; ella solo manda el contenido). Sin tecnicismos de liquidacion.
+    const parts = [
+      "El reparto estandar es 70% para la agencia y 30% para ti.",
+      "Es asi porque nos encargamos de todo, el trafico, la monetizacion y la gestion, y tu solo te encargas de mandar el contenido."
+    ];
     if (responsePlan.questionToAsk) parts.push(responsePlan.questionToAsk);
     return parts.join("\n\n");
   }

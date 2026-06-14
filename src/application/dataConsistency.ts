@@ -137,8 +137,20 @@ export function buildConsistentCandidatePatch(input: {
     patch.experienceDescription = input.extractedData.experienceDescription;
   if (input.extractedData.goals && !isMeaninglessString(input.extractedData.goals) && !input.candidate.goals)
     patch.goals = input.extractedData.goals;
-  if (input.extractedData.objections?.length)
-    patch.objections = [...input.candidate.objections, ...input.extractedData.objections];
+  if (input.extractedData.objections?.length) {
+    // Dedup case-insensitive: la misma objecion repetida en varios mensajes no debe acumularse, o el
+    // conteo de objeciones (p.ej. el de la cara) se infla y dispara decisiones antes de tiempo.
+    const merged = [...input.candidate.objections];
+    const seen = new Set(merged.map((objection) => objection.trim().toLowerCase()));
+    for (const objection of input.extractedData.objections) {
+      const key = objection.trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        merged.push(objection);
+      }
+    }
+    if (merged.length !== input.candidate.objections.length) patch.objections = merged;
+  }
 
   return { patch, contradictions, corrections };
 }

@@ -359,9 +359,15 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
 
 function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: string[]): string[] {
   const message = normalize(input.inboundMessage);
+  // Preguntar la CIFRA del reparto ("que porcentaje os quedais?", "cuanto os llevais?", "cual es el
+  // reparto?") SI se responde con el 70/30 (decision de Alex; invariante 3: solo si preguntan la cifra,
+  // nunca proactivo). OJO: una pregunta del MODELO de pago ("porcentaje o salario fijo?", "que
+  // porcentaje es?") NO pide el reparto -> sin cifra; por eso NO basta con que aparezca "porcentaje".
   const exactPercentageQuestion =
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
-    /\b(cual|exacto|70\/30|quien recibe|quien se queda)\b/.test(message);
+    /\b(cual es el (porcentaje|reparto)|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued)\b/.test(
+      message
+    );
   const generalCommercialQuestion =
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" ||
     /\b(salario|sueldo|porcentaje|reparto|cuanto cobra|comision|skrill|liquidacion)\b/.test(message);

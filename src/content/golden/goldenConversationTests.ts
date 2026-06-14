@@ -101,13 +101,14 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
   },
   {
     id: "golden-percentage",
-    title: "Pregunta general de porcentaje (sin cifra)",
+    title: "Pregunta del reparto: da el 70/30 y el porque, sin escalar",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "QUALIFYING",
     messages: ["Que porcentaje os quedais?"],
     expectedTransition: "QUALIFYING",
-    responseMustIncludeAny: ["reparto", "salario fijo", "llamada"],
-    responseMustNotInclude: ["70%", "70/30", "75", "garantizado"]
+    // Decision de Alex (14-jun): preguntar el reparto SI da la cifra 70/30 + breve porque; nunca proactivo.
+    responseMustIncludeAny: ["70%"],
+    responseMustNotInclude: ["75", "garantizado", "socio", "consulto"]
   },
   {
     id: "golden-percentage-exact",

@@ -48,10 +48,11 @@ describe("business knowledge golden tests", () => {
       message: "Que porcentaje os quedais?"
     });
 
+    // Decision de Alex (14-jun): preguntar el reparto SI da el 70/30 + el porque, sin escalar.
     expect(result.candidate.currentState).toBe("QUALIFYING");
     expect(result.response.toLowerCase()).toContain("reparto");
-    expect(result.response).not.toContain("70/30");
-    expect(result.response).not.toContain("70%");
+    expect(result.response).toContain("70%");
+    expect(result.response).toContain("30%");
     expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 
@@ -66,7 +67,7 @@ describe("business knowledge golden tests", () => {
 
     expect(result.response).toContain("70%");
     expect(result.response).toContain("30%");
-    expect(result.response.toLowerCase()).toContain("rose models");
+    expect(result.response.toLowerCase()).toContain("agencia");
     expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 
@@ -162,7 +163,7 @@ describe("business knowledge golden tests", () => {
 
     expect(result.response).toContain("70%");
     expect(result.response).toContain("30%");
-    expect(result.response.toLowerCase()).toContain("rose models");
+    expect(result.response.toLowerCase()).toContain("agencia");
     expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 

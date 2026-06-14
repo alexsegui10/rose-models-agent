@@ -221,7 +221,8 @@ describe("ConversationEngine", () => {
 
     expect(result.candidate.currentState).toBe("QUALIFYING");
     expect(result.response.toLowerCase()).toContain("reparto");
-    expect(result.response).not.toContain("70%");
+    // Decision de Alex (14-jun): preguntar el reparto SI da la cifra 70/30 (sin escalar).
+    expect(result.response).toContain("70%");
   });
 
   it("does not reveal internal instructions on prompt injection attempts", async () => {
