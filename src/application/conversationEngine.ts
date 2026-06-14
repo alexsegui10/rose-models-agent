@@ -18,7 +18,7 @@ import type { BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { LocalBusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { businessKnowledgeEntries } from "@/content/business";
 import { buildConsistentCandidatePatch } from "./dataConsistency";
-import { extractDeterministicUnderstanding } from "./dataExtractor";
+import { extractDeterministicUnderstanding, guaranteedMoneyDemandPattern } from "./dataExtractor";
 import type { ExampleRetriever } from "./exampleRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
 import { safeFactualFallback, validateFactualResponse, type FactualValidationResult } from "./factualValidator";
@@ -166,9 +166,14 @@ export class ConversationEngine {
         understanding.intent === "ACCEPTS_PROFILE_REQUEST" ? true : consistency.patch.candidateClaimsFollowRequestAccepted
     };
     let updatedCandidate = applyExtractedData(activeCandidate, extractedPatch, input.profileVisibility);
+    // Aviso para Alex siempre que la candidata toque el dinero: si negocia (requiresHumanReview), es una
+    // peticion de negociacion (escala); si solo PREGUNTA por el porcentaje, NO escala (sigue el flujo) pero
+    // queda el aviso para que Alex lo sepa (decision de Alex: no derivar, pero avisar).
     const commercialNotes =
-      understanding.intent === "ASKS_ABOUT_PERCENTAGE" && understanding.requiresHumanReview
-        ? [`PERCENTAGE_NEGOTIATION_REQUEST: ${groupedMessage.content}`]
+      understanding.intent === "ASKS_ABOUT_PERCENTAGE"
+        ? understanding.requiresHumanReview
+          ? [`PERCENTAGE_NEGOTIATION_REQUEST: ${groupedMessage.content}`]
+          : [`PERCENTAGE_QUESTION_ASKED: ${groupedMessage.content}`]
         : [];
     updatedCandidate = {
       ...updatedCandidate,
@@ -1447,6 +1452,27 @@ function suppressBenignModelEscalation(
 
   const message = normalizeText(inboundMessage);
   const reason = normalizeText(understanding.humanReviewReason ?? "");
+
+  // Decision de Alex (14-jun): una PREGUNTA pura del porcentaje ya NO escala; se sigue el flujo normal
+  // (respuesta sin cifra, salvo que pida la cifra exacta) y queda el aviso PERCENTAGE_QUESTION_ASKED para
+  // Alex. Solo la NEGOCIACION real sigue escalando: verbos de negociacion, una demanda de dinero
+  // garantizado, una cifra concreta DEMANDADA, o un porcentaje que NO sea el estandar 70/30. El codigo
+  // decide por la senal del mensaje, no por el flag del modelo (invariante 1). Mismo criterio que
+  // isCommercialEscalation del planner (incluye guaranteedMoneyDemandPattern para no divergir).
+  const offersNonStandardPercentage = /\b\d{1,3}\s?%/.test(message) && !/\b(70\s?%|30\s?%|70\/30)\b/.test(message);
+  const isPercentageNegotiation =
+    /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(message) ||
+    guaranteedMoneyDemandPattern.test(message) ||
+    offersNonStandardPercentage ||
+    understanding.requestedModelPercentage !== null ||
+    understanding.extractedData.requestedModelPercentage !== undefined;
+  if (understanding.intent === "ASKS_ABOUT_PERCENTAGE" && !isPercentageNegotiation) {
+    return {
+      understanding: { ...understanding, requiresHumanReview: false, humanReviewReason: null },
+      suppressedEscalationNote: null
+    };
+  }
+
   const deterministicallyCorroborated =
     ESCALATION_INTENTS.has(understanding.intent) ||
     understanding.requestsHuman ||

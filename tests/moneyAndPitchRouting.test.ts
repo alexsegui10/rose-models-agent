@@ -165,3 +165,27 @@ describe("engine money and pitch behavior", () => {
     expect(result.response.toLowerCase()).not.toContain("parte operativa");
   });
 });
+
+describe("percentage question notifies Alex without escalating; negotiation still escalates", () => {
+  it("a pure percentage question stays QUALIFYING and leaves a PERCENTAGE_QUESTION_ASKED note", async () => {
+    const { engine } = createEngine();
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "pct_question",
+      profileVisibility: "PUBLIC",
+      message: "que porcentaje os quedais?"
+    });
+    expect(result.candidate.currentState).toBe("QUALIFYING");
+    expect(result.candidate.notes.some((note) => note.startsWith("PERCENTAGE_QUESTION_ASKED"))).toBe(true);
+  });
+
+  it("a real negotiation still escalates to human review with a PERCENTAGE_NEGOTIATION_REQUEST note", async () => {
+    const { engine } = createEngine();
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "pct_negotiation",
+      profileVisibility: "PUBLIC",
+      message: "me dais el 90% a mi?"
+    });
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.candidate.notes.some((note) => note.startsWith("PERCENTAGE_NEGOTIATION_REQUEST"))).toBe(true);
+  });
+});
