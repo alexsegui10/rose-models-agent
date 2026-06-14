@@ -237,32 +237,32 @@ describe("commercial and device policy", () => {
 
   it("does not pass to final review with unknown device", async () => {
     const { engine } = createEngine();
-    const first = await engine.handleIncomingMessage({
-      instagramUsername: "missing_iphone_case",
-      profileVisibility: "PUBLIC",
-      message: "Soy Ana, tengo 24 anos, soy de Madrid y tengo experiencia en redes"
-    });
-    const second = await engine.handleIncomingMessage({
-      candidateId: first.candidate.id,
-      instagramUsername: "missing_iphone_case",
-      profileVisibility: "PUBLIC",
-      message: "Estoy disponible por las tardes y no trabajo con otra agencia"
-    });
+    const turns = [
+      "Soy Ana, tengo 24 anos y soy de Madrid",
+      "si tengo onlyfans activo",
+      "no he trabajado con agencias",
+      "puedo dedicarle las tardes",
+      "vale, sin problema"
+    ];
+    const responses: string[] = [];
+    let id: string | undefined;
+    let last: Awaited<ReturnType<typeof engine.handleIncomingMessage>> | undefined;
+    for (const message of turns) {
+      last = await engine.handleIncomingMessage({
+        candidateId: id,
+        instagramUsername: "missing_iphone_case",
+        profileVisibility: "PUBLIC",
+        message
+      });
+      id = last.candidate.id;
+      responses.push(last.response.toLowerCase());
+    }
 
-    // Al decir que no ha trabajado con agencias, el bot explica como trabajamos (pitch proactivo)
-    // antes de seguir; el movil llega en el siguiente turno. El gate de movil sigue intacto:
-    // con dispositivo desconocido NUNCA pasa a revision final.
-    expect(second.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
-    expect(second.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
-
-    const third = await engine.handleIncomingMessage({
-      candidateId: first.candidate.id,
-      instagramUsername: "missing_iphone_case",
-      profileVisibility: "PUBLIC",
-      message: "vale, suena bien"
-    });
-    expect(third.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
-    expect(third.response.toLowerCase()).toContain("movil");
+    // Da todos los datos MENOS el movil: con dispositivo desconocido NUNCA pasa a revision final, y el
+    // bot debe preguntar por el movil en algun momento del guion.
+    expect(last?.candidate.deviceEligibility).toBe("UNKNOWN");
+    expect(last?.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
+    expect(responses.some((response) => response.includes("movil"))).toBe(true);
   });
 
   it("does not ask for device again once answered", async () => {

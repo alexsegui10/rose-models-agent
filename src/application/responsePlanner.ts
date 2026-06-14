@@ -70,7 +70,9 @@ const qualificationSlots: QualificationSlot[] = [
     id: "onlyfans-or-experience",
     question: "Tienes of o has tenido alguna vez?",
     alreadyAskedPattern: /tienes of|has tenido of|tienes onlyfans|has tenido onlyfans/,
-    isMissing: (candidate) => candidate.hasOnlyFans === undefined && !candidate.experienceDescription
+    // Solo depende de si SABEMOS si tiene OnlyFans: una experienceDescription (a veces alucinada por
+    // el LLM desde un mensaje de parloteo) NO dice si tiene OF, asi que no debe saltarse esta pregunta.
+    isMissing: (candidate) => candidate.hasOnlyFans === undefined
   },
   {
     id: "agencies",
