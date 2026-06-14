@@ -20,9 +20,51 @@ const ageCountNounLookahead = "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[
 // a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
 // menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
 const agePattern = new RegExp(
-  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años))`,
+  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años|anitos|añitos))`,
   "i"
 );
+
+// Declaracion de minoria de edad. Invariante 2 (INNEGOCIABLE): una menor SIEMPRE se cierra y NUNCA
+// se confirma como adulta. Se detecta ANTES del agePattern para que "no tengo 18" no se lea como
+// "tengo 18" (edad 18 -> adulta confirmada, el peor fallo posible hallado en la auditoria del 14-jun).
+// Opera sobre el texto ya normalizado (sin acentos): "años"->"anos", "añitos"->"anitos".
+const wordAgesUnder18: Readonly<Record<string, number>> = {
+  diez: 10,
+  once: 11,
+  doce: 12,
+  trece: 13,
+  catorce: 14,
+  quince: 15,
+  dieciseis: 16,
+  diecisiete: 17
+};
+
+function declaredMinorAge(normalized: string): number | null {
+  // Minoria explicita sin cifra: "soy menor", "menor de edad", "no soy mayor de edad".
+  if (
+    /\b(?:soy|aun soy|todavia soy)\s+menor\b/.test(normalized) ||
+    /\bmenor de edad\b/.test(normalized) ||
+    /\bno soy mayor de edad\b/.test(normalized)
+  ) {
+    return 17;
+  }
+  // "(aun|todavia) no tengo N" / "no tengo N (todavia|aun)" con N<=18 -> casi N, es menor (~N-1).
+  // Se excluyen contables/dinero para no leer "no tengo 200 euros" como edad.
+  const notYet = normalized.match(
+    /\bno tengo\s+(\d{1,2})\b(?!\s*(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|euros?|dolares?|mil))/
+  );
+  if (notYet) {
+    const declared = Number(notYet[1]);
+    if (declared <= 18) return Math.max(1, declared - 1);
+  }
+  // Numeros en letra menores de 18 en contexto de edad ("tengo dieciseis", "quince anos"), evitando
+  // "hace quince anos" (un periodo de tiempo, no la edad).
+  for (const [word, value] of Object.entries(wordAgesUnder18)) {
+    if (new RegExp(`\\btengo\\s+${word}\\b`).test(normalized)) return value;
+    if (new RegExp(`(?<!hace\\s)\\b${word}\\s+(?:anos|años|anitos|añitos)\\b`).test(normalized)) return value;
+  }
+  return null;
+}
 
 // Demanda de dinero garantizado: cifra + moneda + periodicidad ("500 dolares por semana"),
 // cifra + "garantizados", o verbo de exigencia + cifra + periodicidad. NO matchea declaraciones
@@ -150,9 +192,11 @@ const agentAskedAgePattern = /\b(que edad tienes|cuantos anos|tu edad)\b/;
 const agentAskedOnlyFansPattern = /\b(tienes of|has tenido of|tienes onlyfans|has tenido onlyfans|of activo)\b/;
 const agentAskedAgenciesPattern = /\botras? agencias?\b/;
 
-// Una edad pelada es exactamente uno o dos digitos (con ruido de puntuacion opcional), nunca un
-// numero embebido en una frase ("tengo 2 cuentas"): eso evita edades fantasma (invariante 2).
-const bareAgeMessagePattern = /^\s*(\d{1,2})\s*$/;
+// Una edad pelada es uno o dos digitos como respuesta a "que edad tienes?", admitiendo el prefijo
+// "edad:" y ruido final de puntuacion/emoji ("17!", "17 :)", "edad: 17"). No matchea numeros con un
+// contable detras ("17 cuentas"): eso evita edades fantasma (invariante 2). Solo se usa si el agente
+// acaba de preguntar la edad, asi que el ruido final es seguro.
+const bareAgeMessagePattern = /^\s*(?:edad\s*:?\s*)?(\d{1,2})\s*(?:anos|años|anitos|añitos)?\s*[\p{P}\p{S}\s]*$/u;
 
 // Respuestas afirmativas/negativas peladas a una pregunta cerrada del agente.
 const bareYesPattern = /^\s*(si+|sii*|claro|por supuesto|asi es|correcto|afirmativo|exacto)\b/;
@@ -288,8 +332,14 @@ export function extractDeterministicUnderstanding(
 
   // Los numeros argentinos locales empiezan por "11"/"15": si la candidata escribe
   // "tengo 11 2345 6789" no podemos leer edad 11 y cerrarla como menor (invariante 2).
-  const ageMatch = stripPhoneSpans(normalized).match(agePattern);
-  if (ageMatch) extractedData.age = Number(ageMatch[1] ?? ageMatch[2]);
+  // La declaracion de minoria tiene prioridad sobre el agePattern: "no tengo 18" es menor, no "18".
+  const minorAge = declaredMinorAge(normalized);
+  if (minorAge !== null) {
+    extractedData.age = minorAge;
+  } else {
+    const ageMatch = stripPhoneSpans(normalized).match(agePattern);
+    if (ageMatch) extractedData.age = Number(ageMatch[1] ?? ageMatch[2]);
+  }
 
   if (mentionsPrivateProfile(normalized)) extractedData.profileVisibility = "PRIVATE";
 
