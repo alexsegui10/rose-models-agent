@@ -1,9 +1,10 @@
 import type { Candidate } from "@/domain/candidate";
 
+// La validacion de porcentajes (rechazar cifras fuera de la politica 70/30) vive en factualValidator,
+// que conoce la excepcion 70/30. Aqui solo se filtran promesas/datos sensibles que nunca son validos.
 const forbiddenPatterns = [
   /ingresos garantizados/i,
   /ganancias garantizadas/i,
-  /\b\d{1,2}%\b/,
   /maquina de estados/i,
   /máquina de estados/i,
   /prompt/i,

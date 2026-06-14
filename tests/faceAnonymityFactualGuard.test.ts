@@ -61,6 +61,15 @@ describe("factual guard: never promise hiding the face (replay-4 T12)", () => {
     expect(validation.valid).toBe(false);
   });
 
+  it("rejects a long formulation that hides the face with 'sin que aparezca ... la cara'", () => {
+    const plan = planForFaceObjection();
+    const validation = validateFactualResponse(
+      "Podemos crear una estrategia donde trabajamos el contenido sobre otras tematicas del cuerpo y movimientos sin que aparezca de manera evidente la cara.",
+      plan
+    );
+    expect(validation.valid).toBe(false);
+  });
+
   it("accepts the canonical 'la cara es imprescindible' answer", () => {
     const plan = planForFaceObjection();
     const validation = validateFactualResponse(

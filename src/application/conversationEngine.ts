@@ -3,6 +3,7 @@ import type {
   CandidatePatch,
   CandidateState,
   ConversationMessage,
+  HumanReviewReason,
   ProfileVisibility,
   StateTransition
 } from "@/domain/candidate";
@@ -223,7 +224,9 @@ export class ConversationEngine {
         humanReviewStatus: nextState === "WAITING_HUMAN_REVIEW" ? "PENDING" : projectedCandidate.humanReviewStatus,
         humanReviewReason:
           nextState === "HUMAN_INTERVENTION_REQUIRED"
-            ? (responsePlan.humanReviewReason ?? projectedCandidate.humanReviewReason)
+            ? (responsePlan.humanReviewReason ??
+              contradictionReviewReason(criticalHumanReviewReason) ??
+              projectedCandidate.humanReviewReason)
             : projectedCandidate.humanReviewReason,
         updatedAt: new Date()
       };
@@ -346,11 +349,41 @@ export class ConversationEngine {
     }
 
     const deliveryStatus = deliveryStatusFor(this.automationMode, responsePlan, projectedCandidate, factualValidation.valid);
-    if (deliveryStatus === "DRAFT_ONLY" || deliveryStatus === "BLOCKED") {
+    if (deliveryStatus === "BLOCKED") {
+      // La entrega se bloquea (escala a revision humana, fallo de validacion factual, o ya en HIR),
+      // pero la transicion de estado decidida por codigo (p. ej. -> HUMAN_INTERVENTION_REQUIRED) SI
+      // debe persistirse: si guardasemos el estado previo, el siguiente turno lo recargaria y el bot
+      // seguiria cualificando como si nada, perdiendo la pausa (rompe invariantes 1 y 4). No se envia
+      // ningun mensaje (esta bloqueado), pero el estado avanza igual que en una entrega normal.
+      await this.dependencies.repository.saveCandidate(projectedCandidate);
+      for (const transition of plannedTransitions) {
+        await this.dependencies.repository.addTransition(transition);
+      }
+      return {
+        candidate: projectedCandidate,
+        response,
+        understanding,
+        knowledgeEntries,
+        responsePlan,
+        retrievedExamples,
+        styleContext,
+        styleEvaluation,
+        factualValidation,
+        duplicate: false,
+        automationBlocked: true,
+        automationMode: this.automationMode,
+        deliveryStatus,
+        draft,
+        contradictions: consistency.contradictions,
+        corrections: consistency.corrections,
+        plannedTransitions
+      };
+    }
+    if (deliveryStatus === "DRAFT_ONLY") {
       await this.dependencies.repository.saveCandidate(updatedCandidate);
       // En DRAFT_ONLY (playback de evaluacion) el borrador SI se guarda como mensaje del agente:
       // sin ese historial, el guard anti-repeticion y el "no" contextual no ven que pregunto el bot.
-      if (deliveryStatus === "DRAFT_ONLY" && response.trim().length > 0) {
+      if (response.trim().length > 0) {
         await this.dependencies.repository.addMessage(
           agentMessage(updatedCandidate.id, response, {
             deliveryStatus,
@@ -372,7 +405,7 @@ export class ConversationEngine {
         styleEvaluation,
         factualValidation,
         duplicate: false,
-        automationBlocked: deliveryStatus === "BLOCKED",
+        automationBlocked: false,
         automationMode: this.automationMode,
         deliveryStatus,
         draft,
@@ -1526,6 +1559,12 @@ function criticalRestrictionReason(
   if (candidate.deviceEligibility === "NOT_ELIGIBLE") return "Movil no elegible por calidad.";
   if (understanding.intent === "PROMPT_INJECTION") return "Intento de obtener instrucciones internas.";
   return null;
+}
+
+// Cuando la escalada a HIR la causa una contradiccion de datos (no el plan de respuesta), el motivo
+// estructurado por el que Alex filtra las pausas debe ser DATA_CONTRADICTION, no quedar sin asignar.
+function contradictionReviewReason(criticalHumanReviewReason: string | null): HumanReviewReason | undefined {
+  return criticalHumanReviewReason?.startsWith("Datos contradictorios") ? "DATA_CONTRADICTION" : undefined;
 }
 
 function canAutomationSend(candidate: Candidate, tokenVersion: number): boolean {

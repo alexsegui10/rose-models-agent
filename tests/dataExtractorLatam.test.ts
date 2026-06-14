@@ -123,6 +123,23 @@ describe("dataExtractor LATAM phone extraction", () => {
       expect(result.extractedData.phone).toBe("1123456789");
     });
   });
+
+  describe("does not read the Spanish preposition 'a' as the 'años' abbreviation", () => {
+    it("does not read a call-time proposal 'de 9 a 14' as age 9 (would falsely CLOSE an adult)", () => {
+      const result = extractDeterministicUnderstanding("Perfecto, podemos hablar de 9 a 14 cualquier dia");
+      expect(result.extractedData.age).toBeUndefined();
+    });
+
+    it("does not read 'tengo 25 a alguien' as age 25", () => {
+      const result = extractDeterministicUnderstanding("Tengo 25 a alguien en mi lista");
+      expect(result.extractedData.age).toBeUndefined();
+    });
+
+    it("still extracts age from the explicit 'años' form", () => {
+      const result = extractDeterministicUnderstanding("Tengo 22 años");
+      expect(result.extractedData.age).toBe(22);
+    });
+  });
 });
 
 describe("dataExtractor LATAM cities and countries", () => {

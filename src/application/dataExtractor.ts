@@ -16,8 +16,11 @@ const phonePatterns: readonly RegExp[] = [
 // es edad si N no va seguido de un contable ("cuentas", "seguidores", "hijos"...). "N años" se sigue
 // resolviendo por la segunda rama.
 const ageCountNounLookahead = "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|anos|años|a\\b))";
+// La segunda rama solo acepta "anos"/"años" explicito: "a" suelta es la preposicion castellana ("de 9
+// a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
+// menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
 const agePattern = new RegExp(
-  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años|a\\b))`,
+  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años))`,
   "i"
 );
 

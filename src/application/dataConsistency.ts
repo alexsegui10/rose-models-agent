@@ -199,6 +199,14 @@ function applyDeviceEligibility(
   allowsCorrection: boolean
 ): void {
   if (nextValue === undefined) return;
+  // NOT_ELIGIBLE es un rechazo duro por hardware (policyRules lo trata como "con ese movil no podemos
+  // trabajar"). No se puede "desbloquear" por una re-inferencia del texto: una candidata rechazada por
+  // movil que luego afirma otro telefono debe ir a revision humana (verificacion real de calidad),
+  // nunca auto-aprobarse en silencio. Bajar a UNKNOWN es perdida de info y lo gestiona applyValue.
+  if (currentValue === "NOT_ELIGIBLE" && nextValue !== "NOT_ELIGIBLE" && nextValue !== "UNKNOWN") {
+    contradictions.push(`deviceEligibility changed from NOT_ELIGIBLE to ${nextValue}`);
+    return;
+  }
   const expectedResolution =
     (currentValue === "PENDING_UPGRADE" || currentValue === "PENDING_QUALITY_TEST" || currentValue === "UNKNOWN") &&
     (nextValue === "APPROVED" || nextValue === "PENDING_QUALITY_TEST");

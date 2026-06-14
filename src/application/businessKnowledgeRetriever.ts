@@ -176,7 +176,9 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("contract", "legal", "human-review");
   if (input.intent === "REQUESTS_CALL") tags.push("call", "schedule");
 
-  return tags;
+  // Varias reglas empujan el mismo tag (p. ej. "percentage" por "porcentaje" y por un "%" numerico).
+  // scoreEntry suma +1.4 por cada coincidencia, asi que sin deduplicar una entrada puntuaria doble.
+  return [...new Set(tags)];
 }
 
 // Especificaciones contractuales GENUINAS: terminos legales concretos o salida/compromiso de la

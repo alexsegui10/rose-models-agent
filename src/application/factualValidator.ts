@@ -117,6 +117,9 @@ function promisesFaceConcealment(response: string): boolean {
   if (/\b(no\s+(?:saldra|sale|salga|aparece|aparecera|se\s+ve|se\s+vera))\b[^.!?]{0,20}\bcara\b/.test(normalized)) return true;
   if (/\bcara\b[^.!?]{0,20}\bno\s+(?:saldra|sale|salga|aparece|aparecera|se\s+ve|se\s+vera)\b/.test(normalized)) return true;
   if (/\bsin\s+(?:mostrar|ensenar|que\s+se\s+vea)\b[^.!?]{0,15}\bcara\b/.test(normalized)) return true;
+  // Formulaciones largas con "sin que (aparezca|salga|se vea) ... la cara" ("sin que aparezca de
+  // manera evidente la cara"): el ocultamiento y "cara" pueden ir separados por varias palabras.
+  if (/\bsin\s+que\s+(?:aparezca|aparezcan|salga|salgan|se\s+vea|se\s+vean)\b[^.!?]{0,40}\bcara\b/.test(normalized)) return true;
   if (/\bno\s+(?:hace\s+falta|necesitas|tienes\s+que)\s+(?:mostrar|ensenar)\b[^.!?]{0,15}\bcara\b/.test(normalized)) return true;
 
   return false;
