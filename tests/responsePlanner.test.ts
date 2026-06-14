@@ -460,3 +460,56 @@ describe("responsePlanner knowledge dumping guard", () => {
     expect(plan.answerFacts.length).toBeGreaterThan(0);
   });
 });
+
+// FIX 2 (sobre-escalado): el modelo en vivo a veces clasifica "Cual es el proceso de seleccion?"
+// como ASKS_ABOUT_CONTRACT, lo que arrastraba la entrada contract-questions-human-review (HIR) y
+// escalaba una pregunta benigna. Una pregunta generica de proceso/seleccion/como-funciona se
+// RESPONDE con faq-selection-process; solo las dudas contractuales GENUINAS (permanencia, clausula,
+// firmar, exclusividad, terminos legales) escalan.
+describe("responsePlanner generic process question does not over-escalate as contract (FIX 2)", () => {
+  it("answers the selection-process question instead of escalating, even when the model labels it ASKS_ABOUT_CONTRACT", () => {
+    const plan = planFor({
+      candidate: candidateWith(),
+      understanding: understandingWith({ intent: "ASKS_ABOUT_CONTRACT" }),
+      inboundMessage: "Cual es el proceso de seleccion?",
+      knowledgeEntries: [entryById("faq-selection-process")]
+    });
+    expect(plan.requiresHumanReview).toBe(false);
+    expect(plan.uncoveredQuestion).toBe(false);
+    expect(plan.knowledgeEntryIds).toContain("faq-selection-process");
+    expect(plan.answerFacts.length).toBeGreaterThan(0);
+  });
+
+  it("answers a generic 'como funciona el proceso' question without escalating", () => {
+    const plan = planFor({
+      candidate: candidateWith(),
+      understanding: understandingWith({ intent: "ASKS_ABOUT_CONTRACT" }),
+      inboundMessage: "Como funciona el proceso de revision?",
+      knowledgeEntries: [entryById("faq-selection-process")]
+    });
+    expect(plan.requiresHumanReview).toBe(false);
+    expect(plan.uncoveredQuestion).toBe(false);
+  });
+
+  it("STILL escalates a genuine permanence contract question to human review", () => {
+    const plan = planFor({
+      candidate: candidateWith(),
+      understanding: understandingWith({ intent: "ASKS_ABOUT_CONTRACT" }),
+      inboundMessage: "El contrato tiene permanencia?",
+      knowledgeEntries: [entryById("contract-questions-human-review")]
+    });
+    expect(plan.requiresHumanReview).toBe(true);
+    expect(plan.humanReviewReason).toBe("CONTRACT_QUESTION");
+  });
+
+  it("STILL escalates a genuine exclusivity-clause contract question to human review", () => {
+    const plan = planFor({
+      candidate: candidateWith(),
+      understanding: understandingWith({ intent: "ASKS_ABOUT_CONTRACT" }),
+      inboundMessage: "Hay alguna clausula de exclusividad en el contrato que tengo que firmar?",
+      knowledgeEntries: [entryById("contract-questions-human-review")]
+    });
+    // "exclusividad" es una pregunta especifica sin cobertura: escala (reason OTHER), pero escala.
+    expect(plan.requiresHumanReview).toBe(true);
+  });
+});

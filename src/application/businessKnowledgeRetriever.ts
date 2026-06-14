@@ -165,10 +165,36 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(telegram|twitter|videollamadas|otras redes)\b/.test(message)) tags.push("traffic", "telegram", "twitter", "services");
 
   if (input.intent === "ASKS_ABOUT_PERCENTAGE") tags.push("percentage", "revenue-share");
-  if (input.intent === "ASKS_ABOUT_CONTRACT") tags.push("contract", "legal", "human-review");
+  // FIX 2: el modelo en vivo a veces etiqueta una pregunta benigna de proceso/seleccion/como-funciona
+  // como ASKS_ABOUT_CONTRACT. Forzar aqui las etiquetas contractuales (que arrastran la entrada HIR
+  // contract-questions-human-review) escalaba una pregunta que SI tiene respuesta activa
+  // (faq-selection-process). Solo se fuerza la etiqueta contractual cuando hay una especificacion
+  // contractual GENUINA en el mensaje, o cuando NO es una pregunta generica de proceso. Las dudas
+  // contractuales reales (contrato/clausula/permanencia/firmar/exclusividad) ya las captura la linea
+  // de mensaje de arriba y/o este intent, asi que la escalada genuina nunca se debilita.
+  if (input.intent === "ASKS_ABOUT_CONTRACT" && (hasGenuineContractSpecifics(message) || !isGenericProcessQuestion(message)))
+    tags.push("contract", "legal", "human-review");
   if (input.intent === "REQUESTS_CALL") tags.push("call", "schedule");
 
   return tags;
+}
+
+// Especificaciones contractuales GENUINAS: terminos legales concretos o salida/compromiso de la
+// relacion. Su presencia mantiene SIEMPRE la escalada contractual, aunque el mensaje tambien hable de
+// "proceso" (una baja/terminacion disfrazada de "que pasos hay para salir?" sigue siendo contractual).
+const genuineContractSpecificsPattern =
+  /\b(contrato|contractual|clausula|permanencia|exclusividad|firmar|terminos legales|legal|abogad|preaviso|penalizacion|salir|salirme|dejar|dejarlo|baja|darme de baja|desvincul|terminar|finalizar|rescind|compromiso|comprometer|obligan|obligacion|tiempo minimo)\b/;
+
+// Pregunta generica de proceso/seleccion/como-funciona: tiene respuesta activa y NO debe escalar.
+const genericProcessQuestionPattern =
+  /\b(proceso|seleccion|como funciona|como va|como es|que pasos|requisitos|como entro|como me uno|como empiezo)\b/;
+
+function hasGenuineContractSpecifics(message: string): boolean {
+  return genuineContractSpecificsPattern.test(message);
+}
+
+function isGenericProcessQuestion(message: string): boolean {
+  return genericProcessQuestionPattern.test(message);
 }
 
 function normalize(value: string): string {

@@ -33,4 +33,19 @@ describe("buildDraftingInstructions (reglas de voz y flujo en modo OpenAI)", () 
     expect(instructions).toMatch(/no inventes/);
     expect(instructions).toMatch(/porcentaje/);
   });
+
+  // FIX 3 (replay-2 T9, replay-8 T6): el modelo se saltaba la pregunta de OnlyFans y proponia
+  // agendar la llamada antes de terminar el guion esencial. La regla obliga a hacer mainQuestion
+  // (OF/edad) y prohibe adelantar la agenda mientras siga pendiente.
+  it("forbids rushing to schedule while an essential question (OnlyFans/age) is still pending", () => {
+    expect(instructions).toMatch(/onlyfans|tienes of/);
+    expect(instructions).toMatch(/no propongas agendar|no te saltes|primero se termina el guion/);
+    expect(instructions).toMatch(/edad/);
+  });
+
+  // FIX 4 (replay-11 T4: 'Tengo cuenta y me falta solo saber la edad tuya'): no devolver como loro
+  // las palabras de la candidata.
+  it("forbids parroting back the candidate's own words", () => {
+    expect(instructions).toMatch(/loro|no repitas ni paraf|sin devolverle su propia frase/);
+  });
 });

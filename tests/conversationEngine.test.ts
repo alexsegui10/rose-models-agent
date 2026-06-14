@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConversationEngine } from "@/application/conversationEngine";
+import { ConversationEngine, greetingForHour } from "@/application/conversationEngine";
 import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
 import {
   ModelConversationOutputSchema,
@@ -237,9 +237,79 @@ describe("ConversationEngine", () => {
     expect(result.response.toLowerCase()).not.toContain("prompt");
     expect(result.response.toLowerCase()).not.toContain("instrucciones internas");
   });
+
+  // FIX 2 (sobre-escalado de extremo a extremo): aunque el modelo etiquete una pregunta benigna de
+  // proceso como ASKS_ABOUT_CONTRACT, el pipeline completo (retriever -> planner -> motor) la
+  // RESPONDE sin pausar a revision humana.
+  it("does not escalate a generic process question mislabeled as ASKS_ABOUT_CONTRACT", async () => {
+    const { engine } = createEngineWithStub([stubUnderstanding({ intent: "ASKS_ABOUT_CONTRACT" })]);
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_proceso_benigno",
+      profileVisibility: "PUBLIC",
+      message: "Cual es el proceso de seleccion?"
+    });
+
+    expect(result.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.responsePlan.requiresHumanReview).toBe(false);
+    expect(result.responsePlan.knowledgeEntryIds).toContain("faq-selection-process");
+  });
+
+  // FIX 2 (la escalada genuina NO se debilita): una duda contractual real sigue pausando a humano.
+  it("STILL escalates a genuine contract question (permanence) to human intervention", async () => {
+    const { engine } = createEngineWithStub([stubUnderstanding({ intent: "ASKS_ABOUT_CONTRACT" })]);
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_contrato_real",
+      profileVisibility: "PUBLIC",
+      message: "El contrato tiene permanencia o clausula de exclusividad?"
+    });
+
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+  });
+});
+
+// FIX 1: el saludo del opener era siempre "buenos dias", tambien de noche. Alex pidio que sea
+// consciente de la hora (zona horaria de Alex, Europe/Madrid, porque el que habla es Alex).
+describe("greetingForHour (saludo consciente de la hora, helper puro)", () => {
+  it("says 'buenos dias' in the morning window (5-13)", () => {
+    for (const hour of [5, 8, 11, 13]) {
+      expect(greetingForHour(hour)).toBe("buenos dias");
+    }
+  });
+
+  it("says 'buenas tardes' in the afternoon window (14-20)", () => {
+    for (const hour of [14, 17, 20]) {
+      expect(greetingForHour(hour)).toBe("buenas tardes");
+    }
+  });
+
+  it("says 'buenas noches' in the night window (21-4)", () => {
+    for (const hour of [21, 23, 0, 3, 4]) {
+      expect(greetingForHour(hour)).toBe("buenas noches");
+    }
+  });
 });
 
 describe("ConversationEngine first contact (opener canonico gate-first)", () => {
+  it("uses the time-aware greeting in the canonical opener and keeps the rest identical", async () => {
+    const { engine } = createEngine();
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_saludo_horario",
+      profileVisibility: "PUBLIC",
+      message: "Hola, quiero informacion"
+    });
+
+    // El saludo correcto para la hora actual de Madrid debe aparecer; el resto del opener intacto.
+    const expectedGreeting = greetingForHour(
+      Number(new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", hour: "2-digit", hour12: false }).format(new Date())) %
+        24
+    );
+    expect(result.response.toLowerCase()).toContain(expectedGreeting);
+    expect(result.response).toContain("Alex de Rose Models");
+    expect(result.response).not.toContain("?");
+  });
+
   it("opens the first agent turn with the three canonical beats and zero questions", async () => {
     const { engine } = createEngine();
 

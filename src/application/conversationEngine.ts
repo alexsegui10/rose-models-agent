@@ -663,7 +663,7 @@ function generateResponse(
   }
 
   if (candidate.currentState === "WAITING_PROFILE_ACCESS") {
-    return "Hola, buenos dias. Soy Alex, de Rose Models.\n\nHe visto que tienes la cuenta privada. Si no te supone ningun problema, aceptanos la solicitud de seguimiento para valorar tu perfil antes de explicarte todo mejor.";
+    return `Hola, ${greetingForHour(currentMadridHour())}. Soy Alex, de Rose Models.\n\nHe visto que tienes la cuenta privada. Si no te supone ningun problema, aceptanos la solicitud de seguimiento para valorar tu perfil antes de explicarte todo mejor.`;
   }
 
   if (candidate.currentState === "PROFILE_READY_FOR_REVIEW") {
@@ -816,13 +816,37 @@ function humanInterventionResponse(
   return "Vale, esto lo hablo con mi socio y te digo, no te preocupes.";
 }
 
+/**
+ * Saludo consciente de la hora (helper PURO, sin I/O): el saludo lo decide la hora de Alex, no la de
+ * la candidata. Manana 5-13, tarde 14-20, noche 21-4. Antes el opener decia siempre "buenos dias",
+ * tambien por la noche (fallo de voz que Alex pidio corregir explicitamente).
+ */
+export function greetingForHour(hour: number): string {
+  const normalized = ((hour % 24) + 24) % 24;
+  if (normalized >= 5 && normalized <= 13) return "buenos dias";
+  if (normalized >= 14 && normalized <= 20) return "buenas tardes";
+  return "buenas noches";
+}
+
+/** Hora actual en la zona horaria de Alex (Europe/Madrid), porque el que saluda es Alex. */
+function currentMadridHour(): number {
+  const formatted = new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit",
+    hour12: false
+  }).format(new Date());
+  // Intl puede devolver "24" a medianoche en algunos entornos; se normaliza a 0-23.
+  return Number(formatted) % 24;
+}
+
 /** Opener canonico (plantillas reales de Alex): identidad + validacion de perfil o gate + marco. */
 function canonicalOpener(candidate: Candidate): string {
+  const greeting = greetingForHour(currentMadridHour());
   if (candidate.declaredProfileVisibility === "PUBLIC") {
-    return "Hola, buenos dias soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.";
+    return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.`;
   }
 
-  return "Hola, buenos dias soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.";
+  return `Hola, ${greeting} soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.`;
 }
 
 // Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.

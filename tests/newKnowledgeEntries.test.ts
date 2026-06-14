@@ -125,6 +125,47 @@ describe("new knowledge entries from real conversation synthesis (2026-06-10)", 
     }
   });
 
+  // FIX 2: el modelo en vivo a veces etiqueta "Cual es el proceso de seleccion?" como
+  // ASKS_ABOUT_CONTRACT. La intencion contractual NO debe forzar la entrada HIR
+  // (contract-questions-human-review) cuando la pregunta es generica de proceso/seleccion: se
+  // recupera faq-selection-process y se responde, no se escala.
+  it("does not force the contract HIR entry when ASKS_ABOUT_CONTRACT is a generic process question", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const entries = await retriever.retrieve({
+      candidate: probeCandidate(),
+      intent: "ASKS_ABOUT_CONTRACT",
+      question: "Cual es el proceso de seleccion?",
+      limit: 6
+    });
+    const ids = entries.map((entry) => entry.id);
+    expect(ids).toContain("faq-selection-process");
+    expect(ids).not.toContain("contract-questions-human-review");
+  });
+
+  it("STILL retrieves the contract HIR entry for a genuine contract question (permanence)", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const entries = await retriever.retrieve({
+      candidate: probeCandidate(),
+      intent: "ASKS_ABOUT_CONTRACT",
+      question: "El contrato tiene permanencia o clausula de exclusividad?",
+      limit: 6
+    });
+    expect(entries.map((entry) => entry.id)).toContain("contract-questions-human-review");
+  });
+
+  // FIX 2 (cierre del hueco senalado por el revisor): una pregunta de baja/terminacion disfrazada de
+  // "proceso" ('que pasos hay para salir?') sigue siendo contractual y debe mantener la escalada.
+  it("STILL retrieves the contract HIR entry for a termination question disguised as a process question", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const entries = await retriever.retrieve({
+      candidate: probeCandidate(),
+      intent: "ASKS_ABOUT_CONTRACT",
+      question: "Que pasos hay para salir si quiero dejarlo?",
+      limit: 6
+    });
+    expect(entries.map((entry) => entry.id)).toContain("contract-questions-human-review");
+  });
+
   it("never returns DRAFT entries for production retrieval even when they are the only match", async () => {
     const syntheticDraft = {
       ...businessKnowledgeEntries.find((entry) => entry.id === "faq-selection-process")!,

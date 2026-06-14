@@ -35,4 +35,12 @@ describe("buildUnderstandingInstructions (guia anti sobre-escalado en modo OpenA
     // No volcar la descripcion de OF en deviceModel, ni marcadores ':' en campos vacios.
     expect(instructions).toContain("devicemodel");
   });
+
+  // FIX 2: una pregunta generica de proceso/como-funciona/seleccion no debe etiquetarse como
+  // ASKS_ABOUT_CONTRACT (eso disparaba la escalada HIR sobre una pregunta que tiene respuesta activa).
+  it("tells the model a generic process/how-it-works question is NOT a contract question", () => {
+    expect(instructions).toMatch(/proceso|como funciona|seleccion/);
+    expect(instructions).toContain("asks_about_contract");
+    expect(instructions).toMatch(/permanencia|clausula|exclusividad|terminos legales/);
+  });
 });
