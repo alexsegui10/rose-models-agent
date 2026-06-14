@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
 import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
+import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import type {
   ABEvaluationCase,
   ABWinner,
@@ -621,11 +622,19 @@ export default function Home() {
               {messages.length === 0 ? (
                 <p className="muted">Envia un mensaje como candidata para iniciar la conversacion.</p>
               ) : (
-                messages.map((item) => (
-                  <div className={`message ${item.role}`} key={item.id}>
-                    {item.content}
-                  </div>
-                ))
+                messages.flatMap((item) =>
+                  item.role === "agent"
+                    ? splitIntoMessageBurst(item.content).map((chunk, index) => (
+                        <div className={`message ${item.role}`} key={`${item.id}-${index}`}>
+                          {chunk}
+                        </div>
+                      ))
+                    : [
+                        <div className={`message ${item.role}`} key={item.id}>
+                          {item.content}
+                        </div>
+                      ]
+                )
               )}
             </div>
 
