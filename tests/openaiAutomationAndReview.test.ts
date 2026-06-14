@@ -126,6 +126,59 @@ describe("OpenAI adapter, automation and review", () => {
     expect(result.modelVersion).toBe("fake-understanding");
   });
 
+  it("discards the LLM device eligibility and derives it deterministically (invariante 1)", async () => {
+    // El LLM alucina NOT_ELIGIBLE de un mensaje sin movil ('malo y viejo'): el adaptador lo DESCARTA,
+    // la elegibilidad del movil es regla de hardware determinista, no opinion del modelo.
+    const hallucinated = validUnderstanding();
+    const provider = new OpenAIConversationUnderstandingProvider({
+      apiKey: "test-key",
+      understandingModel: "fake-understanding",
+      writingModel: "fake-writing",
+      timeoutMs: 100,
+      maxRetries: 0,
+      fallbackUnderstandingProvider: new DeterministicUnderstandingProvider(),
+      runner: fakeRunner({
+        ...hallucinated,
+        extractedData: { ...hallucinated.extractedData, deviceEligibility: "NOT_ELIGIBLE" }
+      })
+    });
+
+    const result = await provider.understand(baseUnderstandingInput("perdona estoy un poco malo y viejo para esto"));
+    expect(result.extractedData.deviceEligibility).toBeUndefined();
+  });
+
+  it("derives device eligibility from a misspelled iphone so the slot is not re-asked (ipone 13 -> APPROVED)", async () => {
+    const provider = new OpenAIConversationUnderstandingProvider({
+      apiKey: "test-key",
+      understandingModel: "fake-understanding",
+      writingModel: "fake-writing",
+      timeoutMs: 100,
+      maxRetries: 0,
+      fallbackUnderstandingProvider: new DeterministicUnderstandingProvider(),
+      runner: fakeRunner(validUnderstanding())
+    });
+
+    const result = await provider.understand(baseUnderstandingInput("tengo un ipone 13"));
+    expect(result.extractedData.deviceEligibility).toBe("APPROVED");
+  });
+
+  it("still flags a genuinely bad phone as NOT_ELIGIBLE when a device is actually named", async () => {
+    // El gating descarta 'malo/viejo' SIN movil (puede referirse a la persona), pero si la candidata
+    // nombra el movil ('movil viejo y malo'), el gate de hardware determinista SI debe rechazarlo.
+    const provider = new OpenAIConversationUnderstandingProvider({
+      apiKey: "test-key",
+      understandingModel: "fake-understanding",
+      writingModel: "fake-writing",
+      timeoutMs: 100,
+      maxRetries: 0,
+      fallbackUnderstandingProvider: new DeterministicUnderstandingProvider(),
+      runner: fakeRunner(validUnderstanding())
+    });
+
+    const result = await provider.understand(baseUnderstandingInput("tengo un movil viejo y malo"));
+    expect(result.extractedData.deviceEligibility).toBe("NOT_ELIGIBLE");
+  });
+
   it("falls back when structured understanding output is invalid", async () => {
     const provider = new OpenAIConversationUnderstandingProvider({
       apiKey: "test-key",

@@ -58,13 +58,19 @@ export function createNegotiationLog(input: NegotiationLog): NegotiationLog {
   return input;
 }
 
+// "iphone" con los typos castellanos habituales: ipone (sin h), iphon (sin e), ifone/ifon (ph->f).
+// Sin esto, "ipone 13" no se reconocia como iPhone, deviceEligibility quedaba UNKNOWN y el slot del
+// movil se preguntaba en bucle (bug real del spot-check de Alex). El "i" inicial obligatorio evita
+// falsos positivos con palabras castellanas (impone, propone, pienso, telefono...).
+const IPHONE_TYPO = "i(?:ph|p|f)o?ne?";
+
 export function deviceEligibilityForDescription(description: string): DeviceEligibility {
   const normalized = normalize(description);
 
   if (
-    /\b(comprare|compraré|cambiare|cambiaré|me comprare|me compraré|me cambio)\b.*\b(iphone|galaxy\s?s2[3-9]|s23|s24|s25)\b/.test(
-      normalized
-    )
+    new RegExp(
+      `\\b(comprare|compraré|cambiare|cambiaré|me comprare|me compraré|me cambio)\\b.*\\b(?:${IPHONE_TYPO}|galaxy\\s?s2[3-9]|s23|s24|s25)\\b`
+    ).test(normalized)
   )
     return "PENDING_UPGRADE";
   if (/\b(viejo|malo|mala calidad|roto|gama baja|android barato|redmi antiguo)\b/.test(normalized)) return "NOT_ELIGIBLE";
@@ -72,12 +78,14 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
   // moto e/g son gama de entrada; un motorola sin modelo pasa a prueba de calidad.
   if (/\b(?:motorola|moto)\s?[eg]\s?\d{1,2}(?!\d)/.test(normalized)) return "NOT_ELIGIBLE";
   // (?!\d) en vez de \b: "iphone 13pro max" pega el sufijo al numero y \b no corta entre "13" y "pro".
-  if (/\biphone\s?(1[3-9]|[2-9]\d)(?!\d)/.test(normalized)) return "APPROVED";
-  if (/\biphone\s?([1-9]|1[0-2])(?!\d)/.test(normalized)) return "PENDING_QUALITY_TEST";
+  if (new RegExp(`\\b${IPHONE_TYPO}\\s?(1[3-9]|[2-9]\\d)(?!\\d)`).test(normalized)) return "APPROVED";
+  if (new RegExp(`\\b${IPHONE_TYPO}\\s?([1-9]|1[0-2])(?!\\d)`).test(normalized)) return "PENDING_QUALITY_TEST";
   if (/\b(galaxy\s?s2[3-9]|samsung\s?s2[3-9])\b/.test(normalized)) return "APPROVED";
   if (/\b(pro|max|ultra|gama alta|high end|xiaomi 14|xiaomi 15|pixel 8|pixel 9)\b/.test(normalized))
     return "PENDING_QUALITY_TEST";
-  if (/\b(iphone|samsung|galaxy|android|xiaomi|huawei|oppo|realme|pixel|motorola|moto)\b/.test(normalized))
+  if (
+    new RegExp(`\\b(?:${IPHONE_TYPO}|samsung|galaxy|android|xiaomi|huawei|oppo|realme|pixel|motorola|moto)\\b`).test(normalized)
+  )
     return "PENDING_QUALITY_TEST";
 
   return "UNKNOWN";
@@ -85,7 +93,7 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
 
 export function deviceTypeForDescription(description: string): DeviceType {
   const normalized = normalize(description);
-  if (/\b(iphone|i phone|ios)\b/.test(normalized)) return "IPHONE";
+  if (new RegExp(`\\b(?:${IPHONE_TYPO}|i phone|ios)\\b`).test(normalized)) return "IPHONE";
   if (/\b(samsung|galaxy)\b/.test(normalized)) return "SAMSUNG";
   if (/\b(android|xiaomi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono)\b/.test(normalized)) return "OTHER";
   return "UNKNOWN";
@@ -94,7 +102,9 @@ export function deviceTypeForDescription(description: string): DeviceType {
 export function deviceModelForDescription(description: string): string | null {
   const normalized = normalize(description);
   const match = normalized.match(
-    /\b(iphone\s?\d{1,2}(?:\s?(?:pro\s?max|pro|max|plus|mini))?|galaxy\s?s\d{2}(?:\s?(?:ultra|plus))?|samsung\s?s\d{2}(?:\s?(?:ultra|plus))?|pixel\s?\d{1,2}\s?pro|pixel\s?\d{1,2}|xiaomi\s?\d{1,2})\b/
+    new RegExp(
+      `\\b(${IPHONE_TYPO}\\s?\\d{1,2}(?:\\s?(?:pro\\s?max|pro|max|plus|mini))?|galaxy\\s?s\\d{2}(?:\\s?(?:ultra|plus))?|samsung\\s?s\\d{2}(?:\\s?(?:ultra|plus))?|pixel\\s?\\d{1,2}\\s?pro|pixel\\s?\\d{1,2}|xiaomi\\s?\\d{1,2})\\b`
+    )
   );
   return match ? match[1].replace(/\s+/g, " ").trim() : null;
 }

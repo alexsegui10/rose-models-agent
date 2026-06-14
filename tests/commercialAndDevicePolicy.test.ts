@@ -179,6 +179,21 @@ describe("commercial and device policy", () => {
     expect(deviceEligibilityForDescription("Tengo iPhone 12")).toBe("PENDING_QUALITY_TEST");
   });
 
+  it("tolerates common iphone typos so the device slot is not re-asked (spot-check de Alex: 'ipone 13')", () => {
+    // "ipone 13" daba UNKNOWN -> el slot del movil se preguntaba en bucle.
+    expect(deviceEligibilityForDescription("ipone 13")).toBe("APPROVED");
+    expect(deviceEligibilityForDescription("tengo un ifone 14")).toBe("APPROVED");
+    expect(deviceEligibilityForDescription("iphon 11")).toBe("PENDING_QUALITY_TEST");
+    expect(deviceEligibilityForDescription("tengo un ipone")).toBe("PENDING_QUALITY_TEST");
+  });
+
+  it("does not misread common Spanish words as an iphone (sin falsos positivos)", () => {
+    expect(deviceEligibilityForDescription("no me lo pienso")).toBe("UNKNOWN");
+    expect(deviceEligibilityForDescription("eso me lo impone la agencia")).toBe("UNKNOWN");
+    expect(deviceEligibilityForDescription("propone otra cosa")).toBe("UNKNOWN");
+    expect(deviceEligibilityForDescription("cuando dispongo de tiempo")).toBe("UNKNOWN");
+  });
+
   it("allows excellent candidate with future iPhone to human review and call but blocks onboarding", async () => {
     const { engine } = createEngine();
     const result = await engine.handleIncomingMessage({

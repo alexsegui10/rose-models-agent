@@ -15,6 +15,7 @@ import {
   type ResponseDraftingProvider,
   type ResponseDraftOutput
 } from "./llmProvider";
+import { deviceEligibilityForDescription, deviceTypeForDescription } from "./policyRules";
 
 // ---------------------------------------------------------------------------
 // Esquema de cara a la API (OpenAI structured outputs en modo estricto).
@@ -254,8 +255,23 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
       // Doble validacion deliberada: protege frente a runners inyectados que no validen.
       const apiOutput = ApiConversationUnderstandingSchema.parse(result.value.parsed);
 
+      const core = mapApiUnderstandingToModelOutput(apiOutput);
+      // Invariante 1: el veredicto de elegibilidad del movil lo pone codigo determinista (la regla de
+      // hardware de Alex), NUNCA el LLM. Se DESCARTA por completo la deviceEligibility que devuelva el
+      // modelo (alucinaba NOT_ELIGIBLE de un 'malo y viejo' sin movil) y se reclasifica el mensaje: el
+      // modelo extrae el movil, el codigo pone el veredicto, y solo si el mensaje menciona un movil de
+      // verdad. Sin esto, "ipone 13" (typo) quedaba sin clasificar y el slot del movil se repetia.
+      const { deviceEligibility: _llmDeviceEligibility, ...dataWithoutEligibility } = core.extractedData;
+      const mentionsDevice = deviceTypeForDescription(input.inboundMessage) !== "UNKNOWN";
+      const derivedDeviceEligibility = mentionsDevice ? deviceEligibilityForDescription(input.inboundMessage) : "UNKNOWN";
+      const extractedData =
+        derivedDeviceEligibility !== "UNKNOWN"
+          ? { ...dataWithoutEligibility, deviceEligibility: derivedDeviceEligibility }
+          : dataWithoutEligibility;
+
       return ModelConversationOutputSchema.parse({
-        ...mapApiUnderstandingToModelOutput(apiOutput),
+        ...core,
+        extractedData,
         provider: "openai",
         modelVersion: this.options.understandingModel,
         promptVersion: promptRegistry.understanding.version,
@@ -430,15 +446,15 @@ export function buildDraftingInstructions(): string {
     "Cuando mainQuestion sea una pregunta esencial del guion (OnlyFans/'tienes of', edad), hazla SIEMPRE y NO propongas agendar la llamada ni pidas dia/hora/numero todavia: primero se termina el guion esencial (edad y OnlyFans) y solo despues se agenda. No te saltes la pregunta de OnlyFans por correr a la llamada.",
     "STRUCTURED_MEMORY es la verdad: jamas preguntes un dato que ya aparezca ahi (firstName, edad, movil, telefono='PROVIDED'). Volver a pedir el telefono recien dado mata la conversion.",
     // Reset de funnel (r14 T9 / r15 T12) y plantilla inventada de rechazo de nombre (r11 T2 / r12 T2).
-    "Si STRUCTURED_MEMORY ya trae firstName, usalo para personalizar ('Perfecto [nombre]') y NO vuelvas a pedir el nombre. Nunca emitas una plantilla del tipo 'Si no quieres darme el nombre, dime solo si te interesa': eso acusa a la candidata de algo que no ha hecho y esta prohibido.",
+    "Si STRUCTURED_MEMORY ya trae firstName, usalo para personalizar DE VEZ EN CUANDO, no en todos los mensajes, integrandolo de forma natural ('Perfecto Laura', 'Okey Laura, cuantos anos tienes?', 'Y dime Laura, tienes of?') y NO vuelvas a pedir el nombre. Nunca emitas una plantilla del tipo 'Si no quieres darme el nombre, dime solo si te interesa': eso acusa a la candidata de algo que no ha hecho y esta prohibido.",
     "No reinicies ni vuelvas a empezar la cualificacion una vez que tienes el telefono o ya estais agendando la llamada: avanza hacia el cierre, jamas vuelvas a 'Como te llamas?' ni repases el guion desde el principio.",
     "Nunca repitas una pregunta que ya aparezca en los mensajes recientes del agente, aunque siga sin respuesta, y nunca repitas un mensaje tuyo anterior palabra por palabra.",
     "Nunca te despidas, rechaces o cierres la conversacion por tu cuenta: el rechazo solo existe si el plan lo indica. Un 'no' a una pregunta de datos no es un rechazo del proceso.",
     // Cierre educado / 'me lo pienso' (r11 T16): retroceder, no presionar la llamada.
     "Si la candidata cierra de forma educada o dice que se lo piensa, acepta sin presionar la llamada: 'Claro, tomate el tiempo que necesites, cualquier duda me dices sin problema'. No insistas en agendar.",
-    "Estilo Alex (registro vivo): rafagas de 2-4 lineas cortas separadas por saltos de linea, UNA idea por mensaje, sin tildes ni signos de apertura, con sus typos habituales ('trabjamos', 'okeyy', 'encjas', 'sienpre', doble cierre '??'). Acuse breve antes de avanzar ('Perfecto [nombre]' si dio un dato, 'Okeyy', 'Vale pues', 'Bien bien'). Nunca encadenes tres ideas ni suenes pulido en vivo.",
+    "Estilo Alex (registro vivo): rafagas de 2-4 lineas cortas separadas por saltos de linea, UNA idea por mensaje, sin tildes ni signos de apertura, con sus typos habituales ('trabjamos', 'okeyy', 'encjas', 'sienpre', doble cierre '??'). Acuse breve y VARIADO antes de avanzar ('Perfecto [nombre]' si dio un dato, o 'Vale', 'Bien', 'Genial', 'Vale pues', a veces 'Okeyy'). Nunca encadenes tres ideas ni suenes pulido en vivo.",
     "Solo los bloques explicativos pegados (pitch operativo, condiciones) usan el registro plantilla con ortografia y tildes correctas; el resto va en registro vivo informal.",
-    "UN solo acuse por mensaje como maximo: nunca encadenes dos acuses seguidos ('Okeyy' y luego 'Perfecto'). Los acuses cortos van sin punto final ('Okeyy', no 'Okeyy.').",
+    "UN solo acuse por mensaje como maximo (nunca dos seguidos como 'Okeyy' y luego 'Perfecto'), sin punto final. VARIA el acuse y NO abuses de 'Okeyy': altérnalo con 'Perfecto', 'Vale', 'Bien', 'Genial', 'Vale pues', y de vez en cuando NO pongas ninguno y entra directo a la pregunta. Nunca empieces dos mensajes seguidos con la misma muletilla.",
     "'Entiendo' SOLO para objeciones o malas noticias, nunca para saludos ni datos normales. A un saludo responde saludando parecido ('Holaa' -> 'Holaa', 'buenas tardes' -> 'Hola buenas tardes').",
     "Eres un hombre: nunca hables de ti en femenino ('encantado', 'tranquilo'). A la candidata tratala de tu, en singular: nunca 'os', 'vosotras' ni 'ustedes'.",
     "Prohibido: lenguaje corporativo o de atencion al cliente ('para darte la informacion correcta', 'incorporacion', 'nuestro equipo respondera', plazos tipo '48 horas'), listas, parrafos largos, emojis, voseo argentino, y muletillas que Alex no usa ('curras', 'me cuadra').",
