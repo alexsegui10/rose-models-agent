@@ -18,6 +18,7 @@ import type { BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { LocalBusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { businessKnowledgeEntries } from "@/content/business";
 import { buildConsistentCandidatePatch } from "./dataConsistency";
+import { applyHumanReviewDecision, humanDecisionToState, type HumanReviewDecision } from "./humanReview";
 import { extractDeterministicUnderstanding, guaranteedMoneyDemandPattern } from "./dataExtractor";
 import type { ExampleRetriever } from "./exampleRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
@@ -97,6 +98,68 @@ export class ConversationEngine {
       ...input,
       messages: [{ content: input.message, externalMessageId: input.externalMessageId }]
     });
+  }
+
+  /**
+   * Decision humana explicita desde el CRM (invariante 4: las salidas de revision SOLO las decide
+   * Alex). Aplica la decision, registra la transicion y, al APROBAR, propone la llamada de forma
+   * proactiva (peticion de Alex #5) y reanuda la automatizacion. Una decision que no admite la
+   * transicion desde el estado actual no se fuerza: se devuelve sin cambios (no revienta el grafo).
+   */
+  async applyHumanDecision(input: {
+    candidateId: string;
+    decision: HumanReviewDecision;
+    note?: string;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+
+    const targetState = humanDecisionToState(input.decision);
+    if (existing.currentState === targetState || !canTransition(existing.currentState, targetState)) {
+      return { candidate: existing, transitions: [], proposedMessage: null };
+    }
+
+    const transitions: StateTransition[] = [];
+    const decided = applyHumanReviewDecision({ candidate: existing, decision: input.decision, note: input.note });
+    transitions.push(decided.transition);
+    let candidate = decided.candidate;
+
+    let proposedMessage: string | null = null;
+    if (input.decision === "APPROVE") {
+      proposedMessage =
+        "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada rapida para explicartelo todo. Que dia y a que hora te viene mejor?";
+      if (canTransition(candidate.currentState, "COLLECTING_CALL_DETAILS")) {
+        transitions.push(
+          createTransition({
+            candidate,
+            toState: "COLLECTING_CALL_DETAILS",
+            trigger: "HUMAN_REVIEW_APPROVE",
+            reason: "Aprobada por Alex: el bot propone la llamada."
+          })
+        );
+        candidate = { ...candidate, currentState: "COLLECTING_CALL_DETAILS" };
+      }
+      // Aprobada: el bot retoma el control para agendar la llamada.
+      candidate = { ...candidate, manualControlActive: false, automationPaused: false, updatedAt: new Date() };
+    }
+
+    await this.dependencies.repository.saveCandidate(candidate);
+    for (const transition of transitions) {
+      await this.dependencies.repository.addTransition(transition);
+    }
+    if (proposedMessage) {
+      await this.dependencies.repository.addMessage(
+        agentMessage(candidate.id, proposedMessage, {
+          provider: "deterministic",
+          trigger: "HUMAN_REVIEW_APPROVE",
+          proactive: true
+        })
+      );
+    }
+
+    return { candidate, transitions, proposedMessage };
   }
 
   async handleIncomingTurn(

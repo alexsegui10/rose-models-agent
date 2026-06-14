@@ -10,11 +10,10 @@ export const HumanReviewDecision = {
 
 export type HumanReviewDecision = (typeof HumanReviewDecision)[keyof typeof HumanReviewDecision];
 
-export function applyHumanReviewDecision(input: {
+export function applyHumanReviewDecision(input: { candidate: Candidate; decision: HumanReviewDecision; note?: string }): {
   candidate: Candidate;
-  decision: HumanReviewDecision;
-  note?: string;
-}): { candidate: Candidate; transition: StateTransition } {
+  transition: StateTransition;
+} {
   const toState = humanDecisionToState(input.decision);
   const transition = createTransition({
     candidate: input.candidate,
@@ -38,7 +37,12 @@ export function applyHumanReviewDecision(input: {
       ...input.candidate,
       currentState: toState,
       humanReviewStatus,
-      humanProfileReviewStatus: input.decision === "APPROVE" ? "POTENTIAL_FIT" : input.decision === "REJECT" ? "NOT_A_FIT" : input.candidate.humanProfileReviewStatus,
+      humanProfileReviewStatus:
+        input.decision === "APPROVE"
+          ? "POTENTIAL_FIT"
+          : input.decision === "REJECT"
+            ? "NOT_A_FIT"
+            : input.candidate.humanProfileReviewStatus,
       humanFitDecision: input.decision === "APPROVE" ? "APPROVED" : input.decision === "REJECT" ? "REJECTED" : "PENDING",
       notes: input.note ? [...input.candidate.notes, input.note] : input.candidate.notes,
       updatedAt: new Date()
@@ -46,7 +50,7 @@ export function applyHumanReviewDecision(input: {
   };
 }
 
-function humanDecisionToState(decision: HumanReviewDecision): CandidateState {
+export function humanDecisionToState(decision: HumanReviewDecision): CandidateState {
   switch (decision) {
     case "APPROVE":
       return "APPROVED";

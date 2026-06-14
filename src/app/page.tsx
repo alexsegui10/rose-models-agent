@@ -98,7 +98,7 @@ type SimulatorStatus = {
   writingModel: string;
 };
 
-type SimulatorTab = "EVALUACION" | "CHAT" | "AB";
+type SimulatorTab = "EVALUACION" | "CHAT" | "CRM" | "AB";
 
 const EVALUATION_ISSUE_OPTIONS: EvaluationIssue[] = [
   "FACTUAL_ERROR",
@@ -114,6 +114,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<SimulatorTab>("EVALUACION");
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [crmNotice, setCrmNotice] = useState<string | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [transitions, setTransitions] = useState<StateTransition[]>([]);
@@ -289,6 +290,49 @@ export default function Home() {
     await refreshCandidates();
   }
 
+  async function setBotPaused(candidate: Candidate, paused: boolean) {
+    // El bot se pausa/reanuda por candidata (peticion de Alex #3). manual-control fija ambos flags.
+    await fetch("/api/simulator/manual-control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: candidate.id, manualControlActive: paused })
+    });
+    setCrmNotice(
+      paused ? `Bot pausado para @${candidate.instagramUsername}.` : `Bot reanudado para @${candidate.instagramUsername}.`
+    );
+    if (selectedCandidate?.id === candidate.id) {
+      setSelectedCandidate({ ...candidate, manualControlActive: paused, automationPaused: paused });
+    }
+    await refreshCandidates();
+  }
+
+  async function applyHumanDecision(candidate: Candidate, decision: "APPROVE" | "REJECT") {
+    // Decision humana explicita (invariante 4). Al aprobar, el bot propone la llamada (peticion #5).
+    const response = await fetch("/api/simulator/human-review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: candidate.id, decision })
+    });
+    if (!response.ok) {
+      setCrmNotice("No se pudo aplicar la decision.");
+      return;
+    }
+    const data = (await response.json()) as { candidate: Candidate; proposedMessage: string | null };
+    if (decision === "APPROVE") {
+      setCrmNotice(
+        data.proposedMessage
+          ? `Aprobada @${candidate.instagramUsername}. El bot propuso: "${data.proposedMessage.replace(/\n+/g, " ")}"`
+          : `@${candidate.instagramUsername} no estaba en revision: sin cambios.`
+      );
+    } else {
+      setCrmNotice(`@${candidate.instagramUsername} marcada como rechazada.`);
+    }
+    if (selectedCandidate?.id === candidate.id) {
+      setSelectedCandidate(data.candidate);
+    }
+    await refreshCandidates();
+  }
+
   async function runABComparison() {
     const messagesForRun = abMessages
       .split("\n")
@@ -430,6 +474,13 @@ export default function Home() {
             onClick={() => setActiveTab("CHAT")}
           >
             Chat de prueba
+          </button>
+          <button
+            className={activeTab === "CRM" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("CRM")}
+          >
+            CRM
           </button>
           <button
             className={activeTab === "AB" ? "tab-button active" : "tab-button"}
@@ -846,6 +897,70 @@ export default function Home() {
             ) : null}
           </aside>
         </main>
+      ) : null}
+
+      {activeTab === "CRM" ? (
+        <section className="panel">
+          <h2>CRM de candidatas</h2>
+          <p className="muted">
+            Pausa o reanuda el bot por candidata, y aprueba o rechaza las que esperan tu decision. Al aprobar, el bot propone la
+            llamada automaticamente.
+          </p>
+          {crmNotice ? <p className="status-bar">{crmNotice}</p> : null}
+          {candidates.length === 0 ? (
+            <p className="muted">Aun no hay candidatas. Inicia una conversacion en el chat de prueba.</p>
+          ) : (
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Candidata</th>
+                  <th>Estado</th>
+                  <th>Bot</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {candidates.map((candidate) => {
+                  const paused = candidate.manualControlActive || candidate.automationPaused;
+                  const awaitingDecision =
+                    candidate.currentState === "WAITING_HUMAN_REVIEW" || candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
+                  return (
+                    <tr key={candidate.id}>
+                      <td>
+                        <strong>@{candidate.instagramUsername}</strong>
+                      </td>
+                      <td>
+                        <span className="state-pill">{candidate.currentState}</span>
+                      </td>
+                      <td>{paused ? <span className="muted">Pausado</span> : <span>Activo</span>}</td>
+                      <td className="crm-actions">
+                        <button className="secondary" type="button" onClick={() => void setBotPaused(candidate, !paused)}>
+                          {paused ? "Reanudar bot" : "Pausar bot"}
+                        </button>
+                        <button
+                          className="secondary"
+                          type="button"
+                          disabled={!awaitingDecision}
+                          onClick={() => void applyHumanDecision(candidate, "APPROVE")}
+                        >
+                          Aprobar
+                        </button>
+                        <button
+                          className="danger"
+                          type="button"
+                          disabled={!awaitingDecision}
+                          onClick={() => void applyHumanDecision(candidate, "REJECT")}
+                        >
+                          Rechazar
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
       ) : null}
 
       {activeTab === "AB" ? (

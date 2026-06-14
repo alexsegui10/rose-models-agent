@@ -264,6 +264,33 @@ button {
   font-weight: 700;
 }
 
+.crm-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.crm-table th,
+.crm-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e2e8e6;
+  vertical-align: middle;
+}
+
+.crm-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent-strong);
+}
+
+.crm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .dev-panel {
   margin-top: 22px;
   padding-top: 18px;
