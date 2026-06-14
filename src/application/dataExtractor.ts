@@ -6,8 +6,9 @@ const phonePatterns: readonly RegExp[] = [
   /(?<!\d)\+?54[\s.-]?(?:9[\s.-]?)?(?:\d{2}[\s.-]?\d{4}[\s.-]?\d{4}|\d{3}[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/,
   // Colombia: prefijo +57 (con o sin "+") y movil de 10 digitos que empieza por 3.
   /(?<!\d)\+?57[\s.-]?3\d{2}[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)/,
-  // España: prefijo +34 opcional y 9 digitos que empiezan por 6/7/8/9.
-  /(?<!\d)(?:\+34[\s.-]?)?[6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}(?!\d)/,
+  // España: prefijo +34 opcional y 9 digitos que empiezan por 6/7/8/9, con CUALQUIER agrupacion de
+  // separadores (3-3-3 "612 345 678", 2-2-2-2 "612 34 56 78" o sin espacios "612345678").
+  /(?<!\d)(?:\+34[\s.-]?)?[6789](?:[\s.-]?\d){8}(?!\d)/,
   // LATAM local sin prefijo de pais: 10 digitos agrupados, p. ej. "11 2345 6789" (AR) o "3001234567" (CO).
   /(?<!\d)(?:\d{2}[\s.-]?\d{4}[\s.-]?\d{4}|\d{3}[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)/
 ];
@@ -352,8 +353,15 @@ export function extractDeterministicUnderstanding(
     }
   }
 
-  // "only" es la abreviatura coloquial real de OnlyFans ("es la primera vez que uso only").
-  if (/\b(onlyfans|only|of)\b/.test(normalized)) extractedData.hasOnlyFans = true;
+  // "only"/"of" son la abreviatura coloquial real de OnlyFans, PERO sin contexto cazaban ingles
+  // ("the best of me" -> hasOnlyFans=true, falso). Se exige "onlyfans" literal o que "only"/"of" vaya
+  // pegado a un verbo/posesivo castellano de OF ("tengo of", "uso only", "mi of", "of activo").
+  if (
+    /\bonlyfans\b/.test(normalized) ||
+    /\b(?:tengo|tienes|tuve|tenia|mi|tu|el|un|uso|usaba|abri|cree|hago|hice|en|de|con)\s+(?:only|of)\b/.test(normalized) ||
+    /\b(?:only|of)\s+(?:activ|abiert|cuenta|propi)/.test(normalized)
+  )
+    extractedData.hasOnlyFans = true;
   // Negacion antes de la mencion ("no tengo of", "nunca tuve onlyfans", "no, jamas use only").
   if (/\b(no tengo onlyfans|sin onlyfans|no tengo of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
   if (/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\b(?:onlyfans|only|of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
@@ -394,7 +402,7 @@ export function extractDeterministicUnderstanding(
   const demandsGuaranteedMoney = guaranteedMoneyDemandPattern.test(normalized);
 
   if (
-    /\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo|cuanto pagan|cuanto pagais|cuanto me pagan|me pagan|nos pagan|cuando pagan|cuando cobro|como son los pagos|me pagarian|cuanto se gana|cuanto ganaria|cuanto cobraria|cuanto cobrar[ie]a)\b/.test(
+    /\b(porcentaje|comision|cuanto os quedais|reparto|70\/30|salario|sueldo|cuanto pagan|cuanto pagais|cuanto me pagan|me pagan|nos pagan|cuando pagan|cuando cobro|como son los pagos|me pagarian|cuanto se gana|cuanto ganaria|cuanto cobraria|cuanto cobrar[ie]a|cuanto me llevo|cuanto me llevaria|cuanto me queda|cuanto me quedaria|cuanto me toca|cuanto saco|cuanto sacaria|que me llevo|mi parte)\b/.test(
       normalized
     ) ||
     /\b\d{1,3}\s?%/.test(normalized) ||

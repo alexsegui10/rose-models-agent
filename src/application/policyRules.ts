@@ -84,7 +84,9 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
   if (/\b(pro|max|ultra|gama alta|high end|xiaomi 14|xiaomi 15|pixel 8|pixel 9)\b/.test(normalized))
     return "PENDING_QUALITY_TEST";
   if (
-    new RegExp(`\\b(?:${IPHONE_TYPO}|samsung|galaxy|android|xiaomi|huawei|oppo|realme|pixel|motorola|moto)\\b`).test(normalized)
+    new RegExp(`\\b(?:${IPHONE_TYPO}|samsung|galaxy|android|xiaomi|redmi|huawei|honor|oppo|realme|pixel|motorola|moto)\\b`).test(
+      normalized
+    )
   )
     return "PENDING_QUALITY_TEST";
 
