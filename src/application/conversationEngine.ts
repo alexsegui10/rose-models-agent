@@ -260,13 +260,19 @@ export class ConversationEngine {
       immediateObjective: immediateObjectiveFor(projectedCandidate.currentState, understanding.intent, isOpenerTurn)
     });
 
+    // Coherencia en la espera: si en mensajes recientes ya se aviso de que se consulta con el socio, no
+    // se repite el mismo aviso en bucle (se varia a un acuse breve). Decision de Alex (mas coherencia).
+    const alreadyAwaitingPartner = recentMessages.some(
+      (message) => message.role === "agent" && /\b(mi socio|comentar tu perfil|lo comento|comentarlo)\b/i.test(message.content)
+    );
     const deterministicResponse = generateResponse(
       projectedCandidate,
       understanding,
       responsePlan,
       approvedNegotiationDecision,
       groupedMessage.content,
-      isOpenerTurn
+      isOpenerTurn,
+      alreadyAwaitingPartner
     );
     // El opener real de Alex es una plantilla pegada a mano: cuando no hay nada que responder,
     // se envia la plantilla canonica tal cual (cero deriva del modelo, traza honesta: deterministico).
@@ -292,8 +298,18 @@ export class ConversationEngine {
       responsePlan.answerFacts.length === 0 &&
       !responsePlan.requiresHumanReview &&
       !responsePlan.uncoveredQuestion;
+    // Turno de ESPERA (en revision humana o intervencion humana, sin nada que responder ni preguntar): el
+    // mensaje de espera lo pone el codigo (variado, sin bucle), no OpenAI — que repetia "lo hablo con mi
+    // socio" turno tras turno (fallo real del spot-check de Alex).
+    const isAwaitingHoldingTurn =
+      !useCanonicalOpenerTemplate &&
+      agencyExplanation === null &&
+      responsePlan.answerFacts.length === 0 &&
+      responsePlan.questionToAsk === null &&
+      (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
+        projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED");
     let draft =
-      useCanonicalOpenerTemplate || useDeterministicQuestionTurn
+      useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn
         ? deterministicDraftOutput(deterministicResponse)
         : agencyExplanation !== null
           ? deterministicDraftOutput(agencyExplanation)
@@ -727,7 +743,8 @@ function generateResponse(
   responsePlan: ResponsePlan,
   approvedNegotiationDecision: NegotiationDecision | null,
   inboundMessage: string,
-  isOpenerTurn = false
+  isOpenerTurn = false,
+  alreadyAwaitingPartner = false
 ): string {
   if (candidate.currentState === "CLOSED" && candidate.age && candidate.age < 18) {
     return "Gracias por contestar. Ahora mismo solo podemos valorar perfiles de personas mayores de edad, asi que no podemos seguir con el proceso. Te deseo lo mejor.";
@@ -738,7 +755,7 @@ function generateResponse(
   }
 
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
-    return humanInterventionResponse(candidate, understanding, responsePlan, approvedNegotiationDecision);
+    return humanInterventionResponse(candidate, understanding, responsePlan, approvedNegotiationDecision, alreadyAwaitingPartner);
   }
 
   if (candidate.currentState === "WAITING_PROFILE_ACCESS") {
@@ -750,7 +767,11 @@ function generateResponse(
   }
 
   if (candidate.currentState === "WAITING_HUMAN_REVIEW") {
-    return "Perfecto, muchas gracias por explicarmelo.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
+    // Coherencia (fallo real: el bot repetia "lo comento con mi socio" en bucle si la candidata seguia
+    // escribiendo): la primera vez se explica; despues se reconoce de forma breve y variada, sin repetir.
+    return alreadyAwaitingPartner
+      ? "Sin prisa, en cuanto lo vea con mi socio te confirmo. Cualquier cosa que necesites me dices."
+      : "Perfecto, muchas gracias por explicarmelo.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
   }
 
   if (responsePlan.uncoveredQuestion) {
@@ -834,7 +855,8 @@ function humanInterventionResponse(
   candidate: Candidate,
   understanding: ModelConversationOutput,
   responsePlan: ResponsePlan,
-  approvedNegotiationDecision: NegotiationDecision | null
+  approvedNegotiationDecision: NegotiationDecision | null,
+  alreadyAwaitingPartner = false
 ): string {
   if (approvedNegotiationDecision?.decision === "ALLOW_CUSTOM_TERMS") {
     return `Lo he revisado con mi socio y podemos valorarlo con estas condiciones: ${approvedNegotiationDecision.approvedModelPercentage}% para ti y ${approvedNegotiationDecision.approvedAgencyPercentage}% para la agencia. En la llamada te lo explicamos bien.`;
@@ -892,7 +914,10 @@ function humanInterventionResponse(
     return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada.";
   }
 
-  return "Vale, esto lo hablo con mi socio y te digo, no te preocupes.";
+  // Espera en HIR: la primera vez se deriva al socio; si ya se le dijo, se varia para no repetir en bucle.
+  return alreadyAwaitingPartner
+    ? "Tranquila, sigue pendiente con mi socio; en cuanto lo vea te confirmo."
+    : "Vale, esto lo hablo con mi socio y te digo, no te preocupes.";
 }
 
 /**

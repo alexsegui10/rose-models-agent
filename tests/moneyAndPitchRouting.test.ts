@@ -189,3 +189,21 @@ describe("percentage question notifies Alex without escalating; negotiation stil
     expect(result.candidate.notes.some((note) => note.startsWith("PERCENTAGE_NEGOTIATION_REQUEST"))).toBe(true);
   });
 });
+
+describe("awaiting holding message does not loop verbatim (coherence)", () => {
+  it("varies the holding reply when the candidate keeps writing while awaiting human review", async () => {
+    const { engine } = createEngine();
+    const username = "holding_no_loop";
+    const first = await engine.handleIncomingMessage({
+      instagramUsername: username,
+      profileVisibility: "PUBLIC",
+      message: "me dais el 90% a mi?"
+    });
+    expect(first.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    const id = first.candidate.id;
+    const second = await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "vale, y cuando me decis algo?" });
+    const third = await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "ok, sigo esperando entonces" });
+    // No repite el MISMO mensaje de espera palabra por palabra dos turnos seguidos.
+    expect(third.response).not.toBe(second.response);
+  });
+});
