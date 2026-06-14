@@ -844,6 +844,12 @@ function generateResponse(
     return "Gracias por avisarme. No te molesto mas. Que vaya todo muy bien.";
   }
 
+  // Rechazada por Alex: cierre cortes y definitivo, sin reabrir el proceso ni el dead-end generico
+  // "cualquier duda me dices" (que invitaba a seguir escribiendo a un proceso ya cerrado).
+  if (candidate.currentState === "REJECTED") {
+    return "Gracias por tu tiempo y por el interes. De momento no podemos seguir adelante, pero te deseo lo mejor.";
+  }
+
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
     return humanInterventionResponse(candidate, understanding, responsePlan, approvedNegotiationDecision, alreadyAwaitingPartner);
   }

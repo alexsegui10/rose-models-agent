@@ -368,8 +368,10 @@ export function extractDeterministicUnderstanding(
 
   if (/\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized))
     extractedData.worksWithAnotherAgency = true;
-  if (/\b(no trabajo con otra agencia|no tengo agencia|sin agencia)\b/.test(normalized))
-    extractedData.worksWithAnotherAgency = false;
+  // Negacion en cualquier formulacion ("no he trabajado con agencias", "nunca trabaje con agencias",
+  // "no trabajo con ninguna agencia"): una negacion a <=30 chars de "agencia(s)" es un NO. Va despues
+  // del positivo para corregir "no trabajo con otra agencia" (que el positivo marcaria true).
+  if (/\b(?:no|nunca|jamas|ninguna)\b[^.!?]{0,30}\bagencias?\b/.test(normalized)) extractedData.worksWithAnotherAgency = false;
 
   const revenueMatch = normalized.match(/\b(?:ingreso|ingresos|facturo|gano)\s*(?:unos|sobre)?\s*(\d{3,6})\b/);
   if (revenueMatch) extractedData.currentMonthlyRevenue = Number(revenueMatch[1]);
