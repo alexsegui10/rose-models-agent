@@ -256,6 +256,7 @@ export class ConversationEngine {
       understanding,
       responsePlan,
       approvedNegotiationDecision,
+      groupedMessage.content,
       isOpenerTurn
     );
     // El opener real de Alex es una plantilla pegada a mano: cuando no hay nada que responder,
@@ -716,6 +717,7 @@ function generateResponse(
   understanding: ModelConversationOutput,
   responsePlan: ResponsePlan,
   approvedNegotiationDecision: NegotiationDecision | null,
+  inboundMessage: string,
   isOpenerTurn = false
 ): string {
   if (candidate.currentState === "CLOSED" && candidate.age && candidate.age < 18) {
@@ -796,7 +798,7 @@ function generateResponse(
   }
 
   if (responsePlan.questionToAsk) {
-    return `${acknowledgementFor(understanding)}\n\n${responsePlan.questionToAsk}`;
+    return `${acknowledgementFor(understanding, inboundMessage)}\n\n${responsePlan.questionToAsk}`;
   }
 
   // Lista YA con el telefono guardado (r4 T18 "ahora si"): el cierre real es el handoff inmediato
@@ -917,8 +919,19 @@ function canonicalOpener(candidate: Candidate): string {
   return `Hola, ${greeting} soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.`;
 }
 
+// La candidata comparte una dificultad/duda/experiencia personal (no un dato a secas): "me cuesta",
+// "lo deje", "me da miedo", "no estoy segura"... Detectarlo permite un acuse EMPATICO medido en vez
+// de uno neutro frio. Es deteccion determinista: el acuse es una frase fija, jamas inventa nada.
+const sharesPersonalConcernPattern =
+  /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da (miedo|verguenza|cosa|palo|apuro|reparo)|no se si|no estoy segura|no estaba segura|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza)\b/;
+
 // Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.
-function acknowledgementFor(understanding: ModelConversationOutput): string {
+export function acknowledgementFor(understanding: ModelConversationOutput, inboundMessage = ""): string {
+  // Equilibrio (peticion de Alex): reconocer lo que cuenta SIN dramatizar y SIN inventar nada. Frase
+  // breve y fija; nunca afirma hechos ni politicas.
+  if (sharesPersonalConcernPattern.test(normalizeText(inboundMessage))) {
+    return understanding.intent === "UNCLEAR" ? "Entiendo" : "Te entiendo";
+  }
   if (understanding.intent === "UNCLEAR") return "Okeyy";
   if (Object.keys(understanding.extractedData).length > 0) return "Perfecto";
   return "Vale pues";
