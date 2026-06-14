@@ -147,6 +147,28 @@ describe("OpenAI adapter, automation and review", () => {
     expect(result.extractedData.deviceEligibility).toBeUndefined();
   });
 
+  it("discards hallucinated hasOnlyFans / worksWithAnotherAgency so OF and agency questions are not skipped", async () => {
+    // El LLM ponia hasOnlyFans=false y worksWithAnotherAgency=false desde "me interesa" (sin que la
+    // candidata dijera nada) -> el planner daba esos slots por respondidos y saltaba esas preguntas.
+    const hallucinated = validUnderstanding();
+    const provider = new OpenAIConversationUnderstandingProvider({
+      apiKey: "test-key",
+      understandingModel: "fake-understanding",
+      writingModel: "fake-writing",
+      timeoutMs: 100,
+      maxRetries: 0,
+      fallbackUnderstandingProvider: new DeterministicUnderstandingProvider(),
+      runner: fakeRunner({
+        ...hallucinated,
+        extractedData: { ...hallucinated.extractedData, hasOnlyFans: false, worksWithAnotherAgency: false }
+      })
+    });
+
+    const result = await provider.understand(baseUnderstandingInput("Hola, me interesa. Tengo 22 anos y soy de Madrid."));
+    expect(result.extractedData.hasOnlyFans).toBeUndefined();
+    expect(result.extractedData.worksWithAnotherAgency).toBeUndefined();
+  });
+
   it("derives device eligibility from a misspelled iphone so the slot is not re-asked (ipone 13 -> APPROVED)", async () => {
     const provider = new OpenAIConversationUnderstandingProvider({
       apiKey: "test-key",

@@ -256,18 +256,23 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
       const apiOutput = ApiConversationUnderstandingSchema.parse(result.value.parsed);
 
       const core = mapApiUnderstandingToModelOutput(apiOutput);
-      // Invariante 1: el veredicto de elegibilidad del movil lo pone codigo determinista (la regla de
-      // hardware de Alex), NUNCA el LLM. Se DESCARTA por completo la deviceEligibility que devuelva el
-      // modelo (alucinaba NOT_ELIGIBLE de un 'malo y viejo' sin movil) y se reclasifica el mensaje: el
-      // modelo extrae el movil, el codigo pone el veredicto, y solo si el mensaje menciona un movil de
-      // verdad. Sin esto, "ipone 13" (typo) quedaba sin clasificar y el slot del movil se repetia.
-      const { deviceEligibility: _llmDeviceEligibility, ...dataWithoutEligibility } = core.extractedData;
+      // Invariante 1: el LLM no decide campos de negocio. Los ALUCINA (los fija sin que la candidata
+      // diga nada: "me interesa" -> hasOnlyFans=false), lo que daba esos slots por respondidos y hacia
+      // que el bot SALTASE las preguntas de OnlyFans y agencias. Se descartan deviceEligibility,
+      // hasOnlyFans y worksWithAnotherAgency del modelo; la extraccion deterministica (gateada por
+      // contexto: el agente pregunto + si/no, o mencion explicita de of/agencia) los rellena via
+      // mergeDeterministicExtraction en el motor. La elegibilidad del movil ademas se re-deriva aqui
+      // (regla de hardware de Alex) solo si el mensaje nombra un movil de verdad.
+      const {
+        deviceEligibility: _llmDeviceEligibility,
+        hasOnlyFans: _llmHasOnlyFans,
+        worksWithAnotherAgency: _llmWorksWithAnotherAgency,
+        ...baseData
+      } = core.extractedData;
       const mentionsDevice = deviceTypeForDescription(input.inboundMessage) !== "UNKNOWN";
       const derivedDeviceEligibility = mentionsDevice ? deviceEligibilityForDescription(input.inboundMessage) : "UNKNOWN";
       const extractedData =
-        derivedDeviceEligibility !== "UNKNOWN"
-          ? { ...dataWithoutEligibility, deviceEligibility: derivedDeviceEligibility }
-          : dataWithoutEligibility;
+        derivedDeviceEligibility !== "UNKNOWN" ? { ...baseData, deviceEligibility: derivedDeviceEligibility } : baseData;
 
       return ModelConversationOutputSchema.parse({
         ...core,
@@ -446,15 +451,15 @@ export function buildDraftingInstructions(): string {
     "Cuando mainQuestion sea una pregunta esencial del guion (OnlyFans/'tienes of', edad), hazla SIEMPRE y NO propongas agendar la llamada ni pidas dia/hora/numero todavia: primero se termina el guion esencial (edad y OnlyFans) y solo despues se agenda. No te saltes la pregunta de OnlyFans por correr a la llamada.",
     "STRUCTURED_MEMORY es la verdad: ANTES de preguntar nada comprueba que ese dato no este ya ahi y JAMAS lo vuelvas a preguntar. Concretamente: si firstName no es null ya tienes el nombre; si age no es null ya tienes la edad; si deviceEligibility NO es 'UNKNOWN' (o hay deviceModel) ya tienes el movil, NO preguntes por el movil; si hasOnlyFans no es null ya sabes si tiene OnlyFans, NO preguntes por OF; si country/city no es null ya tienes el pais; si phone no es null el telefono esta PROVIDED. Re-preguntar un dato ya dado mata la conversion.",
     // Reset de funnel (r14 T9 / r15 T12) y plantilla inventada de rechazo de nombre (r11 T2 / r12 T2).
-    "Si STRUCTURED_MEMORY ya trae firstName, usalo para personalizar DE VEZ EN CUANDO, no en todos los mensajes, integrandolo de forma natural ('Perfecto Laura', 'Okey Laura, cuantos anos tienes?', 'Y dime Laura, tienes of?') y NO vuelvas a pedir el nombre. Nunca emitas una plantilla del tipo 'Si no quieres darme el nombre, dime solo si te interesa': eso acusa a la candidata de algo que no ha hecho y esta prohibido.",
+    "Si STRUCTURED_MEMORY ya trae firstName, NO lo uses en cada mensaje (suena a robot y esta MAL): usalo MUY de vez en cuando, como mucho 1 de cada 4-5 mensajes, de forma natural ('Perfecto Laura', 'Y dime Laura, tienes of?'). La mayoria de mensajes van SIN el nombre. Y NO vuelvas a pedir el nombre. Nunca emitas una plantilla del tipo 'Si no quieres darme el nombre, dime solo si te interesa': eso acusa a la candidata de algo que no ha hecho y esta prohibido.",
     "No reinicies ni vuelvas a empezar la cualificacion una vez que tienes el telefono o ya estais agendando la llamada: avanza hacia el cierre, jamas vuelvas a 'Como te llamas?' ni repases el guion desde el principio.",
     "Nunca repitas una pregunta que ya aparezca en los mensajes recientes del agente, aunque siga sin respuesta, y nunca repitas un mensaje tuyo anterior palabra por palabra.",
     "Nunca te despidas, rechaces o cierres la conversacion por tu cuenta: el rechazo solo existe si el plan lo indica. Un 'no' a una pregunta de datos no es un rechazo del proceso.",
     // Cierre educado / 'me lo pienso' (r11 T16): retroceder, no presionar la llamada.
     "Si la candidata cierra de forma educada o dice que se lo piensa, acepta sin presionar la llamada: 'Claro, tomate el tiempo que necesites, cualquier duda me dices sin problema'. No insistas en agendar.",
-    "Estilo Alex (registro vivo): rafagas de 2-4 lineas cortas separadas por saltos de linea, UNA idea por mensaje, sin tildes ni signos de apertura, con sus typos habituales ('trabjamos', 'okeyy', 'encjas', 'sienpre', doble cierre '??'). Acuse breve y VARIADO antes de avanzar ('Perfecto [nombre]' si dio un dato, o 'Vale', 'Bien', 'Genial', 'Vale pues', a veces 'Okeyy'). Nunca encadenes tres ideas ni suenes pulido en vivo.",
+    "Estilo Alex (registro vivo): rafagas de 2-4 lineas cortas separadas por saltos de linea, UNA idea por mensaje, sin tildes ni signos de apertura, con sus typos habituales ('trabjamos', 'okeyy', 'encjas', 'sienpre', doble cierre '??'). El acuse es OPCIONAL y la excepcion: la mayoria de mensajes entran DIRECTOS a lo que toca; cuando uses uno, breve y variado. Nunca encadenes tres ideas ni suenes pulido en vivo.",
     "Solo los bloques explicativos pegados (pitch operativo, condiciones) usan el registro plantilla con ortografia y tildes correctas; el resto va en registro vivo informal.",
-    "UN solo acuse por mensaje como maximo (nunca dos seguidos como 'Okeyy' y luego 'Perfecto'), sin punto final. VARIA el acuse y NO abuses de 'Okeyy': altérnalo con 'Perfecto', 'Vale', 'Bien', 'Genial', 'Vale pues', y de vez en cuando NO pongas ninguno y entra directo a la pregunta. Nunca empieces dos mensajes seguidos con la misma muletilla.",
+    "La MAYORIA de los mensajes van SIN acuse: entra directo. Pon un acuse corto solo de vez en cuando, NUNCA en mensajes seguidos, y JAMAS dos acuses en el mismo mensaje (nunca 'Okeyy' y luego 'Vale'). Cuando lo pongas, varia ('Perfecto', 'Vale', 'Bien', 'Genial', 'Vale pues', 'Okeyy') sin punto final y sin repetir el mismo dos veces seguidas. Cualquier patron fijo (acuse o nombre en cada mensaje) suena a robot y esta MAL.",
     "'Entiendo' SOLO para objeciones o malas noticias, nunca para saludos ni datos normales. A un saludo responde saludando parecido ('Holaa' -> 'Holaa', 'buenas tardes' -> 'Hola buenas tardes').",
     "Eres un hombre: nunca hables de ti en femenino ('encantado', 'tranquilo'). A la candidata tratala de tu, en singular: nunca 'os', 'vosotras' ni 'ustedes'.",
     "Prohibido: lenguaje corporativo o de atencion al cliente ('para darte la informacion correcta', 'incorporacion', 'nuestro equipo respondera', plazos tipo '48 horas'), listas, parrafos largos, emojis, voseo argentino, y muletillas que Alex no usa ('curras', 'me cuadra').",
