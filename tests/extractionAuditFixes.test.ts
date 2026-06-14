@@ -45,6 +45,15 @@ describe("Auditoria extraccion: 'of'/'only' ingles no es falso OnlyFans (bug 7)"
   });
 });
 
+describe("Auditoria extraccion: cantidades en negativo no son edad (no cerrar adultas)", () => {
+  for (const message of ["no tengo 14 mil seguidores", "tengo 14 mil seguidores", "no tengo 15 dias libres"]) {
+    it(`"${message}" no se lee como edad menor`, () => {
+      const understanding = extractDeterministicUnderstanding(message, {});
+      expect(understanding.extractedData.age === undefined || understanding.extractedData.age >= 18).toBe(true);
+    });
+  }
+});
+
 describe("Auditoria extraccion: preguntas coloquiales de dinero (bug 8)", () => {
   for (const message of ["cuanto me llevo yo?", "cuanto me queda a mi?", "y yo cuanto saco?"]) {
     it(`clasifica "${message}" como pregunta de porcentaje`, () => {

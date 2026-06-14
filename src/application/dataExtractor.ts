@@ -16,7 +16,10 @@ const phonePatterns: readonly RegExp[] = [
 // El lookahead de sustantivos contables impide leer "tengo 2 cuentas" como edad 2: "tengo N" solo
 // es edad si N no va seguido de un contable ("cuentas", "seguidores", "hijos"...). "N años" se sigue
 // resolviendo por la segunda rama.
-const ageCountNounLookahead = "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|anos|años|a\\b))";
+// Incluye cantidades/periodos ("14 mil seguidores", "15 dias libres", "3 meses"): sin esto, una
+// adulta que presume de seguidores ("no tengo 14 mil seguidores") se leia como edad 14 -> CLOSED.
+const ageCountNounLookahead =
+  "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?|anos|años|a\\b))";
 // La segunda rama solo acepta "anos"/"años" explicito: "a" suelta es la preposicion castellana ("de 9
 // a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
 // menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
@@ -52,7 +55,7 @@ function declaredMinorAge(normalized: string): number | null {
   // "(aun|todavia) no tengo N" / "no tengo N (todavia|aun)" con N<=18 -> casi N, es menor (~N-1).
   // Se excluyen contables/dinero para no leer "no tengo 200 euros" como edad.
   const notYet = normalized.match(
-    /\bno tengo\s+(\d{1,2})\b(?!\s*(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|euros?|dolares?|mil))/
+    /\bno tengo\s+(\d{1,2})\b(?!\s*(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|euros?|dolares?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?))/
   );
   if (notYet) {
     const declared = Number(notYet[1]);
