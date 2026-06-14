@@ -131,13 +131,41 @@ export function importedConversationsForEvaluation(file: ImportedConversationFil
   return file.conversations.filter((conversation) => conversation.purpose === "EVALUATION");
 }
 
+function scanForPersonalData(text: string): string[] {
+  const kinds: string[] = [];
+  if (/\b(?:\+?\d[\s.-]?){8,}\b/.test(text)) kinds.push("phone");
+  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(text)) kinds.push("email");
+  if (/(?:^|\s)@[a-z0-9._]{2,}/i.test(text)) kinds.push("social-handle");
+  return kinds;
+}
+
 function detectPersonalData(conversation: ImportedConversation): string[] {
   const findings: string[] = [];
-  const text = conversation.messages.map((message) => message.content).join("\n");
+  const messageText = conversation.messages
+    .flatMap((message) => [message.content, message.originalAlexResponse, message.correctedResponse])
+    .filter((value): value is string => typeof value === "string")
+    .join("\n");
+  for (const kind of scanForPersonalData(messageText)) findings.push(`${conversation.id}: ${kind}`);
 
-  if (/\b(?:\+?\d[\s.-]?){8,}\b/.test(text)) findings.push(`${conversation.id}: phone`);
-  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(text)) findings.push(`${conversation.id}: email`);
-  if (/(?:^|\s)@[a-z0-9._]{2,}/i.test(text)) findings.push(`${conversation.id}: social-handle`);
+  // El campo anonymizedPersonalData DEBE contener placeholders (ANON_PHONE...), no PII real. Si trae
+  // un telefono/email/handle de verdad, el gate (invariante 5: nunca PII en ejemplos/almacen) debe
+  // rechazarlo igual que en los mensajes; antes este campo escapaba por completo a la deteccion.
+  const anonymizedText = Object.values(conversation.anonymizedPersonalData).join("\n");
+  for (const kind of scanForPersonalData(anonymizedText)) findings.push(`${conversation.id}: anonymizedPersonalData-${kind}`);
+
+  // Texto libre que se PERSISTE y/o alimenta ejemplos de generacion (idealNextResponse y notes van a
+  // ConversationExample con useForGeneration=true; estos campos se guardan en Postgres): tambien debe
+  // estar anonimizado o la PII se cuela al almacen y al prompt por una via que el gate antes ignoraba.
+  const persistedFreeText = [
+    conversation.idealNextResponse,
+    conversation.notes,
+    conversation.outcome,
+    ...conversation.originalAlexResponses,
+    ...conversation.correctedResponses
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n");
+  for (const kind of scanForPersonalData(persistedFreeText)) findings.push(`${conversation.id}: metadata-${kind}`);
 
   return findings;
 }

@@ -203,6 +203,55 @@ describe("OpenAI adapter, automation and review", () => {
 
     expect(result.draft.usedFallback).toBe(true);
     expect(result.response.toLowerCase()).toContain("como te llamas");
+    // Invariante 6: la respuesta entregada es deterministica, la traza NO puede acreditarla a OpenAI.
+    expect(result.draft.actualProvider).toBe("deterministic");
+    expect(result.draft.provider).toBe("deterministic");
+    // ...pero SI pedimos a OpenAI: requestedProvider sigue siendo honesto.
+    expect(result.draft.requestedProvider).toBe("OPENAI");
+  });
+
+  it("does not credit OpenAI when an empty OpenAI draft falls back to the deterministic reply", async () => {
+    const { engine } = createEngine({
+      draftingProvider: {
+        async draft() {
+          // OpenAI responde con exito pero el texto es solo espacios (parsea: response no tiene .min(1)).
+          return ResponseDraftOutputSchema.parse({
+            response: "   ",
+            provider: "openai",
+            modelVersion: "fake-writing",
+            promptVersion: "test-prompt",
+            requestedProvider: "OPENAI",
+            actualProvider: "openai",
+            requestedModel: "fake-writing",
+            actualModel: "fake-writing",
+            usedFallback: false,
+            fallbackReason: null,
+            durationMs: 5,
+            retryCount: 0,
+            inputTokens: 10,
+            outputTokens: 0,
+            estimatedCostUsd: 0.001
+          });
+        }
+      }
+    });
+
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "empty_openai_draft",
+      profileVisibility: "PUBLIC",
+      message: "Hola, me interesa"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "empty_openai_draft",
+      message: "Vale, perfecto"
+    });
+
+    expect(result.response.trim().length).toBeGreaterThan(0);
+    expect(result.draft.usedFallback).toBe(true);
+    expect(result.draft.actualProvider).toBe("deterministic");
+    expect(result.draft.provider).toBe("deterministic");
+    expect(result.draft.requestedProvider).toBe("OPENAI");
   });
 
   it("blocks drafted percentages that are not allowed", async () => {

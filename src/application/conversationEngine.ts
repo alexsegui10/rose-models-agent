@@ -506,10 +506,19 @@ export class ConversationEngine {
     });
 
     if (!draft.response.trim()) {
+      // El borrador de OpenAI vino vacio o la llamada fallo: la respuesta ENTREGADA es la
+      // deterministica, asi que la traza debe acreditarsela al proveedor determinista (invariante 6:
+      // los metadatos nunca mienten sobre quien produjo el texto real). Se conserva requestedProvider/
+      // requestedModel (SI pedimos a OpenAI) y los tokens/coste/duracion reales del intento fallido.
       return {
         ...draft,
         response: input.deterministicResponse,
+        provider: "deterministic",
+        actualProvider: "deterministic",
+        modelVersion: "deterministic-local-2026-06-08.1",
+        actualModel: "deterministic-local-2026-06-08.1",
         usedFallback: true,
+        fallbackReason: draft.fallbackReason ?? "empty-openai-draft",
         error: draft.error ?? "empty-openai-draft"
       };
     }
