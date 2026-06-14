@@ -299,6 +299,7 @@ describe("commercial and device policy", () => {
         humanProfileReviewStatus: "NOT_REVIEWED",
         humanFitDecision: "PENDING",
         objections: [],
+        faceObjectionCount: 0,
         notes: [],
         conversationSummary: "",
         currentState: "QUALIFYING",

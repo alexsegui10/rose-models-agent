@@ -120,6 +120,7 @@ export const candidates = pgTable("candidates", {
   goals: text("goals"),
   interestLevel: text("interest_level", { enum: InterestLevelSchema.options }).notNull().default("UNKNOWN"),
   objections: jsonb("objections").$type<string[]>().notNull().default([]),
+  faceObjectionCount: integer("face_objection_count").notNull().default(0),
   notes: jsonb("notes").$type<string[]>().notNull().default([]),
   conversationSummary: text("conversation_summary").notNull().default(""),
   currentState: text("current_state", { enum: CandidateStateSchema.options }).notNull().default("NEW_LEAD"),

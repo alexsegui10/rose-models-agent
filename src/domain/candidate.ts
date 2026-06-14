@@ -58,7 +58,12 @@ export type DeviceEligibility = z.infer<typeof DeviceEligibilitySchema>;
 export const CandidateCommercialTierSchema = z.enum(["STANDARD", "HIGH_POTENTIAL", "EXCEPTIONAL"]);
 export type CandidateCommercialTier = z.infer<typeof CandidateCommercialTierSchema>;
 
-export const OnboardingBlockerSchema = z.enum(["DEVICE_UPGRADE_REQUIRED", "DEVICE_QUALITY_TEST_REQUIRED", "IDENTITY_VERIFICATION_REQUIRED", "CONTRACT_REQUIRED"]);
+export const OnboardingBlockerSchema = z.enum([
+  "DEVICE_UPGRADE_REQUIRED",
+  "DEVICE_QUALITY_TEST_REQUIRED",
+  "IDENTITY_VERIFICATION_REQUIRED",
+  "CONTRACT_REQUIRED"
+]);
 export type OnboardingBlocker = z.infer<typeof OnboardingBlockerSchema>;
 
 export const CandidateSchema = z.object({
@@ -88,6 +93,10 @@ export const CandidateSchema = z.object({
   goals: z.string().optional(),
   interestLevel: InterestLevelSchema.default("UNKNOWN"),
   objections: z.array(z.string()).default([]),
+  // Cuantas veces la candidata ha objetado/dudado de mostrar la cara. La 1a vez se reconduce; si
+  // insiste se cierra educadamente (peticion de Alex: no rechazar de golpe). Nunca debilita el
+  // invariante de "la cara es imprescindible", solo controla el RITMO del rechazo.
+  faceObjectionCount: z.number().int().nonnegative().default(0),
   notes: z.array(z.string()).default([]),
   conversationSummary: z.string().default(""),
   currentState: CandidateStateSchema.default("NEW_LEAD"),
@@ -168,6 +177,7 @@ export interface CandidatePatch {
   goals?: string;
   interestLevel?: InterestLevel;
   objections?: string[];
+  faceObjectionCount?: number;
   notes?: string[];
   conversationSummary?: string;
   currentState?: CandidateState;
@@ -202,6 +212,7 @@ export function createCandidate(input: {
     humanProfileReviewStatus: "NOT_REVIEWED",
     humanFitDecision: "PENDING",
     objections: [],
+    faceObjectionCount: 0,
     notes: [],
     conversationSummary: "",
     currentState: "NEW_LEAD",
@@ -226,14 +237,17 @@ export function normalizeCandidate(candidate: CandidateNormalizationInput): Cand
   return CandidateSchema.parse({
     ...candidate,
     declaredProfileVisibility: candidate.declaredProfileVisibility ?? candidate.profileVisibility ?? "UNKNOWN",
-    candidateClaimsFollowRequestAccepted: candidate.candidateClaimsFollowRequestAccepted ?? candidate.candidateDeclaredProfileAccessAccepted ?? false,
-    humanProfileReviewStatus: candidate.humanProfileReviewStatus ?? (candidate.profileReviewed ? "POTENTIAL_FIT" : "NOT_REVIEWED"),
+    candidateClaimsFollowRequestAccepted:
+      candidate.candidateClaimsFollowRequestAccepted ?? candidate.candidateDeclaredProfileAccessAccepted ?? false,
+    humanProfileReviewStatus:
+      candidate.humanProfileReviewStatus ?? (candidate.profileReviewed ? "POTENTIAL_FIT" : "NOT_REVIEWED"),
     humanFitDecision: humanFitDecision.success ? humanFitDecision.data : "PENDING",
     deviceType: candidate.deviceType ?? "UNKNOWN",
     deviceModel: candidate.deviceModel ?? null,
     deviceEligibility: candidate.deviceEligibility ?? "UNKNOWN",
     commercialTier: candidate.commercialTier ?? "STANDARD",
     objections: candidate.objections ?? [],
+    faceObjectionCount: candidate.faceObjectionCount ?? 0,
     notes: candidate.notes ?? [],
     conversationSummary: candidate.conversationSummary ?? "",
     interestLevel: candidate.interestLevel ?? "UNKNOWN",

@@ -149,7 +149,14 @@ export class ConversationEngine {
       ),
       groupedMessage.content
     );
-    const understanding = escalationFilter.understanding;
+    // Objecion/duda de cara (peticion de Alex #2): no rechazar de golpe. La 1a vez se reconduce; si
+    // insiste tras reconducir, se cierra educadamente. El contador vive en el candidato.
+    const faceConcern = classifyFaceConcern(groupedMessage.content);
+    const faceObjectionCountBefore = activeCandidate.faceObjectionCount;
+    let understanding = escalationFilter.understanding;
+    if (faceConcern) {
+      understanding = applyFaceConcern(understanding, faceConcern, faceObjectionCountBefore);
+    }
     // Primer turno del agente con un lead nuevo: toca el opener canonico (plantilla real de Alex),
     // nunca una pregunta de cualificacion. Los leads sembrados a mitad de funnel no lo necesitan.
     const isOpenerTurn =
@@ -175,11 +182,26 @@ export class ConversationEngine {
           ? [`PERCENTAGE_NEGOTIATION_REQUEST: ${groupedMessage.content}`]
           : [`PERCENTAGE_QUESTION_ASKED: ${groupedMessage.content}`]
         : [];
+    // La objecion/duda de cara (no las propuestas parciales, que van a Alex) incrementa el contador
+    // que decide reconducir-vs-cerrar, y deja aviso para que Alex lo vea en el CRM.
+    const faceCountsAsObjection = faceConcern !== null && faceConcern !== "partial";
+    const faceObjectionNotes =
+      faceConcern === "partial"
+        ? [`FACE_PARTIAL_PROPOSAL: ${groupedMessage.content}`]
+        : faceCountsAsObjection
+          ? [
+              faceConcern === "refusal" && faceObjectionCountBefore >= 1
+                ? `FACE_REFUSAL_CLOSED: ${groupedMessage.content}`
+                : `FACE_CONCERN_RECONDUCTED: ${groupedMessage.content}`
+            ]
+          : [];
     updatedCandidate = {
       ...updatedCandidate,
+      faceObjectionCount: faceCountsAsObjection ? faceObjectionCountBefore + 1 : updatedCandidate.faceObjectionCount,
       notes: [
         ...updatedCandidate.notes,
         ...commercialNotes,
+        ...faceObjectionNotes,
         // Una escalada suprimida nunca se pierde en silencio: Alex conserva el motivo original.
         ...(escalationFilter.suppressedEscalationNote === null ? [] : [escalationFilter.suppressedEscalationNote]),
         ...consistency.contradictions.map((item) => `CONTRADICTION: ${item}`),
@@ -751,6 +773,11 @@ function generateResponse(
   }
 
   if (candidate.currentState === "CLOSED") {
+    // Rechazo educado especifico de la cara (peticion de Alex #2): cuando insiste tras reconducir, se
+    // cierra con tacto, dejando la puerta abierta y sin valoraciones personales. El resto: cierre generico.
+    if (candidate.faceObjectionCount >= 1 && classifyFaceConcern(inboundMessage) === "refusal") {
+      return "Entiendo.\n\nPero es nuestra manera de trabajar, asi que en este caso no podemos seguir contigo.\n\nSi en algun momento te lo replanteas, aqui estare. Te deseo lo mejor, un saludo.";
+    }
     return "Gracias por avisarme. No te molesto mas. Que vaya todo muy bien.";
   }
 
@@ -1026,6 +1053,17 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
 
   if (responsePlan.knowledgeEntryIds.includes("content-boundaries-neutral-question")) {
     return "¿Hay algun tipo de contenido que no quieras hacer o algun limite que debamos tener en cuenta?";
+  }
+
+  // Reconduccion calida de la objecion de cara (peticion de Alex #2: no rechazar de golpe). Se llega
+  // aqui solo en la reconduccion (la 1a vez); si insiste, el cierre educado lo da generateResponse.
+  // Solo hechos documentados (trafico, confianza) y se ofrece resolver la privacidad: NUNCA promete
+  // ocultar/difuminar la cara ni anonimato (invariante de la cara + guard del validador factual).
+  if (responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory")) {
+    return withOptionalQuestion(
+      "Te entiendo, a muchas chicas les pasa al principio.\n\nLa cara es imprescindible para la estrategia de trafico y da mucha mas confianza al cliente. Es nuestra forma de trabajar, pero si te preocupa la privacidad dimelo y te explico como la cuidamos.",
+      responsePlan
+    );
   }
 
   // Sin hechos respondibles no se promete una explicacion vacia ("Te lo explico con calma."
@@ -1717,6 +1755,93 @@ function resolveContextualDecline(
     internalNotes: [
       ...understanding.internalNotes,
       "El 'no' responde a la ultima pregunta del agente; no se interpreta como rechazo del proceso."
+    ]
+  };
+}
+
+// Objecion/duda relacionada con mostrar la cara. Peticion de Alex (#2): no rechazar de golpe. La 1a
+// vez se reconduce con calidez (porque la cara importa + se ofrece resolver dudas de privacidad), y
+// solo si INSISTE se cierra educadamente. NUNCA debilita el invariante "la cara es imprescindible".
+//  - "partial": propone mostrar la cara solo en parte -> decision humana (escalationCondition).
+//  - "refusal": rechaza mostrar la cara / pide anonimato -> reconducir (1a) o cerrar (si insiste).
+//  - "recognition": duda de privacidad (que la vean/reconozcan) -> reconducir con las capas reales.
+export type FaceConcernKind = "partial" | "refusal" | "recognition";
+
+// Maximo de reconducciones de una duda de PRIVACIDAD (recognition) antes de escalar a Alex. Una duda
+// de privacidad no es un rechazo de la cara, asi que no se cierra sola; pero tampoco se reconduce sin
+// fin: tras varias vueltas la decide Alex. Evita el bucle de reconduccion identica senalado en review.
+const FACE_RECOGNITION_RECONDUCTION_CAP = 2;
+
+// Tema de la cara/anonimato (no la privacidad geografica, que es "recognition").
+const faceTopicPattern = /\b(cara|rostro|anonim)\b/;
+// Senal de negarse / no querer, en cualquier formulacion ("no quiero", "sigo sin", "tampoco", "me niego"...).
+const faceRefusalSignalPattern =
+  /\b(no quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar)\b/;
+const facePartialPattern =
+  /\b(solo (en )?(algun|alguna|algunas|algunos|parte|ciertas?|ratos?|a veces)|en algunas fotos|media cara|de espaldas|solo el cuerpo|parcial|sin que se vea del todo|a medias)\b/;
+const faceRecognitionPattern =
+  /\b(me reconozca|me reconozcan|que me vean|me vea alguien|me vean en mi pais|en mi pais|conocidos|gente que conozco|me da miedo que me|privacidad|que no me vea)\b/;
+
+function classifyFaceConcern(inboundMessage: string): FaceConcernKind | null {
+  const message = normalizeText(inboundMessage);
+  const mentionsFace = faceTopicPattern.test(message) || /\b(mostrarme|ensenarme|salir en|aparecer en)\b/.test(message);
+  if (mentionsFace && facePartialPattern.test(message)) return "partial";
+  // Rechazo de cara: tema de cara/anonimato + cualquier senal de negacion. Captura formulaciones
+  // evasivas ("sigo sin querer mostrar la cara") sin depender de una frase literal concreta.
+  if ((mentionsFace && faceRefusalSignalPattern.test(message)) || /\banonim/.test(message)) return "refusal";
+  if (faceRecognitionPattern.test(message)) return "recognition";
+  return null;
+}
+
+/**
+ * Ajusta el entendimiento ante una objecion/duda de cara para controlar el RITMO del rechazo, sin
+ * tocar la politica de fondo (la cara sigue siendo imprescindible). La reconduccion mantiene el
+ * estado actual; el cierre solo llega cuando insiste tras haber reconducido al menos una vez.
+ */
+function applyFaceConcern(
+  understanding: ModelConversationOutput,
+  concern: FaceConcernKind,
+  faceObjectionCountBefore: number
+): ModelConversationOutput {
+  if (concern === "partial") {
+    return {
+      ...understanding,
+      requiresHumanReview: true,
+      humanReviewReason: understanding.humanReviewReason ?? "Propone mostrar la cara solo en parte: lo decide Alex.",
+      internalNotes: [...understanding.internalNotes, "Propuesta de cara parcial: revision humana (Alex decide)."]
+    };
+  }
+
+  const alreadyReconducted = faceObjectionCountBefore >= 1;
+  if (concern === "refusal" && alreadyReconducted) {
+    return {
+      ...understanding,
+      intent: "DECLINES",
+      internalNotes: [...understanding.internalNotes, "Insiste en no mostrar la cara tras reconducir: cierre educado."]
+    };
+  }
+
+  // Duda de privacidad que persiste tras varias reconducciones: no es un rechazo (no se cierra sola),
+  // pero tampoco se reconduce sin fin. La decide Alex (revision humana), evitando el bucle.
+  if (concern === "recognition" && faceObjectionCountBefore >= FACE_RECOGNITION_RECONDUCTION_CAP) {
+    return {
+      ...understanding,
+      requiresHumanReview: true,
+      humanReviewReason: understanding.humanReviewReason ?? "Duda de privacidad recurrente sobre mostrarse: lo valora Alex.",
+      internalNotes: [...understanding.internalNotes, "Duda de privacidad recurrente: escala a Alex tras varias reconducciones."]
+    };
+  }
+
+  // Primera objecion de cara o duda de privacidad: se reconduce (REQUESTS_INFORMATION surface el
+  // conocimiento de cara/privacidad y mantiene el estado actual), NUNCA se cierra de golpe.
+  return {
+    ...understanding,
+    intent: "REQUESTS_INFORMATION",
+    internalNotes: [
+      ...understanding.internalNotes,
+      concern === "recognition"
+        ? "Duda de privacidad sobre mostrarse: se reconduce con las capas reales de privacidad."
+        : "Objecion de cara (1a vez): se reconduce con calidez, sin cerrar."
     ]
   };
 }
