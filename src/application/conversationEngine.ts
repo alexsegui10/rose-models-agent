@@ -313,6 +313,14 @@ export class ConversationEngine {
       response = dedupedResponse;
       draft = { ...draft, response };
     }
+    // Ritmo determinista (decision de Alex 14-jun): el codigo, no el LLM, evita el patron robotico de
+    // abrir CADA mensaje con acuse o repetir el nombre. Solo recorta el saludo de apertura.
+    const recentAgentMessages = recentMessages.filter((message) => message.role === "agent").map((message) => message.content);
+    const rhythmicResponse = applyConversationalRhythm(response, recentAgentMessages, projectedCandidate.firstName ?? undefined);
+    if (rhythmicResponse !== response && rhythmicResponse.trim().length > 0) {
+      response = rhythmicResponse;
+      draft = { ...draft, response };
+    }
     const styleEvaluation = await this.styleEvaluator.evaluate({
       response,
       candidate: projectedCandidate,
@@ -1489,6 +1497,59 @@ function swapLeadingAcknowledgement(response: string): string {
   }
 
   return `Okeyy\n\n${response}`;
+}
+
+// Muletillas de apertura que Alex usa como acuse breve. Las mas largas van primero para que la
+// alternancia del regex capture "vale pues" antes que "vale" y "bien bien" antes que "bien".
+const RHYTHM_ACK_ALTERNATION = "perfecto|vale pues|vale|bien bien|bien|okeyy|okey|genial|entiendo";
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function messageLeadsWithAcknowledgement(message: string): boolean {
+  return new RegExp(`^\\s*(?:${RHYTHM_ACK_ALTERNATION})\\b`, "i").test(message.trim());
+}
+
+/**
+ * Ritmo conversacional DETERMINISTA (decision de Alex 14-jun: el codigo controla el guion/ritmo, el
+ * LLM solo redacta). El Alex real no abre CADA mensaje con un acuse ni repite el nombre constantemente
+ * -> cualquier patron fijo suena a robot. Esta funcion opera sobre el bloque de apertura
+ * "acuse [nombre]<salto/coma>resto" (el patron dominante): si el mensaje anterior del agente YA abrio
+ * con acuse, este entra directo al contenido; si el nombre se uso en los ultimos mensajes, se conserva
+ * el acuse pero se quita el nombre. SOLO recorta el saludo de apertura; nunca toca la pregunta ni el
+ * contenido, asi que no puede romper la validacion factual ya hecha.
+ */
+export function applyConversationalRhythm(response: string, recentAgentMessages: string[], firstName?: string): string {
+  const previousAgentMessage = recentAgentMessages[recentAgentMessages.length - 1] ?? "";
+  const previousLedWithAck = messageLeadsWithAcknowledgement(previousAgentMessage);
+  const nameUsedRecently =
+    Boolean(firstName) &&
+    recentAgentMessages.slice(-2).some((message) => new RegExp(`\\b${escapeRegExp(firstName as string)}\\b`, "i").test(message));
+
+  const namePattern = firstName ? `(?:\\s+${escapeRegExp(firstName)})?` : "";
+  const opener = response.match(
+    new RegExp(`^(\\s*)((?:${RHYTHM_ACK_ALTERNATION})${namePattern})(\\s*(?:\\n+|,\\s))([\\s\\S]+)$`, "i")
+  );
+  if (!opener) {
+    return response;
+  }
+  const ackBlock = opener[2];
+  const separator = opener[3];
+  const rest = opener[4];
+
+  if (previousLedWithAck) {
+    // Dos mensajes seguidos abriendo con acuse = patron de robot: este entra directo al contenido.
+    return rest.trimStart();
+  }
+  if (nameUsedRecently && firstName) {
+    // El nombre ya salio hace nada: se conserva el acuse pero se quita el nombre repetido.
+    const ackWithoutName = ackBlock.replace(new RegExp(`\\s+${escapeRegExp(firstName)}\\s*$`, "i"), "");
+    if (ackWithoutName !== ackBlock) {
+      return `${ackWithoutName}${separator}${rest}`;
+    }
+  }
+  return response;
 }
 
 const explicitDeclinePattern =
