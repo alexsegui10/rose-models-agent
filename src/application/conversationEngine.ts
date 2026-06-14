@@ -16,6 +16,7 @@ import type { StyleEvaluation } from "@/domain/styleEvaluation";
 import type { KnowledgeEntry, NegotiationDecision, ResponsePlan } from "@/domain/businessKnowledge";
 import type { BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { LocalBusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
+import { businessKnowledgeEntries } from "@/content/business";
 import { buildConsistentCandidatePatch } from "./dataConsistency";
 import { extractDeterministicUnderstanding } from "./dataExtractor";
 import type { ExampleRetriever } from "./exampleRetriever";
@@ -267,18 +268,23 @@ export class ConversationEngine {
       (projectedCandidate.currentState === "QUALIFYING" ||
         projectedCandidate.currentState === "NEW_LEAD" ||
         projectedCandidate.currentState === "WAITING_PROFILE_ACCESS");
+    // Beat del pitch: si la candidata acaba de decir que no ha trabajado con agencias, se le explica
+    // como trabajamos (proactivo, decision de Alex) con el pitch confirmado verbatim, sin pasar por el LLM.
+    const agencyExplanation = agencyExplanationBeat(consistency.patch, recentMessages, responsePlan);
     let draft = useCanonicalOpenerTemplate
       ? deterministicDraftOutput(deterministicResponse)
-      : await this.draftResponse({
-          deterministicResponse,
-          projectedCandidate,
-          recentMessages,
-          knowledgeEntries,
-          responsePlan,
-          retrievedExamples,
-          styleContext,
-          approvedNegotiationDecision
-        });
+      : agencyExplanation !== null
+        ? deterministicDraftOutput(agencyExplanation)
+        : await this.draftResponse({
+            deterministicResponse,
+            projectedCandidate,
+            recentMessages,
+            knowledgeEntries,
+            responsePlan,
+            retrievedExamples,
+            styleContext,
+            approvedNegotiationDecision
+          });
     let response = draft.response;
     const validation = validateAgentResponse(response, projectedCandidate);
     if (!validation.valid) {
@@ -1505,6 +1511,34 @@ const RHYTHM_ACK_ALTERNATION = "perfecto|vale pues|vale|bien bien|bien|okeyy|oke
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Pitch operativo confirmado por Alex, entregado VERBATIM (su voz exacta) desde el conocimiento.
+const agencyPitchEntry = businessKnowledgeEntries.find((entry) => entry.id === "services-agency-management");
+const AGENCY_PITCH_TEXT = agencyPitchEntry ? agencyPitchEntry.approvedAnswerPoints.join("\n\n") : null;
+const agencyExplanationGivenPattern = /chatters|cuentas de instagram|cuentas con ubicaciones/i;
+
+/**
+ * Beat proactivo del pitch (decision de Alex 14-jun): cuando la candidata ACABA de decir que NO ha
+ * trabajado con agencias no sabe en que consiste lo de la agencia, asi que se le explica como
+ * trabajamos sin que lo pregunte. El codigo decide el beat y entrega el pitch confirmado tal cual
+ * (voz de Alex, determinista, igual que la plantilla del opener); el guion sigue en el siguiente turno.
+ */
+function agencyExplanationBeat(
+  patch: CandidatePatch,
+  recentMessages: ConversationMessage[],
+  responsePlan: ResponsePlan
+): string | null {
+  if (patch.worksWithAnotherAgency !== false) return null;
+  if (responsePlan.requiresHumanReview || responsePlan.uncoveredQuestion) return null;
+  // Si ademas hay una pregunta respondible (la candidata pregunto algo), esa respuesta manda: no se
+  // pisa con el pitch (mismo criterio que la plantilla del opener).
+  if (responsePlan.answerFacts.length > 0) return null;
+  if (!AGENCY_PITCH_TEXT) return null;
+  const alreadyExplained = recentMessages.some(
+    (message) => message.role === "agent" && agencyExplanationGivenPattern.test(message.content)
+  );
+  return alreadyExplained ? null : AGENCY_PITCH_TEXT;
 }
 
 function messageLeadsWithAcknowledgement(message: string): boolean {

@@ -7,13 +7,16 @@ const entries: KnowledgeEntryInput[] = [
     title: "Servicios principales de la agencia",
     facts: [
       "La agencia se encarga de estrategia, trafico, monetizacion, chatting y gestion acordada.",
-      "La modelo solo manda el contenido; la agencia hace el trafico via Instagram y la monetizacion en OnlyFans con un equipo de chatters 24/7."
+      "La modelo solo manda el contenido; la agencia hace el trafico creando cuentas de Instagram con ubicaciones y nombres españoles, y al llegar a bastantes seguidores pone el link al OnlyFans y monetiza con un equipo de chatters 24/7."
     ],
     approvedAnswerPoints: [
-      // Pitch breve real de Alex (analisis 2026-06-10, plantilla verbatim de 7 hilos, normalizada).
-      "Te explico como trabajamos de forma breve: basicamente mandas el contenido y nosotros ya hacemos todo el trafico con Instagram y la monetizacion en OnlyFans con nuestro equipo de chatters 24/7.",
-      "En la llamada te lo explicamos todo mejor.",
-      "La idea es que la modelo no tenga que llevar sola toda la parte de crecimiento y gestion."
+      // Pitch confirmado por Alex (14-jun): mecanismo real (cuentas de Instagram españolas -> seguidores
+      // -> link al OF -> monetizacion con chatters). Se entrega tambien PROACTIVAMENTE cuando la
+      // candidata NO ha trabajado con agencias (no sabe en que consiste lo de la agencia), no solo si
+      // pregunta "como trabajais".
+      "Te explico rapido como trabajamos: tu solo te encargas de mandar el contenido y nosotros hacemos el resto, la monetizacion, el trafico y toda la gestion.",
+      "El trafico lo hacemos con cuentas de instagram que creamos con ubicaciones y nombres españoles, y cuando ya tienen bastantes seguidores ponemos el link a tu of y empezamos a monetizar con el equipo de chatters 24/7.",
+      "En la llamada te lo explico todo mejor."
     ],
     prohibitedClaims: [
       "Prometer resultados concretos.",
@@ -26,10 +29,10 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["No prometer resultados.", "No inventar servicios concretos no documentados."],
     escalationConditions: ["La candidata pide resultados garantizados.", "La candidata pregunta por servicios no documentados."],
     requiresHumanReview: false,
-    version: "services-agency-management-2026-06-12.1",
+    version: "services-agency-management-2026-06-14.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-12"
+    updatedAt: "2026-06-14"
   }
 ];
 

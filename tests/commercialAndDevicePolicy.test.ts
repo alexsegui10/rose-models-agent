@@ -249,8 +249,20 @@ describe("commercial and device policy", () => {
       message: "Estoy disponible por las tardes y no trabajo con otra agencia"
     });
 
+    // Al decir que no ha trabajado con agencias, el bot explica como trabajamos (pitch proactivo)
+    // antes de seguir; el movil llega en el siguiente turno. El gate de movil sigue intacto:
+    // con dispositivo desconocido NUNCA pasa a revision final.
     expect(second.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
-    expect(second.response.toLowerCase()).toContain("movil");
+    expect(second.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
+
+    const third = await engine.handleIncomingMessage({
+      candidateId: first.candidate.id,
+      instagramUsername: "missing_iphone_case",
+      profileVisibility: "PUBLIC",
+      message: "vale, suena bien"
+    });
+    expect(third.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
+    expect(third.response.toLowerCase()).toContain("movil");
   });
 
   it("does not ask for device again once answered", async () => {
