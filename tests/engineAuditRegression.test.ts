@@ -59,6 +59,20 @@ describe("audit: la escalada por contradiccion de datos queda etiquetada", () =>
   });
 });
 
+describe("audit: marcadores vacios del LLM (':') no rellenan campos de texto libre", () => {
+  it("ignora firstName/experienceDescription/goals sin sentido para no saltarse los slots de nombre y OF", () => {
+    const candidate = createCandidate({ instagramUsername: "junk_fields" });
+    const result = buildConsistentCandidatePatch({
+      candidate,
+      extractedData: { firstName: ":", experienceDescription: ":", goals: "-" },
+      inboundMessage: "hola me interesa"
+    });
+    expect(result.patch.firstName).toBeUndefined();
+    expect(result.patch.experienceDescription).toBeUndefined();
+    expect(result.patch.goals).toBeUndefined();
+  });
+});
+
 describe("audit: un movil NOT_ELIGIBLE no se puede re-aprobar en silencio", () => {
   it("escala en vez de actualizar en blando NOT_ELIGIBLE -> APPROVED", () => {
     const candidate = {

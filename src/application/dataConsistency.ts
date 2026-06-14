@@ -124,10 +124,19 @@ export function buildConsistentCandidatePatch(input: {
     allowsCorrection
   );
 
-  if (input.extractedData.firstName && !input.candidate.firstName) patch.firstName = input.extractedData.firstName;
-  if (input.extractedData.experienceDescription && !input.candidate.experienceDescription)
+  // El LLM a veces vuelca marcadores vacios (":", "-", "") en estos campos de texto libre. Un ":" es
+  // truthy y pasaba el `&&`, fijando firstName=":" o experienceDescription=":" -> el slot de nombre o
+  // de OnlyFans se daba por respondido y el bot SE LO SALTABA. Se ignoran igual que en applyValue.
+  if (input.extractedData.firstName && !isMeaninglessString(input.extractedData.firstName) && !input.candidate.firstName)
+    patch.firstName = input.extractedData.firstName;
+  if (
+    input.extractedData.experienceDescription &&
+    !isMeaninglessString(input.extractedData.experienceDescription) &&
+    !input.candidate.experienceDescription
+  )
     patch.experienceDescription = input.extractedData.experienceDescription;
-  if (input.extractedData.goals && !input.candidate.goals) patch.goals = input.extractedData.goals;
+  if (input.extractedData.goals && !isMeaninglessString(input.extractedData.goals) && !input.candidate.goals)
+    patch.goals = input.extractedData.goals;
   if (input.extractedData.objections?.length)
     patch.objections = [...input.candidate.objections, ...input.extractedData.objections];
 

@@ -271,20 +271,32 @@ export class ConversationEngine {
     // Beat del pitch: si la candidata acaba de decir que no ha trabajado con agencias, se le explica
     // como trabajamos (proactivo, decision de Alex) con el pitch confirmado verbatim, sin pasar por el LLM.
     const agencyExplanation = agencyExplanationBeat(consistency.patch, recentMessages, responsePlan);
-    let draft = useCanonicalOpenerTemplate
-      ? deterministicDraftOutput(deterministicResponse)
-      : agencyExplanation !== null
-        ? deterministicDraftOutput(agencyExplanation)
-        : await this.draftResponse({
-            deterministicResponse,
-            projectedCandidate,
-            recentMessages,
-            knowledgeEntries,
-            responsePlan,
-            retrievedExamples,
-            styleContext,
-            approvedNegotiationDecision
-          });
+    // Control determinista del guion (decision de Alex 14-jun): en un turno que es SOLO una pregunta de
+    // cualificacion (sin nada que responder, sin escalada), el CODIGO pone la pregunta (plantilla real de
+    // Alex, orden fijo, sin saltarse ni reordenar). Asi el LLM no rompe el orden ni la deteccion
+    // contextual del turno siguiente. OpenAI se reserva para objeciones/explicaciones/pitch (answerFacts).
+    const useDeterministicQuestionTurn =
+      !useCanonicalOpenerTemplate &&
+      agencyExplanation === null &&
+      responsePlan.questionToAsk !== null &&
+      responsePlan.answerFacts.length === 0 &&
+      !responsePlan.requiresHumanReview &&
+      !responsePlan.uncoveredQuestion;
+    let draft =
+      useCanonicalOpenerTemplate || useDeterministicQuestionTurn
+        ? deterministicDraftOutput(deterministicResponse)
+        : agencyExplanation !== null
+          ? deterministicDraftOutput(agencyExplanation)
+          : await this.draftResponse({
+              deterministicResponse,
+              projectedCandidate,
+              recentMessages,
+              knowledgeEntries,
+              responsePlan,
+              retrievedExamples,
+              styleContext,
+              approvedNegotiationDecision
+            });
     let response = draft.response;
     const validation = validateAgentResponse(response, projectedCandidate);
     if (!validation.valid) {

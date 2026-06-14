@@ -270,14 +270,16 @@ describe("OpenAI adapter, automation and review", () => {
     // El primer turno es la plantilla canonica deterministica (no pasa por OpenAI).
     expect(opener.response).toContain("Rose Models");
 
+    // Un turno que SI pasa por OpenAI (pregunta con respuesta de conocimiento; los turnos de solo
+    // pregunta de cualificacion ya son deterministas por diseno). Si OpenAI falla -> fallback honesto.
     const result = await engine.handleIncomingMessage({
       candidateId: opener.candidate.id,
       instagramUsername: "draft_fallback",
-      message: "Vale, perfecto"
+      message: "que hace la agencia exactamente?"
     });
 
     expect(result.draft.usedFallback).toBe(true);
-    expect(result.response.toLowerCase()).toContain("como te llamas");
+    expect(result.response.trim().length).toBeGreaterThan(0);
     // Invariante 6: la respuesta entregada es deterministica, la traza NO puede acreditarla a OpenAI.
     expect(result.draft.actualProvider).toBe("deterministic");
     expect(result.draft.provider).toBe("deterministic");
@@ -319,7 +321,7 @@ describe("OpenAI adapter, automation and review", () => {
     const result = await engine.handleIncomingMessage({
       candidateId: opener.candidate.id,
       instagramUsername: "empty_openai_draft",
-      message: "Vale, perfecto"
+      message: "que hace la agencia exactamente?"
     });
 
     expect(result.response.trim().length).toBeGreaterThan(0);
