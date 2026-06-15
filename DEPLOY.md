@@ -83,7 +83,13 @@ En la carpeta del proyecto (`c:\Users\Alex\Desktop\proyecto1`):
 
 ## PASO 5 — App de Meta + conectar el webhook
 
-1. https://developers.facebook.com → **My Apps → Create App** → tipo **Business**.
+> ⚠️ OJO: las apps NO están en **Meta Business Suite** (`business.facebook.com`, donde gestionas
+> posts/anuncios/inbox). Las apps de desarrollador están en **Meta for Developers**, una web DISTINTA:
+> **`developers.facebook.com`**. Entra ahí con la misma cuenta; si es tu primera vez te registra como
+> desarrollador (gratis). Tu Instagram ya es cuenta profesional vinculada al negocio — eso ya está.
+
+1. https://developers.facebook.com → arriba derecha **My Apps → Create App** → caso de uso
+   **Instagram** (o **Other → Business** si no aparece claro).
 2. Añade el producto **Instagram** (mensajería de Instagram) / Messenger con Instagram.
 3. Vincula tu **cuenta de Instagram de empresa** (y su página de Facebook).
 4. **App secret**: en App settings → Basic → copia el *App Secret* → ponlo en Vercel como
