@@ -1861,6 +1861,13 @@ function reclassifyAnswerableBusinessQuestion(
   const wasEscalating = understanding.intent === "ASKS_ABOUT_CONTRACT" || understanding.requiresHumanReview;
   if (!wasEscalating) return understanding;
 
+  // Duda CONTRACTUAL genuina (permanencia, exclusiva/exclusividad, firmar, clausula, atadura, obligar):
+  // NUNCA se rescata, la decide Alex (riesgo del revisor 15-jun: "ya trabajo con otra agencia, me obligais
+  // a firmar exclusiva?" mezcla multi-agencia con una pregunta de contrato real que DEBE escalar).
+  if (/\b(permanencia|exclusivid|exclusiv|clausula|contrato|firmar|atadura|me atais|obligan|obligais)\b/.test(message)) {
+    return understanding;
+  }
+
   // Negociacion real: no se toca (sigue escalando). Demanda de cifra/dinero garantizado o % no estandar.
   const isNegotiation =
     /\b(me dais|dame|negociar|negociamos|excepcion|mas para mi|quiero el|quiero un|quiero ganar)\b/.test(message) ||

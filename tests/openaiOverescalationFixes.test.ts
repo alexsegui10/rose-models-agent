@@ -167,6 +167,26 @@ describe("Comercial: preguntas respondibles no se escalan a HIR (validacion 15-j
     expect(result.response).toMatch(/30/);
   });
 
+  it("multi-agencia CON duda contractual real ('me obligais a firmar exclusiva?') SIGUE escalando", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: fixedUnderstanding({ intent: "ASKS_ABOUT_CONTRACT", requiresHumanReview: true }),
+      automationMode: "AUTOMATIC"
+    });
+    const seeded = await seed(repository, "QUALIFYING");
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "oa_fix_case",
+      message: "ya trabajo con otra agencia, me obligais a firmar exclusiva con vosotros?"
+    });
+
+    // La duda contractual real (exclusiva) la decide Alex; no se responde como simple multi-agencia.
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.deliveryStatus).toBe("BLOCKED");
+  });
+
   it("una NEGOCIACION real de porcentaje SIGUE escalando a revision humana", async () => {
     const repository = new InMemoryCandidateRepository();
     const engine = new ConversationEngine({
