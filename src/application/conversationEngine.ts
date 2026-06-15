@@ -470,6 +470,15 @@ export class ConversationEngine {
     const alreadyAwaitingPartner = recentMessages.some(
       (message) => message.role === "agent" && /\b(mi socio|comentar tu perfil|lo comento|comentarlo)\b/i.test(message.content)
     );
+    // Coherencia del gate de movil: si ya se le dijo que con ese movil no se puede, no repetir el mismo
+    // rechazo en bucle (fallo real del replay: 11 veces "lamentablemente con ese movil...").
+    const alreadyToldDeviceIssue = recentMessages.some(
+      (message) =>
+        message.role === "agent" &&
+        /con ese movil no podemos|cambiarte el movil|movil lo tendriamos que valorar|movil mejor lo retomamos/i.test(
+          message.content
+        )
+    );
     const deterministicResponse = generateResponse(
       projectedCandidate,
       understanding,
@@ -477,7 +486,8 @@ export class ConversationEngine {
       approvedNegotiationDecision,
       groupedMessage.content,
       isOpenerTurn,
-      alreadyAwaitingPartner
+      alreadyAwaitingPartner,
+      alreadyToldDeviceIssue
     );
     // El opener real de Alex es una plantilla pegada a mano: cuando no hay nada que responder,
     // se envia la plantilla canonica tal cual (cero deriva del modelo, traza honesta: deterministico).
@@ -954,7 +964,8 @@ function generateResponse(
   approvedNegotiationDecision: NegotiationDecision | null,
   inboundMessage: string,
   isOpenerTurn = false,
-  alreadyAwaitingPartner = false
+  alreadyAwaitingPartner = false,
+  alreadyToldDeviceIssue = false
 ): string {
   if (candidate.currentState === "CLOSED" && candidate.age && candidate.age < 18) {
     return "Gracias por contestar. Ahora mismo solo podemos valorar perfiles de personas mayores de edad, asi que no podemos seguir con el proceso. Te deseo lo mejor.";
@@ -983,7 +994,14 @@ function generateResponse(
   }
 
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
-    return humanInterventionResponse(candidate, understanding, responsePlan, approvedNegotiationDecision, alreadyAwaitingPartner);
+    return humanInterventionResponse(
+      candidate,
+      understanding,
+      responsePlan,
+      approvedNegotiationDecision,
+      alreadyAwaitingPartner,
+      alreadyToldDeviceIssue
+    );
   }
 
   if (candidate.currentState === "WAITING_PROFILE_ACCESS") {
@@ -1084,7 +1102,8 @@ function humanInterventionResponse(
   understanding: ModelConversationOutput,
   responsePlan: ResponsePlan,
   approvedNegotiationDecision: NegotiationDecision | null,
-  alreadyAwaitingPartner = false
+  alreadyAwaitingPartner = false,
+  alreadyToldDeviceIssue = false
 ): string {
   if (approvedNegotiationDecision?.decision === "ALLOW_CUSTOM_TERMS") {
     return `Lo he revisado con mi socio y podemos valorarlo con estas condiciones: ${approvedNegotiationDecision.approvedModelPercentage}% para ti y ${approvedNegotiationDecision.approvedAgencyPercentage}% para la agencia. En la llamada te lo explicamos bien.`;
@@ -1104,6 +1123,20 @@ function humanInterventionResponse(
   // Guion real del gate de movil (halago/obstaculo/solucion, sin lenguaje corporativo tipo
   // "incorporacion"): "con ese movil no podemos trabajar / no has pensado en cambiartelo".
   if (candidate.deviceEligibility === "NOT_ELIGIBLE") {
+    // Si en ESTE turno reporta un movil mejor (la mejora no se auto-aplica por seguridad: dataConsistency
+    // la marca contradiccion y va a revision humana), se reconoce el cambio en vez de repetir el rechazo
+    // (fallo real del replay: una candidata consiguio un iPhone y el bot seguia diciendo "lamentablemente").
+    const reportsBetterDevice =
+      understanding.extractedData.deviceEligibility === "APPROVED" ||
+      understanding.extractedData.deviceEligibility === "PENDING_QUALITY_TEST" ||
+      understanding.extractedData.deviceEligibility === "PENDING_UPGRADE";
+    if (reportsBetterDevice) {
+      return "Genial que te hayas cambiado de movil, eso cambia la cosa.\n\nDejame que lo valore con mi socio y te confirmo, no te preocupes.";
+    }
+    // Ya se le explico antes lo del movil: no repetir el mismo rechazo en bucle (coherencia).
+    if (alreadyToldDeviceIssue) {
+      return "Como te decia, en cuanto tengas un movil mejor lo retomamos encantados. Cualquier cosa me dices.";
+    }
     return "Lamentablemente con ese movil no podemos trabajar, es muy importante la calidad de fotos y videos.\n\nNo has pensado en cambiarte el movil? Si lo consigues estariamos encantados.";
   }
 

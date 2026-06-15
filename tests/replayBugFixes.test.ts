@@ -90,6 +90,47 @@ describe("Replay bug: 'tengo dos/una' como respuesta a '¿tienes OF?' marca true
   }
 });
 
+describe("Replay bug: movil NO_ELIGIBLE que mejora / no repetir el rechazo (caso carola)", () => {
+  function engine() {
+    const repository = new InMemoryCandidateRepository();
+    return new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      businessKnowledgeRetriever: new LocalBusinessKnowledgeRetriever(),
+      exampleRetriever: new LocalExampleRetriever()
+    });
+  }
+
+  it("cuando reporta un movil mejor, reconoce el cambio (no repite 'lamentablemente')", async () => {
+    const e = engine();
+    const a = await e.handleIncomingMessage({ instagramUsername: "carola", profileVisibility: "PUBLIC", message: "hola" });
+    await e.handleIncomingMessage({ candidateId: a.candidate.id, instagramUsername: "carola", message: "Motorola E32" });
+    const upgrade = await e.handleIncomingMessage({
+      candidateId: a.candidate.id,
+      instagramUsername: "carola",
+      message: "Conseguí un iPhone 11"
+    });
+    expect(upgrade.response.toLowerCase()).not.toContain("lamentablemente con ese movil");
+    expect(upgrade.response.toLowerCase()).toMatch(/cambiad|genial|valor|lo veo|lo reviso/);
+  });
+
+  it("no repite el rechazo de movil identico turno tras turno", async () => {
+    const e = engine();
+    const a = await e.handleIncomingMessage({ instagramUsername: "carola2", profileVisibility: "PUBLIC", message: "hola" });
+    const first = await e.handleIncomingMessage({
+      candidateId: a.candidate.id,
+      instagramUsername: "carola2",
+      message: "Motorola E32"
+    });
+    const second = await e.handleIncomingMessage({
+      candidateId: a.candidate.id,
+      instagramUsername: "carola2",
+      message: "uy que lastima"
+    });
+    expect(second.response).not.toBe(first.response);
+  });
+});
+
 // Stub que fuerza intent=DECLINES SOLO en el mensaje largo (como a veces hace el LLM), dejando que
 // el opener avance con normalidad. Asi probamos el guard del cierre en el turno problematico real.
 class ForcedDeclineProvider implements ConversationUnderstandingProvider {
