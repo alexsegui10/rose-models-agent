@@ -19,7 +19,7 @@ const phonePatterns: readonly RegExp[] = [
 // Incluye cantidades/periodos ("14 mil seguidores", "15 dias libres", "3 meses"): sin esto, una
 // adulta que presume de seguidores ("no tengo 14 mil seguidores") se leia como edad 14 -> CLOSED.
 const ageCountNounLookahead =
-  "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?|anos|años|a\\b))";
+  "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?|a\\b))";
 // La segunda rama solo acepta "anos"/"años" explicito: "a" suelta es la preposicion castellana ("de 9
 // a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
 // menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
@@ -27,6 +27,9 @@ const agePattern = new RegExp(
   `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años|anitos|añitos))`,
   "i"
 );
+// Version global del mismo patron para recorrer TODAS las coincidencias (matchAll) y elegir la
+// primera que no sea una duracion ("llevo 5 años, tengo 25" -> 25, no 5).
+const agePatternGlobal = new RegExp(agePattern.source, "gi");
 
 // Declaracion de minoria de edad. Invariante 2 (INNEGOCIABLE): una menor SIEMPRE se cierra y NUNCA
 // se confirma como adulta. Se detecta ANTES del agePattern para que "no tengo 18" no se lea como
@@ -202,9 +205,12 @@ const agentAskedAgenciesPattern = /\botras? agencias?\b/;
 // acaba de preguntar la edad, asi que el ruido final es seguro.
 const bareAgeMessagePattern = /^\s*(?:edad\s*:?\s*)?(\d{1,2})\s*(?:anos|años|anitos|añitos)?\s*[\p{P}\p{S}\s]*$/u;
 
-// Respuestas afirmativas/negativas peladas a una pregunta cerrada del agente.
-const bareYesPattern = /^\s*(si+|sii*|claro|por supuesto|asi es|correcto|afirmativo|exacto)\b/;
-const bareNoPattern = /^\s*(no+|nop|nunca|jamas|negativo|para nada|que va|nop)\b/;
+// Respuestas afirmativas/negativas peladas a una pregunta cerrada del agente. El "si" se admite
+// doblado o alargado ("sisi", "si si", "siii") sin confundir "siempre"/"siento" (que NO son un si):
+// si+(?:\s*si+)* solo casa repeticiones de "si", y \b corta antes de otras letras.
+const bareYesPattern = /^\s*(si+(?:\s*si+)*|sip|claro|por supuesto|asi es|correcto|afirmativo|exacto|obvio|obviamente)\b/;
+// El "no" se admite doblado/alargado ("nono", "no no", "noo") igual que el "si" afirmativo.
+const bareNoPattern = /^\s*(no+(?:\s*no+)*|nop|nunca|jamas|negativo|para nada|que va)\b/;
 
 // Fillers, saludos y dias de la semana que NUNCA son un nombre aunque el agente lo pida.
 const nameRejectWords = new Set([
@@ -293,6 +299,10 @@ export function extractDeterministicUnderstanding(
   if (extractedData.hasOnlyFans === undefined && agentAskedOnlyFans) {
     if (bareYesPattern.test(normalized)) extractedData.hasOnlyFans = true;
     else if (bareNoPattern.test(normalized)) extractedData.hasOnlyFans = false;
+    // "Tengo dos", "tengo una cuenta activa", "ya tengo" como respuesta a "¿tienes OF?" = SI lo tiene,
+    // aunque no diga la palabra "of" (replay 15-jun: se repreguntaba OF en bucle). Excluye "tengo que".
+    else if (/\b(?:ya\s+)?tengo\b/.test(normalized) && !/\bno tengo\b/.test(normalized) && !/\btengo que\b/.test(normalized))
+      extractedData.hasOnlyFans = true;
   }
   if (extractedData.worksWithAnotherAgency === undefined && agentAskedAgencies) {
     if (bareYesPattern.test(normalized)) extractedData.worksWithAnotherAgency = true;
@@ -341,8 +351,34 @@ export function extractDeterministicUnderstanding(
   if (minorAge !== null) {
     extractedData.age = minorAge;
   } else {
-    const ageMatch = stripPhoneSpans(normalized).match(agePattern);
-    if (ageMatch) extractedData.age = Number(ageMatch[1] ?? ageMatch[2]);
+    // Se recorren TODAS las coincidencias y se toma la primera que NO sea una DURACION: asi "llevo 5
+    // años, tengo 25" coge 25 y no 5. Una "N años" es DURACION (no edad) si su misma clausula lleva un
+    // marcador temporal (hace/llevo/desde/durante/van) o va seguida de "de experiencia/trabajando/...".
+    // "N años de edad" SI es edad. Sin suelo numerico: "12 años" cierra como menor (invariante 2).
+    const stripped = stripPhoneSpans(normalized);
+    for (const m of stripped.matchAll(agePatternGlobal)) {
+      const value = Number(m[1] ?? m[2]);
+      const idx = m.index ?? 0;
+      const clausePrefix = (
+        stripped
+          .slice(0, idx)
+          .split(/[,.;!?]/)
+          .pop() ?? ""
+      ).trim();
+      const after = stripped.slice(idx, idx + (m[0]?.length ?? 0) + 22);
+      const durationBefore = /\b(hace|llevo|desde|durante|van|llevaba|llevamos)\b/.test(clausePrefix);
+      // Marcadores FUERTES de duracion (hace/llevo/de experiencia/trabajando): siempre duracion. "de
+      // edad" NUNCA es duracion (es edad). Marcadores DEBILES ("en esto/en el sector") solo son
+      // duracion si el valor es <13; en rango de menor (13-17) se trata como EDAD y cierra (invariante 2).
+      const strongDurationAfter =
+        /anos?\s+(?:de\s+(?:experiencia|trabajo|profesion|carrera|antiguedad)|trabajand|haciend|dedicad|metid|currand)/.test(
+          after
+        );
+      const weakDurationAfter = /anos?\s+en\s+(?:esto|el sector|el mundillo|el rubro|of|onlyfans|la plataforma)/.test(after);
+      if (durationBefore || strongDurationAfter || (weakDurationAfter && value < 13)) continue;
+      extractedData.age = value;
+      break;
+    }
   }
 
   if (mentionsPrivateProfile(normalized)) extractedData.profileVisibility = "PRIVATE";

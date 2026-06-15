@@ -1185,7 +1185,7 @@ function canonicalOpener(candidate: Candidate): string {
 // "lo deje", "me da miedo", "no estoy segura"... Detectarlo permite un acuse EMPATICO medido en vez
 // de uno neutro frio. Es deteccion determinista: el acuse es una frase fija, jamas inventa nada.
 const sharesPersonalConcernPattern =
-  /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da (miedo|verguenza|cosa|palo|apuro|reparo)|no se si|no estoy segura|no estaba segura|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza)\b/;
+  /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da (miedo|verguenza|cosa|palo|apuro|reparo)|no se si|no estoy segura|no estaba segura|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza|estaf|me robaron|me timaron|mala experiencia|me enganaron|dejaron de contestar|desaparecieron)\b/;
 
 // Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.
 export function acknowledgementFor(understanding: ModelConversationOutput, inboundMessage = ""): string {
@@ -1943,6 +1943,21 @@ function resolveContextualDecline(
   const normalizedInbound = normalizeText(inboundMessage);
   if (explicitDeclinePattern.test(normalizedInbound)) {
     return understanding;
+  }
+
+  // Un mensaje largo y explicativo NUNCA es un rechazo seco del proceso, aunque empiece por "No,"
+  // o mencione que "dejo"/"borraron" algo (fallo real del replay: una candidata que contaba su
+  // historial en un parrafo acababa en CLOSED). Un decline real es corto ("no me interesa", "paso").
+  const wordCount = normalizedInbound.split(/\s+/).filter(Boolean).length;
+  if (wordCount >= 12) {
+    return {
+      ...understanding,
+      intent: "OTHER",
+      internalNotes: [
+        ...understanding.internalNotes,
+        "Mensaje largo explicativo: no se interpreta como rechazo del proceso aunque el modelo dijera DECLINES."
+      ]
+    };
   }
 
   const normalizedAgent = normalizeText(lastAgentMessage);

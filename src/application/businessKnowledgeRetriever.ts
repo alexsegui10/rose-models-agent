@@ -90,7 +90,7 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // El pitch operativo ("cual es su forma de trabajar?", "como me promocionan?") es la pregunta
   // mas matadora de leads cuando se deriva al socio: debe recuperar SIEMPRE la entrada de servicios.
   if (
-    /\bcomo trabaj|\bcomo se trabaja\b|\bforma de trabajar\b|\ben que consiste\b|\bque (?:me )?ofrec|\bcomo (?:me |la )?promocion|\bcomo (?:lo|la|se) manej|\bme la gestionen\b|\bcomo seria el trabajo\b/.test(
+    /\bcomo trabaj|\bcomo se trabaja\b|\bforma de trabajar\b|\ben que consiste\b|\bque (?:me )?ofrec|\bcomo (?:me |la )?promocion|\bcomo (?:lo|la|se) manej|\bme la gestionen\b|\bcomo seria el trabajo\b|\bde que (?:se )?(?:trata|va)\b|\bme explicas\b|\bexplicame\b|\bme cuentas\b|\bcuentame (?:mas|un poco|como|de que)\b|\bde que se trata\b/.test(
       message
     )
   )
