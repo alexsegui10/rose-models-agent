@@ -48,6 +48,30 @@ describe("Seguridad de menores: declaracion de minoria -> CLOSED, nunca adulta",
     });
   }
 
+  it("una menor que da TODOS los datos en un turno recibe el cierre de seguridad, NUNCA el pitch (regresion 15-jun)", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      businessKnowledgeRetriever: new LocalBusinessKnowledgeRetriever(),
+      exampleRetriever: new LocalExampleRetriever(),
+      automationMode: "AUTOMATIC"
+    });
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "minor_full_script",
+      profileVisibility: "PUBLIC",
+      message: "me llamo Ana, tengo 16 anos, no tengo of y mi movil es un iphone 13"
+    });
+
+    expect(result.candidate.currentState).toBe("CLOSED");
+    expect(result.candidate.isAdultConfirmed).toBe(false);
+    // JAMAS el pitch de monetizacion del OnlyFans a una menor (invariante 2).
+    expect(result.response.toLowerCase()).not.toMatch(/chatters|cuentas de instagram|link a tu of/);
+    // Cierre de seguridad por minoria de edad.
+    expect(result.response.toLowerCase()).toContain("mayores de edad");
+  });
+
   it("NO confirma adulta ante 'no tengo 18' (el peor fallo: leer 'tengo 18')", () => {
     const understanding = extractDeterministicUnderstanding("no tengo 18", { lastAgentMessage: "Que edad tienes?" });
     expect(understanding.extractedData.age === undefined || understanding.extractedData.age < 18).toBe(true);

@@ -122,7 +122,7 @@ describe("ConversationEngine never re-asks the question the candidate just answe
     });
     expect(askOnlyFans.candidate.age).toBe(27);
     expect(askOnlyFans.response.toLowerCase()).not.toContain("que edad tienes");
-    expect(askOnlyFans.response.toLowerCase()).toContain("tienes of");
+    expect(askOnlyFans.response.toLowerCase()).toContain("has tenido of");
 
     const askAgencies = await engine.handleIncomingMessage({
       candidateId: seeded.id,
@@ -130,7 +130,7 @@ describe("ConversationEngine never re-asks the question the candidate just answe
       message: "Es la primera vez que uso only"
     });
     expect(askAgencies.candidate.hasOnlyFans).toBe(true);
-    expect(askAgencies.response.toLowerCase()).not.toContain("tienes of");
+    expect(askAgencies.response.toLowerCase()).not.toContain("has tenido of");
     expect(askAgencies.response.toLowerCase()).toContain("otras agencias");
   });
 });

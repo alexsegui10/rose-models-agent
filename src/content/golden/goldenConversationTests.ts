@@ -171,7 +171,7 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     stateBefore: "QUALIFYING",
     // Orden canonico del guion real: con nombre y edad conocidos, el siguiente slot es OF, no "ciudad".
     messages: ["Como te dije, tengo 27"],
-    responseMustIncludeAny: ["tienes of", "experiencia"],
+    responseMustIncludeAny: ["has tenido of", "experiencia"],
     responseMustNotInclude: ["que edad tienes"]
   },
   {
@@ -180,7 +180,7 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     initialCandidate: { profileVisibility: "PUBLIC", firstName: "Luz", age: 31, city: "Buenos Aires", country: "Argentina" },
     stateBefore: "QUALIFYING",
     messages: ["Perdona, recien veo tu mensaje, estuve a full estos dias"],
-    responseMustIncludeAny: ["tienes of", "experiencia", "disponibilidad"],
+    responseMustIncludeAny: ["has tenido of", "experiencia", "disponibilidad"],
     responseMustNotInclude: ["empezamos de cero"]
   },
   {
@@ -202,7 +202,7 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     messages: ["Tengo 24 y soy de Madrid"],
     expectedTransition: "QUALIFYING",
     expectedExtractedFields: { age: 24, city: "Madrid", country: "España" },
-    responseMustIncludeAny: ["tienes of", "experiencia"],
+    responseMustIncludeAny: ["has tenido of", "experiencia"],
     responseMustNotInclude: ["que edad tienes"]
   },
   {

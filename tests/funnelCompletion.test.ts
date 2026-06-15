@@ -182,7 +182,7 @@ describe("Cierre del funnel: confirmacion de llamada (-> CALL_SCHEDULED)", () =>
     expect(reply.response.toLowerCase()).not.toContain("todo listo, te llamo el martes");
   });
 
-  it("un 2o mensaje en REJECTED no degrada a un 'Okeyy' suelto", async () => {
+  it("un mensaje en REJECTED no recibe respuesta (bot silenciado, sin gasto de OpenAI)", async () => {
     const { engine, repository } = createEngine();
     const seeded = await seed(repository, "REJECTED", { automationPaused: false, manualControlActive: false });
 
@@ -197,9 +197,8 @@ describe("Cierre del funnel: confirmacion de llamada (-> CALL_SCHEDULED)", () =>
       message: "porfa dame una oportunidad"
     });
 
-    expect(first.response.length).toBeGreaterThan(0);
-    const reply = second.response.trim().toLowerCase();
-    expect(reply).not.toBe("okeyy");
-    expect(reply).not.toBe("vale pues");
+    // Decision de Alex: una candidata rechazada deja de recibir respuestas (nada de 'Okeyy' degradado).
+    expect(first.response).toBe("");
+    expect(second.response).toBe("");
   });
 });

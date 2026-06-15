@@ -16,7 +16,9 @@ const entries: KnowledgeEntryInput[] = [
       // pregunta "como trabajais".
       "Te explico rapido como trabajamos: tu solo te encargas de mandar el contenido y nosotros hacemos el resto, la monetizacion, el trafico y toda la gestion.",
       "El trafico lo hacemos con cuentas de instagram que creamos con ubicaciones y nombres españoles, y cuando ya tienen bastantes seguidores ponemos el link a tu of y empezamos a monetizar con el equipo de chatters 24/7.",
-      "En la llamada te lo explico todo mejor."
+      "En la llamada te lo explico todo mejor.",
+      // Cierre calido del pitch (peticion de Alex 15-jun): invita a preguntar sin presionar.
+      "Cualquier duda me preguntas sin problema."
     ],
     prohibitedClaims: [
       "Prometer resultados concretos.",
@@ -29,10 +31,10 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["No prometer resultados.", "No inventar servicios concretos no documentados."],
     escalationConditions: ["La candidata pide resultados garantizados.", "La candidata pregunta por servicios no documentados."],
     requiresHumanReview: false,
-    version: "services-agency-management-2026-06-14.1",
+    version: "services-agency-management-2026-06-15.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-14"
+    updatedAt: "2026-06-15"
   }
 ];
 

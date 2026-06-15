@@ -356,14 +356,21 @@ export default function Home() {
     await refreshCandidates();
   }
 
-  async function advanceStage(candidate: Candidate, action: "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL") {
-    // Cierra los huecos del funnel: verificar perfil (seguir/rechazar) y confirmar la llamada.
+  async function advanceStage(
+    candidate: Candidate,
+    action: "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT"
+  ) {
+    // Acciones del CRM: verificar/OK de perfil (en cualquier momento), confirmar llamada, rechazar.
     let slot: string | undefined;
     if (action === "CONFIRM_CALL") {
       const entered = window.prompt("Hora acordada para la llamada (opcional, p. ej. 'el lunes a las 18h'):");
       // Cancelar/Escape (null) ABORTA: no se confirma la llamada por error. Vacio = confirmar sin hora.
       if (entered === null) return;
       slot = entered.trim() || undefined;
+    }
+    if (action === "REJECT") {
+      // Rechazar silencia el bot (deja de responder, sin gastar OpenAI): confirmar para evitar clics por error.
+      if (!window.confirm(`Rechazar a @${candidate.instagramUsername}? El bot dejara de responderle.`)) return;
     }
     const response = await fetch("/api/simulator/advance-stage", {
       method: "POST",
@@ -378,10 +385,18 @@ export default function Home() {
     const labels: Record<typeof action, string> = {
       PROFILE_FIT: `Perfil de @${candidate.instagramUsername} verificado: sigue la cualificacion.`,
       PROFILE_NO_FIT: `@${candidate.instagramUsername} descartada en la revision de perfil.`,
-      CONFIRM_CALL: `Llamada confirmada para @${candidate.instagramUsername}.`
+      CONFIRM_CALL: `Llamada confirmada para @${candidate.instagramUsername}.`,
+      PROFILE_OK: `Perfil de @${candidate.instagramUsername} marcado como OK.`,
+      REJECT: `@${candidate.instagramUsername} rechazada: el bot deja de responderle.`
     };
-    // Si el motor no aplico nada (estado incompatible), no mentir con un aviso de exito.
-    if (!data.proposedMessage && data.candidate.currentState === candidate.currentState) {
+    // Si el motor no aplico nada (estado incompatible), no mentir con un aviso de exito. PROFILE_OK puede
+    // no cambiar de estado pero si marcar el perfil como OK: eso tambien cuenta como aplicado.
+    const profileFlagChanged = data.candidate.humanProfileReviewStatus !== candidate.humanProfileReviewStatus;
+    const appliedNothing =
+      !data.proposedMessage &&
+      data.candidate.currentState === candidate.currentState &&
+      !(action === "PROFILE_OK" && profileFlagChanged);
+    if (appliedNothing) {
       setCrmNotice(`Sin cambios para @${candidate.instagramUsername}: la accion no aplica en su estado actual.`);
     } else {
       setCrmNotice(
@@ -1014,13 +1029,11 @@ export default function Home() {
                         >
                           Aprobar
                         </button>
-                        <button
-                          className="danger"
-                          type="button"
-                          disabled={!awaitingDecision}
-                          onClick={() => void applyHumanDecision(candidate, "REJECT")}
-                        >
+                        <button className="danger" type="button" onClick={() => void advanceStage(candidate, "REJECT")}>
                           Rechazar
+                        </button>
+                        <button className="secondary" type="button" onClick={() => void advanceStage(candidate, "PROFILE_OK")}>
+                          Dar OK al perfil
                         </button>
                         {awaitingProfileReview ? (
                           <>

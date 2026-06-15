@@ -38,8 +38,8 @@ describe("Auditoria funnel: negacion de agencia se captura (no re-preguntar)", (
   });
 });
 
-describe("Auditoria funnel: estado REJECTED tiene cierre cortes propio (no dead-end generico)", () => {
-  it("una candidata rechazada recibe un cierre claro, no 'cualquier duda me dices'", async () => {
+describe("Auditoria funnel: una candidata RECHAZADA queda silenciada (sin respuesta ni gasto de OpenAI)", () => {
+  it("no responde a una candidata ya rechazada por Alex", async () => {
     const { engine, repository } = createEngine();
     const seeded = await repository.saveCandidate(
       normalizeCandidate({
@@ -58,7 +58,8 @@ describe("Auditoria funnel: estado REJECTED tiene cierre cortes propio (no dead-
     });
 
     expect(result.candidate.currentState).toBe("REJECTED");
-    expect(result.response.toLowerCase()).not.toContain("cualquier duda que tengas me dices");
-    expect(result.response.length).toBeGreaterThan(0);
+    // Decision de Alex: rechazada -> el bot deja de responder y no se gasta OpenAI.
+    expect(result.response).toBe("");
+    expect(result.understanding.actualProvider).toBe("deterministic");
   });
 });

@@ -4,8 +4,9 @@ import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorSt
 
 const AdvanceStageSchema = z.object({
   candidateId: z.string(),
-  action: z.enum(["PROFILE_FIT", "PROFILE_NO_FIT", "CONFIRM_CALL"]),
-  slot: z.string().optional()
+  action: z.enum(["PROFILE_FIT", "PROFILE_NO_FIT", "CONFIRM_CALL", "PROFILE_OK", "REJECT"]),
+  slot: z.string().optional(),
+  note: z.string().optional()
 });
 
 export async function POST(request: Request) {
@@ -23,22 +24,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
   }
 
-  const result =
-    parsed.data.action === "CONFIRM_CALL"
-      ? await engine.confirmScheduledCall({ candidateId: parsed.data.candidateId, slot: parsed.data.slot })
-      : await engine.applyProfileReviewDecision({
-          candidateId: parsed.data.candidateId,
-          fits: parsed.data.action === "PROFILE_FIT"
-        });
+  const result = await dispatchAction(engine, parsed.data);
 
   const messages = await repository.listMessages(result.candidate.id);
   const transitions = await repository.listTransitions(result.candidate.id);
 
   return NextResponse.json({
     candidate: result.candidate,
-    proposedMessage: result.proposedMessage,
+    proposedMessage: "proposedMessage" in result ? result.proposedMessage : null,
     appliedTransitions: result.transitions,
     messages,
     transitions
   });
+}
+
+type AdvanceStageInput = z.infer<typeof AdvanceStageSchema>;
+
+async function dispatchAction(
+  engine: ReturnType<typeof getSimulatorEngine>,
+  data: AdvanceStageInput
+): Promise<{
+  candidate: Awaited<ReturnType<typeof engine.markProfileOk>>["candidate"];
+  transitions: unknown[];
+  proposedMessage?: string | null;
+}> {
+  switch (data.action) {
+    case "CONFIRM_CALL":
+      return engine.confirmScheduledCall({ candidateId: data.candidateId, slot: data.slot });
+    case "PROFILE_OK":
+      return engine.markProfileOk({ candidateId: data.candidateId });
+    case "REJECT":
+      return engine.rejectCandidate({ candidateId: data.candidateId, note: data.note });
+    case "PROFILE_FIT":
+    case "PROFILE_NO_FIT":
+    default:
+      return engine.applyProfileReviewDecision({ candidateId: data.candidateId, fits: data.action === "PROFILE_FIT" });
+  }
 }

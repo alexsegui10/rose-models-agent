@@ -69,7 +69,8 @@ const qualificationSlots: QualificationSlot[] = [
   },
   {
     id: "onlyfans-or-experience",
-    question: "Tienes of o has tenido alguna vez?",
+    // Registro mas calido (peticion de Alex 15-jun): nada de pregunta fria a secas.
+    question: "Me puedes contar si has tenido OF alguna vez?",
     alreadyAskedPattern: /tienes of|has tenido of|tienes onlyfans|has tenido onlyfans/,
     // Solo depende de si SABEMOS si tiene OnlyFans: una experienceDescription (a veces alucinada por
     // el LLM desde un mensaje de parloteo) NO dice si tiene OF, asi que no debe saltarse esta pregunta.
@@ -79,7 +80,10 @@ const qualificationSlots: QualificationSlot[] = [
     id: "agencies",
     question: "Has trabajado alguna vez con otras agencias?",
     alreadyAskedPattern: /otras? agencias?/,
-    isMissing: (candidate) => candidate.worksWithAnotherAgency === undefined
+    // Solo se pregunta por agencias a quien SI ha tenido OF: si no tiene experiencia, preguntar por
+    // agencias es redundante (peticion de Alex 15-jun: "si dijo que no tiene experiencia, por que le
+    // pregunta por agencias"). Para las inexpertas, el pitch proactivo cubre el "como trabajamos".
+    isMissing: (candidate) => candidate.worksWithAnotherAgency === undefined && candidate.hasOnlyFans === true
   },
   {
     id: "device",

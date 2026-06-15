@@ -14,6 +14,22 @@ import { getSimulatorEngine } from "@/server/simulatorStore";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Ritmo de la rafaga (peticion de Alex: que no responda al instante y deje unos segundos entre
+// mensajes). PRESUPUESTO total de pausa por turno: tope para convivir con el limite de 10s del plan
+// gratis (la comprension+redaccion de OpenAI ya consume parte). Ajustable por env si se cambia de plan.
+const BURST_DELAY_BUDGET_MS = Number(process.env.INSTAGRAM_BURST_DELAY_BUDGET_MS ?? 4500);
+const BURST_DELAY_PER_MESSAGE_MAX_MS = Number(process.env.INSTAGRAM_BURST_DELAY_MAX_MS ?? 2600);
+
+/** Pausa "humana" antes de un mensaje: base + tiempo de tecleo segun longitud, con tope por mensaje. */
+function naturalSendDelayMs(chunk: string): number {
+  const typingMs = 700 + chunk.trim().length * 28;
+  return Math.min(typingMs, BURST_DELAY_PER_MESSAGE_MAX_MS);
+}
+
+function sleep(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
 /**
  * Webhook de Instagram. GET = handshake de verificación de Meta. POST = eventos entrantes: verifica
  * firma → parsea → motor → responde (en ráfaga) SOLO si la automatización lo entrega (SENT). En
@@ -104,9 +120,19 @@ export async function POST(request: Request): Promise<NextResponse> {
         responseLen: result.response.trim().length
       });
       if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
-        for (const chunk of splitIntoMessageBurst(result.response)) {
-          const sent = await provider.sendTextMessage(message.senderId, chunk);
-          console.log("[ig-webhook] envio a Instagram", { sent });
+        const chunks = splitIntoMessageBurst(result.response);
+        let delayBudgetMs = BURST_DELAY_BUDGET_MS;
+        for (let i = 0; i < chunks.length; i += 1) {
+          // Ritmo natural (peticion de Alex): unos segundos entre mensajes, NUNCA instantaneo. Se
+          // reparte un presupuesto total de pausa para no acercarse al limite de 10s de Vercel: si se
+          // agota, los ultimos mensajes salen seguidos en vez de tumbar la funcion.
+          if (delayBudgetMs > 0) {
+            const wait = Math.min(naturalSendDelayMs(chunks[i]), delayBudgetMs);
+            delayBudgetMs -= wait;
+            await sleep(wait);
+          }
+          const sent = await provider.sendTextMessage(message.senderId, chunks[i]);
+          console.log("[ig-webhook] envio a Instagram", { sent, parte: `${i + 1}/${chunks.length}` });
         }
       } else {
         console.log("[ig-webhook] NO se envia respuesta", {

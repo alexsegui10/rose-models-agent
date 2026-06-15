@@ -52,7 +52,7 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
 
   it("asks for OnlyFans after age, never the city question", () => {
     const plan = planFor({ candidate: candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true }) });
-    expect(plan.questionToAsk).toBe("Tienes of o has tenido alguna vez?");
+    expect(plan.questionToAsk).toBe("Me puedes contar si has tenido OF alguna vez?");
     expect(plan.questionToAsk).not.toContain("ciudad");
   });
 
@@ -68,6 +68,14 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
       worksWithAnotherAgency: false
     });
     expect(planFor({ candidate: withAgencies }).questionToAsk).toContain("que movil tienes");
+  });
+
+  it("no pregunta por agencias si la candidata no tiene OF (salta al movil)", () => {
+    // Peticion de Alex 15-jun: si no tiene experiencia (sin OF), preguntar por agencias es redundante.
+    const noOf = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true, hasOnlyFans: false });
+    const question = planFor({ candidate: noOf }).questionToAsk ?? "";
+    expect(question.toLowerCase()).not.toContain("otras agencias");
+    expect(question.toLowerCase()).toContain("que movil tienes");
   });
 
   it("asks the country late and only when device is already known", () => {
@@ -106,7 +114,7 @@ describe("responsePlanner no-repeat guard (mata el bucle degenerado de iteracion
       candidate: candidateWith({ firstName: "Carla" }),
       recentAgentMessages: ["Perfecto. Que edad tienes?", "Te leo. Que edad tienes?"]
     });
-    expect(plan.questionToAsk).toBe("Tienes of o has tenido alguna vez?");
+    expect(plan.questionToAsk).toBe("Me puedes contar si has tenido OF alguna vez?");
   });
 
   it("asks nothing when every pending slot was already asked twice", () => {
@@ -357,7 +365,7 @@ describe("responsePlanner question gating", () => {
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "Si, hagamos la llamada"
     });
-    expect(plan.questionToAsk).toBe("Tienes of o has tenido alguna vez?");
+    expect(plan.questionToAsk).toBe("Me puedes contar si has tenido OF alguna vez?");
   });
 
   it("never asks for the phone more than twice (anti acoso telefonico)", () => {

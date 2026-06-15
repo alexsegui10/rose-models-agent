@@ -16,7 +16,7 @@ function createEngine() {
 }
 
 describe("agency pitch is delivered proactively when the candidate has no agency experience", () => {
-  it("explains how the agency works right after she says she has not worked with agencies", async () => {
+  it("asks for the phone first and only then explains how the agency works (order: OF -> agencies -> movil -> pitch)", async () => {
     const { engine } = createEngine();
     const username = "no_agency_pitch";
     const opener = await engine.handleIncomingMessage({
@@ -28,21 +28,32 @@ describe("agency pitch is delivered proactively when the candidate has no agency
     await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "me llamo ana" });
     await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "tengo 25" });
     await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "si he tenido of" });
-    const result = await engine.handleIncomingMessage({
+    const afterAgencies = await engine.handleIncomingMessage({
       candidateId: id,
       instagramUsername: username,
       message: "no, nunca con agencias"
     });
 
-    expect(result.candidate.worksWithAnotherAgency).toBe(false);
-    // La respuesta es el pitch operativo (mecanismo de cuentas de Instagram + chatters), no otra pregunta.
-    expect(result.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
+    expect(afterAgencies.candidate.worksWithAnotherAgency).toBe(false);
+    // Decision de Alex 15-jun: el movil va ANTES del pitch. Aqui todavia no se explica como trabajamos.
+    expect(afterAgencies.response.toLowerCase()).toContain("movil");
+    expect(afterAgencies.response.toLowerCase()).not.toMatch(/chatters|cuentas de instagram/);
 
-    // Anti-bucle: repetir que no trabaja con agencias NO vuelve a soltar el pitch.
+    // Tras dar el movil, AHORA si llega el pitch operativo (cuentas de Instagram + chatters) y se cierra
+    // invitando a preguntar.
+    const result = await engine.handleIncomingMessage({
+      candidateId: id,
+      instagramUsername: username,
+      message: "tengo un iphone 13"
+    });
+    expect(result.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
+    expect(result.response.toLowerCase()).toContain("cualquier duda me preguntas");
+
+    // Anti-bucle: seguir hablando NO vuelve a soltar el pitch.
     const again = await engine.handleIncomingMessage({
       candidateId: id,
       instagramUsername: username,
-      message: "que no, nunca he trabajado con ninguna agencia"
+      message: "vale, entendido"
     });
     expect(again.response.toLowerCase()).not.toMatch(/chatters|cuentas de instagram/);
   });

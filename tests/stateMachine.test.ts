@@ -14,4 +14,24 @@ describe("state machine", () => {
     expect(canTransition("HUMAN_INTERVENTION_REQUIRED", "APPROVED")).toBe(true);
     expect(canTransition("CLOSED", "QUALIFYING")).toBe(false);
   });
+
+  it("permite rechazo humano (REJECTED) desde cualquier estado activo, pero no desde CLOSED", () => {
+    // Alex puede descartar a una candidata en cualquier punto del funnel desde el CRM.
+    for (const state of [
+      "NEW_LEAD",
+      "WAITING_PROFILE_ACCESS",
+      "PROFILE_READY_FOR_REVIEW",
+      "QUALIFYING",
+      "WAITING_HUMAN_REVIEW",
+      "APPROVED",
+      "COLLECTING_CALL_DETAILS",
+      "READY_TO_SCHEDULE",
+      "CALL_SCHEDULED",
+      "HUMAN_INTERVENTION_REQUIRED"
+    ] as const) {
+      expect(canTransition(state, "REJECTED")).toBe(true);
+    }
+    // CLOSED es terminal: no se sale ni siquiera a REJECTED.
+    expect(canTransition("CLOSED", "REJECTED")).toBe(false);
+  });
 });

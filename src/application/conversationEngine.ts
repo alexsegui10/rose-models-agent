@@ -215,6 +215,75 @@ export class ConversationEngine {
   }
 
   /**
+   * Rechazo humano explicito desde el CRM (invariante 4: lo decide Alex). Marca a la candidata como
+   * RECHAZADA desde cualquier estado no terminal y, a partir de aqui, el bot queda silenciado: no
+   * responde ni gasta OpenAI (gate al inicio de handleIncomingTurn). No envia ningun mensaje: Alex ha
+   * decidido no seguir. Idempotente: si ya estaba RECHAZADA/CERRADA, no hace nada.
+   */
+  async rejectCandidate(input: {
+    candidateId: string;
+    note?: string;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[] }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    if (existing.currentState === "REJECTED" || existing.currentState === "CLOSED") {
+      return { candidate: existing, transitions: [] };
+    }
+    if (!canTransition(existing.currentState, "REJECTED")) {
+      return { candidate: existing, transitions: [] };
+    }
+
+    const transition = createTransition({
+      candidate: existing,
+      toState: "REJECTED",
+      trigger: "HUMAN_REJECT",
+      reason: input.note?.trim() ? `Rechazada por Alex: ${input.note.trim()}` : "Rechazada por Alex desde el CRM."
+    });
+    const candidate: Candidate = {
+      ...existing,
+      currentState: "REJECTED",
+      humanFitDecision: "REJECTED",
+      humanProfileReviewStatus: "NOT_A_FIT",
+      // Silenciada: el bot no debe retomar la automatizacion ante el siguiente mensaje.
+      automationPaused: true,
+      manualControlActive: true,
+      notes: input.note?.trim() ? [...existing.notes, `HUMAN_REJECT: ${input.note.trim()}`] : existing.notes,
+      updatedAt: new Date()
+    };
+
+    await this.dependencies.repository.saveCandidate(candidate);
+    await this.dependencies.repository.addTransition(transition);
+    return { candidate, transitions: [transition] };
+  }
+
+  /**
+   * "Dar OK al perfil" desde el CRM en CUALQUIER momento (decision de Alex 15-jun: no tiene por que ser
+   * antes de agendar). Si la candidata esta en PROFILE_READY_FOR_REVIEW se comporta como la verificacion
+   * de perfil (avanza a QUALIFYING y propone seguir). En cualquier otro estado solo deja constancia del
+   * OK (humanProfileReviewStatus=POTENTIAL_FIT) sin tocar el funnel ni enviar mensaje.
+   */
+  async markProfileOk(input: {
+    candidateId: string;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    if (existing.currentState === "PROFILE_READY_FOR_REVIEW") {
+      return this.applyProfileReviewDecision({ candidateId: input.candidateId, fits: true });
+    }
+    const candidate: Candidate = {
+      ...existing,
+      humanProfileReviewStatus: "POTENTIAL_FIT",
+      updatedAt: new Date()
+    };
+    await this.dependencies.repository.saveCandidate(candidate);
+    return { candidate, transitions: [], proposedMessage: null };
+  }
+
+  /**
    * Confirmacion humana de la llamada (cierra el hueco de COLLECTING_CALL_DETAILS). Alex confirma el
    * momento acordado y el bot se lo confirma a la candidata; pasa a CALL_SCHEDULED. Si el estado no
    * admite la transicion, no fuerza nada.
@@ -295,6 +364,18 @@ export class ConversationEngine {
       updatedAt: new Date()
     };
     await this.dependencies.repository.saveCandidate(activeCandidate);
+
+    // Bot silenciado (decision de Alex 15-jun): si la candidata ya esta RECHAZADA por Alex o la
+    // conversacion esta CERRADA, no se responde NI se llama a OpenAI (ahorro de tokens). El mensaje
+    // entrante ya quedo guardado arriba para el historial; el turno termina aqui sin coste de modelo.
+    if (isSilencedState(activeCandidate.currentState)) {
+      return skippedResult(
+        activeCandidate,
+        "",
+        false,
+        `Bot silenciado (estado ${activeCandidate.currentState}): sin respuesta ni gasto de OpenAI.`
+      );
+    }
 
     const recentMessages = await this.dependencies.repository.listMessages(activeCandidate.id, 8);
     // Ventana ancha SOLO para el guard anti-repeticion del planner: con 8 mensajes una pregunta
@@ -499,9 +580,10 @@ export class ConversationEngine {
       (projectedCandidate.currentState === "QUALIFYING" ||
         projectedCandidate.currentState === "NEW_LEAD" ||
         projectedCandidate.currentState === "WAITING_PROFILE_ACCESS");
-    // Beat del pitch: si la candidata acaba de decir que no ha trabajado con agencias, se le explica
-    // como trabajamos (proactivo, decision de Alex) con el pitch confirmado verbatim, sin pasar por el LLM.
-    const agencyExplanation = agencyExplanationBeat(consistency.patch, recentMessages, responsePlan);
+    // Beat del pitch: a una candidata inexperta (sin OF o sin agencias) se le explica como trabajamos
+    // de forma proactiva (decision de Alex) con el pitch confirmado verbatim, sin pasar por el LLM, pero
+    // SOLO cuando el guion esencial (incl. movil) ya esta completo, para que el movil vaya antes del pitch.
+    const agencyExplanation = agencyExplanationBeat(projectedCandidate, activeCandidate, recentMessages, responsePlan);
     // Control determinista del guion (decision de Alex 14-jun): en un turno que es SOLO una pregunta de
     // cualificacion (sin nada que responder, sin escalada), el CODIGO pone la pregunta (plantilla real de
     // Alex, orden fijo, sin saltarse ni reordenar). Asi el LLM no rompe el orden ni la deteccion
@@ -1207,11 +1289,15 @@ function currentMadridHour(): number {
 /** Opener canonico (plantillas reales de Alex): identidad + validacion de perfil o gate + marco. */
 function canonicalOpener(candidate: Candidate): string {
   const greeting = greetingForHour(currentMadridHour());
-  if (candidate.declaredProfileVisibility === "PUBLIC") {
-    return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.`;
+  // Solo cuando SABEMOS que el perfil es privado se pide aceptar la solicitud de seguimiento. En
+  // publico o desconocido se entra directo al marco de cualificacion (coherente con decideNextState,
+  // que solo manda a WAITING_PROFILE_ACCESS si la visibilidad es PRIVATE). Asi el opener siempre lleva
+  // el marco "te hago unas preguntas rapidas y luego agendamos una llamada" (peticion de Alex 15-jun).
+  if (candidate.declaredProfileVisibility === "PRIVATE") {
+    return `Hola, ${greeting} soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.`;
   }
 
-  return `Hola, ${greeting} soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.`;
+  return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.`;
 }
 
 // La candidata comparte una dificultad/duda/experiencia personal (no un dato a secas): "me cuesta",
@@ -1892,20 +1978,55 @@ const agencyExplanationGivenPattern = /chatters|cuentas de instagram|cuentas con
  * (voz de Alex, determinista, igual que la plantilla del opener); el guion sigue en el siguiente turno.
  */
 function agencyExplanationBeat(
-  patch: CandidatePatch,
+  candidateAfter: Candidate,
+  candidateBefore: Candidate,
   recentMessages: ConversationMessage[],
   responsePlan: ResponsePlan
 ): string | null {
-  if (patch.worksWithAnotherAgency !== false) return null;
   if (responsePlan.requiresHumanReview || responsePlan.uncoveredQuestion) return null;
+  // NUNCA en estados terminales o de intervencion. CRITICO (invariante 2): una menor pasa a CLOSED en
+  // este mismo turno; sin este guard recibiria el pitch de monetizacion en vez del cierre de seguridad.
+  // En REJECTED/HIR tampoco se pitchea.
+  if (
+    candidateAfter.currentState === "CLOSED" ||
+    candidateAfter.currentState === "REJECTED" ||
+    candidateAfter.currentState === "HUMAN_INTERVENTION_REQUIRED"
+  ) {
+    return null;
+  }
   // Si ademas hay una pregunta respondible (la candidata pregunto algo), esa respuesta manda: no se
   // pisa con el pitch (mismo criterio que la plantilla del opener).
   if (responsePlan.answerFacts.length > 0) return null;
   if (!AGENCY_PITCH_TEXT) return null;
+  // Inexperta: no tiene OF, o nunca trabajo con agencias -> no sabe en que consiste lo de la agencia,
+  // asi que el pitch va PROACTIVO (decision de Alex). Para las no-OF no se pregunta por agencias, por eso
+  // basta con hasOnlyFans===false.
+  const inexperienced = candidateAfter.hasOnlyFans === false || candidateAfter.worksWithAnotherAgency === false;
+  if (!inexperienced) return null;
+  // El pitch va EXACTAMENTE en el turno en que se COMPLETA el guion esencial (nombre, edad, OF, movil),
+  // que es justo despues de dar el movil: asi el movil va antes del pitch (orden pedido por Alex 15-jun) y
+  // el pitch no resucita en turnos posteriores (p. ej. cuando pide la llamada).
+  const justCompleted = essentialScriptComplete(candidateAfter) && !essentialScriptComplete(candidateBefore);
+  if (!justCompleted) return null;
   const alreadyExplained = recentMessages.some(
     (message) => message.role === "agent" && agencyExplanationGivenPattern.test(message.content)
   );
   return alreadyExplained ? null : AGENCY_PITCH_TEXT;
+}
+
+/**
+ * Guion esencial completo: nombre, EDAD ADULTA confirmada, si tiene OF y el movil. El pitch proactivo
+ * espera a tenerlo todo. Exigir isAdultConfirmed (no solo age) es una salvaguarda de seguridad: una menor
+ * jamas debe "completar el guion" y recibir el pitch (invariante 2).
+ */
+function essentialScriptComplete(candidate: Candidate): boolean {
+  return (
+    Boolean(candidate.firstName) &&
+    Boolean(candidate.age) &&
+    candidate.isAdultConfirmed &&
+    candidate.hasOnlyFans !== undefined &&
+    candidate.deviceEligibility !== "UNKNOWN"
+  );
 }
 
 function messageLeadsWithAcknowledgement(message: string): boolean {
@@ -2148,6 +2269,15 @@ function canAutomationSend(candidate: Candidate, tokenVersion: number): boolean 
   return (
     !candidate.manualControlActive && !candidate.automationPaused && candidate.generationCancellationVersion === tokenVersion
   );
+}
+
+/**
+ * Estados en los que el bot queda SILENCIADO: ni responde ni se llama a OpenAI en el turno (ahorro de
+ * tokens, decision de Alex). REJECTED = Alex la descarto; CLOSED = conversacion terminada (menor,
+ * rechazo educado o decline). El mensaje entrante se sigue guardando para el historial.
+ */
+function isSilencedState(state: CandidateState): boolean {
+  return state === "REJECTED" || state === "CLOSED";
 }
 
 function deliveryStatusFor(

@@ -328,17 +328,33 @@ describe("ConversationEngine first contact (opener canonico gate-first)", () => 
     expect(result.responsePlan.questionToAsk).toBeNull();
   });
 
-  it("asks the follow request gate when the profile is not visible yet", async () => {
+  it("asks the follow request gate only when the profile is PRIVATE", async () => {
     const { engine } = createEngine();
 
     const result = await engine.handleIncomingMessage({
-      instagramUsername: "lead_sin_perfil_visible",
+      instagramUsername: "lead_perfil_privado",
+      profileVisibility: "PRIVATE",
+      message: "Hola, quiero informacion"
+    });
+
+    expect(result.response).toContain("Rose Models");
+    expect(result.response.toLowerCase()).toContain("solicitud de seguimiento");
+    expect(result.responsePlan.questionToAsk).toBeNull();
+  });
+
+  it("con visibilidad desconocida no pide solicitud: opener con marco de cualificacion (Alex 15-jun)", async () => {
+    const { engine } = createEngine();
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_sin_visibilidad",
       message: "Hola, quiero informacion"
     });
 
     expect(result.response).toContain("Alex de Rose Models");
-    expect(result.response.toLowerCase()).toContain("solicitud de seguimiento");
-    expect(result.responsePlan.questionToAsk).toBeNull();
+    expect(result.response.toLowerCase()).not.toContain("solicitud de seguimiento");
+    // El marco que pidio Alex: "te hago unas preguntas rapidas y luego agendamos una llamada".
+    expect(result.response.toLowerCase()).toContain("unas preguntas");
+    expect(result.response.toLowerCase()).toContain("llamada");
   });
 
   it("asks for the name right after the candidate accepts the frame", async () => {
@@ -730,7 +746,7 @@ describe("ConversationEngine contextual decline (un 'no' es un dato, no un recha
       instagramUsername: "lead_no_contextual",
       message: "Soy Carla, tengo 24 anos"
     });
-    expect(first.response.toLowerCase()).toContain("tienes of");
+    expect(first.response.toLowerCase()).toContain("has tenido of");
 
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,
@@ -782,7 +798,9 @@ describe("ConversationEngine contextual decline (un 'no' es un dato, no un recha
 
     expect(second.candidate.currentState).toBe("CLOSED");
     expect(second.plannedTransitions).toHaveLength(0);
-    expect(second.response.length).toBeGreaterThan(0);
+    // Bot silenciado (decision de Alex): una conversacion CERRADA no recibe respuesta ni gasta OpenAI.
+    expect(second.response).toBe("");
+    expect(second.understanding.actualProvider).toBe("deterministic");
   });
 });
 
