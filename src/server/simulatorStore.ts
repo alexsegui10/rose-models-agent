@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ConversationEngine } from "@/application/conversationEngine";
 import { InMemoryImportedConversationRepository } from "@/application/conversationImport";
@@ -24,7 +25,12 @@ import type {
   ImportedConversationRepository
 } from "@/infrastructure/repositories/types";
 
-const SNAPSHOT_FILE_PATH = join(process.cwd(), "data", "simulator-snapshot.json");
+// En Vercel (serverless) el FS es de solo lectura salvo /tmp: si el modo json llega a activarse (p. ej.
+// fallback ante un fallo de Neon) el snapshot debe ir a /tmp para no lanzar EROFS. En produccion el modo
+// recomendado es postgres, asi que esto solo es una red de seguridad para no tumbar el proceso.
+const SNAPSHOT_FILE_PATH = process.env.VERCEL
+  ? join(tmpdir(), "rose-simulator-snapshot.json")
+  : join(process.cwd(), "data", "simulator-snapshot.json");
 const SNAPSHOT_DEBOUNCE_MS = 300;
 
 /**

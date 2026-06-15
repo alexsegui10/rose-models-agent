@@ -1,9 +1,13 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import { parseInstagramWebhookEvent, resolveWebhookChallenge, verifyWebhookSignature } from "@/application/instagramWebhook";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import { getSimulatorEngine } from "@/server/simulatorStore";
+
+// postgres.js necesita runtime Node (no Edge). maxDuration: en Hobby el techo real es 10s igualmente.
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
  * Webhook de Instagram (Messenger Platform). GET = handshake de verificación de Meta. POST = eventos
@@ -51,27 +55,31 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const inbound = parseInstagramWebhookEvent(parsed);
   if (inbound.length > 0) {
-    const engine = getSimulatorEngine();
-    const provider = new GraphApiInstagramMessagingProvider(config);
-    for (const message of inbound) {
-      try {
-        const result = await engine.handleIncomingTurn({
-          // El IGSID es la clave de la conversación (Instagram no da el @username en el webhook).
-          instagramUsername: message.senderId,
-          messages: [{ content: message.text, externalMessageId: message.messageId }]
-        });
-        // Solo se envía si la automatización LO ENTREGA. PENDING_APPROVAL/BLOCKED → Alex decide en el CRM.
-        if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
-          for (const chunk of splitIntoMessageBurst(result.response)) {
-            await provider.sendTextMessage(message.senderId, chunk);
+    // Se responde 200 a Meta YA y se procesa en `after()` (tras enviar la respuesta), para que el ACK
+    // sea rapido (Meta reintenta ante cualquier no-200) y el motor + envio no bloqueen el handshake.
+    after(async () => {
+      const engine = getSimulatorEngine();
+      const provider = new GraphApiInstagramMessagingProvider(config);
+      for (const message of inbound) {
+        try {
+          const result = await engine.handleIncomingTurn({
+            // El IGSID es la clave de la conversación (Instagram no da el @username en el webhook).
+            instagramUsername: message.senderId,
+            messages: [{ content: message.text, externalMessageId: message.messageId }]
+          });
+          // Solo se envía si la automatización LO ENTREGA. PENDING_APPROVAL/BLOCKED → Alex decide en el CRM.
+          if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
+            for (const chunk of splitIntoMessageBurst(result.response)) {
+              await provider.sendTextMessage(message.senderId, chunk);
+            }
           }
+        } catch (error) {
+          console.warn("[instagram] error procesando un mensaje entrante", {
+            error: error instanceof Error ? error.name : "unknown"
+          });
         }
-      } catch (error) {
-        console.warn("[instagram] error procesando un mensaje entrante", {
-          error: error instanceof Error ? error.name : "unknown"
-        });
       }
-    }
+    });
   }
 
   // Siempre 200 tras verificar: Meta reintenta ante cualquier no-200 (la idempotencia cubre el reintento).

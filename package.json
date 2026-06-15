@@ -15,6 +15,9 @@
     "convert:instagram": "node scripts/convert-instagram-export.mjs",
     "import:replay": "node scripts/convert-instagram-export.mjs --post"
   },
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
     "next": "^15.1.0",

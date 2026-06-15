@@ -14,8 +14,17 @@ export interface DbConnection {
  * postgres.js es perezoso: no abre sockets hasta la primera query, así que construir la conexión
  * no falla aunque el servidor no esté disponible.
  */
-export function createDbConnection(databaseUrl: string, options: { max?: number } = {}): DbConnection {
-  const client = postgres(databaseUrl, { max: options.max ?? 5 });
+export function createDbConnection(
+  databaseUrl: string,
+  options: { max?: number; prepare?: boolean; idleTimeout?: number; connectTimeout?: number } = {}
+): DbConnection {
+  const client = postgres(databaseUrl, {
+    max: options.max ?? 5,
+    // El pooler de Neon (PgBouncer transaction mode) NO soporta prepared statements: prepare:false.
+    ...(options.prepare === false ? { prepare: false } : {}),
+    ...(options.idleTimeout ? { idle_timeout: options.idleTimeout } : {}),
+    ...(options.connectTimeout ? { connect_timeout: options.connectTimeout } : {})
+  });
   return { db: drizzle({ client, schema }), client };
 }
 
@@ -38,7 +47,12 @@ export function getDb(): Database {
       );
     }
 
-    globalForDb.roseDbConnection = createDbConnection(databaseUrl, { max: 5 });
+    // Serverless (Vercel + endpoint POOLED de Neon, con "-pooler" en el host, o DB_SERVERLESS=1): pocas
+    // conexiones por instancia y sin prepared statements. Directo/local (tests): comportamiento clasico.
+    const isPooledServerless = /-pooler\./.test(databaseUrl) || process.env.DB_SERVERLESS === "1";
+    globalForDb.roseDbConnection = isPooledServerless
+      ? createDbConnection(databaseUrl, { max: 1, prepare: false, idleTimeout: 20, connectTimeout: 10 })
+      : createDbConnection(databaseUrl, { max: 5 });
   }
 
   return globalForDb.roseDbConnection.db;
