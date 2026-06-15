@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import { parseInstagramWebhookEvent, resolveWebhookChallenge, verifyWebhookSignature } from "@/application/instagramWebhook";
@@ -42,8 +43,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     console.warn("[ig-webhook] SKIP: integracion no configurada (faltan INSTAGRAM_VERIFY_TOKEN/APP_SECRET/ACCESS_TOKEN en env)");
     return NextResponse.json({ ok: true, skipped: "not-configured" });
   }
-  if (!verifyWebhookSignature(rawBody, request.headers.get("x-hub-signature-256"), config.appSecret)) {
-    console.warn("[ig-webhook] SKIP: firma X-Hub-Signature-256 invalida (revisa INSTAGRAM_APP_SECRET)");
+  const sigHeader = request.headers.get("x-hub-signature-256");
+  if (!verifyWebhookSignature(rawBody, sigHeader, config.appSecret)) {
+    // DIAGNOSTICO TEMPORAL: solo prefijos de hash (no son secretos) + longitudes, para localizar la causa.
+    const calculada = sigHeader
+      ? `sha256=${createHmac("sha256", config.appSecret).update(rawBody, "utf8").digest("hex")}`
+      : "(sin header)";
+    console.warn("[ig-webhook] SKIP firma invalida — DIAG", {
+      headerPresente: Boolean(sigHeader),
+      recibida: sigHeader ? sigHeader.slice(0, 20) : "-",
+      calculada: calculada.slice(0, 20),
+      bodyLen: rawBody.length,
+      secretLen: config.appSecret.length
+    });
     return new NextResponse("Invalid signature", { status: 403 });
   }
 
