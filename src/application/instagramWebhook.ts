@@ -29,13 +29,43 @@ export function resolveWebhookChallenge(
   return null;
 }
 
-/** Verifica la firma HMAC-SHA256 del cuerpo crudo. Comparación en tiempo constante. */
-export function verifyWebhookSignature(rawBody: string, signatureHeader: string | null, appSecret: string): boolean {
-  if (!signatureHeader || !appSecret) return false;
-  const expected = `sha256=${createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex")}`;
+export interface SignatureCheck {
+  valid: boolean;
+  /** Índice del secreto candidato que cuadró, o -1. Para diagnóstico; nunca expone el secreto. */
+  matchedIndex: number;
+}
+
+/**
+ * Verifica la firma HMAC-SHA256 sobre los BYTES crudos del cuerpo (sin round-trip de string, así no
+ * hay ninguna duda de codificación UTF-8/UTF-16). Comparación en tiempo constante. Acepta uno o varios
+ * secretos candidatos: si uno cuadra, devuelve su índice — útil para saber CUÁL secreto es el correcto
+ * cuando hay dudas (App Secret de Básica vs. el de Instagram), sin tener que adivinar a ciegas.
+ */
+export function verifyWebhookSignature(
+  rawBody: string | Buffer,
+  signatureHeader: string | null,
+  appSecret: string | string[]
+): SignatureCheck {
+  const secrets = (Array.isArray(appSecret) ? appSecret : [appSecret]).filter(Boolean);
+  if (!signatureHeader || secrets.length === 0) return { valid: false, matchedIndex: -1 };
+  const body = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
   const received = Buffer.from(signatureHeader);
-  const computed = Buffer.from(expected);
-  return received.length === computed.length && timingSafeEqual(received, computed);
+  for (let i = 0; i < secrets.length; i++) {
+    const expected = Buffer.from(`sha256=${createHmac("sha256", secrets[i]).update(body).digest("hex")}`);
+    if (received.length === expected.length && timingSafeEqual(received, expected)) {
+      return { valid: true, matchedIndex: i };
+    }
+  }
+  return { valid: false, matchedIndex: -1 };
+}
+
+/**
+ * Huella NO reversible de un secreto (HMAC con clave fija, truncado). Sirve para comparar si el valor
+ * desplegado coincide byte a byte con el del panel de Meta SIN filtrar el secreto en logs (invariante 5).
+ */
+export function secretFingerprint(secret: string): string {
+  if (!secret) return "vacio";
+  return createHmac("sha256", "ig-webhook-diag").update(secret).digest("hex").slice(0, 12);
 }
 
 /**

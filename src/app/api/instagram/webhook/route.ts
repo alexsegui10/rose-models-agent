@@ -1,7 +1,11 @@
-import { createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getInstagramConfig } from "@/application/instagramConfig";
-import { parseInstagramWebhookEvent, resolveWebhookChallenge, verifyWebhookSignature } from "@/application/instagramWebhook";
+import {
+  parseInstagramWebhookEvent,
+  resolveWebhookChallenge,
+  secretFingerprint,
+  verifyWebhookSignature
+} from "@/application/instagramWebhook";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import { getSimulatorEngine } from "@/server/simulatorStore";
@@ -36,7 +40,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 
 export async function POST(request: Request): Promise<NextResponse> {
   const config = getInstagramConfig();
-  const rawBody = await request.text();
+  // Bytes crudos exactos que firmó Meta (sin round-trip de string); rawBody (utf8) solo para el JSON.parse.
+  const buf = Buffer.from(await request.arrayBuffer());
+  const rawBody = buf.toString("utf8");
   console.log("[ig-webhook] POST recibido", { configured: config.isConfigured });
 
   if (!config.isConfigured) {
@@ -44,19 +50,25 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true, skipped: "not-configured" });
   }
   const sigHeader = request.headers.get("x-hub-signature-256");
-  if (!verifyWebhookSignature(rawBody, sigHeader, config.appSecret)) {
-    // DIAGNOSTICO TEMPORAL: solo prefijos de hash (no son secretos) + longitudes, para localizar la causa.
-    const calculada = sigHeader
-      ? `sha256=${createHmac("sha256", config.appSecret).update(rawBody, "utf8").digest("hex")}`
-      : "(sin header)";
+  const check = verifyWebhookSignature(buf, sigHeader, config.appSecretCandidates);
+  if (!check.valid) {
+    // DIAGNOSTICO TEMPORAL: ni el secreto ni el cuerpo se filtran — solo longitudes y huellas no reversibles.
     console.warn("[ig-webhook] SKIP firma invalida — DIAG", {
       headerPresente: Boolean(sigHeader),
       recibida: sigHeader ? sigHeader.slice(0, 20) : "-",
-      calculada: calculada.slice(0, 20),
-      bodyLen: rawBody.length,
-      secretLen: config.appSecret.length
+      bodyByteLen: buf.byteLength,
+      bodyStrLen: rawBody.length,
+      contentLength: request.headers.get("content-length"),
+      secretFingerprints: config.appSecretCandidates.map(secretFingerprint),
+      secretLens: config.appSecretCandidates.map((s) => s.length)
     });
     return new NextResponse("Invalid signature", { status: 403 });
+  }
+  if (check.matchedIndex > 0) {
+    console.warn(
+      "[ig-webhook] firma valida con SECRETO ALTERNATIVO (INSTAGRAM_APP_SECRET_ALT). Promueve ese valor a INSTAGRAM_APP_SECRET.",
+      { index: check.matchedIndex }
+    );
   }
 
   let parsed: unknown;

@@ -1,6 +1,11 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { parseInstagramWebhookEvent, resolveWebhookChallenge, verifyWebhookSignature } from "@/application/instagramWebhook";
+import {
+  parseInstagramWebhookEvent,
+  resolveWebhookChallenge,
+  secretFingerprint,
+  verifyWebhookSignature
+} from "@/application/instagramWebhook";
 
 const APP_SECRET = "test-app-secret";
 const sign = (body: string) => `sha256=${createHmac("sha256", APP_SECRET).update(body, "utf8").digest("hex")}`;
@@ -19,18 +24,45 @@ describe("Instagram webhook: handshake de verificacion (GET)", () => {
 });
 
 describe("Instagram webhook: verificacion de firma HMAC (POST)", () => {
-  it("acepta una firma valida", () => {
+  it("acepta una firma valida (string)", () => {
     const body = JSON.stringify({ object: "instagram", entry: [] });
-    expect(verifyWebhookSignature(body, sign(body), APP_SECRET)).toBe(true);
+    expect(verifyWebhookSignature(body, sign(body), APP_SECRET)).toEqual({ valid: true, matchedIndex: 0 });
+  });
+
+  it("acepta una firma valida hasheando los BYTES crudos (Buffer), igual que sobre el string", () => {
+    const body = JSON.stringify({ object: "instagram", entry: [{ texto: "acentos áéí y emoji 🌹" }] });
+    const buf = Buffer.from(body, "utf8");
+    expect(verifyWebhookSignature(buf, sign(body), APP_SECRET)).toEqual({ valid: true, matchedIndex: 0 });
   });
 
   it("rechaza firma invalida, ausente o con el secreto equivocado", () => {
     const body = JSON.stringify({ object: "instagram" });
-    expect(verifyWebhookSignature(body, "sha256=deadbeef", APP_SECRET)).toBe(false);
-    expect(verifyWebhookSignature(body, null, APP_SECRET)).toBe(false);
-    expect(verifyWebhookSignature(body, sign(body), "otro-secreto")).toBe(false);
+    expect(verifyWebhookSignature(body, "sha256=deadbeef", APP_SECRET).valid).toBe(false);
+    expect(verifyWebhookSignature(body, null, APP_SECRET).valid).toBe(false);
+    expect(verifyWebhookSignature(body, sign(body), "otro-secreto").valid).toBe(false);
+    expect(verifyWebhookSignature(body, sign(body), []).valid).toBe(false);
     // Cuerpo manipulado tras firmar -> la firma ya no cuadra.
-    expect(verifyWebhookSignature(body + " ", sign(body), APP_SECRET)).toBe(false);
+    expect(verifyWebhookSignature(body + " ", sign(body), APP_SECRET).valid).toBe(false);
+  });
+
+  it("prueba varios secretos candidatos y devuelve el indice del que cuadra", () => {
+    const body = JSON.stringify({ object: "instagram", entry: [] });
+    // El correcto es el segundo de la lista (simula: el ALT era el bueno).
+    const out = verifyWebhookSignature(body, sign(body), ["secreto-malo", APP_SECRET]);
+    expect(out).toEqual({ valid: true, matchedIndex: 1 });
+    // Si ninguno cuadra -> invalido.
+    expect(verifyWebhookSignature(body, sign(body), ["malo-1", "malo-2"]).valid).toBe(false);
+  });
+});
+
+describe("Instagram webhook: huella de secreto (diagnostico sin filtrar)", () => {
+  it("es estable, no reversible y distingue secretos distintos", () => {
+    expect(secretFingerprint(APP_SECRET)).toBe(secretFingerprint(APP_SECRET));
+    expect(secretFingerprint(APP_SECRET)).not.toBe(secretFingerprint("otro-secreto"));
+    // No revela el secreto: corta (12 chars hex) y no lo contiene.
+    expect(secretFingerprint(APP_SECRET)).toMatch(/^[0-9a-f]{12}$/);
+    expect(secretFingerprint(APP_SECRET)).not.toContain(APP_SECRET);
+    expect(secretFingerprint("")).toBe("vacio");
   });
 });
 
