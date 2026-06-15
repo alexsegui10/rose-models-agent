@@ -1,4 +1,4 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import { parseInstagramWebhookEvent, resolveWebhookChallenge, verifyWebhookSignature } from "@/application/instagramWebhook";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
@@ -10,11 +10,10 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * Webhook de Instagram (Messenger Platform). GET = handshake de verificación de Meta. POST = eventos
- * entrantes: verifica firma → parsea → motor → responde (en ráfaga) SOLO si la automatización lo
- * entrega (SENT). En HUMAN_APPROVAL o con la candidata pausada en el CRM, el motor NO marca SENT, así
- * que el bot no envía nada solo: Alex decide desde el CRM. La idempotencia por mid (externalMessageId)
- * evita procesar dos veces si Meta reintenta. Nunca se procesa un POST sin firma válida.
+ * Webhook de Instagram. GET = handshake de verificación de Meta. POST = eventos entrantes: verifica
+ * firma → parsea → motor → responde (en ráfaga) SOLO si la automatización lo entrega (SENT). En
+ * HUMAN_APPROVAL o con la candidata pausada, el motor NO marca SENT y el bot no envía solo (Alex decide
+ * en el CRM). Idempotente por mid. Logs `[ig-webhook]` (sin datos personales) para diagnosticar.
  */
 
 export async function GET(request: Request): Promise<NextResponse> {
@@ -37,12 +36,14 @@ export async function GET(request: Request): Promise<NextResponse> {
 export async function POST(request: Request): Promise<NextResponse> {
   const config = getInstagramConfig();
   const rawBody = await request.text();
+  console.log("[ig-webhook] POST recibido", { configured: config.isConfigured });
 
-  // Sin configuración no se procesa, pero se responde 200 para que Meta no reintente en bucle.
   if (!config.isConfigured) {
+    console.warn("[ig-webhook] SKIP: integracion no configurada (faltan INSTAGRAM_VERIFY_TOKEN/APP_SECRET/ACCESS_TOKEN en env)");
     return NextResponse.json({ ok: true, skipped: "not-configured" });
   }
   if (!verifyWebhookSignature(rawBody, request.headers.get("x-hub-signature-256"), config.appSecret)) {
+    console.warn("[ig-webhook] SKIP: firma X-Hub-Signature-256 invalida (revisa INSTAGRAM_APP_SECRET)");
     return new NextResponse("Invalid signature", { status: 403 });
   }
 
@@ -54,34 +55,71 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const inbound = parseInstagramWebhookEvent(parsed);
-  if (inbound.length > 0) {
-    // Se responde 200 a Meta YA y se procesa en `after()` (tras enviar la respuesta), para que el ACK
-    // sea rapido (Meta reintenta ante cualquier no-200) y el motor + envio no bloqueen el handshake.
-    after(async () => {
-      const engine = getSimulatorEngine();
-      const provider = new GraphApiInstagramMessagingProvider(config);
-      for (const message of inbound) {
-        try {
-          const result = await engine.handleIncomingTurn({
-            // El IGSID es la clave de la conversación (Instagram no da el @username en el webhook).
-            instagramUsername: message.senderId,
-            messages: [{ content: message.text, externalMessageId: message.messageId }]
-          });
-          // Solo se envía si la automatización LO ENTREGA. PENDING_APPROVAL/BLOCKED → Alex decide en el CRM.
-          if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
-            for (const chunk of splitIntoMessageBurst(result.response)) {
-              await provider.sendTextMessage(message.senderId, chunk);
-            }
-          }
-        } catch (error) {
-          console.warn("[instagram] error procesando un mensaje entrante", {
-            error: error instanceof Error ? error.name : "unknown"
-          });
-        }
-      }
-    });
+  console.log("[ig-webhook] parseado", {
+    object: describeObject(parsed),
+    mensajes: inbound.length,
+    eventKeys: describeEventKeys(parsed)
+  });
+  if (inbound.length === 0) {
+    return NextResponse.json({ ok: true, skipped: "no-text-messages" });
   }
 
-  // Siempre 200 tras verificar: Meta reintenta ante cualquier no-200 (la idempotencia cubre el reintento).
+  const engine = getSimulatorEngine();
+  const provider = new GraphApiInstagramMessagingProvider(config);
+  for (const message of inbound) {
+    try {
+      const result = await engine.handleIncomingTurn({
+        // El IGSID es la clave de la conversación (Instagram no da el @username en el webhook).
+        instagramUsername: message.senderId,
+        messages: [{ content: message.text, externalMessageId: message.messageId }]
+      });
+      console.log("[ig-webhook] turno procesado", {
+        estado: result.candidate.currentState,
+        delivery: result.deliveryStatus,
+        blocked: result.automationBlocked,
+        responseLen: result.response.trim().length
+      });
+      if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
+        for (const chunk of splitIntoMessageBurst(result.response)) {
+          const sent = await provider.sendTextMessage(message.senderId, chunk);
+          console.log("[ig-webhook] envio a Instagram", { sent });
+        }
+      } else {
+        console.log("[ig-webhook] NO se envia respuesta", {
+          motivo: `delivery=${result.deliveryStatus} blocked=${result.automationBlocked}`
+        });
+      }
+    } catch (error) {
+      console.error("[ig-webhook] ERROR procesando el turno", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
   return NextResponse.json({ ok: true });
+}
+
+/** Solo estructura (no contenido), para diagnosticar sin filtrar datos personales. */
+function describeObject(parsed: unknown): string {
+  if (parsed && typeof parsed === "object" && "object" in parsed) {
+    return String((parsed as { object?: unknown }).object);
+  }
+  return "?";
+}
+
+function describeEventKeys(parsed: unknown): string {
+  try {
+    const entry = (parsed as { entry?: unknown[] }).entry?.[0] as Record<string, unknown> | undefined;
+    if (!entry) return "sin-entry";
+    const topKeys = Object.keys(entry).join(",");
+    const messagingEvent = (entry.messaging as Record<string, unknown>[] | undefined)?.[0];
+    const eventKeys = messagingEvent ? Object.keys(messagingEvent).join(",") : "sin-messaging";
+    const messageKeys =
+      messagingEvent && messagingEvent.message && typeof messagingEvent.message === "object"
+        ? Object.keys(messagingEvent.message as Record<string, unknown>).join(",")
+        : "sin-message";
+    return `entry[${topKeys}] event[${eventKeys}] message[${messageKeys}]`;
+  } catch {
+    return "?";
+  }
 }
