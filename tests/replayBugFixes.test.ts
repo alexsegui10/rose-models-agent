@@ -65,7 +65,14 @@ describe("Replay bug: 'N años' de DURACION no es edad (no cerrar adultas como m
     // Menores <13 sueltas tambien cierran (no usar un suelo numerico que las deje pasar).
     ["12 años", 12],
     ["tengo 12 años", 12],
-    ["10 años", 10]
+    ["10 años", 10],
+    // Hallazgo del revisor: una cifra en rango de menor (13-17) cierra AUNQUE haya marcador fuerte de
+    // duracion. Safety-first: cerrar una adulta rara ("16 años de experiencia") < colar una menor.
+    ["tengo 16 años trabajando", 16],
+    ["tengo 17 años currando", 17],
+    ["tengo 13 años de experiencia", 13],
+    ["tengo 16 años haciendo contenido", 16],
+    ["tengo 15 años trabajando", 15]
   ];
   for (const [message, age] of realAges) {
     it(`"${message}" SI extrae edad ${age}`, () => {

@@ -367,6 +367,14 @@ export function extractDeterministicUnderstanding(
       ).trim();
       const after = stripped.slice(idx, idx + (m[0]?.length ?? 0) + 22);
       const durationBefore = /\b(hace|llevo|desde|durante|van|llevaba|llevamos)\b/.test(clausePrefix);
+      // SAFETY-FIRST (invariante 2): una cifra en rango de menor (13-17) se trata como edad y cierra,
+      // aunque vaya con contexto de duracion despues ("tengo 16 años trabajando", "13 años de
+      // experiencia": podria ser una menor). EXCEPCION: un verbo de duracion claro DELANTE (llevo/hace/
+      // desde) la hace inequivocamente experiencia de adulta ("llevo 15 años"), no edad.
+      if (value >= 13 && value <= 17 && !durationBefore) {
+        extractedData.age = value;
+        break;
+      }
       // Marcadores FUERTES de duracion (hace/llevo/de experiencia/trabajando): siempre duracion. "de
       // edad" NUNCA es duracion (es edad). Marcadores DEBILES ("en esto/en el sector") solo son
       // duracion si el valor es <13; en rango de menor (13-17) se trata como EDAD y cierra (invariante 2).
