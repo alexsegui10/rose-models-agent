@@ -169,7 +169,7 @@ describe("responsePlanner phone ask in HUMAN_INTERVENTION_REQUIRED (playbook 1.7
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "Si, me gustaria hacer la llamada"
     });
-    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
+    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada por WhatsApp?");
   });
 
   it("asks for the phone once the candidate proposes a concrete time while waiting on the socio", () => {
@@ -184,7 +184,7 @@ describe("responsePlanner phone ask in HUMAN_INTERVENTION_REQUIRED (playbook 1.7
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "Si, me gustaria hacer la llamada manana a las 11"
     });
-    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
+    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de WhatsApp?");
   });
 
   it("asks nothing in HUMAN_INTERVENTION_REQUIRED when the phone is already saved", () => {
@@ -261,7 +261,7 @@ describe("responsePlanner question gating", () => {
       inboundMessage: "Podemos hacer la llamada?",
       knowledgeEntries: [entryById("call-details-after-review")]
     });
-    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
+    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada por WhatsApp?");
   });
 
   it("asks for the phone as soon as the candidate proposes a concrete day or hour", () => {
@@ -271,7 +271,7 @@ describe("responsePlanner question gating", () => {
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "El domingo a las 11 am me viene bien"
     });
-    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
+    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de WhatsApp?");
   });
 
   it("treats a bare time proposal as call confirmation when the agent already proposed the call", () => {
@@ -280,9 +280,9 @@ describe("responsePlanner question gating", () => {
       candidate,
       understanding: understandingWith({ intent: "OTHER" }),
       inboundMessage: "Domingo 11 am?",
-      recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+      recentAgentMessages: ["Que dia y hora te viene bien para la llamada por WhatsApp?"]
     });
-    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
+    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de WhatsApp?");
   });
 
   // Regresion taxonomia nº1/nº6 iteracion 2 (r3 T14, lead-killing): "no ahora no" tras proponer
@@ -294,9 +294,9 @@ describe("responsePlanner question gating", () => {
       candidate,
       understanding: understandingWith({ intent: "UNCLEAR" }),
       inboundMessage: "no ahora no",
-      recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+      recentAgentMessages: ["Que dia y hora te viene bien para la llamada por WhatsApp?"]
     });
-    expect(plan.questionToAsk).not.toBe("Me puedes pasar tu numero de telefono?");
+    expect(plan.questionToAsk).not.toBe("Me puedes pasar tu numero de WhatsApp?");
   });
 
   it("does not treat 'ahora no puedo' or 'hoy no' as a concrete time proposal", () => {
@@ -306,9 +306,9 @@ describe("responsePlanner question gating", () => {
         candidate,
         understanding: understandingWith({ intent: "UNCLEAR" }),
         inboundMessage: message,
-        recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+        recentAgentMessages: ["Que dia y hora te viene bien para la llamada por WhatsApp?"]
       });
-      expect(plan.questionToAsk).not.toBe("Me puedes pasar tu numero de telefono?");
+      expect(plan.questionToAsk).not.toBe("Me puedes pasar tu numero de WhatsApp?");
     }
   });
 
@@ -318,9 +318,9 @@ describe("responsePlanner question gating", () => {
       candidate,
       understanding: understandingWith({ intent: "OTHER" }),
       inboundMessage: "manana a las 11 si",
-      recentAgentMessages: ["Que dia y hora te viene bien para la llamada?"]
+      recentAgentMessages: ["Que dia y hora te viene bien para la llamada por WhatsApp?"]
     });
-    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de telefono?");
+    expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de WhatsApp?");
   });
 
   // Regresion del stall-loop de la iteracion 3 (r14-t7/t8, r15-t11/t12): con el si a la llamada
@@ -341,7 +341,7 @@ describe("responsePlanner question gating", () => {
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "Si, hagamos la llamada"
     });
-    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
+    expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada por WhatsApp?");
   });
 
   it("still finishes the essential script (OF pendiente) before scheduling the call", () => {
@@ -366,7 +366,7 @@ describe("responsePlanner question gating", () => {
       candidate,
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "Hoy a las 18 mejor",
-      recentAgentMessages: ["Me puedes pasar tu numero de telefono?", "Pasame tu numero de telefono"]
+      recentAgentMessages: ["Me puedes pasar tu numero de WhatsApp?", "Pasame tu numero de telefono"]
     });
     expect(plan.questionToAsk).toBeNull();
   });

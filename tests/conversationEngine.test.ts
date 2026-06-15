@@ -574,7 +574,7 @@ describe("ConversationEngine answers documented knowledge inside HUMAN_INTERVENT
     });
 
     expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
-    expect(result.response.toLowerCase()).toContain("numero de telefono");
+    expect(result.response.toLowerCase()).toContain("numero de whatsapp");
   });
 
   it("acknowledges a received phone in HUMAN_INTERVENTION_REQUIRED without the generic filler", async () => {
@@ -618,7 +618,7 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
       instagramUsername: "lead_numero_pelado",
       message: "Podemos hacer la llamada el domingo a las 11?"
     });
-    expect(askPhone.response.toLowerCase()).toContain("numero de telefono");
+    expect(askPhone.response.toLowerCase()).toContain("numero de whatsapp");
 
     const givesPhone = await engine.handleIncomingMessage({
       candidateId: seeded.id,
@@ -627,7 +627,7 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
     });
 
     expect(givesPhone.candidate.phone).toBe("5550147");
-    expect(givesPhone.response.toLowerCase()).not.toContain("numero de telefono");
+    expect(givesPhone.response.toLowerCase()).not.toContain("numero de whatsapp");
     expect(givesPhone.response.toLowerCase()).toContain("lo apunto");
   });
 
@@ -685,7 +685,7 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
       message: "El domingo tipo 11 entonces"
     });
     expect(proposesTime.response.toLowerCase()).toContain("quedamos");
-    expect(proposesTime.response.toLowerCase()).toContain("numero de telefono");
+    expect(proposesTime.response.toLowerCase()).toContain("numero de whatsapp");
   });
 
   it("enforces the device gate on a budget Motorola (replay-10 T1: 'Perfecto' a un Motorola E32)", async () => {
@@ -843,7 +843,7 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
       candidateId: seeded.id,
       role: "agent",
       author: "AI_AGENT",
-      content: "Que dia y hora te viene bien para la llamada?",
+      content: "Que dia y hora te viene bien para la llamada por WhatsApp?",
       createdAt: new Date()
     });
 

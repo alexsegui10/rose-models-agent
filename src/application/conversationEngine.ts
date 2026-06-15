@@ -129,7 +129,7 @@ export class ConversationEngine {
     let proposedMessage: string | null = null;
     if (input.decision === "APPROVE") {
       proposedMessage =
-        "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada rapida para explicartelo todo. Que dia y a que hora te viene mejor?";
+        "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada por WhatsApp para explicartelo todo. Que dia y a que hora te viene mejor?";
       if (canTransition(candidate.currentState, "COLLECTING_CALL_DETAILS")) {
         transitions.push(
           createTransition({
@@ -254,8 +254,8 @@ export class ConversationEngine {
     };
 
     const proposedMessage = slot
-      ? `Genial, te confirmo la llamada ${slot}. Cualquier cosa me dices, hablamos pronto!`
-      : "Genial, te confirmo la llamada. En breve hablamos, cualquier cosa me dices!";
+      ? `Genial, te confirmo la llamada por WhatsApp ${slot}. Cualquier cosa me dices, hablamos pronto!`
+      : "Genial, te confirmo la llamada por WhatsApp. En breve hablamos, cualquier cosa me dices!";
 
     await this.dependencies.repository.saveCandidate(candidate);
     await this.dependencies.repository.addTransition(transition);
@@ -989,8 +989,8 @@ function generateResponse(
   // Llamada ya confirmada por Alex: el bot mantiene la cita, no reabre el guion ni cae al dead-end.
   if (candidate.currentState === "CALL_SCHEDULED") {
     return candidate.scheduledCallSlot
-      ? `Todo listo, te llamo ${candidate.scheduledCallSlot}. Si necesitas cambiar algo me dices.`
-      : "Todo listo con la llamada. Si necesitas cambiar algo me dices.";
+      ? `Todo listo, te llamo por WhatsApp ${candidate.scheduledCallSlot}. Si necesitas cambiar algo me dices.`
+      : "Todo listo con la llamada por WhatsApp. Si necesitas cambiar algo me dices.";
   }
 
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {

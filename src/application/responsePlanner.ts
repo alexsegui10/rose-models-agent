@@ -24,9 +24,10 @@ const MAX_SAME_QUESTION_ASKS = 2;
 
 // Cierre hacia la llamada (playbook 1.7): pitch -> la candidata propone dia/hora -> ENTONCES el
 // telefono. Pedir el numero nada mas oir "llamada" era el fallo nº1 de la iteracion 1.
-export const PHONE_QUESTION = "Me puedes pasar tu numero de telefono?";
-export const SCHEDULE_QUESTION = "Que dia y hora te viene bien para la llamada?";
-const phoneAskPattern = /pasa(?:me)?\s?tu numero|numero de telefono/;
+// La llamada de cierre se hace por WhatsApp (dato confirmado por Alex): se pide el numero de WhatsApp.
+export const PHONE_QUESTION = "Me puedes pasar tu numero de WhatsApp?";
+export const SCHEDULE_QUESTION = "Que dia y hora te viene bien para la llamada por WhatsApp?";
+const phoneAskPattern = /pasa(?:me)?\s?tu numero|numero de (?:telefono|whatsapp)/;
 const scheduleAskPattern = /que dia y hora/;
 // Propuesta de momento concreto (dia, hora o "cuando quieras") en el mensaje de la candidata.
 const timeProposalPattern =
