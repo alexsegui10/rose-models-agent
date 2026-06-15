@@ -17,6 +17,7 @@ imports/raw/
 data/simulator-snapshot.json
 data/simulator-snapshot.json.tmp
 data/sim-transcripts.json
+data/sim-openai-transcripts.json
 backups/
 
 # Arneses de replay locales (leen el export real de IG) y sus salidas con posible PII

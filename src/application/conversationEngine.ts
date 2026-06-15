@@ -391,7 +391,10 @@ export class ConversationEngine {
     // los omita: la extraccion deterministica rellena SOLO los campos que el modelo dejo vacios.
     const escalationFilter = suppressBenignModelEscalation(
       resolveContextualDecline(
-        mergeDeterministicExtraction(modelUnderstanding, groupedMessage.content, lastAgentMessageContent(recentMessages)),
+        reclassifyAnswerableBusinessQuestion(
+          mergeDeterministicExtraction(modelUnderstanding, groupedMessage.content, lastAgentMessageContent(recentMessages)),
+          groupedMessage.content
+        ),
         lastAgentMessageContent(recentMessages),
         groupedMessage.content
       ),
@@ -605,8 +608,15 @@ export class ConversationEngine {
       responsePlan.questionToAsk === null &&
       (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
         projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED");
+    // Flujo de la CARA (sensible): SIEMPRE determinista. El codigo reconduce la 1a vez (y cierra solo si
+    // insiste tras reconducir); nunca se deja a OpenAI, que llego a soltar la plantilla de RECHAZO ante la
+    // PRIMERA duda de cara, perdiendo el lead (validacion con OpenAI 15-jun). generateResponse ya produce
+    // la reconduccion o el cierre correctos segun faceObjectionCount.
+    const useDeterministicFaceTurn =
+      (faceConcern !== null || responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory")) &&
+      !useCanonicalOpenerTemplate;
     let draft =
-      useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn
+      useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn || useDeterministicFaceTurn
         ? deterministicDraftOutput(deterministicResponse)
         : agencyExplanation !== null
           ? deterministicDraftOutput(agencyExplanation)
@@ -1833,6 +1843,98 @@ interface ModelEscalationFilterResult {
  * solo pueden anadir escaladas, nunca quitarlas. Una supresion jamas es silenciosa: deja la traza
  * "ESCALADA_SUPRIMIDA" para las notas de la candidata.
  */
+/**
+ * Reclasifica preguntas de negocio CLARAMENTE respondibles que OpenAI etiqueta mal y manda a contrato/
+ * HIR (validacion con OpenAI 15-jun): en produccion una candidata preguntando "es sueldo fijo o
+ * porcentaje?" o "puedo estar en dos agencias?" acababa escalada a Alex en vez de respondida. El codigo
+ * (no el modelo) decide: si es una pregunta de MODELO DE PAGO (sin cifra) o de MULTI-AGENCIA y NO una
+ * negociacion, se responde con conocimiento aprobado. Invariante 3 intacto: NUNCA se da una cifra de
+ * reparto aqui (el planner filtra el 70/30 salvo que pidan la cifra exacta); solo rescata respuestas
+ * seguras de una escalada indebida. Una negociacion real (cifra demandada, dinero garantizado) NO se toca.
+ */
+function reclassifyAnswerableBusinessQuestion(
+  understanding: ModelConversationOutput,
+  inboundMessage: string
+): ModelConversationOutput {
+  const message = normalizeText(inboundMessage);
+  // Solo rescatamos lo que IBA a escalar (contrato o revision humana); nunca creamos escaladas nuevas.
+  const wasEscalating = understanding.intent === "ASKS_ABOUT_CONTRACT" || understanding.requiresHumanReview;
+  if (!wasEscalating) return understanding;
+
+  // Negociacion real: no se toca (sigue escalando). Demanda de cifra/dinero garantizado o % no estandar.
+  const isNegotiation =
+    /\b(me dais|dame|negociar|negociamos|excepcion|mas para mi|quiero el|quiero un|quiero ganar)\b/.test(message) ||
+    guaranteedMoneyDemandPattern.test(message) ||
+    (/\b\d{1,3}\s?%/.test(message) && !/\b(70\s?%|30\s?%|70\/30)\b/.test(message)) ||
+    demandsSpecificPercentage(understanding, message);
+  if (isNegotiation) return understanding;
+
+  // Pregunta por la CIFRA exacta del reparto ("cuanto os llevais/quedais", "cual es el reparto", "que
+  // porcentaje os quedais"): es respondible (invariante 3: se da el 70/30 SOLO si pide la cifra). El
+  // planner lo entrega; aqui solo evitamos que OpenAI lo escale por error.
+  const asksExactSplit =
+    /\b(cuanto os (llev|qued)|que (porcentaje|parte) os (llev|qued)|cual es el reparto|que reparto|que comision os|os quedais con|vuestra parte)\b/.test(
+      message
+    );
+  if (asksExactSplit) {
+    return {
+      ...understanding,
+      intent: "ASKS_ABOUT_PERCENTAGE",
+      requiresHumanReview: false,
+      humanReviewReason: null,
+      internalNotes: [...understanding.internalNotes, "Reclasificado: pregunta por la cifra del reparto -> responder (70/30)."]
+    };
+  }
+
+  // Pregunta del MODELO de pago (sueldo fijo vs porcentaje): respondible como ASKS_ABOUT_PERCENTAGE
+  // (el planner responde "trabajamos con porcentaje" SIN cifra), nunca contrato/HIR.
+  // "fijo" solo cuenta como modelo de pago si va con palabra de pago (no "contrato fijo de 1 año").
+  const asksPaymentModel =
+    /\b(sueldo|salario|nomina)\b/.test(message) ||
+    /\b(paga fija|pago fijo|cobro fijo|sueldo fijo|salario fijo)\b/.test(message) ||
+    (/\bfijo\b/.test(message) && /\b(porcentaje|comision|reparto|cobr|gano|gana|pagais|pagan)\b/.test(message));
+  if (asksPaymentModel) {
+    return {
+      ...understanding,
+      intent: "ASKS_ABOUT_PERCENTAGE",
+      requiresHumanReview: false,
+      humanReviewReason: null,
+      internalNotes: [...understanding.internalNotes, "Reclasificado: pregunta de modelo de pago (sin cifra) -> responder."]
+    };
+  }
+
+  // Pregunta de MULTI-AGENCIA (hay politica activa): se responde, no es contrato/HIR.
+  const asksMultiAgency =
+    /\b(dos agencias|otra agencia|otras agencias|varias agencias|mas de una agencia)\b/.test(message) &&
+    /\b(puedo|se puede|a la vez|al mismo tiempo|ya trabajo|ya estoy|tambien|simultane)\b/.test(message);
+  if (asksMultiAgency) {
+    return {
+      ...understanding,
+      intent: "REQUESTS_INFORMATION",
+      requiresHumanReview: false,
+      humanReviewReason: null,
+      internalNotes: [
+        ...understanding.internalNotes,
+        "Reclasificado: pregunta de multi-agencia -> responder con la politica activa."
+      ]
+    };
+  }
+
+  return understanding;
+}
+
+/**
+ * Una cifra de reparto DEMANDADA cuenta como negociacion solo si el mensaje trae un numero. OpenAI a
+ * veces alucina requestedModelPercentage en una simple PREGUNTA de cifra ("cuanto os llevais?") sin que
+ * ella exija nada, y eso forzaba una escalada indebida a Alex (validacion OpenAI 15-jun). Helper
+ * compartido por el supresor y el reclasificador para no divergir.
+ */
+function demandsSpecificPercentage(understanding: ModelConversationOutput, normalizedMessage: string): boolean {
+  const hasModelPercentage =
+    understanding.requestedModelPercentage !== null || understanding.extractedData.requestedModelPercentage !== undefined;
+  return hasModelPercentage && /\d/.test(normalizedMessage);
+}
+
 function suppressBenignModelEscalation(
   understanding: ModelConversationOutput,
   inboundMessage: string
@@ -1855,8 +1957,7 @@ function suppressBenignModelEscalation(
     /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(message) ||
     guaranteedMoneyDemandPattern.test(message) ||
     offersNonStandardPercentage ||
-    understanding.requestedModelPercentage !== null ||
-    understanding.extractedData.requestedModelPercentage !== undefined;
+    demandsSpecificPercentage(understanding, message);
   if (understanding.intent === "ASKS_ABOUT_PERCENTAGE" && !isPercentageNegotiation) {
     return {
       understanding: { ...understanding, requiresHumanReview: false, humanReviewReason: null },
@@ -2165,7 +2266,7 @@ const FACE_RECOGNITION_RECONDUCTION_CAP = 2;
 const faceTopicPattern = /\b(cara|rostro|anonim)\b/;
 // Senal de negarse / no querer, en cualquier formulacion ("no quiero", "sigo sin", "tampoco", "me niego"...).
 const faceRefusalSignalPattern =
-  /\b(no quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar)\b/;
+  /\b(no quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar|tapar|taparme|taparla|difuminar|pixelar|me da (cosa|verguenza|palo|apuro|reparo|corte)|sin la cara|sin cara|no enseno|no ensenar|no mostrar)\b/;
 const facePartialPattern =
   /\b(solo (en )?(algun|alguna|algunas|algunos|parte|ciertas?|ratos?|a veces)|en algunas fotos|media cara|de espaldas|solo el cuerpo|parcial|sin que se vea del todo|a medias)\b/;
 // La candidata quiere mover/cancelar una llamada YA agendada (se evalua solo en CALL_SCHEDULED).
