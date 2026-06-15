@@ -45,10 +45,15 @@ es **configuración tuya en Meta + un sitio donde alojar la app**. Esta guía es
    PERSISTENCE=postgres        # para no perder candidatas al reiniciar
    ```
 
-6. **Elige el modo de automatización** (`AUTOMATION_MODE` en `.env.local`):
-   - `HUMAN_APPROVAL` (recomendado para empezar): el bot redacta pero **no envía solo**; tú apruebas
-     cada respuesta desde el CRM. Empezar así y vigilar.
-   - `AUTOMATIC`: el bot responde solo (respeta la pausa por candidata del CRM).
+6. **Modo de automatización** (`AUTOMATION_MODE` en `.env.local`): tu elección = **`AUTOMATIC`**.
+   - El bot responde solo la cualificación rutinaria.
+   - Se PAUSA solo (no envía nada) en lo delicado: negociación de %, edad dudosa, dudas no cubiertas,
+     contrato, o cualquier fallo de validación → queda en revisión para ti.
+   - Tú puedes pausar a cualquier candidata a mano (botón "Pausar bot" en el CRM).
+   - A las candidatas escaladas/pausadas les respondes desde el CRM con **"Responder"** (se envía a
+     Instagram), o directamente en la app de Instagram. Para tomar el control total: "Pausar bot" + responder.
+   - (Alternativa `HUMAN_APPROVAL`: el bot no envía nada hasta que apruebes cada mensaje; requiere una
+     bandeja de aprobación que aún no está construida.)
 
 ## Cómo se comporta
 

@@ -333,6 +333,29 @@ export default function Home() {
     await refreshCandidates();
   }
 
+  async function sendManualReply(candidate: Candidate) {
+    // Responder a mano a una candidata (escalada o pausada). Se persiste como mensaje de Alex y se
+    // envia a Instagram si la integracion esta activa. Para ver el contexto completo, pestaña Chat.
+    const text = window.prompt(`Responder a @${candidate.instagramUsername} (se envia a Instagram):`);
+    if (text === null || !text.trim()) return;
+    const response = await fetch("/api/simulator/manual-reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: candidate.id, message: text.trim() })
+    });
+    if (!response.ok) {
+      setCrmNotice("No se pudo enviar la respuesta.");
+      return;
+    }
+    const data = (await response.json()) as { sentToInstagram: boolean };
+    setCrmNotice(
+      data.sentToInstagram
+        ? `Respuesta enviada a @${candidate.instagramUsername} por Instagram.`
+        : `Respuesta guardada para @${candidate.instagramUsername} (Instagram no conectado todavia).`
+    );
+    await refreshCandidates();
+  }
+
   async function advanceStage(candidate: Candidate, action: "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL") {
     // Cierra los huecos del funnel: verificar perfil (seguir/rechazar) y confirmar la llamada.
     let slot: string | undefined;
@@ -979,6 +1002,9 @@ export default function Home() {
                       <td className="crm-actions">
                         <button className="secondary" type="button" onClick={() => void setBotPaused(candidate, !paused)}>
                           {paused ? "Reanudar bot" : "Pausar bot"}
+                        </button>
+                        <button className="secondary" type="button" onClick={() => void sendManualReply(candidate)}>
+                          Responder
                         </button>
                         <button
                           className="secondary"
