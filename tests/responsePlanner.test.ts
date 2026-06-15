@@ -78,7 +78,7 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
     expect(question.toLowerCase()).toContain("que movil tienes");
   });
 
-  it("asks the country late and only when device is already known", () => {
+  it("con el guion esencial completo propone la llamada, no pregunta el pais (Alex 15-jun: tras explicar, agendar)", () => {
     const candidate = candidateWith({
       firstName: "Carla",
       age: 27,
@@ -87,24 +87,23 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
       worksWithAnotherAgency: false,
       deviceEligibility: "APPROVED"
     });
-    expect(planFor({ candidate }).questionToAsk).toBe("Por cierto, de que pais eres?");
+    const question = planFor({ candidate }).questionToAsk ?? "";
+    expect(question.toLowerCase()).toContain("que dia y hora");
+    expect(question.toLowerCase()).not.toContain("pais");
+    expect(question.toLowerCase()).not.toContain("disponibilidad");
   });
 
-  // El "Que disponibilidad tendrias para crear contenido durante la semana?" corporativo no existe
-  // en el canon de Alex (juez iteracion 3): la pregunta de tiempo se reformula en su registro.
-  it("asks availability with Alex-like phrasing, never the corporate wording", () => {
+  it("si propone una hora con el guion completo, pide directamente el WhatsApp", () => {
     const candidate = candidateWith({
       firstName: "Carla",
       age: 27,
       isAdultConfirmed: true,
       hasOnlyFans: true,
       worksWithAnotherAgency: false,
-      deviceEligibility: "APPROVED",
-      country: "Argentina"
+      deviceEligibility: "APPROVED"
     });
-    const plan = planFor({ candidate });
-    expect(plan.questionToAsk).toBe("Cuanto tiempo le podrias dedicar a esto a la semana?");
-    expect(plan.questionToAsk).not.toContain("disponibilidad");
+    const plan = planFor({ candidate, inboundMessage: "el lunes por la tarde me viene genial" });
+    expect((plan.questionToAsk ?? "").toLowerCase()).toContain("numero de whatsapp");
   });
 });
 

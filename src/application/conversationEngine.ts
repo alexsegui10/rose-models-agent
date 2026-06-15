@@ -1297,7 +1297,10 @@ function canonicalOpener(candidate: Candidate): string {
     return `Hola, ${greeting} soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.`;
   }
 
-  return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.`;
+  // El opener pide el NOMBRE directamente (peticion de Alex: lo primero es el nombre). Asi, ademas, la
+  // respuesta de la candidata ("ana", "marta"...) llega con contexto de pregunta y se captura bien, en vez
+  // de perderse y dejar al bot en bucle "Como te llamas?" (fallo real visto en la simulacion 15-jun).
+  return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.\n\nPara empezar, como te llamas?`;
 }
 
 // La candidata comparte una dificultad/duda/experiencia personal (no un dato a secas): "me cuesta",
@@ -2033,6 +2036,11 @@ function messageLeadsWithAcknowledgement(message: string): boolean {
   return new RegExp(`^\\s*(?:${RHYTHM_ACK_ALTERNATION})\\b`, "i").test(message.trim());
 }
 
+/** Primera letra en mayuscula (para no dejar fragmentos en minuscula al recortar un acuse de apertura). */
+function capitalizeFirst(text: string): string {
+  return text.length > 0 ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
 /**
  * Ritmo conversacional DETERMINISTA (decision de Alex 14-jun: el codigo controla el guion/ritmo, el
  * LLM solo redacta). El Alex real no abre CADA mensaje con un acuse ni repite el nombre constantemente
@@ -2061,8 +2069,9 @@ export function applyConversationalRhythm(response: string, recentAgentMessages:
   const rest = opener[4];
 
   if (previousLedWithAck) {
-    // Dos mensajes seguidos abriendo con acuse = patron de robot: este entra directo al contenido.
-    return rest.trimStart();
+    // Dos mensajes seguidos abriendo con acuse = patron de robot: este entra directo al contenido. Se
+    // recapitaliza la primera letra para no dejar un fragmento en minuscula ("quedamos asi entonces.").
+    return capitalizeFirst(rest.trimStart());
   }
   if (nameUsedRecently && firstName) {
     // El nombre ya salio hace nada: se conserva el acuse pero se quita el nombre repetido.

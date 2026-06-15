@@ -20,8 +20,23 @@ describe("dataExtractor contextual answers (la respuesta al ultimo mensaje del a
     expect(result.extractedData.firstName).toBe("Gisell");
   });
 
-  it("does not mistake fillers, greetings or weekdays for a name", () => {
-    for (const reply of ["vale", "hola", "jajaja", "claro", "domingo", "gracias", "bueno"]) {
+  it("does not mistake fillers, greetings, interjections or weekdays for a name", () => {
+    // Tras poner el nombre en el opener, el ruido ("mmm", "aja") llegaba a capturarse como nombre.
+    for (const reply of [
+      "vale",
+      "hola",
+      "jajaja",
+      "claro",
+      "domingo",
+      "gracias",
+      "bueno",
+      "mmm",
+      "aja",
+      "ya",
+      "nose",
+      "eh",
+      "aaa"
+    ]) {
       const result = extractDeterministicUnderstanding(reply, { lastAgentMessage: "Como te llamas?" });
       expect(result.extractedData.firstName).toBeUndefined();
     }

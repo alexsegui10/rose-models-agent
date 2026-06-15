@@ -60,9 +60,12 @@ describe("ConversationEngine", () => {
     expect(result.candidate.currentState).toBe("QUALIFYING");
     expect(result.candidate.age).toBe(22);
     expect(result.candidate.city).toBe("Madrid");
-    // Gate-first: en el primer turno NUNCA hay pregunta de cualificacion, solo el opener canonico.
+    // El opener se presenta y pide el NOMBRE (Alex: lo primero es el nombre); el resto del guion
+    // (edad, OF, movil) NO se adelanta en el primer turno. questionToAsk sigue null (la pregunta del
+    // nombre va en el texto del opener, no como pregunta de plan).
     expect(result.response).toContain("Alex de Rose Models");
-    expect(result.response).not.toContain("?");
+    expect(result.response.toLowerCase()).toContain("como te llamas");
+    expect(result.response.toLowerCase()).not.toContain("que edad tienes");
     expect(result.responsePlan.questionToAsk).toBeNull();
   });
 
@@ -308,10 +311,9 @@ describe("ConversationEngine first contact (opener canonico gate-first)", () => 
     );
     expect(result.response.toLowerCase()).toContain(expectedGreeting);
     expect(result.response).toContain("Alex de Rose Models");
-    expect(result.response).not.toContain("?");
   });
 
-  it("opens the first agent turn with the three canonical beats and zero questions", async () => {
+  it("opens presenting itself, framing the call and asking the name first (sin adelantar el resto del guion)", async () => {
     const { engine } = createEngine();
 
     const result = await engine.handleIncomingMessage({
@@ -323,8 +325,10 @@ describe("ConversationEngine first contact (opener canonico gate-first)", () => 
     expect(result.response).toContain("Alex de Rose Models");
     expect(result.response.toLowerCase()).toContain("tu perfil");
     expect(result.response.toLowerCase()).toContain("llamada");
-    // Invariante sagrada: ninguna pregunta de cualificacion antes de que acepte el marco.
-    expect(result.response).not.toContain("?");
+    // El nombre va primero (peticion de Alex), pero el resto del guion NO se adelanta en el opener.
+    expect(result.response.toLowerCase()).toContain("como te llamas");
+    expect(result.response.toLowerCase()).not.toContain("que edad tienes");
+    expect(result.response.toLowerCase()).not.toContain("has tenido of");
     expect(result.responsePlan.questionToAsk).toBeNull();
   });
 
@@ -402,6 +406,10 @@ describe("ConversationEngine no-repeat guard", () => {
       message: "Hola, quiero informacion"
     });
 
+    // El opener pide el nombre pero NO consume el cupo anti-bucle: el planner aun puede re-preguntarlo
+    // dos veces antes de pasar de slot (asi insiste en el nombre sin quedarse en bucle infinito).
+    expect(opener.response.toLowerCase()).toContain("como te llamas");
+
     const first = await engine.handleIncomingMessage({
       candidateId: opener.candidate.id,
       instagramUsername: "lead_bucle",
@@ -421,6 +429,7 @@ describe("ConversationEngine no-repeat guard", () => {
       instagramUsername: "lead_bucle",
       message: "Prefiero hablar de otra cosa"
     });
+    // Tras insistir dos veces (sin contar el opener), no se queda en bucle: pasa al siguiente slot.
     expect(third.response.toLowerCase()).not.toContain("como te llamas");
     expect(third.responsePlan.questionToAsk).not.toBe("Como te llamas?");
   });

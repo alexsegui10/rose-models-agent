@@ -9,19 +9,20 @@ import { GoldenConversationTestSchema, type GoldenConversationTestInput } from "
 const rawGoldenTests: GoldenConversationTestInput[] = [
   {
     id: "golden-initial-contact",
-    title: "Primer contacto desde el anuncio (perfil publico): opener canonico sin preguntas",
+    title: "Primer contacto desde el anuncio (perfil publico): opener canonico que pide el nombre",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
     messages: ["¡Hola! Quiero más información."],
     expectedTransition: "QUALIFYING",
     responseMustIncludeAny: ["Rose Models"],
-    responseMustNotInclude: ["Comprendo perfectamente", "Estimada candidata", "que edad tienes", "?"],
+    // El opener pide el NOMBRE (Alex: lo primero es el nombre), pero NO adelanta el resto del guion.
+    responseMustNotInclude: ["Comprendo perfectamente", "Estimada candidata", "que edad tienes", "has tenido of"],
     responseRequirements: [
       "presentarse como Alex de Rose Models en el primer contacto",
       "validar el perfil y encuadrar preguntas rapidas + llamada",
-      "ninguna pregunta de cualificacion antes del asentimiento"
+      "pedir el nombre como primera pregunta, sin adelantar edad/OF/movil"
     ],
-    acceptableResponsePatterns: ["opener canonico de tres pasos sin pregunta"]
+    acceptableResponsePatterns: ["opener canonico: presentacion + marco + pedir el nombre"]
   },
   {
     id: "golden-initial-contact-assent",

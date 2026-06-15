@@ -285,7 +285,32 @@ function questionToAskFor(
     return slotQuestion ?? askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
   }
 
+  // Guion esencial completo (adulta + nombre + OF + movil): el opener prometio "luego agendamos una
+  // llamada", asi que se PROPONE el dia/hora de forma proactiva en vez de preguntar slots opcionales
+  // (pais, disponibilidad), que se cubren en la propia llamada (peticion de Alex 15-jun: tras explicar,
+  // agendar; nada de "de que pais eres?" justo despues del pitch).
+  if (adultConfirmed && essentialScriptDone(candidate)) {
+    if (proposesTime) return askWithCap(PHONE_QUESTION, phoneAskPattern, recentAgentMessages);
+    const scheduled = askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
+    if (scheduled) return scheduled;
+  }
+
   return nextSlotQuestion(candidate, recentAgentMessages);
+}
+
+/**
+ * Guion esencial completo: nombre, EDAD ADULTA confirmada, si tiene OF y el movil. A partir de aqui el
+ * bot agenda la llamada (no pregunta pais/disponibilidad proactivamente). Espejo de essentialScriptComplete
+ * del motor; se mantiene local para no acoplar capas (el motor importa del planner, no al reves).
+ */
+function essentialScriptDone(candidate: Candidate): boolean {
+  return (
+    Boolean(candidate.firstName) &&
+    Boolean(candidate.age) &&
+    candidate.isAdultConfirmed &&
+    candidate.hasOnlyFans !== undefined &&
+    candidate.deviceEligibility !== "UNKNOWN"
+  );
 }
 
 function nextSlotQuestion(
@@ -303,7 +328,12 @@ function nextSlotQuestion(
 }
 
 function askWithCap(question: string, alreadyAskedPattern: RegExp, recentAgentMessages: string[]): string | null {
-  const timesAsked = recentAgentMessages.filter((message) => alreadyAskedPattern.test(message)).length;
+  // El opener (que ya pide el nombre) NO consume el cupo anti-bucle del planner: el cap existe para
+  // limitar las RE-preguntas del planner, no la primera del opener. Sin esto, ante mensajes vagos
+  // ("mmm", "aja") el bot abandonaba el nombre demasiado pronto y saltaba a la edad (hallazgo jueces 15-jun).
+  const timesAsked = recentAgentMessages.filter(
+    (message) => alreadyAskedPattern.test(message) && !/rose models/.test(message)
+  ).length;
   return timesAsked >= MAX_SAME_QUESTION_ASKS ? null : question;
 }
 

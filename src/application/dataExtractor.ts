@@ -242,7 +242,27 @@ const nameRejectWords = new Set([
   "hoy",
   "ahora",
   "perfecto",
-  "genial"
+  "genial",
+  // Interjecciones/muletillas de chat: nunca son un nombre, aunque el opener acabe de pedir el nombre.
+  "mmm",
+  "mm",
+  "mmmm",
+  "hmm",
+  "aja",
+  "ajam",
+  "ajaja",
+  "aham",
+  "eh",
+  "em",
+  "este",
+  "pues",
+  "nose",
+  "ya",
+  "uy",
+  "oki",
+  "oka",
+  "okeyy",
+  "okeey"
 ]);
 
 /**
@@ -257,6 +277,8 @@ function bareNameFromReply(normalized: string): string | undefined {
   if (nameRejectWords.has(firstWord)) return undefined;
   if (nameStopwords.has(firstWord)) return undefined;
   if (locationKeywords.some((entry) => entry.keyword === firstWord)) return undefined;
+  // Una "palabra" de una sola letra repetida ("mmm", "aaa", "jjj") es ruido, no un nombre.
+  if (/^(.)\1+$/.test(firstWord)) return undefined;
   return firstWord.charAt(0).toUpperCase() + firstWord.slice(1);
 }
 

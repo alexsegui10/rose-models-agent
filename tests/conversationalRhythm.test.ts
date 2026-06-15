@@ -31,8 +31,10 @@ describe("applyConversationalRhythm", () => {
     expect(result).toBe("Perfecto Ana\n\nQue edad tienes?");
   });
 
-  it("handles a comma-separated opener too", () => {
+  it("handles a comma-separated opener too y recapitaliza el resto", () => {
     const result = applyConversationalRhythm("Vale Ana, y de que pais eres?", ["Okeyy\n\nQue movil tienes?"], "Ana");
-    expect(result).toBe("y de que pais eres?");
+    // Al recortar el acuse de apertura, la primera letra del resto se pone en mayuscula (no fragmentos
+    // en minuscula tipo "y de que pais eres?").
+    expect(result).toBe("Y de que pais eres?");
   });
 });
