@@ -9,6 +9,7 @@ import {
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import { escalationNotificationFor, getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
+import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
 import { getSimulatorEngine } from "@/server/simulatorStore";
 
 // postgres.js necesita runtime Node (no Edge). maxDuration: en Hobby el techo real es 10s igualmente.
@@ -162,10 +163,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         });
       }
       // Aviso al operador SOLO cuando la candidata ENTRA este turno en revision humana (escalada), no en
-      // cada turno mientras sigue ahi. El aviso nunca lanza (notify se traga sus errores).
+      // cada turno mientras sigue ahi. El aviso nunca lanza (notify se traga sus errores). En una escalada
+      // el bot NO envia rafaga, asi que hay margen de tiempo para resolver el perfil (cacheado) y meter el
+      // enlace a su cuenta en el WhatsApp; best-effort, jamas rompe el turno.
       const escalation = escalationNotificationFor(result.candidate, result.plannedTransitions);
       if (escalation) {
-        await notifier.notify(escalation);
+        const profile = await fetchInstagramProfile(message.senderId, config);
+        const profileUrl = instagramProfileUrl(profile?.username) ?? undefined;
+        await notifier.notify({ ...escalation, profileUrl });
       }
     } catch (error) {
       console.error("[ig-webhook] ERROR procesando el turno", {

@@ -16,6 +16,8 @@ export interface OperatorNotification {
   reason?: string;
   /** Estado resultante de la candidata. */
   state?: string;
+  /** Enlace publico a la cuenta de Instagram de la candidata (si se pudo resolver). */
+  profileUrl?: string;
   /** Detalle corto para errores; nunca stack traces ni secretos. */
   detail?: string;
 }
@@ -76,7 +78,8 @@ export function formatOperatorMessage(notification: OperatorNotification): strin
   }
   const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
   const reason = notification.reason ? `\nMotivo: ${notification.reason}` : "";
-  return `Rose Models 🔔 Escalada, necesita tu decisión${who}${reason}\nEntra al CRM para resolverla.`;
+  const profile = notification.profileUrl ? `\nPerfil: ${notification.profileUrl}` : "";
+  return `Rose Models 🔔 Escalada, necesita tu decisión${who}${reason}${profile}\nEntra al CRM para resolverla.`;
 }
 
 /**

@@ -32,6 +32,9 @@ describe("operatorNotifier", () => {
     );
     expect(formatOperatorMessage({ kind: "error", detail: "TypeError" })).toContain("Error");
     expect(formatOperatorMessage({ kind: "blocked", conversationId: "u1" })).toContain("bloqueado");
+    expect(
+      formatOperatorMessage({ kind: "escalation", conversationId: "u1", profileUrl: "https://instagram.com/ana_real" })
+    ).toContain("https://instagram.com/ana_real");
   });
 
   it("factory: Noop sin claves, CallMeBot con claves", () => {
