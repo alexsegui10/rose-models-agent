@@ -91,6 +91,49 @@ const SCENARIOS: Scenario[] = [
     title: "Ya trabaja con otra agencia",
     profileVisibility: "PUBLIC",
     messages: ["hola", "ya trabajo con otra agencia, puedo estar en dos a la vez?"]
+  },
+  // --- Tanda dificil: deteccion de sobre-escalada y voz de objeciones con OpenAI real ---
+  {
+    id: "oa-who-are-you",
+    title: "Desconfia de quien eres",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "perdona quien eres y de donde sacaste mi perfil?"]
+  },
+  {
+    id: "oa-part-time",
+    title: "Tiene otro trabajo, media jornada",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "tengo otro curro, esto se puede compaginar a media jornada?"]
+  },
+  {
+    id: "oa-when-paid",
+    title: "Como y cuando cobra",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "y como y cuando me pagais exactamente?"]
+  },
+  {
+    id: "oa-earnings",
+    title: "Cuanto se puede ganar",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "cuanto se puede llegar a ganar al mes con esto?"]
+  },
+  {
+    id: "oa-nervous",
+    title: "Insegura, nunca lo ha hecho",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "soy ana", "23", "nunca he hecho esto y me da inseguridad"]
+  },
+  {
+    id: "oa-time-to-think",
+    title: "Pide tiempo para pensarlo",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "marta", "28", "no tengo of", "dejame pensarlo unos dias"]
+  },
+  {
+    id: "oa-content-type",
+    title: "Pregunta que contenido hay que hacer",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "que tipo de contenido tendria que hacer? hay limites?"]
   }
 ];
 

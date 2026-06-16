@@ -1317,7 +1317,7 @@ function canonicalOpener(candidate: Candidate): string {
 // "lo deje", "me da miedo", "no estoy segura"... Detectarlo permite un acuse EMPATICO medido en vez
 // de uno neutro frio. Es deteccion determinista: el acuse es una frase fija, jamas inventa nada.
 const sharesPersonalConcernPattern =
-  /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da (miedo|verguenza|cosa|palo|apuro|reparo)|no se si|no estoy segura|no estaba segura|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza|estaf|me robaron|me timaron|mala experiencia|me enganaron|dejaron de contestar|desaparecieron)\b/;
+  /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da\b[^.!?]{0,14}\b(miedo|verguenza|cosa|palo|apuro|reparo|inseguridad|corte|vertigo)|no se si|no estoy segura|no estaba segura|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza|inseguridad|insegura|no me atrevo|nunca he hecho esto|nunca lo he hecho|estaf|me robaron|me timaron|mala experiencia|me enganaron|dejaron de contestar|desaparecieron)\b/;
 
 // Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.
 export function acknowledgementFor(understanding: ModelConversationOutput, inboundMessage = ""): string {
