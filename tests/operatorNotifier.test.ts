@@ -4,7 +4,8 @@ import {
   NoopOperatorNotifier,
   escalationNotificationFor,
   formatOperatorMessage,
-  getOperatorNotifier
+  getOperatorNotifier,
+  isStopRequest
 } from "@/infrastructure/integrations/operatorNotifier";
 
 describe("operatorNotifier", () => {
@@ -35,6 +36,20 @@ describe("operatorNotifier", () => {
     expect(
       formatOperatorMessage({ kind: "escalation", conversationId: "u1", profileUrl: "https://instagram.com/ana_real" })
     ).toContain("https://instagram.com/ana_real");
+  });
+
+  it("isStopRequest distingue 'no me mandes nada' de un 'no me interesa' normal", () => {
+    expect(isStopRequest("no me mandes nada por favor")).toBe(true);
+    expect(isStopRequest("dejame en paz")).toBe(true);
+    expect(isStopRequest("no me escribas mas")).toBe(true);
+    expect(isStopRequest("uy no me interesa, gracias")).toBe(false);
+    expect(isStopRequest("hola, cuanto se gana?")).toBe(false);
+  });
+
+  it("formatea el aviso de peticion de parada con el enlace de la candidata", () => {
+    const msg = formatOperatorMessage({ kind: "stop-request", conversationId: "u1", profileUrl: "https://instagram.com/ana" });
+    expect(msg).toContain("no la contactes");
+    expect(msg).toContain("https://instagram.com/ana");
   });
 
   it("factory: Noop sin claves, CallMeBot con claves", () => {

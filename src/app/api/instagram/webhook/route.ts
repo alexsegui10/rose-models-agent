@@ -8,7 +8,7 @@ import {
 } from "@/application/instagramWebhook";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
-import { escalationNotificationFor, getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
+import { escalationNotificationFor, getOperatorNotifier, isStopRequest } from "@/infrastructure/integrations/operatorNotifier";
 import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
 import { getSimulatorEngine } from "@/server/simulatorStore";
 
@@ -167,10 +167,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       // el bot NO envia rafaga, asi que hay margen de tiempo para resolver el perfil (cacheado) y meter el
       // enlace a su cuenta en el WhatsApp; best-effort, jamas rompe el turno.
       const escalation = escalationNotificationFor(result.candidate, result.plannedTransitions);
-      if (escalation) {
+      // Peticion explicita de no contacto ("no me mandes nada"): el bot cierra (CLOSED) pero AVISA a Alex
+      // para que sepa lo que paso (peticion de Alex). Un "no me interesa" normal sigue cerrando en silencio.
+      const enteredClosed = result.plannedTransitions.some((transition) => transition.toState === "CLOSED");
+      const stopRequested = enteredClosed && isStopRequest(message.text);
+      if (escalation || stopRequested) {
         const profile = await fetchInstagramProfile(message.senderId, config);
         const profileUrl = instagramProfileUrl(profile?.username) ?? undefined;
-        await notifier.notify({ ...escalation, profileUrl });
+        if (escalation) await notifier.notify({ ...escalation, profileUrl });
+        if (stopRequested) await notifier.notify({ kind: "stop-request", conversationId: message.senderId, profileUrl });
       }
     } catch (error) {
       console.error("[ig-webhook] ERROR procesando el turno", {

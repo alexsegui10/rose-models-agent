@@ -6,7 +6,21 @@ import type { Candidate, HumanReviewReason, StateTransition } from "@/domain/can
  * cuando hace falta. Secretos en `.env.local`; si no está configurado, el aviso es un no-op silencioso
  * y NUNCA tumba el turno (el procesamiento del mensaje es lo primero).
  */
-export type OperatorNotificationKind = "escalation" | "blocked" | "error";
+export type OperatorNotificationKind = "escalation" | "blocked" | "error" | "stop-request";
+
+// Peticion EXPLICITA de no ser contactada ("no me mandes nada", "dejame en paz"...). Se distingue de un
+// rechazo normal ("no me interesa"): ambos cierran la conversacion, pero este AVISA a Alex para que sepa
+// lo que paso (por si quiere gestionarlo personalmente). Patron conservador para no avisar de cada "no".
+const stopRequestPattern =
+  /\b(no me mandes? (?:nada|mas|mensajes)|no me escribas? (?:mas|nada)|dejame en paz|no me contactes|no me molestes|para de escribirme|no me vuelvas a escribir|deja de escribirme|no quiero que me escrib\w*|borrame|bloquea\w*)\b/;
+
+export function isStopRequest(message: string): boolean {
+  const normalized = message
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+  return stopRequestPattern.test(normalized);
+}
 
 export interface OperatorNotification {
   kind: OperatorNotificationKind;
@@ -75,6 +89,11 @@ export function formatOperatorMessage(notification: OperatorNotification): strin
   if (notification.kind === "blocked") {
     const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
     return `Rose Models ⛔ Envío bloqueado${who}${notification.detail ? `\n${notification.detail}` : ""}`;
+  }
+  if (notification.kind === "stop-request") {
+    const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
+    const profile = notification.profileUrl ? `\nPerfil: ${notification.profileUrl}` : "";
+    return `Rose Models 🛑 Una candidata ha pedido que no la contactes${who}${profile}\nEl bot ha parado; gestiona tú si quieres.`;
   }
   const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
   const reason = notification.reason ? `\nMotivo: ${notification.reason}` : "";
