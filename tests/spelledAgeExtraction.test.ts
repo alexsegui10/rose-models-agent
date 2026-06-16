@@ -32,10 +32,20 @@ describe("extraccion: edad en letra (adultas)", () => {
   });
 
   it("NEGACION en letra: 'no tengo dieciocho' NUNCA es adulta de 18 (invariante 2)", () => {
-    for (const message of ["no tengo dieciocho", "aun no tengo dieciocho todavia", "no tengo dieciocho anos"]) {
+    for (const message of [
+      "no tengo dieciocho",
+      "aun no tengo dieciocho todavia",
+      "no tengo dieciocho anos",
+      "no tengo aun dieciocho"
+    ]) {
       const age = extractDeterministicUnderstanding(message).extractedData.age;
       expect(age).not.toBe(18);
       expect(age === undefined || age < 18).toBe(true);
     }
+  });
+
+  it("NO cierra por error 'no tengo dieciocho mil seguidores' (eso es followers, no edad)", () => {
+    const age = extractDeterministicUnderstanding("no tengo dieciocho mil seguidores todavia").extractedData.age;
+    expect(age).toBeUndefined();
   });
 });

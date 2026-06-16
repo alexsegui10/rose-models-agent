@@ -67,7 +67,11 @@ function declaredMinorAge(normalized: string): number | null {
   // Misma negacion pero con la edad en LETRA: "(aun|todavia) no tengo dieciocho" es MENOR, igual que
   // "no tengo 18". Sin esto, spelledAdultAge leia "tengo dieciocho" dentro de "no tengo dieciocho" como
   // adulta de 18 (regresion del invariante 2 detectada el 16-jun).
-  const notYetWord = normalized.match(/\bno tengo\s+([a-zñ]+)\b/);
+  // Admite un adverbio entre medias ("no tengo aun dieciocho") y hereda la exclusion de contables/dinero
+  // de la rama de digitos, para no cerrar por error "no tengo dieciocho mil seguidores".
+  const notYetWord = normalized.match(
+    /\bno tengo\s+(?:aun\s+|todavia\s+)?([a-zñ]+)\b(?!\s+(?:mil(?:es)?|seguidor[ae]s?|cuentas?|euros?|dolares?|fotos?|videos?|hij[oa]s?|perr[oa]s?|gat[oa]s?|dias?|semanas?|meses|horas?|minutos?))/
+  );
   if (notYetWord) {
     const declaredWord = ({ ...wordAgesUnder18, dieciocho: 18 } as Record<string, number>)[notYetWord[1]];
     if (declaredWord !== undefined && declaredWord <= 18) return Math.max(1, declaredWord - 1);
