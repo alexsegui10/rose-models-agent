@@ -67,3 +67,45 @@ describe("Privacidad: 'me da miedo que me vea mi familia' reconduce con privacid
     expect(/identidad|privacidad|pinterest|imagen/.test(text)).toBe(true);
   });
 });
+
+// Preguntas sin cobertura: reconocer + deferir a la llamada + puente, en vez de "Okeyy | como te llamas".
+describe("Preguntas sin cobertura: deferir a la llamada, no despachar con un acuse vacio", () => {
+  it("confusion total se atiende y defiere, con puente al guion", async () => {
+    const { engine } = createEngine();
+    let candidateId: string | undefined;
+    let last;
+    for (const message of ["hola", "no entiendo nada de lo que dices, que es esto?"]) {
+      last = await engine.handleIncomingMessage({
+        candidateId,
+        instagramUsername: "confused_case",
+        profileVisibility: "PUBLIC",
+        message
+      });
+      candidateId = last.candidate.id;
+    }
+    const text = last!.response.toLowerCase();
+    expect(text.trim()).not.toBe("okeyy");
+    expect(text).toContain("en la llamada");
+    expect(text).toContain("como te llamas");
+  });
+
+  it("'cuanto se puede ganar' defiere SIN dar cifras ni prometer ingresos (invariante)", async () => {
+    const { engine } = createEngine();
+    let candidateId: string | undefined;
+    let last;
+    for (const message of ["hola", "cuanto se puede llegar a ganar con esto?"]) {
+      last = await engine.handleIncomingMessage({
+        candidateId,
+        instagramUsername: "earnings_case",
+        profileVisibility: "PUBLIC",
+        message
+      });
+      candidateId = last.candidate.id;
+    }
+    const text = last!.response.toLowerCase();
+    expect(text).toContain("depende");
+    expect(text).toContain("llamada");
+    // Nunca una cifra de dinero ni un porcentaje proactivo.
+    expect(/\d+\s?(?:euros?|€|\$|mil|%)/.test(text)).toBe(false);
+  });
+});

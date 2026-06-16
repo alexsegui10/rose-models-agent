@@ -637,23 +637,38 @@ export class ConversationEngine {
       wantsToPausePattern.test(normalizeText(groupedMessage.content))
         ? pauseAcknowledgement(recentMessages)
         : null;
+    // Pregunta sin cobertura (confusion total / ganancias): reconocer + deferir a la llamada + puente,
+    // en vez del brush-off "Okeyy | como te llamas?". Solo en cualificacion activa, sin nada que
+    // responder del plan y sin escalada pendiente; el opener y la cara siguen teniendo prioridad.
+    const softDeferMessage =
+      !useCanonicalOpenerTemplate &&
+      agencyExplanation === null &&
+      faceConcern === null &&
+      responsePlan.answerFacts.length === 0 &&
+      !responsePlan.requiresHumanReview &&
+      pauseMessage === null &&
+      (projectedCandidate.currentState === "QUALIFYING" || projectedCandidate.currentState === "NEW_LEAD")
+        ? softDeferResponse(groupedMessage.content, responsePlan.questionToAsk)
+        : null;
     let draft =
       pauseMessage !== null
         ? deterministicDraftOutput(pauseMessage)
-        : useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn || useDeterministicFaceTurn
-          ? deterministicDraftOutput(deterministicResponse)
-          : agencyExplanation !== null
-            ? deterministicDraftOutput(agencyExplanation)
-            : await this.draftResponse({
-                deterministicResponse,
-                projectedCandidate,
-                recentMessages,
-                knowledgeEntries,
-                responsePlan,
-                retrievedExamples,
-                styleContext,
-                approvedNegotiationDecision
-              });
+        : softDeferMessage !== null
+          ? deterministicDraftOutput(softDeferMessage)
+          : useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn || useDeterministicFaceTurn
+            ? deterministicDraftOutput(deterministicResponse)
+            : agencyExplanation !== null
+              ? deterministicDraftOutput(agencyExplanation)
+              : await this.draftResponse({
+                  deterministicResponse,
+                  projectedCandidate,
+                  recentMessages,
+                  knowledgeEntries,
+                  responsePlan,
+                  retrievedExamples,
+                  styleContext,
+                  approvedNegotiationDecision
+                });
     let response = draft.response;
     const validation = validateAgentResponse(response, projectedCandidate);
     if (!validation.valid) {
@@ -2335,6 +2350,28 @@ const PAUSE_ACKNOWLEDGEMENTS = [
 function pauseAcknowledgement(recentMessages: ConversationMessage[]): string {
   const agentCount = recentMessages.filter((message) => message.role === "agent").length;
   return PAUSE_ACKNOWLEDGEMENTS[agentCount % PAUSE_ACKNOWLEDGEMENTS.length];
+}
+
+// Preguntas que el guion NO resuelve y que el bot despachaba con un acuse vacio + repetir la pregunta
+// ("Okeyy/Perfecto | como te llamas?"). Se reconocen, se defiere a la llamada (recurso habitual de Alex)
+// SIN inventar nada ni prometer cifras, y se vuelve al guion con un puente. Determinista; no decide
+// negocio (las ganancias respetan el invariante: "depende", nunca una cantidad).
+const confusionPattern =
+  /\b(no entiendo|no me entero|no se de que (?:hablas|va|me hablas)|que es esto|de que va esto|de que va|para que es esto|en que consiste esto|que significa esto|estoy perdida con esto)\b/;
+const earningsAmountPattern =
+  /\b(cuanto (?:se )?(?:puede )?(?:llegar a )?gana\w*|cuanto puedo ganar|cuanto ganaria|cuanto se saca|cuanto sacaria|cuanto se factura|cuanto dinero (?:se|puedo)|que se gana con esto)\b/;
+function softDeferResponse(message: string, questionToAsk: string | null): string | null {
+  const norm = normalizeText(message);
+  let line: string | null = null;
+  if (earningsAmountPattern.test(norm)) {
+    line =
+      "Eso depende de muchas cosas, como tu perfil, el contenido y el tiempo que le dediques. En la llamada te lo explico mejor y vemos tu caso.";
+  } else if (confusionPattern.test(norm)) {
+    line =
+      "Te entiendo, por aqui a veces se lia. Somos una agencia que gestiona cuentas de OnlyFans y nos encargamos de toda la parte operativa; en la llamada te lo explico con calma.";
+  }
+  if (line === null) return null;
+  return questionToAsk ? `${line}\n\n${bridgeBackToQuestion(questionToAsk)}` : line;
 }
 
 const faceRecognitionPattern =
