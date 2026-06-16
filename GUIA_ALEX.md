@@ -29,9 +29,9 @@ Variables** (producción); nunca en el código.
 - Funciona con tu token actual. Solo asegúrate de que la app de Meta tiene los permisos
   `instagram_business_basic` + `instagram_business_manage_messages` (los mismos que ya usas para los DMs).
 
-## 5. Política de privacidad — hecho
-- Ya añadí la línea sobre el proveedor de verificación de perfil. Si HikerAPI te ofrece un **DPA**
-  (acuerdo de tratamiento de datos), fírmalo y guárdalo.
+## 5. Política de privacidad — la rediactas tú
+- La actualizas tú a mano cuando expliques bien el tratamiento (incluido el proveedor de verificación de
+  perfil). Si HikerAPI te ofrece un **DPA** (acuerdo de tratamiento de datos), fírmalo y guárdalo.
 
 ---
 
