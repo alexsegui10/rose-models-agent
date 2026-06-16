@@ -251,6 +251,51 @@ export class ConversationEngine {
   }
 
   /**
+   * Registra el resultado de la llamada de voz (lo llama el webhook de fin de llamada de la plataforma).
+   * COMPLETED -> CALL_COMPLETED (Alex retoma el siguiente paso: enviar el contrato); NO_ANSWER ->
+   * CALL_NO_ANSWER (reagendar/seguimiento). Solo desde CALL_SCHEDULED o CALL_IN_PROGRESS; en otro estado
+   * no fuerza nada (idempotente). Solo registra el hecho (resumen en notas); no decide negocio.
+   */
+  async recordCallOutcome(input: {
+    candidateId: string;
+    outcome: "COMPLETED" | "NO_ANSWER";
+    summary?: string;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[] }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    if (existing.currentState !== "CALL_SCHEDULED" && existing.currentState !== "CALL_IN_PROGRESS") {
+      return { candidate: existing, transitions: [] };
+    }
+    const toState = input.outcome === "COMPLETED" ? "CALL_COMPLETED" : "CALL_NO_ANSWER";
+    if (!canTransition(existing.currentState, toState)) {
+      return { candidate: existing, transitions: [] };
+    }
+
+    const summary = input.summary?.trim();
+    const transition = createTransition({
+      candidate: existing,
+      toState,
+      trigger: input.outcome === "COMPLETED" ? "CALL_COMPLETED_WEBHOOK" : "CALL_NO_ANSWER_WEBHOOK",
+      reason:
+        input.outcome === "COMPLETED"
+          ? "La llamada termino; Alex retoma el siguiente paso (enviar el contrato)."
+          : "La candidata no contesto la llamada; pendiente de reagendar o seguimiento de Alex."
+    });
+    const candidate: Candidate = {
+      ...existing,
+      currentState: toState,
+      notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`],
+      updatedAt: new Date()
+    };
+
+    await this.dependencies.repository.saveCandidate(candidate);
+    await this.dependencies.repository.addTransition(transition);
+    return { candidate, transitions: [transition] };
+  }
+
+  /**
    * Rechazo humano explicito desde el CRM (invariante 4: lo decide Alex). Marca a la candidata como
    * RECHAZADA desde cualquier estado no terminal y, a partir de aqui, el bot queda silenciado: no
    * responde ni gasta OpenAI (gate al inicio de handleIncomingTurn). No envia ningun mensaje: Alex ha

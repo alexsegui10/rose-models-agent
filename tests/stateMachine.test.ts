@@ -39,6 +39,8 @@ describe("state machine", () => {
     // La llamada arranca, termina, no contesta o se transfiere a Alex.
     expect(canTransition("CALL_SCHEDULED", "CALL_IN_PROGRESS")).toBe(true);
     expect(canTransition("CALL_SCHEDULED", "CALL_NO_ANSWER")).toBe(true);
+    // La llamada puede completarse directamente desde agendada (si no hubo evento de "en curso").
+    expect(canTransition("CALL_SCHEDULED", "CALL_COMPLETED")).toBe(true);
     expect(canTransition("CALL_IN_PROGRESS", "CALL_COMPLETED")).toBe(true);
     // Handoff a Alex en vivo desde la llamada (invariante 4).
     expect(canTransition("CALL_IN_PROGRESS", "HUMAN_INTERVENTION_REQUIRED")).toBe(true);

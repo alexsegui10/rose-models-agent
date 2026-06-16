@@ -22,6 +22,8 @@ export const allowedTransitions: Record<CandidateState, CandidateState[]> = {
   READY_TO_SCHEDULE: ["CALL_SCHEDULED", "COLLECTING_CALL_DETAILS", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
   CALL_SCHEDULED: [
     "CALL_IN_PROGRESS",
+    // La llamada puede completarse directamente desde agendada si no llega evento de "en curso".
+    "CALL_COMPLETED",
     "CALL_NO_ANSWER",
     "COLLECTING_CALL_DETAILS",
     "READY_TO_SCHEDULE",
