@@ -85,6 +85,29 @@ function declaredMinorAge(normalized: string): number | null {
   return null;
 }
 
+// Duda de edad por APARIENCIA (invariante 2, defensa en profundidad): la candidata afirma una edad pero
+// el texto sugiere que aparenta/es menor de 18 ("parezco de 15", "aparento menor de edad", "cara de
+// nina"). No afirma ser menor (eso lo cierra declaredMinorAge), pero introduce duda razonable. Patrones
+// conservadores para no escalar a cualquier adulta: exige una cifra <18 tras parecer/aparentar, o una
+// palabra explicita de minoria/infancia. "parezco mayor / de 20 / de mi edad" NUNCA dispara.
+function looksUnderageDoubt(normalized: string): boolean {
+  // Palabra explicita de aparentar minoria/infancia: "parezco/aparento menor (de edad)", "cara de nina".
+  if (
+    /\b(?:parezco|aparento|dicen que (?:parezco|aparento)|me dicen que (?:parezco|aparento)|tengo cara de|cara de)\b[^.!?]{0,20}\b(?:menor(?:\s+de\s+edad)?|nin[ao]|cria|adolescente|quinceaner[ao])\b/.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+  // "parezco/aparento ... de/como/unos N" con N en 1-17 (cifra concreta de menor). El conector de edad
+  // (de/como/unos) evita falsos positivos con digitos sueltos ("parezco la 1 de la noche"). \b evita
+  // casar "18"/"20"/"25".
+  if (/\b(?:parezco|aparento)\b[^.!?]{0,8}?\b(?:de|como|unos?)\s+(1[0-7]|[1-9])\b/.test(normalized)) {
+    return true;
+  }
+  return false;
+}
+
 // Edades en LETRA de ADULTA (>=18): "tengo veintidos", "treinta y cinco" suelto. Los <18 en letra los
 // cubre declaredMinorAge ANTES (invariante 2). Solo se acepta con "tengo X" o como respuesta suelta exacta
 // (no "<palabra> años" libre) para no leer una DURACION ("llevo veinte años en esto") como edad. Sin esto,
@@ -530,6 +553,21 @@ export function extractDeterministicUnderstanding(
 
   if (/\b(eres ia|eres una ia|eres un bot|sois ia|hablo con una ia|hablo con un bot)\b/.test(normalized)) {
     return baseOutput("REQUESTS_HUMAN", extractedData, 0.88, true, "Pregunta si habla con una IA o bot.", internalNotes);
+  }
+
+  // SAFETY-FIRST (invariante 2): edad adulta-limite (18-22) declarada PERO con duda de aparentar menor.
+  // Va antes que las ramas comerciales: la seguridad manda sobre cualquier pregunta de pago/contrato.
+  // Solo MARCA revision humana (no cierra ni decide flujo): Alex verifica. Modo determinista, sin OpenAI.
+  if (extractedData.age !== undefined && extractedData.age >= 18 && extractedData.age <= 22 && looksUnderageDoubt(normalized)) {
+    internalNotes.push("Edad dudosa: declara mayor de edad pero el texto sugiere aparentar ser menor de 18.");
+    return baseOutput(
+      "PROVIDES_AGE",
+      extractedData,
+      0.8,
+      true,
+      "Edad dudosa: declara mayor de edad pero menciona aparentar ser menor.",
+      internalNotes
+    );
   }
 
   const requestedPercentageMatch = normalized.match(/\b(\d{1,3})\s?%/);

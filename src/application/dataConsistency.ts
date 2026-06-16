@@ -196,6 +196,22 @@ function applyValue<K extends keyof CandidatePatch>(
     return;
   }
 
+  // La EDAD es el unico campo de identidad cuyo cambio sin correccion escala. Se enriquece el motivo
+  // para que Alex priorice el caso de MAXIMO riesgo (cruce del limite 18, posible menor mal declarada)
+  // frente a un cambio entre dos edades adultas. Solo cambia el texto del motivo, no que escale.
+  if (key === "age") {
+    const oldAge = Number(currentValue);
+    const newAge = Number(nextValue);
+    let reason = `age changed from ${String(currentValue)} to ${String(nextValue)}`;
+    if (Number.isFinite(oldAge) && Number.isFinite(newAge)) {
+      if (oldAge < 18 && newAge >= 18) reason += " (possible minor misreporting: crossed the 18 boundary)";
+      else if (oldAge < 18 && newAge < 18) reason += " (age contradiction: both minor)";
+      else if (oldAge >= 18 && newAge < 18) reason += " (now reports being a minor)";
+    }
+    contradictions.push(reason);
+    return;
+  }
+
   contradictions.push(`${String(key)} changed from ${String(currentValue)} to ${String(nextValue)}`);
 }
 

@@ -140,8 +140,18 @@ export async function POST(request: Request): Promise<NextResponse> {
             delayBudgetMs -= wait;
             await sleep(wait);
           }
+          // sendTextMessage devuelve false (no lanza) si la API rechaza o falla la red. Si un chunk se
+          // pierde, ABORTAMOS la rafaga: seguir enviaria los siguientes fuera de orden/contexto (la
+          // candidata veria la parte 3 sin la 2). Se deja traza honesta de entrega parcial.
           const sent = await provider.sendTextMessage(message.senderId, chunks[i]);
           console.log("[ig-webhook] envio a Instagram", { sent, parte: `${i + 1}/${chunks.length}` });
+          if (!sent) {
+            console.warn("[ig-webhook] entrega PARCIAL: chunk fallido, se aborta el resto de la rafaga", {
+              enviados: i,
+              total: chunks.length
+            });
+            break;
+          }
         }
       } else {
         console.log("[ig-webhook] NO se envia respuesta", {
