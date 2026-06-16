@@ -115,6 +115,7 @@ export default function Home() {
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [crmNotice, setCrmNotice] = useState<string | null>(null);
+  const [crmSearch, setCrmSearch] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [transitions, setTransitions] = useState<StateTransition[]>([]);
@@ -981,89 +982,235 @@ export default function Home() {
         <section className="panel">
           <h2>CRM de candidatas</h2>
           <p className="muted">
-            Pausa o reanuda el bot por candidata, y aprueba o rechaza las que esperan tu decision. Al aprobar, el bot propone la
-            llamada automaticamente.
+            Cada columna es una fase del embudo. Las que necesitan tu decision estan en <strong>⚠ Tu decision</strong>.
           </p>
           {crmNotice ? <p className="status-bar">{crmNotice}</p> : null}
           {candidates.length === 0 ? (
             <p className="muted">Aun no hay candidatas. Inicia una conversacion en el chat de prueba.</p>
           ) : (
-            <table className="crm-table">
-              <thead>
-                <tr>
-                  <th>Candidata</th>
-                  <th>Estado</th>
-                  <th>Bot</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.map((candidate) => {
-                  const paused = candidate.manualControlActive || candidate.automationPaused;
-                  const awaitingDecision =
-                    candidate.currentState === "WAITING_HUMAN_REVIEW" || candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
-                  const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
-                  const awaitingCallConfirm =
-                    candidate.currentState === "COLLECTING_CALL_DETAILS" || candidate.currentState === "READY_TO_SCHEDULE";
-                  return (
-                    <tr key={candidate.id}>
-                      <td>
-                        <strong>@{candidate.instagramUsername}</strong>
-                      </td>
-                      <td>
-                        <span className="state-pill">{candidate.currentState}</span>
-                      </td>
-                      <td>{paused ? <span className="muted">Pausado</span> : <span>Activo</span>}</td>
-                      <td className="crm-actions">
-                        <button className="secondary" type="button" onClick={() => void setBotPaused(candidate, !paused)}>
-                          {paused ? "Reanudar bot" : "Pausar bot"}
-                        </button>
-                        <button className="secondary" type="button" onClick={() => void sendManualReply(candidate)}>
-                          Responder
-                        </button>
-                        <button
-                          className="secondary"
-                          type="button"
-                          disabled={!awaitingDecision}
-                          onClick={() => void applyHumanDecision(candidate, "APPROVE")}
-                        >
-                          Aprobar
-                        </button>
-                        <button className="danger" type="button" onClick={() => void advanceStage(candidate, "REJECT")}>
-                          Rechazar
-                        </button>
-                        <button className="secondary" type="button" onClick={() => void advanceStage(candidate, "PROFILE_OK")}>
-                          Dar OK al perfil
-                        </button>
-                        {awaitingProfileReview ? (
-                          <>
-                            <button
-                              className="secondary"
-                              type="button"
-                              onClick={() => void advanceStage(candidate, "PROFILE_FIT")}
-                            >
-                              Perfil encaja
-                            </button>
-                            <button
-                              className="danger"
-                              type="button"
-                              onClick={() => void advanceStage(candidate, "PROFILE_NO_FIT")}
-                            >
-                              Perfil no encaja
-                            </button>
-                          </>
-                        ) : null}
-                        {awaitingCallConfirm ? (
-                          <button className="primary" type="button" onClick={() => void advanceStage(candidate, "CONFIRM_CALL")}>
-                            Confirmar llamada
-                          </button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            (() => {
+              const PHASES: { key: string; title: string; tone: string; states: Candidate["currentState"][] }[] = [
+                { key: "nuevas", title: "Nuevas", tone: "new", states: ["NEW_LEAD", "WAITING_PROFILE_ACCESS"] },
+                { key: "cualificando", title: "Cualificando", tone: "qualify", states: ["QUALIFYING"] },
+                {
+                  key: "decision",
+                  title: "⚠ Tu decision",
+                  tone: "attention",
+                  states: ["PROFILE_READY_FOR_REVIEW", "WAITING_HUMAN_REVIEW", "HUMAN_INTERVENTION_REQUIRED"]
+                },
+                {
+                  key: "agenda",
+                  title: "Agenda",
+                  tone: "schedule",
+                  states: ["APPROVED", "COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE", "CALL_SCHEDULED"]
+                },
+                { key: "cerradas", title: "Cerradas", tone: "closed", states: ["REJECTED", "CLOSED"] }
+              ];
+              const STATE_LABELS: Partial<Record<Candidate["currentState"], string>> = {
+                NEW_LEAD: "Nueva",
+                WAITING_PROFILE_ACCESS: "Esperando solicitud",
+                PROFILE_READY_FOR_REVIEW: "Revisar perfil",
+                QUALIFYING: "Cualificando",
+                WAITING_HUMAN_REVIEW: "Tu decision",
+                HUMAN_INTERVENTION_REQUIRED: "Intervencion",
+                APPROVED: "Aprobada",
+                COLLECTING_CALL_DETAILS: "Agendando",
+                READY_TO_SCHEDULE: "Lista para llamada",
+                CALL_SCHEDULED: "Llamada agendada",
+                REJECTED: "Rechazada",
+                CLOSED: "Cerrada"
+              };
+              const query = crmSearch.trim().toLowerCase();
+              const visible = query
+                ? candidates.filter(
+                    (item) =>
+                      item.instagramUsername.toLowerCase().includes(query) ||
+                      (item.firstName ? item.firstName.toLowerCase().includes(query) : false)
+                  )
+                : candidates;
+              const attentionStates: Candidate["currentState"][] = [
+                "PROFILE_READY_FOR_REVIEW",
+                "WAITING_HUMAN_REVIEW",
+                "HUMAN_INTERVENTION_REQUIRED"
+              ];
+              const attentionCount = candidates.filter((item) => attentionStates.includes(item.currentState)).length;
+              const activeCount = candidates.filter(
+                (item) =>
+                  !item.manualControlActive &&
+                  !item.automationPaused &&
+                  item.currentState !== "REJECTED" &&
+                  item.currentState !== "CLOSED"
+              ).length;
+              return (
+                <>
+                  <div className="crm-toolbar">
+                    <input
+                      className="field crm-search"
+                      type="search"
+                      placeholder="Buscar por nombre o @usuario…"
+                      value={crmSearch}
+                      onChange={(event) => setCrmSearch(event.target.value)}
+                    />
+                    <div className="crm-summary">
+                      <span className="crm-kpi attention">
+                        <b>{attentionCount}</b> te esperan
+                      </span>
+                      <span className="crm-kpi">
+                        <b>{activeCount}</b> activas
+                      </span>
+                      <span className="crm-kpi">
+                        <b>{candidates.length}</b> total
+                      </span>
+                    </div>
+                  </div>
+                  <div className="crm-board">
+                    {PHASES.map((phase) => {
+                      const cards = visible.filter((item) => phase.states.includes(item.currentState));
+                      return (
+                        <div key={phase.key} className={`crm-column tone-${phase.tone}`}>
+                          <div className="crm-column-head">
+                            <span className="crm-column-title">{phase.title}</span>
+                            <span className="crm-count">{cards.length}</span>
+                          </div>
+                          {cards.length === 0 ? (
+                            <p className="crm-empty-col">—</p>
+                          ) : (
+                            cards.map((candidate) => {
+                              const paused = candidate.manualControlActive || candidate.automationPaused;
+                              const awaitingDecision =
+                                candidate.currentState === "WAITING_HUMAN_REVIEW" ||
+                                candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
+                              const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
+                              const awaitingCallConfirm =
+                                candidate.currentState === "COLLECTING_CALL_DETAILS" ||
+                                candidate.currentState === "READY_TO_SCHEDULE";
+                              const closed = candidate.currentState === "REJECTED" || candidate.currentState === "CLOSED";
+                              const displayName = candidate.firstName?.trim() || `@${candidate.instagramUsername}`;
+                              const initial = (candidate.firstName?.trim() || candidate.instagramUsername || "?")
+                                .charAt(0)
+                                .toUpperCase();
+                              const tags: string[] = [];
+                              if (candidate.age) tags.push(`${candidate.age} años`);
+                              if (typeof candidate.hasOnlyFans === "boolean")
+                                tags.push(candidate.hasOnlyFans ? "OF: si" : "OF: no");
+                              if (candidate.deviceModel) tags.push(candidate.deviceModel);
+                              if (candidate.country || candidate.city) tags.push((candidate.country || candidate.city) as string);
+                              if (candidate.phone) tags.push("📱");
+                              return (
+                                <article key={candidate.id} className={`crm-card tone-${phase.tone}`}>
+                                  <div className="crm-card-top">
+                                    <span className="crm-avatar">{initial}</span>
+                                    <span className="crm-card-id">
+                                      <span className="crm-card-name">{displayName}</span>
+                                      {candidate.firstName?.trim() ? (
+                                        <span className="crm-card-handle">@{candidate.instagramUsername}</span>
+                                      ) : null}
+                                    </span>
+                                    <span className="crm-bot" title={paused ? "Bot pausado" : "Bot activo"}>
+                                      <span className={paused ? "crm-bot-dot paused" : "crm-bot-dot"} />
+                                      {paused ? "Pausado" : "Activo"}
+                                    </span>
+                                  </div>
+                                  <span className={`crm-state tone-${phase.tone}`}>
+                                    {STATE_LABELS[candidate.currentState] ?? candidate.currentState}
+                                  </span>
+                                  {tags.length > 0 ? (
+                                    <div className="crm-meta">
+                                      {tags.map((tag, index) => (
+                                        <span key={index} className="crm-tag">
+                                          {tag}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  <div className="crm-card-actions">
+                                    {awaitingProfileReview ? (
+                                      <>
+                                        <button
+                                          className="btn-xs accent"
+                                          type="button"
+                                          onClick={() => void advanceStage(candidate, "PROFILE_FIT")}
+                                        >
+                                          Encaja
+                                        </button>
+                                        <button
+                                          className="btn-xs danger"
+                                          type="button"
+                                          onClick={() => void advanceStage(candidate, "PROFILE_NO_FIT")}
+                                        >
+                                          No encaja
+                                        </button>
+                                      </>
+                                    ) : null}
+                                    {awaitingDecision ? (
+                                      <>
+                                        <button
+                                          className="btn-xs accent"
+                                          type="button"
+                                          onClick={() => void applyHumanDecision(candidate, "APPROVE")}
+                                        >
+                                          Aprobar
+                                        </button>
+                                        <button
+                                          className="btn-xs danger"
+                                          type="button"
+                                          onClick={() => void advanceStage(candidate, "REJECT")}
+                                        >
+                                          Rechazar
+                                        </button>
+                                      </>
+                                    ) : null}
+                                    {awaitingCallConfirm ? (
+                                      <button
+                                        className="btn-xs accent"
+                                        type="button"
+                                        onClick={() => void advanceStage(candidate, "CONFIRM_CALL")}
+                                      >
+                                        Confirmar llamada
+                                      </button>
+                                    ) : null}
+                                    <button className="btn-xs" type="button" onClick={() => void sendManualReply(candidate)}>
+                                      Responder
+                                    </button>
+                                    {!closed ? (
+                                      <button
+                                        className="btn-xs"
+                                        type="button"
+                                        onClick={() => void setBotPaused(candidate, !paused)}
+                                      >
+                                        {paused ? "Reanudar" : "Pausar"}
+                                      </button>
+                                    ) : null}
+                                    {!closed && !awaitingProfileReview && !awaitingDecision ? (
+                                      <>
+                                        <button
+                                          className="btn-xs"
+                                          type="button"
+                                          onClick={() => void advanceStage(candidate, "PROFILE_OK")}
+                                        >
+                                          OK perfil
+                                        </button>
+                                        <button
+                                          className="btn-xs danger"
+                                          type="button"
+                                          onClick={() => void advanceStage(candidate, "REJECT")}
+                                        >
+                                          Rechazar
+                                        </button>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                </article>
+                              );
+                            })
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()
           )}
         </section>
       ) : null}
