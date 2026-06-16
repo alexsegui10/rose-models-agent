@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { respondToCall, type CallChatMessage } from "@/application/callTurnResponder";
+import { bearerMatches } from "@/server/bearerAuth";
+
+// Node runtime: usamos crypto (timingSafeEqual) y streaming SSE; el comportamiento debe ser el de Node.
+export const runtime = "nodejs";
+
+// Tope defensivo de mensajes a procesar (un turno real es muy corto; protege el replay O(n)).
+const MAX_MESSAGES = 200;
 
 /**
  * Endpoint "Custom LLM" OpenAI-compatible que llamará la plataforma de voz (ElevenLabs/Vapi/Retell) en
@@ -32,9 +39,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: { message: "call LLM endpoint not configured", type: "config" } }, { status: 503 });
   }
 
-  const authHeader = request.headers.get("authorization") ?? "";
-  const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-  if (token !== apiKey) {
+  if (!bearerMatches(request.headers.get("authorization"), apiKey)) {
     return NextResponse.json({ error: { message: "unauthorized", type: "auth" } }, { status: 401 });
   }
 
@@ -51,6 +56,7 @@ export async function POST(request: Request) {
   }
 
   const messages: CallChatMessage[] = parsed.data.messages
+    .slice(-MAX_MESSAGES)
     .filter((m) => m.role === "system" || m.role === "user" || m.role === "assistant")
     .map((m) => ({ role: m.role as CallChatMessage["role"], content: m.content ?? "" }));
 
@@ -92,7 +98,9 @@ function streamOpenAiResponse(args: { id: string; created: number; model: string
 
   const stream = new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(chunk({ role: "assistant", content: args.content }, null)));
+      // Formato OpenAI: primer chunk solo el role, luego el contenido, luego el cierre (máxima compatibilidad).
+      controller.enqueue(encoder.encode(chunk({ role: "assistant" }, null)));
+      controller.enqueue(encoder.encode(chunk({ content: args.content }, null)));
       controller.enqueue(encoder.encode(chunk({}, "stop")));
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
@@ -103,7 +111,9 @@ function streamOpenAiResponse(args: { id: string; created: number; model: string
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive"
+      Connection: "keep-alive",
+      // Evita el buffering del proxy (importante para streaming en vivo).
+      "X-Accel-Buffering": "no"
     }
   });
 }

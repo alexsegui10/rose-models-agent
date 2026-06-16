@@ -54,9 +54,9 @@ export interface PlanCallUtteranceInput {
 const DEFER_TEXT =
   "Mira, ese punto prefiero confirmarlo con mi socio y te digo, que no quiero decirte nada que no sea exacto, ¿vale?";
 const HANDOFF_TEXT =
-  "Mira, para esto lo mejor es que lo veas directamente con Alex; deja que se ponga él en contacto contigo, ¿vale?";
+  "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con Alex; ahora mismo le digo que se ponga en contacto contigo, ¿vale?";
 const CLOSE_TEXT =
-  "Pues entonces te paso ahora el contrato para que lo leas con calma. Cualquier duda que tengas sobre él, me dices sin problema, ¿vale?";
+  "Perfecto. Pues te paso ahora el contrato para que lo leas con calma; cualquier duda que tengas sobre él, me dices sin problema, ¿vale?";
 
 /** Convierte una directiva del director en un plan de enunciado. */
 export function planCallUtterance(input: PlanCallUtteranceInput): CallUtterancePlan {
@@ -101,7 +101,7 @@ function concedeShareText(offer?: CallRevenueShareOffer): string {
     // No debería ocurrir; ante la duda, deferimos en vez de inventar una cifra.
     return DEFER_TEXT;
   }
-  const base = `Te entiendo. Mira, por ti lo podemos dejar en un ${offer.modelShare} para ti y un ${offer.agencyShare} para nosotros`;
+  const base = `Te entiendo. Mira, por ti lo podemos dejar en un ${offer.modelShare}% para ti y un ${offer.agencyShare}% para nosotros`;
   return offer.isFloor ? `${base}, y de ahí ya no podemos bajar más, ¿vale?` : `${base}, ¿qué te parece?`;
 }
 
@@ -171,7 +171,9 @@ function dedupe(values: string[]): string[] {
 function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOffer?: CallRevenueShareOffer): string {
   if (stageId === "MONEY") {
     if (shareOffer) {
-      return `Como te dije por Instagram, trabajamos con un ${shareOffer.modelShare} para ti y un ${shareOffer.agencyShare} para nosotros.${points[0] ? ` ${points[0]}` : ""}`;
+      // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"). No se concatenan puntos
+      // genéricos del conocimiento detrás (sonaría contradictorio tras dar la cifra exacta).
+      return `Como te dije por Instagram, trabajamos con un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para nosotros.`;
     }
     return points[0] ?? "Como te comenté por Instagram, el reparto es el que ya hablamos.";
   }
@@ -185,6 +187,11 @@ function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOf
   };
 
   // Para etapas con conocimiento (cómo trabaja la agencia, su parte, contenido), el fallback son los
-  // puntos aprobados; si no hay (etapas de guion), el pegamento; si nada, una frase puente segura.
-  return points.slice(0, 2).join(" ") || scripted[stageId] || "Te cuento un poco más sobre cómo trabajamos.";
+  // puntos aprobados; si no hay (etapas de guion), el pegamento; si nada (no debería: las refs son ACTIVE),
+  // se defiere a Alex en vez de soltar un puente vacío que suena a dar largas.
+  return (
+    points.slice(0, 2).join(" ") ||
+    scripted[stageId] ||
+    "Ese detalle prefiero que te lo confirme bien mi socio, para no decirte nada inexacto."
+  );
 }

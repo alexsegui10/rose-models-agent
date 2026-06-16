@@ -112,6 +112,18 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.draftingBrief).toBeDefined();
   });
 
+  it("regresión auditoría: cifras con '%', acuse de recibo cálido, MONEY sin punto contradictorio", () => {
+    const concede = planCallUtterance({ directive: { type: "CONCEDE_SHARE", shareOffer: offer(65, false) } });
+    expect(concede.deterministicText).toContain("65%");
+    const close = planCallUtterance({ directive: { type: "CLOSE_WITH_CONTRACT" } });
+    expect(close.deterministicText?.toLowerCase()).toMatch(/perfecto|entiendo/);
+    const handoff = planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX", handoffReason: "asked-for-human" } });
+    expect(handoff.deterministicText?.toLowerCase()).toContain("te entiendo");
+    const money = planCallUtterance({ directive: { type: "COVER_STAGE", stageId: "MONEY", shareOffer: offer(70, false) } });
+    expect(money.fallbackText).toContain("70%");
+    expect(money.fallbackText.toLowerCase()).not.toContain("salario");
+  });
+
   it("invariante 6: TODA directiva produce un fallback no vacío (el bot nunca se queda mudo)", () => {
     const directives: CallDirective[] = [
       { type: "GIVE_DISCLOSURE" },

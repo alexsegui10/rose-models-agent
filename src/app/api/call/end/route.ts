@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
+import { bearerMatches } from "@/server/bearerAuth";
 
 /**
  * Webhook de FIN de llamada: lo invoca la plataforma de voz cuando la llamada termina. Ruta fina
@@ -9,6 +10,8 @@ import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorSt
  *
  * Protegido por CALL_WEBHOOK_SECRET (bearer). Sin él, responde 503.
  */
+
+export const runtime = "nodejs";
 
 const EndCallSchema = z
   .object({
@@ -47,9 +50,7 @@ export async function POST(request: Request) {
   if (!secret) {
     return NextResponse.json({ error: "call webhook not configured" }, { status: 503 });
   }
-  const authHeader = request.headers.get("authorization") ?? "";
-  const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-  if (token !== secret) {
+  if (!bearerMatches(request.headers.get("authorization"), secret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
