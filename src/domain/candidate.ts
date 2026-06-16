@@ -11,6 +11,11 @@ export const CandidateStateSchema = z.enum([
   "COLLECTING_CALL_DETAILS",
   "READY_TO_SCHEDULE",
   "CALL_SCHEDULED",
+  // Fase de llamada (bot de voz): la llamada esta en curso, termino (Alex hace el siguiente paso) o no
+  // contesto (reintento/seguimiento). El grafo antes terminaba en CALL_SCHEDULED.
+  "CALL_IN_PROGRESS",
+  "CALL_COMPLETED",
+  "CALL_NO_ANSWER",
   "HUMAN_INTERVENTION_REQUIRED",
   "CLOSED"
 ]);

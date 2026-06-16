@@ -34,4 +34,21 @@ describe("state machine", () => {
     // CLOSED es terminal: no se sale ni siquiera a REJECTED.
     expect(canTransition("CLOSED", "REJECTED")).toBe(false);
   });
+
+  it("cubre el ciclo de la llamada (bot de voz) desde CALL_SCHEDULED", () => {
+    // La llamada arranca, termina, no contesta o se transfiere a Alex.
+    expect(canTransition("CALL_SCHEDULED", "CALL_IN_PROGRESS")).toBe(true);
+    expect(canTransition("CALL_SCHEDULED", "CALL_NO_ANSWER")).toBe(true);
+    expect(canTransition("CALL_IN_PROGRESS", "CALL_COMPLETED")).toBe(true);
+    // Handoff a Alex en vivo desde la llamada (invariante 4).
+    expect(canTransition("CALL_IN_PROGRESS", "HUMAN_INTERVENTION_REQUIRED")).toBe(true);
+    // Tras la llamada o un no-contesta se puede reagendar.
+    expect(canTransition("CALL_COMPLETED", "READY_TO_SCHEDULE")).toBe(true);
+    expect(canTransition("CALL_NO_ANSWER", "CALL_SCHEDULED")).toBe(true);
+    // Rechazo/cierre humano siguen disponibles en la fase de llamada.
+    expect(canTransition("CALL_IN_PROGRESS", "REJECTED")).toBe(true);
+    expect(canTransition("CALL_COMPLETED", "CLOSED")).toBe(true);
+    // No hay atajos imposibles: no se vuelve a cualificar desde una llamada completada.
+    expect(canTransition("CALL_COMPLETED", "QUALIFYING")).toBe(false);
+  });
 });
