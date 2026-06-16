@@ -104,7 +104,14 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     /\bno quiero llamadas?\b/.test(message)
   )
     tags.push("services", "agency", "strategy");
-  if (/\b(que hago yo|mi parte|modelo|contenido|crear contenido|enviar contenido|drive)\b/.test(message))
+  // Alineado con asksUnsupportedSpecificQuestion del planner: "que tengo que hacer yo / que me toca /
+  // que tendria que hacer" tambien preguntan por la parte de la modelo. Sin esto el retriever no surfacea
+  // la entrada y el planner lo marcaba "sin cobertura" -> escalaba a Alex (hueco anotado 15-jun).
+  if (
+    /\b(que hago yo|que tengo que hacer|que tendria que hacer|que me toca|que hay que hacer|mi parte|modelo|contenido|crear contenido|enviar contenido|drive)\b/.test(
+      message
+    )
+  )
     tags.push("model-responsibilities", "content");
   if (/\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message))
     tags.push("production", "reels", "photos", "warmup");

@@ -98,6 +98,28 @@ describe("Cara: reconduccion determinista aunque OpenAI intente rechazar (valida
   });
 });
 
+describe("Cobertura: 'que tengo que hacer yo' se responde, no escala (hueco anotado 15-jun)", () => {
+  it("responde la parte de la modelo en vez de escalar a Alex", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      automationMode: "AUTOMATIC"
+    });
+    const seeded = await seed(repository, "QUALIFYING");
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "oa_fix_case",
+      message: "vale y yo que tengo que hacer exactamente?"
+    });
+
+    expect(result.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.response.toLowerCase()).not.toContain("lo hable con mi socio");
+    expect(result.response.toLowerCase()).toMatch(/contenido|tu parte|subir/);
+  });
+});
+
 describe("Comercial: preguntas respondibles no se escalan a HIR (validacion 15-jun)", () => {
   it("'es sueldo fijo o porcentaje?' se responde con porcentaje, no se escala", async () => {
     const repository = new InMemoryCandidateRepository();
