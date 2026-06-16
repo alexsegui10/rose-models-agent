@@ -33,6 +33,11 @@ const SNAPSHOT_FILE_PATH = process.env.VERCEL
   : join(process.cwd(), "data", "simulator-snapshot.json");
 const SNAPSHOT_DEBOUNCE_MS = 300;
 
+// El fallback de postgres->json (snapshot en /tmp) SOLO es seguro en local/dev. En Vercel /tmp es efimero
+// y por-lambda, asi que conmutar en caliente divergiria el estado entre instancias: ahi preferimos fallar
+// ruidoso (5xx, Meta reintenta) a corromper datos en silencio. Override con ALLOW_EPHEMERAL_FALLBACK=1.
+const ALLOW_EPHEMERAL_FALLBACK = !process.env.VERCEL || process.env.ALLOW_EPHEMERAL_FALLBACK === "1";
+
 /**
  * Modo de persistencia del simulador (env `PERSISTENCE`):
  * - "postgres": repositorios Postgres (Drizzle) sobre DATABASE_URL, sin snapshot JSON.
@@ -244,7 +249,11 @@ function withJsonFallback<T extends object>(
             return resolved;
           },
           (error: unknown) => {
-            if (!controller.hasSucceeded && !controller.failedOver && isConnectionError(error)) {
+            // En Vercel (serverless) el fallback a json es /tmp EFIMERO y por-lambda: ante un fallo de
+            // Neon, conmutar en silencio divergiria el estado de las candidatas entre instancias (idempotencia
+            // rota, datos que aparecen/desaparecen). Mejor FALLAR RUIDOSO: se propaga el 5xx y Meta reintenta
+            // el webhook cuando Neon vuelva. El fallback efimero solo se permite en local/dev. (Auditoria 16-jun.)
+            if (ALLOW_EPHEMERAL_FALLBACK && !controller.hasSucceeded && !controller.failedOver && isConnectionError(error)) {
               controller.failOver(error);
               return callRepositoryMethod(select(controller.ensureFallback()), property, args);
             }
