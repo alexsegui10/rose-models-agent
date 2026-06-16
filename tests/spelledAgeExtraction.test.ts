@@ -30,4 +30,12 @@ describe("extraccion: edad en letra (adultas)", () => {
     expect(age).toBe(16);
     expect(age !== undefined && age < 18).toBe(true);
   });
+
+  it("NEGACION en letra: 'no tengo dieciocho' NUNCA es adulta de 18 (invariante 2)", () => {
+    for (const message of ["no tengo dieciocho", "aun no tengo dieciocho todavia", "no tengo dieciocho anos"]) {
+      const age = extractDeterministicUnderstanding(message).extractedData.age;
+      expect(age).not.toBe(18);
+      expect(age === undefined || age < 18).toBe(true);
+    }
+  });
 });

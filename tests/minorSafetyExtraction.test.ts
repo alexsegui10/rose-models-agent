@@ -30,7 +30,9 @@ describe("Seguridad de menores: declaracion de minoria -> CLOSED, nunca adulta",
     "tengo 17 añitos",
     "tengo 17 anitos",
     "tengo dieciseis",
-    "tengo quince años"
+    "tengo quince años",
+    "no tengo dieciocho",
+    "aun no tengo dieciocho todavia"
   ];
 
   for (const message of minorMessages) {

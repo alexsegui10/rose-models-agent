@@ -64,6 +64,14 @@ function declaredMinorAge(normalized: string): number | null {
     const declared = Number(notYet[1]);
     if (declared <= 18) return Math.max(1, declared - 1);
   }
+  // Misma negacion pero con la edad en LETRA: "(aun|todavia) no tengo dieciocho" es MENOR, igual que
+  // "no tengo 18". Sin esto, spelledAdultAge leia "tengo dieciocho" dentro de "no tengo dieciocho" como
+  // adulta de 18 (regresion del invariante 2 detectada el 16-jun).
+  const notYetWord = normalized.match(/\bno tengo\s+([a-zñ]+)\b/);
+  if (notYetWord) {
+    const declaredWord = ({ ...wordAgesUnder18, dieciocho: 18 } as Record<string, number>)[notYetWord[1]];
+    if (declaredWord !== undefined && declaredWord <= 18) return Math.max(1, declaredWord - 1);
+  }
   // Numeros en letra menores de 18 en contexto de edad ("tengo dieciseis", "quince anos"), evitando
   // "hace quince anos" (un periodo de tiempo, no la edad).
   for (const [word, value] of Object.entries(wordAgesUnder18)) {
@@ -109,12 +117,14 @@ const adultUnitWords: Readonly<Record<string, number>> = {
 
 function spelledAdultAge(normalized: string): number | null {
   const trimmed = normalized.trim();
+  // Una edad NEGADA ("no tengo dieciocho") nunca confirma adulta (invariante 2; la maneja declaredMinorAge).
+  const negated = /\bno tengo\b/.test(trimmed);
   const compound = trimmed.match(/\b(treinta|cuarenta)\s+y\s+(uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)\b/);
-  if (compound && (/\btengo\b/.test(trimmed) || trimmed === compound[0])) {
+  if (compound && !negated && (/\btengo\b/.test(trimmed) || trimmed === compound[0])) {
     return (compound[1] === "treinta" ? 30 : 40) + adultUnitWords[compound[2]];
   }
   for (const [word, value] of Object.entries(wordAgesAdult)) {
-    if (new RegExp(`\\btengo\\s+${word}\\b`).test(trimmed)) return value;
+    if (!negated && new RegExp(`\\btengo\\s+${word}\\b`).test(trimmed)) return value;
     if (trimmed === word) return value;
   }
   return null;
