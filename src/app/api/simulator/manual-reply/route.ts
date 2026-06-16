@@ -30,7 +30,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   await repository.addMessage({
     id: crypto.randomUUID(),
     candidateId: candidate.id,
-    role: "alex",
+    // role "agent" (no "alex"): los guards deterministas del motor (anti-repeticion, ultimo mensaje del
+    // agente, extraccion contextual) filtran role==="agent". Con "alex" eran CIEGOS a lo que Alex escribia
+    // a mano, y al reanudar el bot podia repetir o contradecir su respuesta. La autoria sigue distinguida
+    // por author:"ALEX" (trazabilidad). Asi, al pausar->responder a mano->reanudar, el bot ve el contexto.
+    role: "agent",
     author: "ALEX",
     content: parsed.data.message,
     createdAt: new Date(),
