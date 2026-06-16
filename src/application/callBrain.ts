@@ -45,9 +45,12 @@ export interface RunCallTurnInput {
 /** Ejecuta un turno del cerebro de la llamada. */
 export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
   const coveringEntries = input.resolveQuestion?.(input.utterance) ?? [];
+  // En contexto de dinero (ya se presentó el reparto o se está negociando) una queja "suelta" cuenta.
+  const moneyContext = input.state.coveredStages.includes("MONEY") || input.state.revenueShareStep > 0;
   const signal = classifyCallSignal({
     utterance: input.utterance,
-    isCoveredQuestion: coveringEntries.length > 0
+    isCoveredQuestion: coveringEntries.length > 0,
+    moneyContext
   });
   const { directive, nextState } = decideCallDirective({ state: input.state, signal });
   const knowledge = knowledgeForDirective(directive, coveringEntries);

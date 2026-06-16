@@ -121,4 +121,16 @@ describe("director de la llamada", () => {
     const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
     expect(decideCallDirective({ state, signal: "wants-to-end" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
   });
+
+  it("cierre PEGAJOSO: tras cerrar con el contrato no reabre negociación ni guion", () => {
+    const { state } = run(["none", ...Array(8).fill("follows-along")] as CallCandidateSignal[]);
+    expect(state.closed).toBe(true);
+    // Una queja del reparto DESPUÉS del cierre no reabre la negociación: repite el cierre.
+    expect(decideCallDirective({ state, signal: "complains-about-share" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
+    // Una pregunta tras el cierre tampoco reabre conversación sustantiva.
+    expect(decideCallDirective({ state, signal: "asks-covered" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
+    // Pero la SEGURIDAD sigue: agresión o pedir persona tras el cierre escalan.
+    expect(decideCallDirective({ state, signal: "hostile-or-suspicious" }).directive.type).toBe("HANDOFF_TO_ALEX");
+    expect(decideCallDirective({ state, signal: "wants-human" }).directive.type).toBe("HANDOFF_TO_ALEX");
+  });
 });

@@ -50,6 +50,8 @@ export interface CallDirectorState {
   revenueShareStep: CallRevenueShareStep;
   handedOff: boolean;
   handoffReason?: CallHandoffReason;
+  /** true tras cerrar con el contrato: el cierre es pegajoso (no reabre guion ni negociación). */
+  closed: boolean;
 }
 
 export interface CallDirective {
@@ -68,7 +70,7 @@ export interface CallTurnDecision {
 }
 
 export function initialCallDirectorState(): CallDirectorState {
-  return { disclosureGiven: false, coveredStages: [], revenueShareStep: 0, handedOff: false };
+  return { disclosureGiven: false, coveredStages: [], revenueShareStep: 0, handedOff: false, closed: false };
 }
 
 export function decideCallDirective(input: { state: CallDirectorState; signal: CallCandidateSignal }): CallTurnDecision {
@@ -88,6 +90,14 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       directive: { type: "GIVE_DISCLOSURE" },
       nextState: { ...state, disclosureGiven: true }
     };
+  }
+
+  // Cierre pegajoso: ya se dijo "te paso el contrato". No reabre guion ni negociación; solo escala por
+  // seguridad (agresión / pide persona). Cualquier otra cosa repite un cierre cálido.
+  if (state.closed) {
+    if (signal === "hostile-or-suspicious") return handoff(state, "suspicion-or-aggression");
+    if (signal === "wants-human") return handoff(state, "asked-for-human");
+    return { directive: { type: "CLOSE_WITH_CONTRACT" }, nextState: state };
   }
 
   switch (signal) {
@@ -154,8 +164,8 @@ function advanceAgenda(state: CallDirectorState): CallTurnDecision {
 }
 
 function closeWithContract(state: CallDirectorState): CallTurnDecision {
-  // El cierre marca CLOSE como cubierta (venga del recorrido de agenda o de "quiere terminar").
+  // El cierre marca CLOSE como cubierta y fija `closed` (cierre pegajoso: no reabre guion ni negociación).
   const close: CallAgendaStageId = "CLOSE";
   const coveredStages = state.coveredStages.includes(close) ? state.coveredStages : [...state.coveredStages, close];
-  return { directive: { type: "CLOSE_WITH_CONTRACT" }, nextState: { ...state, coveredStages } };
+  return { directive: { type: "CLOSE_WITH_CONTRACT" }, nextState: { ...state, coveredStages, closed: true } };
 }

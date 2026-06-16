@@ -51,4 +51,23 @@ describe("responder de turno de llamada (stateless por replay)", () => {
     const res = respondToCall({ messages: [sys, { role: "user", content: "ajksdhf qwe" }] });
     expect(res.content.trim().length).toBeGreaterThan(0);
   });
+
+  it("si la candidata habla PRIMERO (el bot aún no habló), abre con la locución legal", () => {
+    const res = respondToCall({ messages: [sys, { role: "user", content: "hola buenas" }] });
+    expect(res.directiveType).toBe("GIVE_DISCLOSURE");
+    expect(res.content.toLowerCase()).toContain("automatizado");
+  });
+
+  it("negociación reconstruida por replay: queja de seguimiento baja a 65 aunque no repita 'reparto'", () => {
+    const messages: CallChatMessage[] = [
+      sys,
+      { role: "assistant", content: "apertura..." },
+      { role: "user", content: "el 30% es mucho" }, // presenta 70/30 (cubre MONEY)
+      { role: "assistant", content: "te cuento el reparto..." },
+      { role: "user", content: "sigue siendo mucho, bajadlo" } // queja de seguimiento -> 65
+    ];
+    const res = respondToCall({ messages });
+    expect(res.directiveType).toBe("CONCEDE_SHARE");
+    expect(res.content).toContain("65");
+  });
 });

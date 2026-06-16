@@ -36,18 +36,24 @@ export interface CallResponderResult {
 export function respondToCall(input: RespondToCallInput): CallResponderResult {
   const userUtterances = input.messages.filter((m) => m.role === "user").map((m) => m.content ?? "");
 
+  // La apertura legal se considera dada SOLO si el BOT ya habló (mensaje assistant no vacío). NO se infiere
+  // de que la candidata haya hablado: si ella habla primero, el bot debe abrir igualmente con la locución
+  // legal (no perderla nunca; riesgo EU AI Act / RGPD).
+  const botHasSpoken = input.messages.some((m) => m.role === "assistant" && (m.content ?? "").trim().length > 0);
+
   let state: CallDirectorState = initialCallDirectorState();
   let lastUtterance = "";
 
-  if (userUtterances.length > 0) {
-    // La apertura legal ya se dijo (fue el primer turno del bot): consúmela y reproduce los turnos
-    // previos de la candidata para reconstruir el estado actual del director.
+  if (botHasSpoken) {
+    // Consume la apertura (ya dicha) y reproduce los turnos previos de la candidata para reconstruir el
+    // estado actual del director. Cada turno se clasifica con el mismo contexto de dinero que el turno vivo.
     state = decideCallDirective({ state, signal: "none" }).nextState;
     for (let i = 0; i < userUtterances.length - 1; i++) {
-      const signal = classifyCallSignal({ utterance: userUtterances[i] });
+      const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
+      const signal = classifyCallSignal({ utterance: userUtterances[i], moneyContext });
       state = decideCallDirective({ state, signal }).nextState;
     }
-    lastUtterance = userUtterances[userUtterances.length - 1];
+    lastUtterance = userUtterances[userUtterances.length - 1] ?? "";
   }
 
   const result = runCallTurn({

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { classifyCallSignal } from "@/application/callSignalClassifier";
 
 const sig = (utterance: string, isCoveredQuestion?: boolean) => classifyCallSignal({ utterance, isCoveredQuestion });
+const sigMoney = (utterance: string) => classifyCallSignal({ utterance, moneyContext: true });
 
 describe("clasificador de señal de la llamada", () => {
   it("agresión / acusación directa -> hostile-or-suspicious", () => {
@@ -56,5 +57,64 @@ describe("clasificador de señal de la llamada", () => {
 
   it("prioridad: la desconfianza se evalúa antes que la pregunta genérica", () => {
     expect(sig("¿esto es seguro? me da miedo")).toBe("distrust");
+  });
+});
+
+// Regresión de la auditoría (16-jun): falsos negativos de escalado y de queja del reparto.
+describe("clasificador: robustez (auditoría)", () => {
+  it("insultos/agresión coloquial escalan a hostile", () => {
+    expect(sig("no me jodas")).toBe("hostile-or-suspicious");
+    expect(sig("qué mierda me estás contando")).toBe("hostile-or-suspicious");
+    expect(sig("déjate de gilipolleces")).toBe("hostile-or-suspicious");
+    expect(sig("menuda estafa de mierda")).toBe("hostile-or-suspicious");
+    expect(sig("esto huele a estafa")).toBe("hostile-or-suspicious");
+  });
+
+  it("hostilidad en 3ª persona (LATAM) escala", () => {
+    expect(sig("son unos ladrones")).toBe("hostile-or-suspicious");
+    expect(sig("me están engañando")).toBe("hostile-or-suspicious");
+  });
+
+  it("peticiones de persona en fraseo natural/LATAM escalan a wants-human", () => {
+    expect(sig("me gustaría hablar con el responsable")).toBe("wants-human");
+    expect(sig("que me llame alguien")).toBe("wants-human");
+    expect(sig("me puede atender una persona")).toBe("wants-human");
+    expect(sig("no me hables tú, que se ponga una persona")).toBe("wants-human");
+  });
+
+  it("quejas del reparto con otras palabras se detectan", () => {
+    expect(sig("el 30% me parece una barbaridad")).toBe("complains-about-share");
+    expect(sig("el 30 me parece excesivo")).toBe("complains-about-share");
+    expect(sig("¿podéis quedaros con menos?")).toBe("complains-about-share");
+  });
+
+  it("queja de SEGUIMIENTO en negociación (frase dirigida al dinero) cuenta como queja", () => {
+    expect(sigMoney("sigue siendo mucho, bajadlo")).toBe("complains-about-share");
+    expect(sigMoney("no me compensa")).toBe("complains-about-share");
+    expect(sigMoney("es mucha comisión")).toBe("complains-about-share");
+    // Sin contexto de dinero, una queja suelta NO se interpreta como queja del reparto.
+    expect(sig("sigue siendo mucho")).not.toBe("complains-about-share");
+  });
+
+  it("en negociación, quejas sobre CONTENIDO/ritmo NO se confunden con queja del reparto (no regala margen)", () => {
+    expect(sigMoney("es mucho contenido para empezar")).not.toBe("complains-about-share");
+    expect(sigMoney("necesito reducir el ritmo de subidas")).not.toBe("complains-about-share");
+    expect(sigMoney("aún así me interesa, seguimos")).not.toBe("complains-about-share");
+  });
+
+  it("sospecha HIPOTÉTICA ('y si es una estafa') es distrust, no hostil; interjección positiva no escala", () => {
+    expect(sig("¿y si es una estafa?")).toBe("distrust");
+    expect(sig("joder qué bien suena")).not.toBe("hostile-or-suspicious");
+  });
+
+  it("desconfianza expresada como pregunta -> distrust (no defiere)", () => {
+    expect(sig("¿y cómo sé que me vais a pagar?")).toBe("distrust");
+    expect(sig("¿esto no será una mentira?")).toBe("distrust");
+    expect(sig("no me lo creo mucho")).toBe("distrust");
+  });
+
+  it("conformidad con palabra interrogativa -> follows-along, no pregunta", () => {
+    expect(sig("como tú digas")).toBe("follows-along");
+    expect(sig("lo que tú veas")).toBe("follows-along");
   });
 });
