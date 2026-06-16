@@ -661,8 +661,14 @@ export function extractDeterministicUnderstanding(
     return baseOutput("REQUESTS_HUMAN", extractedData, 0.82, true, "La candidata pide hablar con una persona.", internalNotes);
   }
 
-  if (/\b(estafa|enfadada|enfado|me molesta|me suena raro|no me fio)\b/.test(normalized)) {
-    return baseOutput("REQUESTS_HUMAN", extractedData, 0.82, true, "Enfado, sospecha o desconfianza.", internalNotes);
+  // Desconfianza (incluida la leve: "como se que es real?", "mala espina", "sois de fiar?") y AGRESION
+  // (insultos): decision de Alex (16-jun) -> escalan a el (HUMAN_INTERVENTION_REQUIRED) y le llega aviso.
+  if (
+    /\b(estafa|estafador\w*|timador\w*|enfadada|enfadado|enfado|me molesta|me suena raro|no me fio|mala espina|como se que (?:es real|es verdad|sois reales|no es estafa)|esto es real|es esto real|sois de fiar|es de fiar|me puedo fiar|sois fiables|no sera (?:una )?estafa|sera (?:una )?estafa|fraude|que asco|sois una basura|panda de|os (?:voy a )?denunci\w*|os denuncio|ladron\w*|ladrones|sinverguenza\w*|mierda)\b/.test(
+      normalized
+    )
+  ) {
+    return baseOutput("REQUESTS_HUMAN", extractedData, 0.82, true, "Enfado, sospecha, desconfianza o agresion.", internalNotes);
   }
 
   if (extractedData.age) return baseOutput("PROVIDES_AGE", extractedData, 0.78, false, null, internalNotes);

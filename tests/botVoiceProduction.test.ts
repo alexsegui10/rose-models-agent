@@ -109,3 +109,36 @@ describe("Preguntas sin cobertura: deferir a la llamada, no despachar con un acu
     expect(/\d+\s?(?:euros?|€|\$|mil|%)/.test(text)).toBe(false);
   });
 });
+
+// Decision de Alex (16-jun): desconfianza (incluida la leve) y agresion -> escalan a el (y le llega aviso).
+describe("Escaladas a Alex: desconfianza y agresion van a revision humana", () => {
+  async function lastStateAfter(messages: string[], username: string): Promise<string> {
+    const { engine } = createEngine();
+    let candidateId: string | undefined;
+    let last;
+    for (const message of messages) {
+      last = await engine.handleIncomingMessage({
+        candidateId,
+        instagramUsername: username,
+        profileVisibility: "PUBLIC",
+        message
+      });
+      candidateId = last.candidate.id;
+    }
+    return last!.candidate.currentState;
+  }
+
+  it("'como se que es real?' escala a HUMAN_INTERVENTION_REQUIRED", async () => {
+    expect(await lastStateAfter(["hola", "y esto como se que es real?"], "trust1")).toBe("HUMAN_INTERVENTION_REQUIRED");
+  });
+
+  it("insultos/agresion escalan a HUMAN_INTERVENTION_REQUIRED", async () => {
+    expect(await lastStateAfter(["hola", "esto es una mierda, sois unos estafadores de mierda"], "angry1")).toBe(
+      "HUMAN_INTERVENTION_REQUIRED"
+    );
+  });
+
+  it("'me da mala espina' tambien escala", async () => {
+    expect(await lastStateAfter(["hola", "uy esto me da mala espina la verdad"], "trust2")).toBe("HUMAN_INTERVENTION_REQUIRED");
+  });
+});

@@ -8,6 +8,7 @@ import {
 } from "@/application/instagramWebhook";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
+import { escalationNotificationFor, getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 import { getSimulatorEngine } from "@/server/simulatorStore";
 
 // postgres.js necesita runtime Node (no Edge). maxDuration: en Hobby el techo real es 10s igualmente.
@@ -112,6 +113,8 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const engine = getSimulatorEngine();
   const provider = new GraphApiInstagramMessagingProvider(config);
+  // Avisos al operador (Alex) por WhatsApp: no-op si no hay claves de CallMeBot en el entorno.
+  const notifier = getOperatorNotifier();
   for (const message of inbound) {
     try {
       const result = await engine.handleIncomingTurn({
@@ -158,10 +161,18 @@ export async function POST(request: Request): Promise<NextResponse> {
           motivo: `delivery=${result.deliveryStatus} blocked=${result.automationBlocked}`
         });
       }
+      // Aviso al operador SOLO cuando la candidata ENTRA este turno en revision humana (escalada), no en
+      // cada turno mientras sigue ahi. El aviso nunca lanza (notify se traga sus errores).
+      const escalation = escalationNotificationFor(result.candidate, result.plannedTransitions);
+      if (escalation) {
+        await notifier.notify(escalation);
+      }
     } catch (error) {
       console.error("[ig-webhook] ERROR procesando el turno", {
         message: error instanceof Error ? error.message : String(error)
       });
+      // Aviso tecnico al operador (sin secretos ni stack): solo el tipo de error para que sepa que mirar.
+      await notifier.notify({ kind: "error", detail: error instanceof Error ? error.name : "desconocido" });
       // Error TRANSITORIO (DB/red, p. ej. Neon caido): devolver 5xx para que Meta REINTENTE el turno
       // cuando el servicio vuelva (la idempotencia por mid evita duplicar lo ya procesado). Asi no se
       // pierde el mensaje de una candidata por un fallo pasajero. Un error NO transitorio (bug logico)
