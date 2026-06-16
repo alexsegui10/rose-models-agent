@@ -73,6 +73,53 @@ function declaredMinorAge(normalized: string): number | null {
   return null;
 }
 
+// Edades en LETRA de ADULTA (>=18): "tengo veintidos", "treinta y cinco" suelto. Los <18 en letra los
+// cubre declaredMinorAge ANTES (invariante 2). Solo se acepta con "tengo X" o como respuesta suelta exacta
+// (no "<palabra> años" libre) para no leer una DURACION ("llevo veinte años en esto") como edad. Sin esto,
+// "tengo veintidos" dejaba la edad sin parsear y el bot re-preguntaba en bucle (hallazgo jueces 16-jun).
+const wordAgesAdult: Readonly<Record<string, number>> = {
+  dieciocho: 18,
+  diecinueve: 19,
+  veinte: 20,
+  veintiuno: 21,
+  veintiuna: 21,
+  veintidos: 22,
+  veintitres: 23,
+  veinticuatro: 24,
+  veinticinco: 25,
+  veintiseis: 26,
+  veintisiete: 27,
+  veintiocho: 28,
+  veintinueve: 29,
+  treinta: 30,
+  cuarenta: 40
+};
+const adultUnitWords: Readonly<Record<string, number>> = {
+  uno: 1,
+  una: 1,
+  dos: 2,
+  tres: 3,
+  cuatro: 4,
+  cinco: 5,
+  seis: 6,
+  siete: 7,
+  ocho: 8,
+  nueve: 9
+};
+
+function spelledAdultAge(normalized: string): number | null {
+  const trimmed = normalized.trim();
+  const compound = trimmed.match(/\b(treinta|cuarenta)\s+y\s+(uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)\b/);
+  if (compound && (/\btengo\b/.test(trimmed) || trimmed === compound[0])) {
+    return (compound[1] === "treinta" ? 30 : 40) + adultUnitWords[compound[2]];
+  }
+  for (const [word, value] of Object.entries(wordAgesAdult)) {
+    if (new RegExp(`\\btengo\\s+${word}\\b`).test(trimmed)) return value;
+    if (trimmed === word) return value;
+  }
+  return null;
+}
+
 // Demanda de dinero garantizado: cifra + moneda + periodicidad ("500 dolares por semana"),
 // cifra + "garantizados", o verbo de exigencia + cifra + periodicidad. NO matchea declaraciones
 // de facturacion propia ("facturo 1200 al mes"). Compartido con el planner (escalada comercial).
@@ -408,6 +455,12 @@ export function extractDeterministicUnderstanding(
       if (durationBefore || strongDurationAfter || (weakDurationAfter && value < 13)) continue;
       extractedData.age = value;
       break;
+    }
+    // Edad en LETRA de adulta si no se detecto nada con digitos ("tengo veintidos" -> 22). Va dentro del
+    // else (la minoria en letra ya la resolvio declaredMinorAge), asi nunca pisa el cierre de menores.
+    if (extractedData.age === undefined) {
+      const spelled = spelledAdultAge(normalized);
+      if (spelled !== null) extractedData.age = spelled;
     }
   }
 
