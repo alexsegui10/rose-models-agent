@@ -1,5 +1,5 @@
 import { KnowledgeEntrySchema, type KnowledgeEntryInput } from "@/domain/businessKnowledge";
-import { communicationPolicy, contentProductionPolicy } from "@/application/policyRules";
+import { communicationPolicy, contentProductionPolicy } from "@/domain/businessPolicy";
 
 export { communicationPolicy, contentProductionPolicy };
 

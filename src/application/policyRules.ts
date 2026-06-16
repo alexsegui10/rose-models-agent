@@ -1,11 +1,10 @@
-import {
-  CommunicationPolicySchema,
-  ContentProductionPolicySchema,
-  NegotiationAuthoritySchema,
-  NonPaymentPolicySchema,
-  type NegotiationLog
-} from "@/domain/businessKnowledge";
+import { NegotiationAuthoritySchema, NonPaymentPolicySchema, type NegotiationLog } from "@/domain/businessKnowledge";
 import type { CandidateCommercialTier, DeviceEligibility, DeviceType } from "@/domain/candidate";
+// Politicas puras movidas a domain (rompen el ciclo application<->content). Se re-exportan aqui para
+// no romper a ningun importador existente de @/application/policyRules.
+import { communicationPolicy, contentProductionPolicy, followUpAttemptCountRange } from "@/domain/businessPolicy";
+
+export { communicationPolicy, contentProductionPolicy, followUpAttemptCountRange };
 
 export const negotiationAuthority = NegotiationAuthoritySchema.parse({
   STANDARD: { minimumAgencyPercentage: 70 },
@@ -20,21 +19,6 @@ export const nonPaymentPolicy = NonPaymentPolicySchema.parse({
   terminateAfterContinuedNonPayment: true,
   allowDebtCollection: true,
   grantsUnlimitedContentRights: false
-});
-
-export const communicationPolicy = CommunicationPolicySchema.parse({
-  expectedResponseTimeHours: 48,
-  singleDelayCausesRejection: false,
-  repeatedDelaysRequireHumanReview: true
-});
-
-export const contentProductionPolicy = ContentProductionPolicySchema.parse({
-  warmupDays: 5,
-  warmupPhotosPerDayMin: 2,
-  warmupPhotosPerDayMax: 3,
-  targetReelsPerWeekMin: 10,
-  targetReelsPerWeekMax: 20,
-  isContractualMinimumConfirmed: false
 });
 
 export function minimumAgencyPercentageForTier(tier: CandidateCommercialTier): number {
@@ -121,10 +105,6 @@ export function shouldAskFollowerCount(): boolean {
 
 export function shouldEscalateForCommunicationDelay(delayCount: number): boolean {
   return delayCount > 1;
-}
-
-export function followUpAttemptCountRange(): { min: 2; max: 3 } {
-  return { min: 2, max: 3 };
 }
 
 function normalize(value: string): string {
