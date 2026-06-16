@@ -10,8 +10,8 @@ import { fetchInstagramIsPrivate } from "@/infrastructure/integrations/instagram
 export const runtime = "nodejs";
 
 // Caché en memoria (por lambda) para no machacar la Graph API ni el proveedor de privacidad (cada consulta
-// a HikerAPI cuesta): el perfil y la privacidad cambian poco. TTL corto para que la foto (URL de CDN que
-// caduca) no se quede obsoleta mucho tiempo.
+// al proveedor cuesta y tarda): el perfil y la privacidad cambian poco. TTL corto para que la foto (URL de
+// CDN que caduca) no se quede obsoleta mucho tiempo.
 const PROFILE_TTL_MS = 30 * 60 * 1000;
 const cache = new Map<string, { profile: InstagramProfile | null; isPrivate: boolean | null; expiresAt: number }>();
 
