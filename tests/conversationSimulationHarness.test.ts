@@ -187,6 +187,103 @@ const SCENARIOS: Scenario[] = [
     title: "Pregunta si trabajan con su país",
     profileVisibility: "PUBLIC",
     messages: ["hola, soy de colombia, trabajais con chicas de fuera de españa?"]
+  },
+  // --- Casos limite (robustez de cara al lanzamiento publico) ---
+  {
+    id: "data-out-of-order",
+    title: "Da edad antes que el nombre",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "tengo 24 años", "ah me llamo ana", "no tengo of", "iphone 13"]
+  },
+  {
+    id: "repeated-short",
+    title: "Respuestas cortisimas repetidas",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "si", "si", "vale", "ok", "aja"]
+  },
+  {
+    id: "aggressive",
+    title: "Candidata agresiva / insultos",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "esto es una mierda, sois unos estafadores de mierda"]
+  },
+  {
+    id: "is-legal",
+    title: "Pregunta si es legal",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "esto es legal? me puede traer problemas?"]
+  },
+  {
+    id: "taxes",
+    title: "Pregunta por impuestos",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "y los impuestos como van? tengo que declarar?"]
+  },
+  {
+    id: "asks-proof",
+    title: "Pide pruebas/fotos de otras chicas",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "enseñame pruebas de que sois reales, fotos de otras chicas que llevais"]
+  },
+  {
+    id: "weird-name",
+    title: "Nombre raro (emoji/numeros)",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "me llamo 😈xXx_reina_99"]
+  },
+  {
+    id: "many-questions",
+    title: "Muchas preguntas a la vez",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "cuanto se gana? hay que firmar algo? es legal? cuando empezaria?"]
+  },
+  {
+    id: "already-famous",
+    title: "Dice que ya tiene muchos seguidores",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "ya tengo 200k seguidores en insta, que me ofreceis?"]
+  },
+  {
+    id: "minor-sneaky",
+    title: "Menor que cumple pronto",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "me llamo lucia", "tengo 17 pero cumplo 18 en un mes"]
+  },
+  {
+    id: "age-in-words",
+    title: "Edad escrita en letras",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "soy carla", "tengo veintidos"]
+  },
+  {
+    id: "two-word-name",
+    title: "Nombre de dos palabras",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "soy ana maria"]
+  },
+  {
+    id: "phone-early",
+    title: "Da el telefono pronto sin que se lo pidan",
+    profileVisibility: "PUBLIC",
+    messages: ["hola me interesa, mi wasap es 600112233", "me llamo sara", "tengo 26", "no tengo of", "iphone 14"]
+  },
+  {
+    id: "confused",
+    title: "No entiende nada",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "no entiendo nada de lo que dices, que es esto?"]
+  },
+  {
+    id: "ghost-returns",
+    title: "Desaparece y vuelve a mitad de funnel",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "ana", "perdona desapareci, sigo interesada", "tengo 25", "no tengo of", "iphone 13"]
+  },
+  {
+    id: "changes-mind",
+    title: "Cambia de idea a mitad",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "marta", "27", "no tengo of", "uff no se si me interesa esto la verdad"]
   }
 ];
 

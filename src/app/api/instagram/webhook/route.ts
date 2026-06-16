@@ -152,10 +152,55 @@ export async function POST(request: Request): Promise<NextResponse> {
       console.error("[ig-webhook] ERROR procesando el turno", {
         message: error instanceof Error ? error.message : String(error)
       });
+      // Error TRANSITORIO (DB/red, p. ej. Neon caido): devolver 5xx para que Meta REINTENTE el turno
+      // cuando el servicio vuelva (la idempotencia por mid evita duplicar lo ya procesado). Asi no se
+      // pierde el mensaje de una candidata por un fallo pasajero. Un error NO transitorio (bug logico)
+      // se traga con 200 para no provocar reintentos en bucle que Meta podria penalizar.
+      if (isLikelyTransientError(error)) {
+        console.warn("[ig-webhook] error transitorio -> 503 para que Meta reintente");
+        return new NextResponse("Transient processing error, please retry", { status: 503 });
+      }
     }
   }
 
   return NextResponse.json({ ok: true });
+}
+
+// Codigos/senales de error TRANSITORIO (no se pudo hablar con la BD/red): justifican un 5xx para que
+// Meta reintente. Un error de datos o de logica NO entra aqui (no debe reintentarse en bucle).
+const TRANSIENT_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ENOTFOUND",
+  "EHOSTUNREACH",
+  "ETIMEDOUT",
+  "EPIPE",
+  "CONNECT_TIMEOUT",
+  "CONNECTION_CLOSED",
+  "CONNECTION_ENDED",
+  "CONNECTION_DESTROYED",
+  "57P03",
+  "08006",
+  "08001",
+  "08004"
+]);
+
+function isLikelyTransientError(error: unknown, depth = 0): boolean {
+  if (depth > 8 || typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; message?: unknown; cause?: unknown };
+  if (typeof candidate.code === "string" && TRANSIENT_ERROR_CODES.has(candidate.code)) return true;
+  if (
+    typeof candidate.message === "string" &&
+    /(econn|etimedout|connect_timeout|connection|fetch failed|socket|terminat|too many connections|timeout)/i.test(
+      candidate.message
+    )
+  ) {
+    return true;
+  }
+  if (error instanceof AggregateError && error.errors.some((inner) => isLikelyTransientError(inner, depth + 1))) {
+    return true;
+  }
+  return isLikelyTransientError(candidate.cause, depth + 1);
 }
 
 /** Solo estructura (no contenido), para diagnosticar sin filtrar datos personales. */
