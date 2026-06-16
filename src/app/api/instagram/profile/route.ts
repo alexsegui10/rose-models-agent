@@ -5,18 +5,21 @@ import {
   instagramProfileUrl,
   type InstagramProfile
 } from "@/infrastructure/integrations/instagramProfileProvider";
+import { fetchInstagramIsPrivate } from "@/infrastructure/integrations/instagramPrivacyProvider";
 
 export const runtime = "nodejs";
 
-// Caché en memoria (por lambda) para no machacar la Graph API: el perfil cambia poco. TTL corto para que
-// la foto (URL de CDN que caduca) no se quede obsoleta mucho tiempo.
+// Caché en memoria (por lambda) para no machacar la Graph API ni el proveedor de privacidad (cada consulta
+// a HikerAPI cuesta): el perfil y la privacidad cambian poco. TTL corto para que la foto (URL de CDN que
+// caduca) no se quede obsoleta mucho tiempo.
 const PROFILE_TTL_MS = 30 * 60 * 1000;
-const cache = new Map<string, { profile: InstagramProfile | null; expiresAt: number }>();
+const cache = new Map<string, { profile: InstagramProfile | null; isPrivate: boolean | null; expiresAt: number }>();
 
 /**
- * GET /api/instagram/profile?id=<IGSID> — devuelve { ok, username, name, profilePicUrl, profileUrl } del
- * perfil público de la candidata para enriquecer el CRM (foto + enlace a su cuenta). Si no está
- * configurado Instagram o el perfil no se puede resolver, responde { ok: false } (el CRM hace fallback).
+ * GET /api/instagram/profile?id=<IGSID> — enriquece el CRM con el perfil público de la candidata:
+ * foto + @usuario + enlace + relación de follow (API oficial), y is_private vía proveedor de terceros
+ * (HikerAPI, solo si HIKERAPI_KEY está configurada). Si algo no se puede resolver, devuelve los campos
+ * que sí y null en el resto; el CRM hace fallback con elegancia.
  */
 export async function GET(request: Request): Promise<NextResponse> {
   const id = new URL(request.url).searchParams.get("id")?.trim() ?? "";
@@ -27,17 +30,19 @@ export async function GET(request: Request): Promise<NextResponse> {
   const now = Date.now();
   const cached = cache.get(id);
   if (cached && cached.expiresAt > now) {
-    return profileResponse(cached.profile);
+    return profileResponse(cached.profile, cached.isPrivate);
   }
 
   const profile = await fetchInstagramProfile(id, getInstagramConfig());
-  cache.set(id, { profile, expiresAt: now + PROFILE_TTL_MS });
-  return profileResponse(profile);
+  // is_private SOLO si el perfil dio @usuario y HikerAPI esta configurado (si no, queda null/desconocido).
+  const isPrivate = await fetchInstagramIsPrivate(profile?.username);
+  cache.set(id, { profile, isPrivate, expiresAt: now + PROFILE_TTL_MS });
+  return profileResponse(profile, isPrivate);
 }
 
-function profileResponse(profile: InstagramProfile | null): NextResponse {
+function profileResponse(profile: InstagramProfile | null, isPrivate: boolean | null): NextResponse {
   if (!profile) {
-    return NextResponse.json({ ok: false });
+    return NextResponse.json({ ok: false, isPrivate });
   }
   return NextResponse.json({
     ok: true,
@@ -48,6 +53,7 @@ function profileResponse(profile: InstagramProfile | null): NextResponse {
     followerCount: profile.followerCount ?? null,
     isVerified: profile.isVerified ?? null,
     followsBusiness: profile.followsBusiness ?? null,
-    businessFollows: profile.businessFollows ?? null
+    businessFollows: profile.businessFollows ?? null,
+    isPrivate
   });
 }

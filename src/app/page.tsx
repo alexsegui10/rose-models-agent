@@ -144,6 +144,7 @@ export default function Home() {
         followsBusiness: boolean | null;
         followerCount: number | null;
         isVerified: boolean | null;
+        isPrivate: boolean | null;
       }
     >
   >({});
@@ -227,6 +228,7 @@ export default function Home() {
             followsBusiness?: boolean | null;
             followerCount?: number | null;
             isVerified?: boolean | null;
+            isPrivate?: boolean | null;
           };
           const empty = {
             username: null,
@@ -234,7 +236,8 @@ export default function Home() {
             profileUrl: null,
             followsBusiness: null,
             followerCount: null,
-            isVerified: null
+            isVerified: null,
+            isPrivate: null
           };
           return [
             candidate.instagramUsername,
@@ -245,9 +248,10 @@ export default function Home() {
                   profileUrl: data.profileUrl ?? null,
                   followsBusiness: data.followsBusiness ?? null,
                   followerCount: data.followerCount ?? null,
-                  isVerified: data.isVerified ?? null
+                  isVerified: data.isVerified ?? null,
+                  isPrivate: data.isPrivate ?? null
                 }
-              : empty
+              : { ...empty, isPrivate: data.isPrivate ?? null }
           ] as const;
         } catch {
           return [
@@ -258,7 +262,8 @@ export default function Home() {
               profileUrl: null,
               followsBusiness: null,
               followerCount: null,
-              isVerified: null
+              isVerified: null,
+              isPrivate: null
             }
           ] as const;
         }
@@ -1299,6 +1304,18 @@ export default function Home() {
                                   {followsBusiness ? (
                                     <span className="crm-follows" title="Te sigue: puedes ver su perfil aunque sea privado">
                                       ✓ Te sigue
+                                    </span>
+                                  ) : null}
+                                  {profile?.isPrivate === true ? (
+                                    <span
+                                      className="crm-private"
+                                      title="Cuenta privada: mándale tú la solicitud para ver su perfil"
+                                    >
+                                      🔒 Privada
+                                    </span>
+                                  ) : profile?.isPrivate === false ? (
+                                    <span className="crm-public" title="Cuenta pública: puedes ver su perfil directamente">
+                                      🌐 Pública
                                     </span>
                                   ) : null}
                                   {tags.length > 0 ? (

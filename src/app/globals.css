@@ -736,6 +736,25 @@ button {
   border-radius: 6px;
   padding: 1px 8px;
 }
+/* Privacidad de la cuenta (via proveedor de terceros). Privada -> mandar solicitud manual; publica -> ver directo. */
+.crm-private,
+.crm-public {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+.crm-private {
+  color: var(--warn);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+.crm-public {
+  color: var(--muted);
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+}
 /* Enlace a la cuenta de Instagram de la candidata. */
 .crm-card-link {
   color: var(--accent-strong);
