@@ -37,8 +37,10 @@ export default function PrivacidadPage() {
       <h2>Con quién los compartimos</h2>
       <p>
         Para entender y redactar las respuestas utilizamos un proveedor de modelos de lenguaje (OpenAI), que procesa el texto de
-        la conversación. Los datos se almacenan en una base de datos segura con acceso restringido. No compartimos tus datos con
-        terceros ajenos a la prestación del servicio.
+        la conversación. Para verificar datos básicos y públicos de tu perfil de Instagram (como tu nombre de usuario y si tu
+        cuenta es pública o privada) podemos consultar a un proveedor de servicios de datos; solo le facilitamos tu nombre de
+        usuario y conservamos lo mínimo necesario. Los datos se almacenan en una base de datos segura con acceso restringido. No
+        compartimos tus datos con terceros ajenos a la prestación del servicio.
       </p>
 
       <h2>Menores de edad</h2>
