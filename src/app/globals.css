@@ -794,6 +794,40 @@ button {
   border-top: 1px dashed var(--line);
   padding-top: 6px;
 }
+/* Motivo de escalada en la tarjeta: badge de atencion para que Alex decida sin abrir el chat. */
+.crm-reason {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn);
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+/* Estado vacio del tablero: invita a probar el chat. */
+.crm-empty-global {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+/* Confirmacion de feedback guardado (positiva). */
+.feedback-saved {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-strong, var(--accent));
+}
+/* Alertas de validacion: visibles sobre el tema oscuro. */
+.alert-warn {
+  color: var(--warn);
+}
+.alert-danger {
+  color: var(--danger);
+}
 .btn-xs {
   min-height: 30px;
   padding: 0 11px;

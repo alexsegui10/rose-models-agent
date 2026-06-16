@@ -110,6 +110,24 @@ const EVALUATION_ISSUE_OPTIONS: EvaluationIssue[] = [
   "MISSED_REAL_QUESTION"
 ];
 
+// Etiquetas en espanol del motivo de escalada, para mostrarlo en la tarjeta del CRM y que Alex decida
+// sin abrir el chat.
+const REVIEW_REASON_LABELS: Record<string, string> = {
+  PROFILE_REVIEW: "Revisar perfil",
+  PERCENTAGE_NEGOTIATION: "Negocia porcentaje",
+  COMMERCIAL_EXCEPTION: "Pide excepción comercial",
+  CONTRACT_QUESTION: "Duda de contrato",
+  DATA_CONTRADICTION: "Dato contradictorio",
+  OTHER: "Revisión humana"
+};
+
+// Confirmacion de feedback en espanol (el estado llega como enum en ingles).
+const FEEDBACK_STATUS_LABELS: Record<string, string> = {
+  APPROVED: "aprobada",
+  EDITED: "editada",
+  REJECTED: "rechazada"
+};
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<SimulatorTab>("EVALUACION");
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
@@ -736,6 +754,9 @@ export default function Home() {
                     setSelectedCandidate(candidate);
                     setInstagramUsername(candidate.instagramUsername);
                     setProfileVisibility(candidate.declaredProfileVisibility);
+                    // Limpia el composer al cambiar de candidata: evita enviar a B un texto escrito para A.
+                    setMessage("");
+                    setFeedbackStatus(null);
                   }}
                 >
                   <strong>@{candidate.instagramUsername}</strong>
@@ -854,7 +875,7 @@ export default function Home() {
                       <div className="data-row">
                         <span>Evaluacion de estilo</span>
                         <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
-                        <p className="muted">
+                        <p className={(styleEvaluation.reasons?.length ?? 0) > 0 ? "alert-warn" : "muted"}>
                           {(styleEvaluation.reasons?.length ?? 0) > 0
                             ? styleEvaluation.reasons.join(" ")
                             : "Sin alertas de estilo."}
@@ -865,8 +886,10 @@ export default function Home() {
                     {factualValidation ? (
                       <div className="data-row">
                         <span>Validacion factual</span>
-                        <strong>{factualValidation.valid ? "Correcta" : "Revisar"}</strong>
-                        <p className="muted">
+                        <strong className={factualValidation.valid ? undefined : "alert-danger"}>
+                          {factualValidation.valid ? "Correcta" : "Revisar"}
+                        </strong>
+                        <p className={factualValidation.valid ? "muted" : "alert-danger"}>
                           {(factualValidation.reasons?.length ?? 0) > 0
                             ? factualValidation.reasons.join(" ")
                             : "Sin alertas factuales."}
@@ -943,7 +966,7 @@ export default function Home() {
                           className="field"
                           value={feedbackReason}
                           onChange={(event) => setFeedbackReason(event.target.value)}
-                          placeholder="Motivo opcional"
+                          placeholder="¿Por qué editas o rechazas esta respuesta? (opcional)"
                         />
                         <select className="field" value={styleRating} onChange={(event) => setStyleRating(event.target.value)}>
                           <option value="">Puntuacion estilo</option>
@@ -967,7 +990,9 @@ export default function Home() {
                             Tomar control
                           </button>
                         </div>
-                        {feedbackStatus ? <p className="muted">Feedback guardado: {feedbackStatus}</p> : null}
+                        {feedbackStatus ? (
+                          <p className="feedback-saved">✓ Guardado: {FEEDBACK_STATUS_LABELS[feedbackStatus] ?? feedbackStatus}</p>
+                        ) : null}
                       </div>
                     ) : null}
                   </>
@@ -1080,6 +1105,14 @@ export default function Home() {
                       </span>
                     </div>
                   </div>
+                  {candidates.length === 0 ? (
+                    <div className="crm-empty-global">
+                      <p>Aún no hay candidatas. Prueba el núcleo conversacional en el chat de prueba.</p>
+                      <button className="btn-xs accent" type="button" onClick={() => setActiveTab("CHAT")}>
+                        Ir al chat de prueba
+                      </button>
+                    </div>
+                  ) : null}
                   <div className="crm-board">
                     {PHASES.map((phase) => {
                       const cards = visible
@@ -1133,6 +1166,11 @@ export default function Home() {
                                   <span className={`crm-state tone-${phase.tone}`}>
                                     {STATE_LABELS[candidate.currentState] ?? candidate.currentState}
                                   </span>
+                                  {awaitingDecision && candidate.humanReviewReason ? (
+                                    <span className="crm-reason" title="Motivo de escalada">
+                                      ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
+                                    </span>
+                                  ) : null}
                                   {tags.length > 0 ? (
                                     <div className="crm-meta">
                                       {tags.map((tag, index) => (
