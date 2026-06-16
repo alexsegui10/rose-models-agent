@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
 import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
@@ -132,6 +132,12 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<SimulatorTab>("EVALUACION");
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  // Perfil de Instagram (foto + @usuario + enlace) resuelto por IGSID via la Graph API, para enriquecer
+  // las tarjetas del CRM. Solo para candidatas reales (IGSID numerico); el simulador no tiene IGSID.
+  const [igProfiles, setIgProfiles] = useState<
+    Record<string, { username: string | null; profilePicUrl: string | null; profileUrl: string | null }>
+  >({});
+  const fetchedProfileIds = useRef<Set<string>>(new Set());
   const [crmNotice, setCrmNotice] = useState<string | null>(null);
   const [crmSearch, setCrmSearch] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -190,6 +196,41 @@ export default function Home() {
         }
       });
   }, []);
+
+  // Resuelve foto/@usuario/enlace de las candidatas reales (IGSID) una sola vez cada una. El ref evita
+  // refetch y bucles de dependencia; el fallo es silencioso (la tarjeta cae al avatar de inicial).
+  useEffect(() => {
+    const pending = candidates.filter(
+      (candidate) => /^\d{5,}$/.test(candidate.instagramUsername) && !fetchedProfileIds.current.has(candidate.instagramUsername)
+    );
+    if (pending.length === 0) return;
+    pending.forEach((candidate) => fetchedProfileIds.current.add(candidate.instagramUsername));
+    void Promise.all(
+      pending.map(async (candidate) => {
+        try {
+          const response = await fetch(`/api/instagram/profile?id=${encodeURIComponent(candidate.instagramUsername)}`);
+          const data = (await response.json()) as {
+            ok: boolean;
+            username?: string | null;
+            profilePicUrl?: string | null;
+            profileUrl?: string | null;
+          };
+          return [
+            candidate.instagramUsername,
+            data.ok
+              ? {
+                  username: data.username ?? null,
+                  profilePicUrl: data.profilePicUrl ?? null,
+                  profileUrl: data.profileUrl ?? null
+                }
+              : { username: null, profilePicUrl: null, profileUrl: null }
+          ] as const;
+        } catch {
+          return [candidate.instagramUsername, { username: null, profilePicUrl: null, profileUrl: null }] as const;
+        }
+      })
+    ).then((entries) => setIgProfiles((previous) => ({ ...previous, ...Object.fromEntries(entries) })));
+  }, [candidates]);
 
   const currentCandidate = selectedCandidate;
   const extractedRows = useMemo(() => buildCandidatePanelRows(currentCandidate), [currentCandidate]);
@@ -1137,8 +1178,15 @@ export default function Home() {
                                 candidate.currentState === "COLLECTING_CALL_DETAILS" ||
                                 candidate.currentState === "READY_TO_SCHEDULE";
                               const closed = candidate.currentState === "REJECTED" || candidate.currentState === "CLOSED";
-                              const displayName = candidate.firstName?.trim() || `@${candidate.instagramUsername}`;
-                              const initial = (candidate.firstName?.trim() || candidate.instagramUsername || "?")
+                              const isIgsid = /^\d{5,}$/.test(candidate.instagramUsername);
+                              const profile = igProfiles[candidate.instagramUsername];
+                              // @usuario real si se resolvio; si no, el usuario del simulador; para un IGSID sin resolver, nada.
+                              const handle = profile?.username ?? (isIgsid ? null : candidate.instagramUsername);
+                              const profileUrl = profile?.profileUrl ?? null;
+                              const picUrl = profile?.profilePicUrl ?? null;
+                              const hasName = Boolean(candidate.firstName?.trim());
+                              const displayName = candidate.firstName?.trim() || (handle ? `@${handle}` : "Candidata nueva");
+                              const initial = (candidate.firstName?.trim() || handle || candidate.instagramUsername || "?")
                                 .charAt(0)
                                 .toUpperCase();
                               const tags: string[] = [];
@@ -1151,11 +1199,47 @@ export default function Home() {
                               return (
                                 <article key={candidate.id} className={`crm-card tone-${phase.tone}`}>
                                   <div className="crm-card-top">
-                                    <span className="crm-avatar">{initial}</span>
+                                    <span className="crm-avatar">
+                                      {picUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          className="crm-avatar-img"
+                                          src={picUrl}
+                                          alt=""
+                                          referrerPolicy="no-referrer"
+                                          onError={(event) => {
+                                            event.currentTarget.style.display = "none";
+                                          }}
+                                        />
+                                      ) : null}
+                                      {initial}
+                                    </span>
                                     <span className="crm-card-id">
-                                      <span className="crm-card-name">{displayName}</span>
-                                      {candidate.firstName?.trim() ? (
-                                        <span className="crm-card-handle">@{candidate.instagramUsername}</span>
+                                      {!hasName && profileUrl ? (
+                                        <a
+                                          className="crm-card-name crm-card-link"
+                                          href={profileUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          {displayName} ↗
+                                        </a>
+                                      ) : (
+                                        <span className="crm-card-name">{displayName}</span>
+                                      )}
+                                      {hasName && handle ? (
+                                        profileUrl ? (
+                                          <a
+                                            className="crm-card-handle crm-card-link"
+                                            href={profileUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            @{handle} ↗
+                                          </a>
+                                        ) : (
+                                          <span className="crm-card-handle">@{handle}</span>
+                                        )
                                       ) : null}
                                     </span>
                                     <span className="crm-bot" title={paused ? "Bot pausado" : "Bot activo"}>
