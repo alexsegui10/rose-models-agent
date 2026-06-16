@@ -147,3 +147,24 @@ latinas. Evitar las voces por defecto de Vapi/Retell/OpenAI (tiran a neutro/lati
 6. **Locución de apertura** (texto IA+grabación+finalidad, tu registro).
 7. **Reintentos** si no contesta (cuántos, en qué horas) y **base legal + conservación** de la grabación.
 8. Firmar **DPAs** con los proveedores.
+
+## Pendiente de TU decisión (de la auditoría del cerebro, 17-jun) — NO tocado, esperando tu OK
+Estos son de comportamiento/producto o texto de cara a la candidata, así que no los he cambiado yo:
+1. **"No me interesa" / desinterés**: ahora el bot lo toma como "sigue" y avanza el guion. ¿Qué prefieres?
+   (a) cerrar amable con el contrato · (b) rebatir la objeción una vez · (c) pasártela a ti.
+2. **Ruido / cosas que el STT entiende mal**: ahora se toman como "sí, sigue" y el bot avanza. ¿Prefieres
+   que, ante algo que no entiende, **pida que se lo repita** ("perdona, no te pillé, ¿me lo repites?") en
+   vez de asumir que asiente? (Recomiendo SÍ — es una señal nueva 'unclear'.)
+3. **Primera queja del % tras presentarlo**: ahora baja directo a 65. ¿Quieres que **defienda el 70 una
+   vez** antes de empezar a bajar?
+4. **Texto exacto de la apertura legal**: cumple lo obligatorio pero suena algo encadenado y repite
+   "asistente". Propuesta más natural: *"Hola [nombre], te llamo de Rose Models, hablamos por Instagram.
+   Antes de nada te aviso: soy un asistente automatizado y esta llamada se graba para gestionar tu alta. Si
+   en algún momento prefieres hablar con una persona, me lo dices y te paso, ¿vale? ¿Te viene bien que te
+   cuente cómo trabajamos?"* — apruébala o ajústala (es texto legal, tu visto bueno).
+5. **"Alex" vs "mi socio"**: la apertura y el handoff dicen "Alex"; el deferir dice "mi socio" (como en el
+   DM). ¿Unificamos a uno solo para que suene coherente? ¿Cuál?
+6. **Responder preguntas con el conocimiento**: hoy el bot DEFIERE toda pregunta a ti ("se lo comento a mi
+   socio"), que es lo que pediste para no liarla. ¿Quieres que **responda las cubiertas** por el
+   conocimiento (cuándo cobra, cómo funciona…) y solo defiera lo no cubierto? Lo activo cuando digas (y le
+   pongo un test de seguridad antes).
