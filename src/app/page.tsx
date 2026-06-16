@@ -135,7 +135,17 @@ export default function Home() {
   // Perfil de Instagram (foto + @usuario + enlace) resuelto por IGSID via la Graph API, para enriquecer
   // las tarjetas del CRM. Solo para candidatas reales (IGSID numerico); el simulador no tiene IGSID.
   const [igProfiles, setIgProfiles] = useState<
-    Record<string, { username: string | null; profilePicUrl: string | null; profileUrl: string | null }>
+    Record<
+      string,
+      {
+        username: string | null;
+        profilePicUrl: string | null;
+        profileUrl: string | null;
+        followsBusiness: boolean | null;
+        followerCount: number | null;
+        isVerified: boolean | null;
+      }
+    >
   >({});
   const fetchedProfileIds = useRef<Set<string>>(new Set());
   const [crmNotice, setCrmNotice] = useState<string | null>(null);
@@ -214,6 +224,17 @@ export default function Home() {
             username?: string | null;
             profilePicUrl?: string | null;
             profileUrl?: string | null;
+            followsBusiness?: boolean | null;
+            followerCount?: number | null;
+            isVerified?: boolean | null;
+          };
+          const empty = {
+            username: null,
+            profilePicUrl: null,
+            profileUrl: null,
+            followsBusiness: null,
+            followerCount: null,
+            isVerified: null
           };
           return [
             candidate.instagramUsername,
@@ -221,12 +242,25 @@ export default function Home() {
               ? {
                   username: data.username ?? null,
                   profilePicUrl: data.profilePicUrl ?? null,
-                  profileUrl: data.profileUrl ?? null
+                  profileUrl: data.profileUrl ?? null,
+                  followsBusiness: data.followsBusiness ?? null,
+                  followerCount: data.followerCount ?? null,
+                  isVerified: data.isVerified ?? null
                 }
-              : { username: null, profilePicUrl: null, profileUrl: null }
+              : empty
           ] as const;
         } catch {
-          return [candidate.instagramUsername, { username: null, profilePicUrl: null, profileUrl: null }] as const;
+          return [
+            candidate.instagramUsername,
+            {
+              username: null,
+              profilePicUrl: null,
+              profileUrl: null,
+              followsBusiness: null,
+              followerCount: null,
+              isVerified: null
+            }
+          ] as const;
         }
       })
     ).then((entries) => setIgProfiles((previous) => ({ ...previous, ...Object.fromEntries(entries) })));
@@ -1189,12 +1223,19 @@ export default function Home() {
                               const initial = (candidate.firstName?.trim() || handle || candidate.instagramUsername || "?")
                                 .charAt(0)
                                 .toUpperCase();
+                              // Si te sigue, puedes ver su perfil aunque sea privado (sustituto oficial de is_private).
+                              const followsBusiness = profile?.followsBusiness === true;
+                              const followerCount = typeof profile?.followerCount === "number" ? profile.followerCount : null;
                               const tags: string[] = [];
                               if (candidate.age) tags.push(`${candidate.age} años`);
                               if (typeof candidate.hasOnlyFans === "boolean")
                                 tags.push(candidate.hasOnlyFans ? "OF: si" : "OF: no");
                               if (candidate.deviceModel) tags.push(candidate.deviceModel);
                               if (candidate.country || candidate.city) tags.push((candidate.country || candidate.city) as string);
+                              if (followerCount !== null)
+                                tags.push(
+                                  followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg` : `${followerCount} seg`
+                                );
                               if (candidate.phone) tags.push("📱");
                               return (
                                 <article key={candidate.id} className={`crm-card tone-${phase.tone}`}>
@@ -1253,6 +1294,11 @@ export default function Home() {
                                   {awaitingDecision && candidate.humanReviewReason ? (
                                     <span className="crm-reason" title="Motivo de escalada">
                                       ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
+                                    </span>
+                                  ) : null}
+                                  {followsBusiness ? (
+                                    <span className="crm-follows" title="Te sigue: puedes ver su perfil aunque sea privado">
+                                      ✓ Te sigue
                                     </span>
                                   ) : null}
                                   {tags.length > 0 ? (

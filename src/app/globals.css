@@ -725,6 +725,17 @@ button {
   object-fit: cover;
   border-radius: 50%;
 }
+/* "Te sigue": su perfil es visible para nosotros aunque sea privado (sustituto de is_private). */
+.crm-follows {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
 /* Enlace a la cuenta de Instagram de la candidata. */
 .crm-card-link {
   color: var(--accent-strong);

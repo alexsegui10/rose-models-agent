@@ -30,16 +30,32 @@ describe("fetchInstagramProfile", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("mapea name/username/profile_pic y nunca expone el token en logs", async () => {
+  it("mapea name/username/profile_pic + relacion de follow (sustituto de is_private)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ name: "Ana", username: "ana_real", profile_pic: "https://cdn/x.jpg" })
+      json: async () => ({
+        name: "Ana",
+        username: "ana_real",
+        profile_pic: "https://cdn/x.jpg",
+        follower_count: 1234,
+        is_verified_user: false,
+        is_user_follow_business: true,
+        is_business_follow_user: false
+      })
     } as Response);
     const profile = await fetchInstagramProfile(IGSID, config(), fetchMock as unknown as typeof fetch);
-    expect(profile).toEqual({ username: "ana_real", name: "Ana", profilePicUrl: "https://cdn/x.jpg" });
-    // La URL llamada lleva el token, pero solo se pasa a fetch (no se loguea); aqui validamos que se uso.
+    expect(profile).toEqual({
+      username: "ana_real",
+      name: "Ana",
+      profilePicUrl: "https://cdn/x.jpg",
+      followerCount: 1234,
+      isVerified: false,
+      followsBusiness: true,
+      businessFollows: false
+    });
+    // La URL pide los campos de follow y nunca se loguea (solo se pasa a fetch).
     const calledUrl = String(fetchMock.mock.calls[0][0]);
-    expect(calledUrl).toContain("fields=name");
+    expect(calledUrl).toContain("is_user_follow_business");
     expect(calledUrl).toContain("profile_pic");
     expect(calledUrl).toContain(IGSID);
   });

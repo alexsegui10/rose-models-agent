@@ -44,6 +44,10 @@ function profileResponse(profile: InstagramProfile | null): NextResponse {
     username: profile.username ?? null,
     name: profile.name ?? null,
     profilePicUrl: profile.profilePicUrl ?? null,
-    profileUrl: instagramProfileUrl(profile.username)
+    profileUrl: instagramProfileUrl(profile.username),
+    followerCount: profile.followerCount ?? null,
+    isVerified: profile.isVerified ?? null,
+    followsBusiness: profile.followsBusiness ?? null,
+    businessFollows: profile.businessFollows ?? null
   });
 }
