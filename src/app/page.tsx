@@ -1020,6 +1020,23 @@ export default function Home() {
                 REJECTED: "Rechazada",
                 CLOSED: "Cerrada"
               };
+              const epochOf = (value?: Date | string): number => {
+                if (!value) return 0;
+                const time = new Date(value).getTime();
+                return Number.isNaN(time) ? 0 : time;
+              };
+              const formatRelativeTime = (value?: Date | string): string | null => {
+                const time = epochOf(value);
+                if (!time) return null;
+                const minutes = Math.round((Date.now() - time) / 60000);
+                if (minutes < 1) return "justo ahora";
+                if (minutes < 60) return `hace ${minutes} min`;
+                const hours = Math.round(minutes / 60);
+                if (hours < 24) return `hace ${hours} h`;
+                const days = Math.round(hours / 24);
+                if (days < 30) return `hace ${days} d`;
+                return new Date(time).toLocaleDateString("es-ES");
+              };
               const query = crmSearch.trim().toLowerCase();
               const visible = query
                 ? candidates.filter(
@@ -1065,7 +1082,9 @@ export default function Home() {
                   </div>
                   <div className="crm-board">
                     {PHASES.map((phase) => {
-                      const cards = visible.filter((item) => phase.states.includes(item.currentState));
+                      const cards = visible
+                        .filter((item) => phase.states.includes(item.currentState))
+                        .sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt));
                       return (
                         <div key={phase.key} className={`crm-column tone-${phase.tone}`}>
                           <div className="crm-column-head">
@@ -1200,6 +1219,9 @@ export default function Home() {
                                       </>
                                     ) : null}
                                   </div>
+                                  {formatRelativeTime(candidate.lastMessageAt) ? (
+                                    <span className="crm-foot">Ultimo mensaje {formatRelativeTime(candidate.lastMessageAt)}</span>
+                                  ) : null}
                                 </article>
                               );
                             })

@@ -284,6 +284,82 @@ const SCENARIOS: Scenario[] = [
     title: "Cambia de idea a mitad",
     profileVisibility: "PUBLIC",
     messages: ["hola", "marta", "27", "no tengo of", "uff no se si me interesa esto la verdad"]
+  },
+  // --- Ronda profunda: voz, multi-turno y realismo (para los jueces) ---
+  {
+    id: "rambling-life-story",
+    title: "Mensaje largo contando su vida",
+    profileVisibility: "PUBLIC",
+    messages: [
+      "hola",
+      "mira te cuento, estoy un poco perdida, dejé un trabajo hace nada, necesito ingresos y una amiga me hablo de esto pero no se si sera para mi la verdad"
+    ]
+  },
+  {
+    id: "contradictory-age",
+    title: "Se contradice en la edad",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "ana", "tengo 25", "no tengo of", "bueno en realidad tengo 30 jaja"]
+  },
+  {
+    id: "cold-terse",
+    title: "Respuestas frias de una palabra (funnel completo)",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "lucia", "24", "no", "iphone 13", "vale", "manana"]
+  },
+  {
+    id: "who-are-you",
+    title: "Desconfia de quien eres",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "perdona pero quien eres y de donde sacaste mi perfil?"]
+  },
+  {
+    id: "family-privacy",
+    title: "Miedo a que la vea su familia",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "ana", "26", "me da miedo que me vea mi familia o gente conocida"]
+  },
+  {
+    id: "part-time-job",
+    title: "Tiene otro trabajo, media jornada",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "tengo otro trabajo, esto se puede llevar a media jornada?"]
+  },
+  {
+    id: "when-paid",
+    title: "Como y cuando cobra",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "y como y cuando me pagariais?"]
+  },
+  {
+    id: "earnings",
+    title: "Cuanto se puede ganar",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "cuanto se puede llegar a ganar con esto?"]
+  },
+  {
+    id: "nervous-insecure",
+    title: "Insegura, nunca lo ha hecho",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "sara", "23", "nunca he hecho esto y me da inseguridad la verdad"]
+  },
+  {
+    id: "time-to-think",
+    title: "Pide tiempo para pensarlo",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "marta", "28", "no tengo of", "iphone 14", "dejame pensarlo unos dias y te digo"]
+  },
+  {
+    id: "latam-variant",
+    title: "Candidata LATAM con su registro",
+    profileVisibility: "PUBLIC",
+    messages: ["holaa, me re interesa", "soy valentina", "tengo 24", "no, nunca tuve of", "tengo un iphone 12"]
+  },
+  {
+    id: "re-asks-answered",
+    title: "Vuelve a preguntar algo ya respondido",
+    profileVisibility: "PUBLIC",
+    messages: ["hola", "es sueldo fijo o porcentaje?", "ya pero entonces como cobro exactamente?"]
   }
 ];
 
