@@ -45,7 +45,7 @@ describe("director de la llamada", () => {
   });
 
   it("pregunta cubierta -> responde del conocimiento sin avanzar la agenda", () => {
-    let state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
     const before = [...state.coveredStages];
     const decision = decideCallDirective({ state, signal: "asks-covered" });
     expect(decision.directive.type).toBe("ANSWER_FROM_KNOWLEDGE");
@@ -64,7 +64,7 @@ describe("director de la llamada", () => {
   });
 
   it("pide hablar con una persona -> handoff pegajoso", () => {
-    let state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
     const decision = decideCallDirective({ state, signal: "wants-human" });
     expect(decision.directive.type).toBe("HANDOFF_TO_ALEX");
     expect(decision.directive.handoffReason).toBe("asked-for-human");
