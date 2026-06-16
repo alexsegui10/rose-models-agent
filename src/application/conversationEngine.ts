@@ -377,10 +377,15 @@ export class ConversationEngine {
       );
     }
 
+    // DOS ventanas de contexto con proposito distinto: recentMessages(8) alimenta estilo/ritmo y el
+    // guard anti-repeticion verbatim; plannerHistory(30) es la ventana ANCHA solo para el guard
+    // anti-loop del planner (con 8 una pregunta capada "resucitaba" al salir de la ventana: bucle real
+    // de "Como te llamas?" x11). Un helper futuro debe elegir conscientemente cual de las dos usa.
     const recentMessages = await this.dependencies.repository.listMessages(activeCandidate.id, 8);
-    // Ventana ancha SOLO para el guard anti-repeticion del planner: con 8 mensajes una pregunta
-    // capada "resucitaba" en cuanto salia de la ventana (bucle real de "Como te llamas?" x11).
     const plannerHistory = await this.dependencies.repository.listMessages(activeCandidate.id, 30);
+    // El ultimo mensaje del agente se reutiliza en varios pasos del turno (extraccion contextual,
+    // declive contextual, guard anti-repeticion): se calcula una vez y se recorre el array una sola vez.
+    const lastAgentMsg = lastAgentMessageContent(recentMessages);
     const modelUnderstanding = await this.dependencies.understandingProvider.understand({
       candidateState: activeCandidate.currentState,
       knownData: knownDataForModel(activeCandidate),
@@ -392,10 +397,10 @@ export class ConversationEngine {
     const escalationFilter = suppressBenignModelEscalation(
       resolveContextualDecline(
         reclassifyAnswerableBusinessQuestion(
-          mergeDeterministicExtraction(modelUnderstanding, groupedMessage.content, lastAgentMessageContent(recentMessages)),
+          mergeDeterministicExtraction(modelUnderstanding, groupedMessage.content, lastAgentMsg),
           groupedMessage.content
         ),
-        lastAgentMessageContent(recentMessages),
+        lastAgentMsg,
         groupedMessage.content
       ),
       groupedMessage.content
@@ -630,7 +635,7 @@ export class ConversationEngine {
         projectedCandidate.currentState === "NEW_LEAD" ||
         projectedCandidate.currentState === "WAITING_PROFILE_ACCESS") &&
       wantsToPausePattern.test(normalizeText(groupedMessage.content))
-        ? "Claro, sin prisa. Cuando quieras seguimos, aqui estoy."
+        ? pauseAcknowledgement(recentMessages)
         : null;
     let draft =
       pauseMessage !== null
@@ -678,12 +683,7 @@ export class ConversationEngine {
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
     // Las variantes son estaticamente seguras (acuses o derivacion honesta al socio), por lo que
     // no invalidan la validacion factual ya realizada.
-    const dedupedResponse = withoutVerbatimRepetition(
-      response,
-      lastAgentMessageContent(recentMessages),
-      responsePlan,
-      projectedCandidate.currentState
-    );
+    const dedupedResponse = withoutVerbatimRepetition(response, lastAgentMsg, responsePlan, projectedCandidate.currentState);
     if (dedupedResponse !== response) {
       response = dedupedResponse;
       draft = { ...draft, response };
@@ -2046,7 +2046,9 @@ function suppressBenignModelEscalation(
   };
 }
 
-const leadingAcknowledgementPattern = /^(Perfecto|Okeyy|Vale pues|Entiendo)\.?/;
+// Acuse de apertura. Admite el prefijo "Te " ("Te entiendo"), que Alex usa a menudo, para que el swap
+// anti-repeticion lo reconozca como acuse y no encadene dos acuses distintos en rafaga.
+const leadingAcknowledgementPattern = /^(?:Te\s+)?(Perfecto|Okeyy|Vale pues|Entiendo)\.?/;
 
 /**
  * El Alex real nunca repite un mensaje caracter a caracter. Si la respuesta planificada es
@@ -2055,7 +2057,7 @@ const leadingAcknowledgementPattern = /^(Perfecto|Okeyy|Vale pues|Entiendo)\.?/;
  * acuse alternativo si hay pregunta de slot, derivacion honesta si el plan exige socio, o un
  * acuse corto en el resto de casos.
  */
-function withoutVerbatimRepetition(
+export function withoutVerbatimRepetition(
   response: string,
   lastAgentMessage: string | null,
   responsePlan: ResponsePlan,
@@ -2108,7 +2110,7 @@ function swapLeadingAcknowledgement(response: string): string {
 
 // Muletillas de apertura que Alex usa como acuse breve. Las mas largas van primero para que la
 // alternancia del regex capture "vale pues" antes que "vale" y "bien bien" antes que "bien".
-const RHYTHM_ACK_ALTERNATION = "perfecto|vale pues|vale|bien bien|bien|okeyy|okey|genial|entiendo";
+const RHYTHM_ACK_ALTERNATION = "perfecto|vale pues|vale|bien bien|bien|okeyy|okey|genial|te entiendo|entiendo";
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -2319,6 +2321,19 @@ const wantsCallChangePattern =
 // Pide PENSARLO / pausar (no es un rechazo): el bot deja de empujar preguntas y espera a que retome.
 const wantsToPausePattern =
   /\b(dejame pensarlo|me lo pienso|lo pienso|tengo que pensarlo|me lo tengo que pensar|dame (?:unos |un par de )?dias|dame tiempo|necesito (?:pensarlo|tiempo)|luego te (?:digo|contesto|escribo)|te (?:digo|escribo|contesto) (?:luego|mas tarde|despues)|me lo miro y te digo|ahora no puedo seguir)\b/;
+
+// Variantes deterministas del acuse de pausa: todas calidas, sin prisa y SIN pregunta. Se rota por el
+// numero de mensajes del agente, asi una pausa repetida no recibe el mismo literal (sonaria a robot) y
+// el guard anti-repeticion verbatim no la degrada a un "Okeyy" pelado.
+const PAUSE_ACKNOWLEDGEMENTS = [
+  "Claro, sin prisa. Cuando quieras seguimos, aqui estoy.",
+  "Tranquila, piensatelo con calma. Cuando lo tengas claro me dices y seguimos.",
+  "Sin problema, tomate el tiempo que necesites. Aqui estare cuando quieras retomarlo."
+];
+function pauseAcknowledgement(recentMessages: ConversationMessage[]): string {
+  const agentCount = recentMessages.filter((message) => message.role === "agent").length;
+  return PAUSE_ACKNOWLEDGEMENTS[agentCount % PAUSE_ACKNOWLEDGEMENTS.length];
+}
 
 const faceRecognitionPattern =
   /\b(me reconozca|me reconozcan|que me vean|me vea alguien|me vean en mi pais|en mi pais|conocidos|gente que conozco|me da miedo que me|privacidad|que no me vea)\b/;
