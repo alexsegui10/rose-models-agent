@@ -4,7 +4,7 @@ import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorSt
 
 const AdvanceStageSchema = z.object({
   candidateId: z.string(),
-  action: z.enum(["PROFILE_FIT", "PROFILE_NO_FIT", "CONFIRM_CALL", "PROFILE_OK", "REJECT"]),
+  action: z.enum(["PROFILE_FIT", "PROFILE_NO_FIT", "CONFIRM_CALL", "PROFILE_OK", "REJECT", "FOLLOW_REQUEST_SENT"]),
   slot: z.string().optional(),
   note: z.string().optional()
 });
@@ -53,6 +53,8 @@ async function dispatchAction(
       return engine.confirmScheduledCall({ candidateId: data.candidateId, slot: data.slot });
     case "PROFILE_OK":
       return engine.markProfileOk({ candidateId: data.candidateId });
+    case "FOLLOW_REQUEST_SENT":
+      return engine.markFollowRequestSent({ candidateId: data.candidateId });
     case "REJECT":
       return engine.rejectCandidate({ candidateId: data.candidateId, note: data.note });
     case "PROFILE_FIT":

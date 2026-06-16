@@ -457,7 +457,7 @@ export default function Home() {
 
   async function advanceStage(
     candidate: Candidate,
-    action: "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT"
+    action: "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT" | "FOLLOW_REQUEST_SENT"
   ) {
     // Acciones del CRM: verificar/OK de perfil (en cualquier momento), confirmar llamada, rechazar.
     let slot: string | undefined;
@@ -486,7 +486,8 @@ export default function Home() {
       PROFILE_NO_FIT: `@${candidate.instagramUsername} descartada en la revision de perfil.`,
       CONFIRM_CALL: `Llamada confirmada para @${candidate.instagramUsername}.`,
       PROFILE_OK: `Perfil de @${candidate.instagramUsername} marcado como OK.`,
-      REJECT: `@${candidate.instagramUsername} rechazada: el bot deja de responderle.`
+      REJECT: `@${candidate.instagramUsername} rechazada: el bot deja de responderle.`,
+      FOLLOW_REQUEST_SENT: `Solicitud enviada a @${candidate.instagramUsername}: el bot deja de pedirla y pasa a revision de perfil.`
     };
     // Si el motor no aplico nada (estado incompatible), no mentir con un aviso de exito. PROFILE_OK puede
     // no cambiar de estado pero si marcar el perfil como OK: eso tambien cuenta como aplicado.
@@ -1213,6 +1214,7 @@ export default function Home() {
                                 candidate.currentState === "WAITING_HUMAN_REVIEW" ||
                                 candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
                               const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
+                              const awaitingProfileAccess = candidate.currentState === "WAITING_PROFILE_ACCESS";
                               const awaitingCallConfirm =
                                 candidate.currentState === "COLLECTING_CALL_DETAILS" ||
                                 candidate.currentState === "READY_TO_SCHEDULE";
@@ -1328,6 +1330,16 @@ export default function Home() {
                                     </div>
                                   ) : null}
                                   <div className="crm-card-actions">
+                                    {awaitingProfileAccess ? (
+                                      <button
+                                        className="btn-xs accent"
+                                        type="button"
+                                        title="La cuenta es privada y ya le has enviado tú la solicitud de seguimiento"
+                                        onClick={() => void advanceStage(candidate, "FOLLOW_REQUEST_SENT")}
+                                      >
+                                        Ya le mandé la solicitud
+                                      </button>
+                                    ) : null}
                                     {awaitingProfileReview ? (
                                       <>
                                         <button

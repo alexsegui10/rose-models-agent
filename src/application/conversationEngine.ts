@@ -215,6 +215,42 @@ export class ConversationEngine {
   }
 
   /**
+   * "Ya le mande la solicitud de seguimiento" desde el CRM (decision de Alex 16-jun): cuando la cuenta es
+   * privada el bot pide aceptar la solicitud, pero es ALEX quien la manda a mano (la API no deja). Al
+   * marcarlo, la candidata sale del bucle de "aceptanos la solicitud" y pasa a revision de perfil
+   * (PROFILE_READY_FOR_REVIEW), donde el bot solo espera con calma y Alex decide. Idempotente: solo aplica
+   * desde WAITING_PROFILE_ACCESS.
+   */
+  async markFollowRequestSent(input: {
+    candidateId: string;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    if (existing.currentState !== "WAITING_PROFILE_ACCESS" || !canTransition(existing.currentState, "PROFILE_READY_FOR_REVIEW")) {
+      return { candidate: existing, transitions: [], proposedMessage: null };
+    }
+
+    const transition = createTransition({
+      candidate: existing,
+      toState: "PROFILE_READY_FOR_REVIEW",
+      trigger: "HUMAN_FOLLOW_REQUEST_SENT",
+      reason: "Alex envio la solicitud de seguimiento a mano; el bot deja de pedirla y pasa a revision."
+    });
+    const candidate: Candidate = {
+      ...existing,
+      currentState: "PROFILE_READY_FOR_REVIEW",
+      notes: [...existing.notes, "FOLLOW_REQUEST_SENT_BY_ALEX"],
+      updatedAt: new Date()
+    };
+
+    await this.dependencies.repository.saveCandidate(candidate);
+    await this.dependencies.repository.addTransition(transition);
+    return { candidate, transitions: [transition], proposedMessage: null };
+  }
+
+  /**
    * Rechazo humano explicito desde el CRM (invariante 4: lo decide Alex). Marca a la candidata como
    * RECHAZADA desde cualquier estado no terminal y, a partir de aqui, el bot queda silenciado: no
    * responde ni gasta OpenAI (gate al inicio de handleIncomingTurn). No envia ningun mensaje: Alex ha
