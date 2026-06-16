@@ -115,6 +115,14 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("model-responsibilities", "content");
   if (/\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message))
     tags.push("production", "reels", "photos", "warmup");
+  // Tiempo de dedicacion / compaginar / media jornada: se responde SOLO si pregunta (decision de Alex):
+  // "con unas horas al dia es suficiente, lo importante es cumplir el contenido".
+  if (
+    /\b(media jornada|jornada completa|cuanto tiempo|cuantas horas|horas al dia|horas a la semana|compaginar|otro trabajo|otro curro|cuanto hay que dedicar|cuanto tengo que dedicar|cuanto le dedico|le puedo dedicar|tiempo le dedico)\b/.test(
+      message
+    )
+  )
+    tags.push("availability", "time-commitment");
   if (
     /\b(publicado antes|publicar antes|nuevo|material antiguo|contenido antiguo|ya creado|reutilizar|sexting|viejos videos)\b/.test(
       message

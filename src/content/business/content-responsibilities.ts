@@ -120,6 +120,30 @@ const entries: KnowledgeEntryInput[] = [
     updatedAt: "2026-06-09"
   },
   {
+    id: "content-time-commitment",
+    category: "CONTENT_RESPONSIBILITIES",
+    title: "Tiempo de dedicacion",
+    facts: [
+      "No se necesita jornada completa: con unas horas al dia es suficiente.",
+      "Lo importante es cumplir con el contenido acordado, no un horario fijo.",
+      "Se puede compaginar con otro trabajo o estudios."
+    ],
+    approvedAnswerPoints: [
+      "No necesitas jornada completa, con dedicarle unas horas al dia es suficiente.",
+      "Lo importante es que cumplas con el contenido que te vayamos pidiendo, lo puedes compaginar con otra cosa."
+    ],
+    prohibitedClaims: ["Prometer un horario fijo exacto.", "Decir que es sin esfuerzo o dinero facil."],
+    mandatoryNuances: ["Solo se explica el tiempo de dedicacion si la candidata lo pregunta."],
+    escalationConditions: ["Pide garantias de horario o condiciones de jornada por escrito."],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["availability", "time-commitment", "content"],
+    requiresHumanReview: false,
+    version: "content-time-commitment-2026-06-16.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-16"
+  },
+  {
     id: "content-boundaries-neutral-question",
     category: "CONTENT_RESPONSIBILITIES",
     title: "Limites de contenido",

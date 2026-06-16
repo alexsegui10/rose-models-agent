@@ -615,21 +615,40 @@ export class ConversationEngine {
     const useDeterministicFaceTurn =
       (faceConcern !== null || responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory")) &&
       !useCanonicalOpenerTemplate;
+    // "Dejame pensarlo / me lo pienso / dame unos dias": NO se empuja otra pregunta; se reconoce con
+    // calidez y se espera a que ella retome (decision de Alex 16-jun). No cambia de estado ni cierra:
+    // cuando vuelva con contenido real, el guion continua. Solo en cualificacion activa y si no hay nada
+    // que responder (una duda real se contesta primero, por eso exige answerFacts vacio).
+    const pauseMessage =
+      !useCanonicalOpenerTemplate &&
+      agencyExplanation === null &&
+      faceConcern === null &&
+      responsePlan.answerFacts.length === 0 &&
+      !responsePlan.requiresHumanReview &&
+      !responsePlan.uncoveredQuestion &&
+      (projectedCandidate.currentState === "QUALIFYING" ||
+        projectedCandidate.currentState === "NEW_LEAD" ||
+        projectedCandidate.currentState === "WAITING_PROFILE_ACCESS") &&
+      wantsToPausePattern.test(normalizeText(groupedMessage.content))
+        ? "Claro, sin prisa. Cuando quieras seguimos, aqui estoy."
+        : null;
     let draft =
-      useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn || useDeterministicFaceTurn
-        ? deterministicDraftOutput(deterministicResponse)
-        : agencyExplanation !== null
-          ? deterministicDraftOutput(agencyExplanation)
-          : await this.draftResponse({
-              deterministicResponse,
-              projectedCandidate,
-              recentMessages,
-              knowledgeEntries,
-              responsePlan,
-              retrievedExamples,
-              styleContext,
-              approvedNegotiationDecision
-            });
+      pauseMessage !== null
+        ? deterministicDraftOutput(pauseMessage)
+        : useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn || useDeterministicFaceTurn
+          ? deterministicDraftOutput(deterministicResponse)
+          : agencyExplanation !== null
+            ? deterministicDraftOutput(agencyExplanation)
+            : await this.draftResponse({
+                deterministicResponse,
+                projectedCandidate,
+                recentMessages,
+                knowledgeEntries,
+                responsePlan,
+                retrievedExamples,
+                styleContext,
+                approvedNegotiationDecision
+              });
     let response = draft.response;
     const validation = validateAgentResponse(response, projectedCandidate);
     if (!validation.valid) {
@@ -1345,7 +1364,7 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
       "El reparto estandar es 70% para la agencia y 30% para ti.",
       "Es asi porque nos encargamos de todo, el trafico, la monetizacion y la gestion, y tu solo te encargas de mandar el contenido."
     ];
-    if (responsePlan.questionToAsk) parts.push(responsePlan.questionToAsk);
+    if (responsePlan.questionToAsk) parts.push(bridgeBackToQuestion(responsePlan.questionToAsk));
     return parts.join("\n\n");
   }
 
@@ -1416,14 +1435,29 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
 
   // Una sola pregunta por mensaje: si la respuesta de conocimiento ya pregunta algo, no se anade otra.
   if (responsePlan.questionToAsk && !parts.some((part) => part.includes("?"))) {
-    parts.push(responsePlan.questionToAsk);
+    parts.push(bridgeBackToQuestion(responsePlan.questionToAsk));
   }
 
   return parts.join("\n\n");
 }
 
+const QUALIFICATION_QUESTION_HINTS = /como te llamas|que edad tienes|has tenido of|otras? agencias?|que movil tienes/i;
+
+// Tras responder una duda de la candidata, retomar la pregunta del GUION con un puente natural (peticion
+// de Alex 16-jun), no a palo seco ("...70/30. Que edad tienes?" -> "...70/30. Y volviendo a lo de antes,
+// que edad tienes?"). Solo para preguntas de cualificacion; la de agendar/telefono se deja tal cual.
+function bridgeBackToQuestion(question: string): string {
+  if (!QUALIFICATION_QUESTION_HINTS.test(question)) return question;
+  // Algunas preguntas del guion ya empiezan con "Y " ("Y que movil tienes?"); el puente lo recorta
+  // para no encadenar "Y volviendo a lo de antes, y que movil tienes?".
+  const trimmed = question.replace(/^y\s+/i, "");
+  return `Y volviendo a lo de antes, ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
+}
+
 function withOptionalQuestion(response: string, responsePlan: ResponsePlan): string {
-  if (responsePlan.questionToAsk && !response.includes("?")) return `${response}\n\n${responsePlan.questionToAsk}`;
+  if (responsePlan.questionToAsk && !response.includes("?")) {
+    return `${response}\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}`;
+  }
   return response;
 }
 
@@ -2040,7 +2074,10 @@ function withoutVerbatimRepetition(
     return "Esto sigue pendiente con mi socio. En cuanto lo hable con el te digo, no te preocupes.";
   }
 
-  if (responsePlan.questionToAsk && response.includes(responsePlan.questionToAsk)) {
+  // Comparacion normalizada: el puente ("Y volviendo a lo de antes, como te llamas?") baja a minuscula
+  // la inicial de la pregunta, asi que un includes literal de questionToAsk ("Como te llamas?") fallaria
+  // y degradaria a un "Okeyy" pelado. Normalizando detectamos la pregunta este o no precedida del puente.
+  if (responsePlan.questionToAsk && normalizeText(response).includes(normalizeText(responsePlan.questionToAsk))) {
     const swapped = swapLeadingAcknowledgement(response);
     if (normalizeText(swapped.trim()) !== normalizeText(lastAgentMessage.trim())) {
       return swapped;
@@ -2279,6 +2316,9 @@ const facePartialPattern =
 // La candidata quiere mover/cancelar una llamada YA agendada (se evalua solo en CALL_SCHEDULED).
 const wantsCallChangePattern =
   /\b(cambiar|cambio|cancelar|cancela|anular|reprogram|aplaz|posponer|mover|otra hora|otro dia|otra fecha|no me viene bien|no puedo el)\b/;
+// Pide PENSARLO / pausar (no es un rechazo): el bot deja de empujar preguntas y espera a que retome.
+const wantsToPausePattern =
+  /\b(dejame pensarlo|me lo pienso|lo pienso|tengo que pensarlo|me lo tengo que pensar|dame (?:unos |un par de )?dias|dame tiempo|necesito (?:pensarlo|tiempo)|luego te (?:digo|contesto|escribo)|te (?:digo|escribo|contesto) (?:luego|mas tarde|despues)|me lo miro y te digo|ahora no puedo seguir)\b/;
 
 const faceRecognitionPattern =
   /\b(me reconozca|me reconozcan|que me vean|me vea alguien|me vean en mi pais|en mi pais|conocidos|gente que conozco|me da miedo que me|privacidad|que no me vea)\b/;
