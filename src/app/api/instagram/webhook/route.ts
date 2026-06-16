@@ -19,6 +19,9 @@ export const maxDuration = 60;
 // gratis (la comprension+redaccion de OpenAI ya consume parte). Ajustable por env si se cambia de plan.
 const BURST_DELAY_BUDGET_MS = Number(process.env.INSTAGRAM_BURST_DELAY_BUDGET_MS ?? 4500);
 const BURST_DELAY_PER_MESSAGE_MAX_MS = Number(process.env.INSTAGRAM_BURST_DELAY_MAX_MS ?? 2600);
+// Techo de tiempo por turno: margen de seguridad bajo el limite de ~10s de Vercel Hobby. El presupuesto
+// de pausas se calcula como (este techo - tiempo ya gastado por OpenAI), para no provocar timeouts.
+const TURN_TIME_BUDGET_MS = Number(process.env.INSTAGRAM_TURN_BUDGET_MS ?? 8500);
 
 /** Pausa "humana" antes de un mensaje: base + tiempo de tecleo segun longitud, con tope por mensaje. */
 function naturalSendDelayMs(chunk: string): number {
@@ -55,6 +58,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  // Reloj del turno: el presupuesto de pausas de la rafaga RESTA lo que ya consumio OpenAI, para no
+  // acercarse al techo de ~10s del plan Hobby de Vercel (peticion validada en la auditoria 16-jun).
+  const turnStartedAt = Date.now();
   const config = getInstagramConfig();
   // Bytes crudos exactos que firmó Meta (sin round-trip de string); rawBody (utf8) solo para el JSON.parse.
   const buf = Buffer.from(await request.arrayBuffer());
@@ -121,7 +127,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
       if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
         const chunks = splitIntoMessageBurst(result.response);
-        let delayBudgetMs = BURST_DELAY_BUDGET_MS;
+        // Presupuesto de pausa = lo que queda del techo del turno tras descontar el tiempo ya gastado
+        // (sobre todo OpenAI). Si OpenAI tardo mucho, casi no se pausa, en vez de arriesgar el timeout.
+        const elapsedMs = Date.now() - turnStartedAt;
+        let delayBudgetMs = Math.max(0, Math.min(BURST_DELAY_BUDGET_MS, TURN_TIME_BUDGET_MS - elapsedMs));
         for (let i = 0; i < chunks.length; i += 1) {
           // Ritmo natural (peticion de Alex): unos segundos entre mensajes, NUNCA instantaneo. Se
           // reparte un presupuesto total de pausa para no acercarse al limite de 10s de Vercel: si se

@@ -18,12 +18,13 @@ const serviceClaims = [
 export function validateFactualResponse(response: string, plan: ResponsePlan): FactualValidationResult {
   const reasons: string[] = [];
 
-  if (
-    /(?:\d{1,3}\s?%|70\/30)/.test(response) &&
-    !plan.hasApprovedNegotiationDecision &&
-    (!activeRevenueSharePolicy.isConfirmed || !activeRevenueSharePolicy.canDiscloseExactPercentagesInChat)
-  ) {
-    reasons.push("La respuesta incluye porcentajes no autorizados para chat.");
+  // Invariante 3 (ultima linea de defensa): un porcentaje SOLO es legitimo si el PLAN lo autorizo este
+  // turno (la candidata pidio la cifra exacta -> filterCommercialAnswerFacts deja el 70/30 en el plan) o
+  // hay negociacion aprobada. Si la respuesta menciona un % que el plan NO trae (mencion proactiva o
+  // cifra alucinada por OpenAI fuera de answerFacts), se bloquea. Antes esta guarda era inerte porque
+  // dependia de la politica (isConfirmed=true), no del plan del turno.
+  if (/(?:\d{1,3}\s?%|70\/30)/.test(response) && !plan.hasApprovedNegotiationDecision && !planAuthorizesPercentage(plan)) {
+    reasons.push("La respuesta menciona porcentajes que el plan no autorizo este turno (mencion proactiva o alucinada).");
   }
 
   if (/(?:\d{1,3}\s?%)/.test(response) && !plan.hasApprovedNegotiationDecision) {
@@ -83,6 +84,21 @@ export function safeFactualFallback(): string {
 
 function hasAllowedContractClaim(plan: ResponsePlan): boolean {
   return plan.knowledgeEntryIds.includes("contract-questions-human-review");
+}
+
+/**
+ * El plan autoriza mencionar un porcentaje SOLO si la cifra esta entre los hechos/afirmaciones que el
+ * planner dejo pasar este turno (sucede cuando la candidata pidio la cifra exacta; en otro caso
+ * filterCommercialAnswerFacts elimina el 70/30). Asi el validador distingue una cifra legitima de una
+ * proactiva/alucinada sin depender de la politica global (que siempre esta "confirmada").
+ */
+function planAuthorizesPercentage(plan: ResponsePlan): boolean {
+  const mentionsPercentage = (text: string) => /\b\d{1,3}\s?%|70\/30\b/.test(text);
+  return (
+    plan.allowedClaims.some(mentionsPercentage) ||
+    plan.answerFacts.some(mentionsPercentage) ||
+    plan.acknowledgedFacts.some(mentionsPercentage)
+  );
 }
 
 function containsLoose(response: string, claim: string): boolean {
