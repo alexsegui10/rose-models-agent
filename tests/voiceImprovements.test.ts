@@ -88,3 +88,38 @@ describe("Voz: puente al retomar el guion tras responder una duda", () => {
     expect(result.response.toLowerCase()).toContain("como te llamas");
   });
 });
+
+describe("Voz: duda de interes ('no se si me interesa') no repite la pregunta, reconoce con calidez", () => {
+  it("ante 'no se si me interesa' pausa con calidez en vez de re-preguntar el slot", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "QUALIFYING", { firstName: "Marta", age: 27, isAdultConfirmed: true });
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "voice_case",
+      message: "uff no se si me interesa esto la verdad"
+    });
+    expect(result.candidate.currentState).not.toBe("CLOSED");
+    const text = result.response.toLowerCase();
+    // No empuja la pregunta de slot (movil/edad) ni suelta un acuse vacio.
+    expect(text).not.toContain("que movil tienes");
+    expect(text).not.toContain("que edad tienes");
+    // Reconoce con calidez (alguna de las variantes de pausa).
+    expect(/sin prisa|con calma|tomate el tiempo|piensatelo/.test(text)).toBe(true);
+  });
+});
+
+describe("Voz: pregunta de pago/cobro no se despacha con 'Okeyy'", () => {
+  it("ante 'como y cuando me pagariais' responde estructura de pago y defiere, no brush-off", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "QUALIFYING");
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "voice_case",
+      message: "oye y como y cuando me pagariais?"
+    });
+    const text = result.response.toLowerCase();
+    // Atiende el tema del pago (porcentaje/reparto) y defiere a la llamada, en vez de "Okeyy | como te llamas".
+    expect(/porcentaje|reparto|llamada/.test(text)).toBe(true);
+    expect(text.startsWith("okeyy")).toBe(false);
+  });
+});

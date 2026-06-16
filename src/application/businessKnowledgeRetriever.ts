@@ -76,7 +76,11 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   const message = normalize(input.question);
   const tags: string[] = [];
 
-  if (/\b(sueldo|salario|fijo|paga|pagan|pagais|pagos|cobro|cobrar|cobraria|ganaria|cuanto se gana|cuanto gano)\b/.test(message))
+  if (
+    /\b(sueldo|salario|fijo|paga|pagan|pagais|pagais|pagaria|pagariais|me pagariais|pagarian|pagaran|pagos|cobro|cobrar|cobraria|cobrarias|ganaria|cuanto se gana|cuanto gano|cuando (?:me )?pag|cuando (?:cobro|cobraria|se cobra|se paga)|cada cuanto (?:cobro|pagais|se paga|me pagais)|como (?:cobro|me pag|me pagais|se cobra))\b/.test(
+      message
+    )
+  )
     tags.push("salary", "payment", "commercial");
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
   if (/\b(70\/30|quien recibe|quien se queda)\b/.test(message)) tags.push("percentage", "revenue-share");

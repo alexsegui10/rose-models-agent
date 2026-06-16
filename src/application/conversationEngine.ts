@@ -2318,9 +2318,11 @@ const facePartialPattern =
 // La candidata quiere mover/cancelar una llamada YA agendada (se evalua solo en CALL_SCHEDULED).
 const wantsCallChangePattern =
   /\b(cambiar|cambio|cancelar|cancela|anular|reprogram|aplaz|posponer|mover|otra hora|otro dia|otra fecha|no me viene bien|no puedo el)\b/;
-// Pide PENSARLO / pausar (no es un rechazo): el bot deja de empujar preguntas y espera a que retome.
+// Pide PENSARLO / pausar O expresa DUDA DE INTERES (no es un rechazo duro): el bot deja de empujar
+// preguntas, reconoce con calidez y espera a que retome. Incluye la indecision ("no se si me interesa",
+// "no me convence", "no lo veo claro") para no repetir mecanicamente la pregunta de slot.
 const wantsToPausePattern =
-  /\b(dejame pensarlo|me lo pienso|lo pienso|tengo que pensarlo|me lo tengo que pensar|dame (?:unos |un par de )?dias|dame tiempo|necesito (?:pensarlo|tiempo)|luego te (?:digo|contesto|escribo)|te (?:digo|escribo|contesto) (?:luego|mas tarde|despues)|me lo miro y te digo|ahora no puedo seguir)\b/;
+  /\b(dejame pensarlo|me lo pienso|lo pienso|tengo que pensarlo|me lo tengo que pensar|dame (?:unos |un par de )?dias|dame tiempo|necesito (?:pensarlo|tiempo)|luego te (?:digo|contesto|escribo)|te (?:digo|escribo|contesto) (?:luego|mas tarde|despues)|me lo miro y te digo|ahora no puedo seguir|no se si me interesa|no se si esto es para mi|no se si es para mi|no me convence|no me termina de convencer|no lo veo claro|no estoy segura de esto|no estoy muy segura de esto)\b/;
 
 // Variantes deterministas del acuse de pausa: todas calidas, sin prisa y SIN pregunta. Se rota por el
 // numero de mensajes del agente, asi una pausa repetida no recibe el mismo literal (sonaria a robot) y
