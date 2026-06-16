@@ -7,7 +7,7 @@ export const metadata = {
 // Live y para el App Review. Texto en español, editable. Sustituye el correo de contacto por el real.
 export default function PrivacidadPage() {
   return (
-    <main style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px", lineHeight: 1.6, color: "#1a2421" }}>
+    <main style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px", lineHeight: 1.6, color: "#dbe4ec" }}>
       <h1>Política de Privacidad — Rose Models</h1>
       <p>Última actualización: junio de 2026</p>
 
