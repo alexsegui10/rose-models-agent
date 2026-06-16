@@ -44,6 +44,24 @@ describe("objections deduplication", () => {
     expect(finalObjections).toEqual(["No quiero salir con la cara"]);
   });
 
+  it("dedup colapsa espacios internos multiples (no acumula la misma objecion mal espaciada)", () => {
+    const candidate = {
+      ...createCandidate({ instagramUsername: "dedup_inner_spaces" }),
+      objections: ["No quiero salir con la cara"]
+    };
+
+    const patch = buildConsistentCandidatePatch({
+      candidate,
+      extractedData: { objections: ["no   quiero  salir con la  cara"] },
+      inboundMessage: "No quiero salir con la cara"
+    });
+
+    // Misma objecion, solo cambia el espaciado interno -> no se duplica: el conteo de objeciones
+    // (p.ej. el de la cara) no debe inflarse por espacios de mas.
+    const finalObjections = patch.patch.objections ?? candidate.objections;
+    expect(finalObjections).toEqual(["No quiero salir con la cara"]);
+  });
+
   it("still appends genuinely new objections", () => {
     const candidate = {
       ...createCandidate({ instagramUsername: "dedup_case_new" }),

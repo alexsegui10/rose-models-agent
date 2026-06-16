@@ -67,6 +67,15 @@ describe("ConversationEngine", () => {
     expect(result.response.toLowerCase()).toContain("como te llamas");
     expect(result.response.toLowerCase()).not.toContain("que edad tienes");
     expect(result.responsePlan.questionToAsk).toBeNull();
+    // Red de seguridad: el opener es una plantilla pegada a mano que SALTA OpenAI por completo. No es
+    // un fallback (no se llego a pedir nada al modelo), por eso la traza es honesta y DETERMINISTA:
+    // requestedProvider DETERMINISTIC (jamas OPENAI) y usedFallback=false. Si alguien rutea el primer
+    // turno por el redactor LLM, estas aserciones deben romperse.
+    expect(result.draft.provider).toBe("deterministic");
+    expect(result.draft.requestedProvider).toBe("DETERMINISTIC");
+    expect(result.draft.actualProvider).toBe("deterministic");
+    expect(result.draft.usedFallback).toBe(false);
+    expect(result.draft.fallbackReason).toBeNull();
   });
 
   it("exposes planned transitions in DRAFT_ONLY mode without persisting them", async () => {

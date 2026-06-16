@@ -148,6 +148,105 @@ describe("escalation suppression allowlist (regresion de seguridad: solo se supr
   });
 });
 
+describe("invariante 1: el modelo no inventa escaladas sin senal determinista", () => {
+  it("suprime una escalada inventada por el modelo con motivo benigno y mensaje inofensivo, sin acabar en intervencion humana", async () => {
+    // Motivo compuesto SOLO de vocabulario benigno del funnel (datos/perfil/proporcionados/completos):
+    // el modelo "se inventa" la escalada sin ninguna senal determinista (ni edad dudosa, ni coaccion, ni
+    // negociacion, ni prompt injection). Invariante 1: la salida del modelo no controla el flujo.
+    const { engine } = createEngineWithStub([
+      stubUnderstanding({
+        intent: "OTHER",
+        extractedData: {},
+        requiresHumanReview: true,
+        humanReviewReason: "El perfil tiene los datos completos"
+      })
+    ]);
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_escalada_inventada_benigna",
+      profileVisibility: "PUBLIC",
+      message: "hola buenas, todo bien por aqui"
+    });
+
+    expect(result.understanding.requiresHumanReview).toBe(false);
+    expect(result.understanding.humanReviewReason).toBeNull();
+    expect(result.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
+    // La supresion nunca es silenciosa: Alex conserva el motivo original en las notas.
+    expect(result.candidate.notes).toContain("ESCALADA_SUPRIMIDA: El perfil tiene los datos completos");
+  });
+
+  it("NO suprime una escalada del modelo con motivo generico vago: lo ambiguo nunca es benigno", async () => {
+    // "Algo parece raro" / "No me da buena espina" no pertenecen al allowlist benigno (palabras fuera
+    // del vocabulario cerrado), asi que la escalada se RESPETA: ante la duda, decide Alex, no el modelo.
+    for (const humanReviewReason of ["Algo parece raro", "No me da buena espina"]) {
+      const { engine } = createEngineWithStub([
+        stubUnderstanding({
+          intent: "OTHER",
+          extractedData: {},
+          requiresHumanReview: true,
+          humanReviewReason
+        })
+      ]);
+
+      const result = await engine.handleIncomingMessage({
+        instagramUsername: "lead_motivo_vago",
+        profileVisibility: "PUBLIC",
+        message: "hola buenas, todo bien por aqui"
+      });
+
+      expect(result.understanding.requiresHumanReview, humanReviewReason).toBe(true);
+      expect(result.candidate.currentState, humanReviewReason).toBe("HUMAN_INTERVENTION_REQUIRED");
+      expect(result.candidate.notes, humanReviewReason).not.toContain(`ESCALADA_SUPRIMIDA: ${humanReviewReason}`);
+    }
+  });
+
+  it("conserva la escalada cuando hay senal real de negociacion en el mensaje (caso de control)", async () => {
+    // Caso de control: misma forma (escalada del modelo) pero el mensaje trae una senal determinista de
+    // negociacion (porcentaje no estandar demandado). La negociacion SIEMPRE va a revision humana.
+    const { engine } = createEngineWithStub([
+      stubUnderstanding({
+        intent: "ASKS_ABOUT_PERCENTAGE",
+        extractedData: {},
+        requiresHumanReview: true,
+        humanReviewReason: "Negocia el reparto"
+      })
+    ]);
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_negociacion_control",
+      profileVisibility: "PUBLIC",
+      message: "quiero que me deis el 80% a mi"
+    });
+
+    expect(result.understanding.requiresHumanReview).toBe(true);
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+  });
+
+  it("conserva la escalada cuando hay senal de coaccion en el mensaje aunque el motivo del modelo sea benigno", async () => {
+    // Caso de control reforzado: el motivo del modelo es benigno ("Datos completos"), pero el MENSAJE
+    // contiene una senal de seguridad (un tercero controla las cuentas). La senal determinista del
+    // mensaje manda sobre el motivo benigno: nunca se neutraliza una posible coaccion en silencio.
+    const { engine } = createEngineWithStub([
+      stubUnderstanding({
+        intent: "OTHER",
+        extractedData: {},
+        requiresHumanReview: true,
+        humanReviewReason: "Datos completos"
+      })
+    ]);
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "lead_coaccion_motivo_benigno",
+      profileVisibility: "PUBLIC",
+      message: "mi novio controla mis cuentas"
+    });
+
+    expect(result.understanding.requiresHumanReview).toBe(true);
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.candidate.notes).not.toContain("ESCALADA_SUPRIMIDA: Datos completos");
+  });
+});
+
 // Regresion del sobre-escalado real (medido con LLM): el modelo re-emite datos blandos o marcadores
 // vacios en turnos posteriores, y la comprobacion de consistencia los tomaba como "contradiccion
 // dura" -> HUMAN_INTERVENTION_REQUIRED pegajoso en cada turno benigno. Estos tests fallan sin el fix

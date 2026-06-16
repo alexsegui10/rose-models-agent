@@ -139,11 +139,13 @@ export function buildConsistentCandidatePatch(input: {
     patch.goals = input.extractedData.goals;
   if (input.extractedData.objections?.length) {
     // Dedup case-insensitive: la misma objecion repetida en varios mensajes no debe acumularse, o el
-    // conteo de objeciones (p.ej. el de la cara) se infla y dispara decisiones antes de tiempo.
+    // conteo de objeciones (p.ej. el de la cara) se infla y dispara decisiones antes de tiempo. La clave
+    // colapsa espacios internos multiples ("no   quiero  salir") para que no se cuele como objecion nueva.
+    const dedupKey = (objection: string) => objection.trim().toLowerCase().replace(/\s+/g, " ");
     const merged = [...input.candidate.objections];
-    const seen = new Set(merged.map((objection) => objection.trim().toLowerCase()));
+    const seen = new Set(merged.map(dedupKey));
     for (const objection of input.extractedData.objections) {
-      const key = objection.trim().toLowerCase();
+      const key = dedupKey(objection);
       if (key && !seen.has(key)) {
         seen.add(key);
         merged.push(objection);

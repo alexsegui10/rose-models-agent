@@ -23,13 +23,50 @@ const ageCountNounLookahead =
 // La segunda rama solo acepta "anos"/"años" explicito: "a" suelta es la preposicion castellana ("de 9
 // a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
 // menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
+// Tercera rama "cumplir N": SOLO cumpleanos PASADO/completado ("acabo de cumplir 18", "recien cumpli
+// 19", "ya cumpli 21", "he cumplido 19"). Antes, sin la palabra "años" la candidata se quedaba sin edad
+// y el bot re-preguntaba en bucle. CRITICO (invariante 2): se exige forma pasada (cumpli/cumplio/cumplido
+// o "acabo de cumplir"); el INFINITIVO/FUTURO ("voy a cumplir 18", "cumplire 18", "pronto cumplo 18")
+// NO casa aqui -> declaredMinorAge lo trata como la menor que aun es (ver notYetTurnsAge). Restringida a
+// 13-99 para que "cumpli los 10 reels" no se lea como edad 10.
 const agePattern = new RegExp(
-  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años|anitos|añitos))`,
+  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años|anitos|añitos)|(?:acab\\w+\\s+de\\s+cumplir|cumpli|cumplio|cumplido)\\s+(?:los\\s+)?(1[3-9]|[2-9]\\d)(?!\\d)${ageCountNounLookahead})`,
   "i"
 );
 // Version global del mismo patron para recorrer TODAS las coincidencias (matchAll) y elegir la
 // primera que no sea una duracion ("llevo 5 años, tengo 25" -> 25, no 5).
 const agePatternGlobal = new RegExp(agePattern.source, "gi");
+
+// Detecta "aun NO los tiene": un cumpleanos NEGADO ("no he cumplido 18") o en FUTURO/INTENCION ("voy a
+// cumplir 18", "pronto cumplo 18", "cuando cumpla 18", "el viernes cumplo 18", "cumplire 18"). Devuelve
+// la edad N que TODAVIA no cumple, o null. El llamador (declaredMinorAge) la trata como menor (~N-1)
+// cuando N<=18. Defensa en profundidad del invariante 2: la rama positiva "cumplir N" del agePattern solo
+// casa PASADO, asi que un futuro no capturado aqui se queda sin edad (re-pregunta segura), nunca adulta.
+// El lookahead de contables evita leer "voy a cumplir 18 mil seguidores" como edad.
+// Excluye contables ("18 mil seguidores") y, sobre todo, ANIVERSARIOS/DURACION ("10 anos como modelo",
+// "5 anos en la empresa", "8 anos de novia/casada/juntos") para que "pronto cumplo 10 anos como modelo"
+// NO se lea como edad 10 y cierre a una adulta. Un "cumplir N anos" SIN ese contexto ("voy a cumplir 18
+// anos") SI es edad y se trata como menor que aun no los tiene. Reusa el criterio de duracion del loop.
+const notAgeCountLookahead =
+  "(?!\\s*(?:mil(?:es)?|seguidor[ae]s?|cuentas?|euros?|dolares?|pesos?|fotos?|videos?|reels?|pedidos?|kilos?))(?!\\s*anos?\\s+(?:como|de|en|trabajand|haciend|dedicad|currand|junt|casad|sali|novi|relacion|pareja))";
+const futureTimeMarker =
+  "voy a|vas a|va a|vamos a|van a|cuando|pronto|manana|proxim\\w+|a punto de|en\\s+(?:\\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|pocos?|unos?|unas?)\\s+(?:dias?|semanas?|meses?)|(?:la semana|el mes|el ano|el dia) que viene|este (?:finde|mes|lunes|martes|miercoles|jueves|viernes|sabado|domingo)|el (?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)";
+function notYetTurnsAge(normalized: string): number | null {
+  const num = `(\\d{1,2})\\b${notAgeCountLookahead}`;
+  const negated = normalized.match(
+    new RegExp(`\\bno\\s+(?:aun\\s+|todavia\\s+)?(?:los\\s+)?(?:he\\s+)?cumpl\\w*\\s+(?:los\\s+)?${num}`)
+  );
+  if (negated) return Number(negated[1]);
+  const futureConj = normalized.match(new RegExp(`\\bcumplir[ae]\\s+(?:los\\s+)?${num}`));
+  if (futureConj) return Number(futureConj[1]);
+  const futureBefore = normalized.match(
+    new RegExp(`\\b(?:${futureTimeMarker})\\b[^.!?]{0,25}?\\bcumpl\\w*\\s+(?:los\\s+)?${num}`)
+  );
+  if (futureBefore) return Number(futureBefore[1]);
+  const futureAfter = normalized.match(new RegExp(`\\bcumpl\\w*\\s+(?:los\\s+)?${num}[^.!?]{0,25}?\\b(?:${futureTimeMarker})`));
+  if (futureAfter) return Number(futureAfter[1]);
+  return null;
+}
 
 // Declaracion de minoria de edad. Invariante 2 (INNEGOCIABLE): una menor SIEMPRE se cierra y NUNCA
 // se confirma como adulta. Se detecta ANTES del agePattern para que "no tengo 18" no se lea como
@@ -63,6 +100,14 @@ function declaredMinorAge(normalized: string): number | null {
   if (notYet) {
     const declared = Number(notYet[1]);
     if (declared <= 18) return Math.max(1, declared - 1);
+  }
+  // "Aun NO los tiene": cumpleanos NEGADO ("no he cumplido 18") o FUTURO/INTENCION ("voy a cumplir 18",
+  // "pronto cumplo 18", "cuando cumpla 18", "el viernes cumplo 18", "cumplire 18"). En todos la candidata
+  // todavia no tiene N anos -> con N<=18 es menor (~N-1) y se cierra. CRITICO (invariante 2): sin esto la
+  // rama positiva "cumplir N" leeria "voy a cumplir 18" como adulta de 18 cuando todavia tiene 17.
+  const notYetCumplirAge = notYetTurnsAge(normalized);
+  if (notYetCumplirAge !== null && notYetCumplirAge <= 18) {
+    return Math.max(1, notYetCumplirAge - 1);
   }
   // Misma negacion pero con la edad en LETRA: "(aun|todavia) no tengo dieciocho" es MENOR, igual que
   // "no tengo 18". Sin esto, spelledAdultAge leia "tengo dieciocho" dentro de "no tengo dieciocho" como
@@ -463,7 +508,7 @@ export function extractDeterministicUnderstanding(
     // "N años de edad" SI es edad. Sin suelo numerico: "12 años" cierra como menor (invariante 2).
     const stripped = stripPhoneSpans(normalized);
     for (const m of stripped.matchAll(agePatternGlobal)) {
-      const value = Number(m[1] ?? m[2]);
+      const value = Number(m[1] ?? m[2] ?? m[3]);
       const idx = m.index ?? 0;
       const clausePrefix = (
         stripped

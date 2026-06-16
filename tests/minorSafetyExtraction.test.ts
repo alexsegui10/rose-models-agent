@@ -32,7 +32,11 @@ describe("Seguridad de menores: declaracion de minoria -> CLOSED, nunca adulta",
     "tengo dieciseis",
     "tengo quince años",
     "no tengo dieciocho",
-    "aun no tengo dieciocho todavia"
+    "aun no tengo dieciocho todavia",
+    // "cumplir N" tambien cierra a menores (regresion 16-jun: antes "cumplir N" no se leia como edad).
+    "acabo de cumplir 16",
+    "cumpli 17 hace nada",
+    "no he cumplido 18 todavia"
   ];
 
   for (const message of minorMessages) {

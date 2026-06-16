@@ -84,6 +84,35 @@ describe("operational safety", () => {
     expect(transitions).toHaveLength(0);
   });
 
+  it("bloqueo atomico: con control manual activo no persiste ni mensaje de agente ni transicion en la BD aunque el turno avanzaria de estado", async () => {
+    // Sin bloqueo, este turno completo cualificaria y avanzaria a WAITING_HUMAN_REVIEW persistiendo
+    // una transicion de estado y el mensaje del agente. Con control manual el bloqueo debe ser
+    // ATOMICO: nada de lo que el motor habria escrito (mensaje + transicion) toca el repositorio.
+    const { engine, repository } = createEngine(async (candidate) => ({
+      ...candidate,
+      manualControlActive: true,
+      automationPaused: true
+    }));
+
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "atomic_block_case",
+      profileVisibility: "PUBLIC",
+      message: "Tengo 23, soy de Madrid, tengo experiencia y un iPhone 13, disponible por las tardes"
+    });
+
+    // Consultamos el REPOSITORIO directamente (no solo la salida del engine) para confirmar
+    // que el bloqueo no dejo rastro persistido.
+    const storedMessages = await repository.listMessages(result.candidate.id);
+    const storedTransitions = await repository.listTransitions(result.candidate.id);
+
+    expect(result.automationBlocked).toBe(true);
+    expect(result.deliveryStatus).toBe("BLOCKED");
+    expect(storedTransitions).toHaveLength(0);
+    expect(storedMessages.filter((message) => message.role === "agent")).toHaveLength(0);
+    // El mensaje entrante de la candidata SI se guarda (llego antes del punto de bloqueo de envio).
+    expect(storedMessages.filter((message) => message.role === "candidate")).toHaveLength(1);
+  });
+
   it("keeps a private profile in review-ready state when candidate says access was accepted but human has not verified it", async () => {
     const { engine } = createEngine();
 

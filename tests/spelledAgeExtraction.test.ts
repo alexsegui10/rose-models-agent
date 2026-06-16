@@ -49,3 +49,28 @@ describe("extraccion: edad en letra (adultas)", () => {
     expect(age).toBeUndefined();
   });
 });
+
+// Cumpleanos reciente: "recien cumpli 18" / "acabo de cumplir 18" / "cumpli 18 hace nada" son una
+// declaracion de edad inequivoca de una adulta de 18, aunque OMITA la palabra "años". Hoy el agePattern
+// solo lee "tengo N" o "N años", asi que estos mensajes se quedan en UNCLEAR sin edad y el bot re-pregunta
+// la edad en bucle (mismo sintoma que motivo el parser de edad en letra). El verbo "cumplir N" debe
+// extraer la edad N e intent PROVIDES_AGE.
+describe("extraccion: cumpleanos reciente sin la palabra 'años'", () => {
+  it("'recien cumpli 18' -> edad 18 e intent PROVIDES_AGE", () => {
+    const out = extractDeterministicUnderstanding("recien cumpli 18");
+    expect(out.extractedData.age).toBe(18);
+    expect(out.intent).toBe("PROVIDES_AGE");
+  });
+
+  it("'acabo de cumplir 18' -> edad 18 e intent PROVIDES_AGE", () => {
+    const out = extractDeterministicUnderstanding("acabo de cumplir 18");
+    expect(out.extractedData.age).toBe(18);
+    expect(out.intent).toBe("PROVIDES_AGE");
+  });
+
+  it("'cumpli 18 hace nada' -> edad 18 e intent PROVIDES_AGE", () => {
+    const out = extractDeterministicUnderstanding("cumpli 18 hace nada");
+    expect(out.extractedData.age).toBe(18);
+    expect(out.intent).toBe("PROVIDES_AGE");
+  });
+});
