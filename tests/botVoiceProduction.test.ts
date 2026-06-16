@@ -1,0 +1,69 @@
+import { describe, expect, it } from "vitest";
+import { ConversationEngine } from "@/application/conversationEngine";
+import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
+import { LocalExampleRetriever } from "@/application/exampleRetriever";
+import { LocalBusinessKnowledgeRetriever } from "@/application/businessKnowledgeRetriever";
+import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
+
+function createEngine() {
+  const repository = new InMemoryCandidateRepository();
+  const engine = new ConversationEngine({
+    repository,
+    understandingProvider: new DeterministicUnderstandingProvider(),
+    businessKnowledgeRetriever: new LocalBusinessKnowledgeRetriever(),
+    exampleRetriever: new LocalExampleRetriever()
+  });
+  return { engine };
+}
+
+// r2: tras reconducir la 1a objecion de cara, si reinsiste con OTRA formulacion ("no LA quiero ensenar")
+// debe CERRAR educadamente, no soltar un "Okeyy" pelado (el pronombre intercalado rompia la deteccion).
+describe("Cara: reinsistir con 'no la quiero ensenar' cierra educadamente (no 'Okeyy')", () => {
+  it("dos turnos de rechazo de cara terminan en CLOSED con cierre educado", async () => {
+    const { engine } = createEngine();
+    let candidateId: string | undefined;
+    const seq = [
+      "ana",
+      "23",
+      "pero yo no quiero salir con la cara, se puede tapar?",
+      "ya pero es que la cara no la quiero enseñar de verdad"
+    ];
+    let last;
+    for (const message of seq) {
+      last = await engine.handleIncomingMessage({
+        candidateId,
+        instagramUsername: "face_insist",
+        profileVisibility: "PUBLIC",
+        message
+      });
+      candidateId = last.candidate.id;
+    }
+    expect(last!.candidate.currentState).toBe("CLOSED");
+    const text = last!.response.toLowerCase();
+    expect(text.trim()).not.toBe("okeyy");
+    expect(/manera de trabajar|no podemos seguir|te deseo lo mejor/.test(text)).toBe(true);
+  });
+});
+
+// r7: miedo a que la RECONOZCA gente conocida (familia) es una duda de privacidad: debe reconducir con
+// el angulo de identidad/privacidad, no ignorarlo y seguir con la siguiente pregunta del guion.
+describe("Privacidad: 'me da miedo que me vea mi familia' reconduce con privacidad, no lo ignora", () => {
+  it("atiende la duda de privacidad antes de seguir cualificando", async () => {
+    const { engine } = createEngine();
+    let candidateId: string | undefined;
+    let last;
+    for (const message of ["ana", "26", "me da miedo que me vea mi familia o gente conocida"]) {
+      last = await engine.handleIncomingMessage({
+        candidateId,
+        instagramUsername: "fam_privacy",
+        profileVisibility: "PUBLIC",
+        message
+      });
+      candidateId = last.candidate.id;
+    }
+    expect(last!.candidate.currentState).not.toBe("CLOSED");
+    const text = last!.response.toLowerCase();
+    // Reconduce con el contenido de privacidad/identidad (no es el simple "Te entiendo | has tenido OF").
+    expect(/identidad|privacidad|pinterest|imagen/.test(text)).toBe(true);
+  });
+});

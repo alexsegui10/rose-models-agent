@@ -170,6 +170,17 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("geo-privacy", "privacy", "country-block", "objection");
+  // Miedo a que la RECONOZCA gente concreta (familia, conocidos, pareja, jefe): es una duda de privacidad,
+  // no un dato. Anclado a un verbo de ver/reconocer/enterarse para no disparar con cualquier "familia".
+  if (
+    /\b(?:me|nos)\s+(?:vea|vean|reconozca|reconozcan|entere|enteren|pille|pillen|descubra|descubran)\b[^.!?]{0,30}\b(familia|conocid\w*|gente|amig\w*|hermano|hermana|padre|madre|novio|pareja|jefe|trabajo|vecin\w*)\b/.test(
+      message
+    ) ||
+    /\b(familia|gente conocida|alguien conocido|conocidos|amig\w*)\b[^.!?]{0,30}\b(me|nos)\s+(?:vea|vean|reconozca|reconozcan|entere|enteren|pille|descubr\w*)\b/.test(
+      message
+    )
+  )
+    tags.push("geo-privacy", "privacy", "objection");
   if (/\b(cara|rostro|anonima|sin mostrarme|sin ensenarme)\b/.test(message)) tags.push("face", "anonymity", "requirement");
   // Solo si la mencion no es negada: "no trabajo con otra agencia" es un dato, no una objecion.
   if (
