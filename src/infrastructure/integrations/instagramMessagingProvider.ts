@@ -36,7 +36,9 @@ export class GraphApiInstagramMessagingProvider implements InstagramMessagingPro
         body: JSON.stringify({
           recipient: { id: recipientId },
           message: { text }
-        })
+        }),
+        // Timeout duro: si Instagram se cuelga, no agotar el techo de ~10s de Vercel a mitad de rafaga.
+        signal: AbortSignal.timeout(3500)
       });
       if (!response.ok) {
         // Solo el status y un id de error si lo hay; nunca el token ni el cuerpo completo.

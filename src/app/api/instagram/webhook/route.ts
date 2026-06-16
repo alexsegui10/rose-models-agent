@@ -24,6 +24,9 @@ const BURST_DELAY_PER_MESSAGE_MAX_MS = Number(process.env.INSTAGRAM_BURST_DELAY_
 // Techo de tiempo por turno: margen de seguridad bajo el limite de ~10s de Vercel Hobby. El presupuesto
 // de pausas se calcula como (este techo - tiempo ya gastado por OpenAI), para no provocar timeouts.
 const TURN_TIME_BUDGET_MS = Number(process.env.INSTAGRAM_TURN_BUDGET_MS ?? 8500);
+// Tope DURO: pasado este tiempo desde el inicio del turno, no se envian mas chunks de la rafaga (margen
+// bajo el techo de ~10s de Vercel Hobby). Evita que la lambda muera a mitad de envio.
+const HARD_TURN_DEADLINE_MS = Number(process.env.INSTAGRAM_HARD_DEADLINE_MS ?? 9000);
 
 /** Pausa "humana" antes de un mensaje: base + tiempo de tecleo segun longitud, con tope por mensaje. */
 function naturalSendDelayMs(chunk: string): number {
@@ -136,6 +139,15 @@ export async function POST(request: Request): Promise<NextResponse> {
         const elapsedMs = Date.now() - turnStartedAt;
         let delayBudgetMs = Math.max(0, Math.min(BURST_DELAY_BUDGET_MS, TURN_TIME_BUDGET_MS - elapsedMs));
         for (let i = 0; i < chunks.length; i += 1) {
+          // Guard DURO de tiempo: si el turno se acerca al techo de ~10s de Vercel, no enviar mas chunks.
+          // Mejor responder 200 con entrega parcial que dejar que Vercel mate la lambda a mitad de envio.
+          if (Date.now() - turnStartedAt > HARD_TURN_DEADLINE_MS) {
+            console.warn("[ig-webhook] presupuesto de tiempo casi agotado: se corta la rafaga", {
+              enviados: i,
+              total: chunks.length
+            });
+            break;
+          }
           // Ritmo natural (peticion de Alex): unos segundos entre mensajes, NUNCA instantaneo. Se
           // reparte un presupuesto total de pausa para no acercarse al limite de 10s de Vercel: si se
           // agota, los ultimos mensajes salen seguidos en vez de tumbar la funcion.

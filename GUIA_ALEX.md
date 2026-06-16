@@ -41,18 +41,32 @@ Variables** (producción); nunca en el código.
 INSTAGRAM_VERIFY_TOKEN=...
 INSTAGRAM_APP_SECRET=...
 INSTAGRAM_ACCESS_TOKEN=...
-# OpenAI (si usas OpenAI para redactar)
+# OpenAI (redacción)
 OPENAI_API_KEY=...
-# Persistencia en producción
+LLM_MODE=OPENAI
+# Timeouts ajustados al cap de ~10s de Vercel Hobby (IMPORTANTE para no perder respuestas)
+OPENAI_TIMEOUT_MS=4000
+OPENAI_MAX_RETRIES=0
+# Persistencia en producción (y NO usar el fallback efímero en Vercel)
 PERSISTENCE=postgres
 DATABASE_URL=...
+ALLOW_EPHEMERAL_FALLBACK=0
+# Modo: arranca aprobando tú cada respuesta (cero riesgo); pasa a AUTOMATIC tras los arreglos de AUTOMATIC
+AUTOMATION_MODE=HUMAN_APPROVAL
 # Avisos WhatsApp
 CALLMEBOT_PHONE=+34644742515
 CALLMEBOT_APIKEY=4045525
-# Privada/pública (cuando tengas la key)
-HIKERAPI_KEY=...
+# Privada/pública (Apify)
+APIFY_TOKEN=...
 ```
 
+## Orden recomendado para salir a producción (auditoría 16-jun)
+1. **App Review de Meta** (Advanced Access de `instagram_business_manage_messages`) — **TARDA DÍAS, empieza YA**. Sin esto, solo te responden cuentas de prueba que añadas a mano, no el público. Es el cuello de botella real.
+2. Crea las **3 credenciales de Instagram** (VERIFY_TOKEN aleatorio, APP_SECRET, ACCESS_TOKEN con el permiso) y ponlas en Vercel.
+3. Pon **todas las variables** de arriba en Vercel y haz **redeploy**.
+4. **Arranca en `HUMAN_APPROVAL`**: tú apruebas cada respuesta desde el CRM. Así ves tráfico real sin riesgo. Mientras, yo termino los arreglos de robustez para AUTOMATIC (timeouts ✅ ya hechos; faltan idempotencia de envío + lock de concurrencia).
+5. Cuando esté todo, pasa a `AUTOMATION_MODE=AUTOMATIC`.
+6. Tras el go-live: **rota las claves** (higiene; `.env.local` nunca se subió al repo) y actualiza la **política de privacidad** (OpenAI, Apify, CallMeBot).
+
 ## Resumen en una frase
-Pon `CALLMEBOT_*` y `HIKERAPI_KEY` en Vercel, pásame la HikerAPI key para probarla, y manda tú la
-solicitud de seguimiento a las que salgan privadas. El resto ya está hecho.
+El código es un MVP sólido (686 tests). Para salir: **App Review de Meta** (lo más lento), variables en Vercel, y arranca en **HUMAN_APPROVAL**. Pásame el OK para terminar los arreglos de AUTOMATIC.

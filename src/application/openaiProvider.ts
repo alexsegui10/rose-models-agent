@@ -200,17 +200,22 @@ export class OpenAIStructuredOutputRunner implements StructuredOutputRunner {
     payload: unknown;
     timeoutMs: number;
   }): Promise<StructuredRunResult<z.infer<T>>> {
-    const request = this.client.responses.parse({
-      model: input.model,
-      input: [
-        { role: "system", content: input.instructions },
-        { role: "user", content: JSON.stringify(input.payload) }
-      ],
-      text: {
-        format: zodTextFormat(input.schema, input.schemaName)
+    // signal: aborta la peticion REAL al expirar (sin esto, el Promise.race de withTimeout rechaza pero
+    // la llamada HTTP a OpenAI sigue viva server-side y puede consumir el techo de 10s de Vercel Hobby).
+    const request = this.client.responses.parse(
+      {
+        model: input.model,
+        input: [
+          { role: "system", content: input.instructions },
+          { role: "user", content: JSON.stringify(input.payload) }
+        ],
+        text: {
+          format: zodTextFormat(input.schema, input.schemaName)
+        },
+        truncation: "auto"
       },
-      truncation: "auto"
-    });
+      { signal: AbortSignal.timeout(input.timeoutMs) }
+    );
 
     const response = await withTimeout(request, input.timeoutMs);
     const parsed = response.output_parsed;

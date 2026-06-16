@@ -28,7 +28,9 @@ export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRu
     openaiApiKey,
     understandingModel: env.OPENAI_UNDERSTANDING_MODEL?.trim() || defaultUnderstandingModel,
     writingModel: env.OPENAI_WRITING_MODEL?.trim() || defaultWritingModel,
-    timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 12000),
+    // Default 8s (no 12s): en Vercel Hobby el techo real por funcion es ~10s. Con 1 reintento, 12s+12s
+    // mataba la lambda a mitad de turno. 8s deja margen para la rafaga/persistencia. Override por env.
+    timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 8000),
     maxRetries: positiveNumber(env.OPENAI_MAX_RETRIES, 1)
   };
 }
