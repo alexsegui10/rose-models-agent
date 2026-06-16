@@ -141,4 +141,10 @@ describe("Escaladas a Alex: desconfianza y agresion van a revision humana", () =
   it("'me da mala espina' tambien escala", async () => {
     expect(await lastStateAfter(["hola", "uy esto me da mala espina la verdad"], "trust2")).toBe("HUMAN_INTERVENTION_REQUIRED");
   });
+
+  it("entusiasmo ('esto es real, que ganas') NO escala (no es desconfianza)", async () => {
+    expect(await lastStateAfter(["hola", "buah esto es real? que ganas la verdad"], "happy1")).not.toBe(
+      "HUMAN_INTERVENTION_REQUIRED"
+    );
+  });
 });

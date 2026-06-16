@@ -664,7 +664,7 @@ export function extractDeterministicUnderstanding(
   // Desconfianza (incluida la leve: "como se que es real?", "mala espina", "sois de fiar?") y AGRESION
   // (insultos): decision de Alex (16-jun) -> escalan a el (HUMAN_INTERVENTION_REQUIRED) y le llega aviso.
   if (
-    /\b(estafa|estafador\w*|timador\w*|enfadada|enfadado|enfado|me molesta|me suena raro|no me fio|mala espina|como se que (?:es real|es verdad|sois reales|no es estafa)|esto es real|es esto real|sois de fiar|es de fiar|me puedo fiar|sois fiables|no sera (?:una )?estafa|sera (?:una )?estafa|fraude|que asco|sois una basura|panda de|os (?:voy a )?denunci\w*|os denuncio|ladron\w*|ladrones|sinverguenza\w*|mierda)\b/.test(
+    /\b(estafa|estafador\w*|timador\w*|enfadada|enfadado|enfado|me molesta|me suena raro|no me fio|mala espina|como se que (?:es real|es verdad|sois reales|no es estafa)|sois de fiar|me puedo fiar|sois fiables|no sera (?:una )?estafa|sera (?:una )?estafa|fraude|que asco|sois una basura|panda de|os (?:voy a )?denunci\w*|os denuncio|ladron\w*|ladrones|sinverguenza\w*|mierda)\b/.test(
       normalized
     )
   ) {

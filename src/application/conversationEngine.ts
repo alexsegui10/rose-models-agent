@@ -410,6 +410,19 @@ export class ConversationEngine {
     const faceConcern = classifyFaceConcern(groupedMessage.content);
     const faceObjectionCountBefore = activeCandidate.faceObjectionCount;
     let understanding = escalationFilter.understanding;
+    // Override determinista (decision de Alex 16-jun): desconfianza clara o AGRESION escalan SIEMPRE a
+    // Alex, en cualquier modo (no depende de que OpenAI lo marque). Va sobre el understanding ya filtrado
+    // (no se suprime). NO pisa el cierre de menor: decideNextState cierra por edad ANTES de la rama HIR.
+    if (operatorEscalationPattern.test(normalizeText(groupedMessage.content))) {
+      understanding = {
+        ...understanding,
+        requiresHumanReview: true,
+        humanReviewReason: understanding.humanReviewReason ?? "Desconfianza o agresion: lo revisa Alex.",
+        internalNotes: understanding.requiresHumanReview
+          ? understanding.internalNotes
+          : [...understanding.internalNotes, "Desconfianza/agresion: escala a Alex (decision 16-jun)."]
+      };
+    }
     if (faceConcern) {
       understanding = applyFaceConcern(understanding, faceConcern, faceObjectionCountBefore);
     }
@@ -1636,6 +1649,15 @@ const negotiationSignalPattern =
   /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi|garantizado|garantizados|fijo al mes|adelantado)\b|\b\d{1,3}\s?%/;
 const contractSignalPattern = /\b(contrato|legal|abogado|clausula|permanencia)\b/;
 const distrustSignalPattern = /\b(estafa|estafo|enfadada|enfado|me molesta|me suena raro|no me fio|desconfianza|denuncia)\b/;
+// Desconfianza CLARA (sobre nosotros) o AGRESION: decision de Alex (16-jun) -> escalan SIEMPRE a el, en
+// cualquier modo (override determinista que NO depende de que OpenAI lo marque). Patron mas estrecho que
+// distrustSignalPattern a proposito: evita falsos positivos de entusiasmo ("esto es real!") o de
+// objeciones logisticas ("me molesta el horario"), que NO deben sacar a la candidata del funnel.
+// Nota: la desconfianza LEVE y generica ("me da un poco de desconfianza") NO entra aqui a proposito:
+// se reconduce con calma y se sigue (no se pierde el lead por una duda blanda). Solo la desconfianza
+// CLARA sobre nosotros (scam/identidad real) y la agresion escalan a Alex.
+const operatorEscalationPattern =
+  /\b(estafa\w*|timador\w*|fraude|mala espina|como se que (?:es real|es verdad|sois reales|no es estafa)|sois de fiar|sois fiables|me puedo fiar|no sera (?:una )?estafa|sera (?:una )?estafa|que asco|sois una basura|panda de|os (?:voy a )?denunci\w*|os denuncio|ladron\w*|sinverguenza\w*|mierda)\b/;
 const aiSignalPattern = /\b(eres ia|eres una ia|eres un bot|sois ia|hablo con una ia|hablo con un bot|inteligencia artificial)\b/;
 const humanSignalPattern = /\b(persona|alex|humano|hablar con alguien)\b/;
 const injectionSignalPattern = /\b(ignora|ignore|instrucciones|prompt|sistema|reglas internas)\b/;
