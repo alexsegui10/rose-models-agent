@@ -60,12 +60,20 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   // legal (no perderla nunca; riesgo EU AI Act / RGPD).
   const botHasSpoken = input.messages.some((m) => m.role === "assistant" && (m.content ?? "").trim().length > 0);
 
+  // Interruptor de la apertura legal. Por defecto ACTIVA (es obligatoria por ley antes de una llamada
+  // real). CALL_DISCLOSURE=off la desactiva SOLO para pruebas; debe volver a ON antes de producción.
+  const disclosureEnabled = process.env.CALL_DISCLOSURE !== "off";
+
   let state: CallDirectorState = initialCallDirectorState();
+  if (!disclosureEnabled) {
+    state = { ...state, disclosureGiven: true };
+  }
   let lastUtterance = "";
 
   if (botHasSpoken) {
-    // Consume la apertura (ya dicha) y reproduce los turnos previos de la candidata para reconstruir el
-    // estado actual del director. Cada turno se clasifica con el mismo contexto de dinero que el turno vivo.
+    // Consume el primer turno del bot (la apertura legal si está activa, o la 1ª etapa si no) y reproduce
+    // los turnos previos de la candidata para reconstruir el estado. La señal "none" produce lo correcto
+    // en ambos casos (apertura si disclosureGiven=false; avanzar agenda si ya está dada).
     state = decideCallDirective({ state, signal: "none" }).nextState;
     for (let i = 0; i < userUtterances.length - 1; i++) {
       const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
@@ -86,6 +94,8 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     utterance: lastUtterance,
     candidateName: input.candidateName,
     recorded: input.recorded,
+    // En el turno de apertura (el bot aún no habló) el bot INICIA: señal "none" (no "unclear" por vacío).
+    signal: botHasSpoken ? undefined : "none",
     resolveQuestion: () => coveringEntries
   });
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { respondToCall, type CallChatMessage } from "@/application/callTurnResponder";
 import type { BusinessKnowledgeRetriever } from "@/application/businessKnowledgeRetriever";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
@@ -30,11 +30,22 @@ const stubRetriever: BusinessKnowledgeRetriever = {
   retrieve: async () => [mockEntry(["El cobro se liquida cada 14 días y tú cobras primero."])]
 };
 
+afterEach(() => {
+  delete process.env.CALL_DISCLOSURE;
+});
+
 describe("responder de turno de llamada (stateless por replay)", () => {
   it("sin turnos de la candidata: abre con la locución legal (declara IA)", async () => {
     const res = await respondToCall({ messages: [sys] });
     expect(res.directiveType).toBe("GIVE_DISCLOSURE");
     expect(res.content.toLowerCase()).toContain("automatizado");
+  });
+
+  it("con CALL_DISCLOSURE=off, la apertura legal se omite (modo prueba) y abre con la primera etapa", async () => {
+    process.env.CALL_DISCLOSURE = "off";
+    const res = await respondToCall({ messages: [sys] });
+    expect(res.directiveType).toBe("COVER_STAGE");
+    expect(res.content.toLowerCase()).not.toContain("automatizado");
   });
 
   it("tras la apertura, un 'vale' avanza a la primera etapa", async () => {

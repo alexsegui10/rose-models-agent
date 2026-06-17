@@ -40,6 +40,8 @@ export interface RunCallTurnInput {
    * endpoint con el recuperador real; sin él, las preguntas se defieren a Alex.
    */
   resolveQuestion?: (question: string) => KnowledgeEntry[];
+  /** Señal explícita (salta la clasificación). La usa la apertura del turno inicial ("none"). */
+  signal?: CallCandidateSignal;
 }
 
 /** Ejecuta un turno del cerebro de la llamada. */
@@ -47,11 +49,13 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
   const coveringEntries = input.resolveQuestion?.(input.utterance) ?? [];
   // En contexto de dinero (ya se presentó el reparto o se está negociando) una queja "suelta" cuenta.
   const moneyContext = input.state.coveredStages.includes("MONEY") || input.state.revenueShareStep > 0;
-  const signal = classifyCallSignal({
-    utterance: input.utterance,
-    isCoveredQuestion: coveringEntries.length > 0,
-    moneyContext
-  });
+  const signal =
+    input.signal ??
+    classifyCallSignal({
+      utterance: input.utterance,
+      isCoveredQuestion: coveringEntries.length > 0,
+      moneyContext
+    });
   const { directive, nextState } = decideCallDirective({ state: input.state, signal });
   const knowledge = knowledgeForDirective(directive, coveringEntries);
   const utterancePlan = planCallUtterance({

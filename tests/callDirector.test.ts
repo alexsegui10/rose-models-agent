@@ -25,12 +25,11 @@ describe("director de la llamada", () => {
   });
 
   it("tras la apertura, recorre la agenda en orden y cierra con el contrato", () => {
-    // disclosure + tantas señales 'follows-along' como etapas hay (8) para recorrer todo.
+    // disclosure + señales 'follows-along' de sobra para recorrer todas las etapas.
     const { directives } = run(["none", ...Array(8).fill("follows-along")] as CallCandidateSignal[]);
     expect(directives[0].type).toBe("GIVE_DISCLOSURE");
     const covered = directives.filter((d) => d.type === "COVER_STAGE").map((d) => d.stageId);
-    expect(covered[0]).toBe("RAPPORT");
-    expect(covered).toContain("HOW_AGENCY_WORKS");
+    expect(covered[0]).toBe("HOW_AGENCY_WORKS");
     expect(covered).toContain("MONEY");
     expect(covered).toContain("BOUNDARIES");
     // La última directiva es el cierre con contrato.

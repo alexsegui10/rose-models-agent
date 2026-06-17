@@ -56,7 +56,23 @@ const DEFER_TEXT =
 const HANDOFF_TEXT =
   "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con mi socio; ahora mismo le digo que se ponga en contacto contigo, ¿vale?";
 const CLOSE_TEXT =
-  "Perfecto. Pues te paso ahora el contrato para que lo leas con calma; cualquier duda que tengas sobre él, me dices sin problema, ¿vale?";
+  "Pues con esto te haces una idea. Te paso ahora el contrato para que lo leas con calma y cualquier duda que tengas me la dices, ¿vale?";
+
+/**
+ * Guion propio de la LLAMADA por etapa (lo que dice el bot, en la voz de Alex). Es texto pensado para
+ * hablar (no los snippets cortos del chat). El conocimiento sigue alimentando el brief del LLM y los
+ * hechos; estas son las líneas deterministas de la llamada. MONEY se construye con la cifra autorizada.
+ */
+const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
+  HOW_AGENCY_WORKS:
+    "Genial. Mira, te resumo cómo trabajamos: tú solo te encargas de mandarnos el contenido y nosotros hacemos todo lo demás. El tráfico lo generamos con cuentas de Instagram con nombres y ubicaciones de España, y cuando ya tienen bastantes seguidores ponemos el link a tu OnlyFans y un equipo de chatters lo monetiza las 24 horas.",
+  HER_RESPONSIBILITIES:
+    "Por tu parte es sencillo: creas el contenido, lo subes a una carpeta de Drive que compartimos, sigues unas referencias que te pasamos y nos dices siempre tus límites. Con responder en un día o dos, de sobra.",
+  CONTENT_AND_FACE:
+    "Al principio son unos cinco días suaves, 2 o 3 fotos al día, y luego vamos a vídeos cada semana. Te adelanto algo importante: la cara se enseña, eso es imprescindible, pero cuidamos mucho tu privacidad, todo va con identidad española.",
+  BOUNDARIES:
+    "Una cosa que siempre pregunto: ¿hay algún tipo de contenido que no quieras hacer o algún límite que deba tener en cuenta? Lo respetamos sin problema."
+};
 // Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
 const CLOSE_SOFT_TEXT =
   "Te entiendo perfectamente, sin ningún problema. Lo dejamos aquí entonces; si en algún momento te animas, aquí nos tienes, ¿vale? Gracias por tu tiempo y un saludo.";
@@ -120,7 +136,7 @@ function concedeShareText(offer?: CallRevenueShareOffer): string {
 }
 
 function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
-  const stageId = input.directive.stageId ?? "RAPPORT";
+  const stageId = input.directive.stageId ?? "HOW_AGENCY_WORKS";
   const stage = callAgendaStage(stageId);
   const gathered = gatherKnowledge(input.knowledge);
   const referenceInstagram = stageId === "MONEY";
@@ -184,30 +200,18 @@ function dedupe(values: string[]): string[] {
  */
 function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOffer?: CallRevenueShareOffer): string {
   if (stageId === "MONEY") {
+    // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"); referencia el DM.
     if (shareOffer) {
-      // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"). No se concatenan puntos
-      // genéricos del conocimiento detrás (sonaría contradictorio tras dar la cifra exacta).
-      return `Como te dije por Instagram, trabajamos con un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para nosotros.`;
+      return `Y del dinero, como ya te dije por Instagram, es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para nosotros; se liquida cada 14 días y cobras tú primero.`;
     }
     return points[0] ?? "Como te comenté por Instagram, el reparto es el que ya hablamos.";
   }
 
-  // Etapas de puro guion (sin afirmaciones de negocio): pegamento conversacional.
-  // OJO: la apertura legal YA saluda y dice "hablamos por Instagram". Estas etapas NO deben volver a
-  // saludar (sonaría a doble presentación robótica): son transiciones cálidas hacia la explicación.
-  const scripted: Partial<Record<CallAgendaStageId, string>> = {
-    RAPPORT: "¡Genial! Y gracias por cogerme la llamada, te robo solo un momentito.",
-    FRAME:
-      "Mira, te llamamos porque vimos tu perfil y encajas muy bien con lo que buscamos; te explico cómo trabajamos y lo que quieras me preguntas, ¿vale?",
-    BOUNDARIES: "Y dime una cosa: ¿hay algún tipo de contenido que no quieras hacer? Lo respetamos sin problema."
-  };
-
-  // Para etapas con conocimiento (cómo trabaja la agencia, su parte, contenido), el fallback son los
-  // puntos aprobados; si no hay (etapas de guion), el pegamento; si nada (no debería: las refs son ACTIVE),
-  // se defiere a Alex en vez de soltar un puente vacío que suena a dar largas.
+  // Guion propio de la llamada (la voz de Alex). Si una etapa no lo tiene, cae a los puntos aprobados del
+  // conocimiento y, en último caso, a deferir (nunca un puente vacío que suene a dar largas).
   return (
+    CALL_SCRIPT[stageId] ||
     points.slice(0, 2).join(" ") ||
-    scripted[stageId] ||
     "Ese detalle prefiero que te lo confirme bien mi socio, para no decirte nada inexacto."
   );
 }

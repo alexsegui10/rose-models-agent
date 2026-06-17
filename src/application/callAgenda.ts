@@ -13,8 +13,6 @@
  */
 
 export type CallAgendaStageId =
-  | "RAPPORT"
-  | "FRAME"
   | "HOW_AGENCY_WORKS"
   | "HER_RESPONSIBILITIES"
   | "CONTENT_AND_FACE"
@@ -41,22 +39,8 @@ export interface CallAgendaStage {
  */
 export const CALL_AGENDA: readonly CallAgendaStage[] = [
   {
-    id: "RAPPORT",
-    order: 1,
-    label: "Saludo y cercanía",
-    objective: "Saludar por su nombre, recordar que hablasteis por Instagram y confirmar que le va bien hablar ahora.",
-    knowledgeRefs: []
-  },
-  {
-    id: "FRAME",
-    order: 2,
-    label: "Encuadre de la llamada",
-    objective: "Explicar por qué la llamada: vimos tu perfil, encajas, te cuento bien cómo trabajamos y resolvemos dudas.",
-    knowledgeRefs: []
-  },
-  {
     id: "HOW_AGENCY_WORKS",
-    order: 3,
+    order: 1,
     label: "Cómo trabaja la agencia",
     objective:
       "Explicar el modelo: cuentas de Instagram españolas que generan tráfico, link a tu OnlyFans, equipo de chatters 24/7, monetización y gestión; tú solo mandas contenido.",
@@ -69,7 +53,7 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
   },
   {
     id: "HER_RESPONSIBILITIES",
-    order: 4,
+    order: 2,
     label: "Qué hace ella",
     objective:
       "Explicar su parte: crear contenido, subirlo a Drive, seguir referencias/guiones, comunicar sus límites y responder en plazo.",
@@ -77,7 +61,7 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
   },
   {
     id: "CONTENT_AND_FACE",
-    order: 5,
+    order: 3,
     label: "Contenido, cara y privacidad",
     objective:
       "Volumen inicial (~5 días, 2-3 fotos/día) y recurrente (Reels), contenido nuevo para Instagram y reutilizable en OnlyFans; la cara es imprescindible y cómo se cuida la privacidad (identidad española).",
@@ -90,7 +74,7 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
   },
   {
     id: "MONEY",
-    order: 6,
+    order: 4,
     label: "Reparto y cobro",
     objective:
       "Recordar el reparto 70/30 (referenciando que ya se habló por Instagram), liquidación cada 14 días (ella cobra primero), sin salario fijo y sin prometer cifras. La negociación a la baja la decide el código si se queja.",
@@ -103,14 +87,14 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
   },
   {
     id: "BOUNDARIES",
-    order: 7,
+    order: 5,
     label: "Límites y consentimiento",
     objective: "Preguntar con tacto si hay algún tipo de contenido que no quiera hacer y dejar claro que se respeta.",
     knowledgeRefs: ["content-boundaries-neutral-question"]
   },
   {
     id: "CLOSE",
-    order: 8,
+    order: 6,
     label: "Cierre y siguiente paso",
     objective:
       "Si no le quedan dudas, cerrar cálido: 'ahora te paso el contrato, léelo con calma y cualquier duda sobre él me avisas'. NO cerrar compromiso firme.",

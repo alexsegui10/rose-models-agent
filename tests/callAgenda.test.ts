@@ -10,9 +10,9 @@ describe("agenda de la llamada", () => {
     expect(Math.min(...orders)).toBe(1);
   });
 
-  it("empieza en RAPPORT y termina en CLOSE", () => {
+  it("empieza explicando cómo trabaja la agencia y termina en CLOSE", () => {
     const sorted = [...CALL_AGENDA].sort((a, b) => a.order - b.order);
-    expect(sorted[0].id).toBe("RAPPORT");
+    expect(sorted[0].id).toBe("HOW_AGENCY_WORKS");
     expect(sorted[sorted.length - 1].id).toBe("CLOSE");
   });
 
@@ -34,7 +34,7 @@ describe("agenda de la llamada", () => {
       covered.push(next.id);
       next = nextCallAgendaStage(covered);
     }
-    expect(visited[0]).toBe("RAPPORT");
+    expect(visited[0]).toBe("HOW_AGENCY_WORKS");
     expect(visited).toContain("MONEY");
     expect(visited[visited.length - 1]).toBe("CLOSE");
     expect(nextCallAgendaStage(covered)).toBeNull();

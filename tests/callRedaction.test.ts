@@ -69,7 +69,7 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.fallbackText).toContain("30");
   });
 
-  it("cubrir etapa con conocimiento: el brief y el fallback se apoyan en los puntos aprobados", () => {
+  it("cubrir etapa con conocimiento: el brief lleva los puntos aprobados (para el LLM); el fallback es el guion propio", () => {
     const knowledge = [
       entry({
         id: "services-agency-management",
@@ -82,15 +82,17 @@ describe("planificador de redacción de la llamada", () => {
       directive: { type: "COVER_STAGE", stageId: "HOW_AGENCY_WORKS" },
       knowledge
     });
+    // El brief (para el LLM) se apoya en los hechos aprobados + restricciones.
     expect(plan.draftingBrief?.groundingFacts).toContain("Nosotros llevamos toda la gestión y la monetización.");
     expect(plan.draftingBrief?.prohibitedClaims).toContain("No prometemos ingresos concretos.");
     expect(plan.draftingBrief?.mandatoryNuances).toContain("El volumen de contenido es orientativo, no contractual.");
-    expect(plan.fallbackText).toContain("gestión");
+    // El fallback determinista es el guion propio de la llamada (la voz de Alex).
+    expect(plan.fallbackText.toLowerCase()).toContain("te resumo cómo trabajamos");
   });
 
-  it("cubrir etapa de guion sin conocimiento (RAPPORT): fallback con pegamento conversacional", () => {
-    const plan = planCallUtterance({ directive: { type: "COVER_STAGE", stageId: "RAPPORT" } });
-    expect(plan.fallbackText.length).toBeGreaterThan(0);
+  it("cubrir una etapa devuelve el guion propio de la llamada (no vacío) + brief presente", () => {
+    const plan = planCallUtterance({ directive: { type: "COVER_STAGE", stageId: "HER_RESPONSIBILITIES" } });
+    expect(plan.fallbackText.toLowerCase()).toContain("tu parte");
     expect(plan.draftingBrief).toBeDefined();
   });
 
@@ -116,7 +118,7 @@ describe("planificador de redacción de la llamada", () => {
     const concede = planCallUtterance({ directive: { type: "CONCEDE_SHARE", shareOffer: offer(65, false) } });
     expect(concede.deterministicText).toContain("65%");
     const close = planCallUtterance({ directive: { type: "CLOSE_WITH_CONTRACT" } });
-    expect(close.deterministicText?.toLowerCase()).toMatch(/perfecto|entiendo/);
+    expect(close.deterministicText?.toLowerCase()).toContain("contrato");
     const handoff = planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX", handoffReason: "asked-for-human" } });
     expect(handoff.deterministicText?.toLowerCase()).toContain("te entiendo");
     const money = planCallUtterance({ directive: { type: "COVER_STAGE", stageId: "MONEY", shareOffer: offer(70, false) } });
@@ -127,7 +129,7 @@ describe("planificador de redacción de la llamada", () => {
   it("invariante 6: TODA directiva produce un fallback no vacío (el bot nunca se queda mudo)", () => {
     const directives: CallDirective[] = [
       { type: "GIVE_DISCLOSURE" },
-      { type: "COVER_STAGE", stageId: "FRAME" },
+      { type: "COVER_STAGE", stageId: "HOW_AGENCY_WORKS" },
       { type: "COVER_STAGE", stageId: "MONEY", shareOffer: offer(70, false) },
       { type: "ANSWER_FROM_KNOWLEDGE" },
       { type: "DEFER_TO_PARTNER" },
