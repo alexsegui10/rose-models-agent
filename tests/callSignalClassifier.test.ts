@@ -46,9 +46,20 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("sí, cuéntame")).toBe("follows-along");
   });
 
-  it("vacío -> none", () => {
-    expect(sig("")).toBe("none");
-    expect(sig("   ")).toBe("none");
+  it("vacío / silencio -> unclear (no se asume asentimiento)", () => {
+    expect(sig("")).toBe("unclear");
+    expect(sig("   ")).toBe("unclear");
+  });
+
+  it("desinterés -> not-interested", () => {
+    expect(sig("no me interesa")).toBe("not-interested");
+    expect(sig("no gracias, así no")).toBe("not-interested");
+    expect(sig("mejor lo dejamos")).toBe("not-interested");
+  });
+
+  it("ruido / frase no reconocida -> unclear (pedir que repita)", () => {
+    expect(sig("ajksdhf qwe")).toBe("unclear");
+    expect(sig("mmm ehh")).toBe("unclear");
   });
 
   it("prioridad: pedir persona gana a la queja del reparto", () => {

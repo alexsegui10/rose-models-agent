@@ -54,9 +54,17 @@ export interface PlanCallUtteranceInput {
 const DEFER_TEXT =
   "Mira, ese punto prefiero confirmarlo con mi socio y te digo, que no quiero decirte nada que no sea exacto, ¿vale?";
 const HANDOFF_TEXT =
-  "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con Alex; ahora mismo le digo que se ponga en contacto contigo, ¿vale?";
+  "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con mi socio; ahora mismo le digo que se ponga en contacto contigo, ¿vale?";
 const CLOSE_TEXT =
   "Perfecto. Pues te paso ahora el contrato para que lo leas con calma; cualquier duda que tengas sobre él, me dices sin problema, ¿vale?";
+// Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
+const CLOSE_SOFT_TEXT =
+  "Te entiendo perfectamente, sin ningún problema. Lo dejamos aquí entonces; si en algún momento te animas, aquí nos tienes, ¿vale? Gracias por tu tiempo y un saludo.";
+// Defensa del 70 una vez antes de bajar (el porqué del reparto; el modelo de la agencia ya documentado).
+const DEFEND_SHARE_TEXT =
+  "Te entiendo. Mira, ese 70 es para ti, que es de lo mejor que vas a encontrar; y a cambio nosotros llevamos todo el tráfico, el equipo de chatters y toda la gestión, tú solo subes el contenido. De verdad que te sale muy a cuenta, ¿lo ves?";
+// No se entendió bien lo que dijo (ruido/STT): pedir que lo repita, sin asumir asentimiento.
+const ASK_REPEAT_TEXT = "Perdona, no te he pillado bien con la línea. ¿Me lo puedes repetir?";
 
 /** Convierte una directiva del director en un plan de enunciado. */
 export function planCallUtterance(input: PlanCallUtteranceInput): CallUtterancePlan {
@@ -73,6 +81,12 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: HANDOFF_TEXT, fallbackText: HANDOFF_TEXT };
     case "CLOSE_WITH_CONTRACT":
       return { directiveType: directive.type, deterministicText: CLOSE_TEXT, fallbackText: CLOSE_TEXT };
+    case "CLOSE_SOFT":
+      return { directiveType: directive.type, deterministicText: CLOSE_SOFT_TEXT, fallbackText: CLOSE_SOFT_TEXT };
+    case "DEFEND_SHARE":
+      return { directiveType: directive.type, deterministicText: DEFEND_SHARE_TEXT, fallbackText: DEFEND_SHARE_TEXT };
+    case "ASK_REPEAT":
+      return { directiveType: directive.type, deterministicText: ASK_REPEAT_TEXT, fallbackText: ASK_REPEAT_TEXT };
     case "CONCEDE_SHARE": {
       const text = concedeShareText(directive.shareOffer);
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };

@@ -20,11 +20,11 @@ export interface CallOpeningDisclosureInput {
 export function callOpeningDisclosure(input: CallOpeningDisclosureInput = {}): string {
   const name = input.candidateName?.trim();
   const greeting = name ? `Hola ${name}` : "Hola";
-  const recordingClause = input.recorded === false ? "" : " y de que la llamada se graba para gestionar tu alta";
+  const recordingClause = input.recorded === false ? "" : " y esta llamada se graba para gestionar tu alta";
   return (
-    `${greeting}, soy el asistente de Rose Models, hablamos por Instagram. ` +
-    `Te aviso de que soy un asistente automatizado${recordingClause}. ` +
-    `Si en algún momento prefieres hablar directamente con una persona, dímelo y te paso con Alex. ` +
-    `¿Te va bien que te cuente cómo trabajamos?`
+    `${greeting}, te llamo de Rose Models, hablamos por Instagram. ` +
+    `Antes de nada te aviso: soy un asistente automatizado${recordingClause}. ` +
+    `Si en algún momento prefieres hablar con una persona, me lo dices y te paso, ¿vale? ` +
+    `¿Te viene bien que te cuente cómo trabajamos?`
   );
 }

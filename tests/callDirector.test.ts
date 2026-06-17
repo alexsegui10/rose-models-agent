@@ -91,13 +91,18 @@ describe("director de la llamada", () => {
     expect(decision.nextState.coveredStages).toContain("MONEY");
   });
 
-  it("negociación del reparto (ya presentado): 70 -> (queja) 65 -> (queja) 60 -> (sigue) handoff a Alex", () => {
-    // Arrancamos con MONEY ya presentado (queja previa) para ejercitar la escalera.
+  it("negociación: presenta 70 -> defiende el 70 una vez -> (queja) 65 -> (queja) 60 -> (sigue) handoff", () => {
     let state: CallDirectorState = decideCallDirective({
       state: initialCallDirectorState(),
       signal: "none"
     }).nextState;
     state = decideCallDirective({ state, signal: "complains-about-share" }).nextState; // presenta 70/30, cubre MONEY
+
+    // Primera queja con MONEY ya presentado: DEFIENDE el 70 una vez (no baja todavía).
+    const defend = decideCallDirective({ state, signal: "complains-about-share" });
+    expect(defend.directive.type).toBe("DEFEND_SHARE");
+    expect(defend.nextState.shareDefended).toBe(true);
+    state = defend.nextState;
 
     const first = decideCallDirective({ state, signal: "complains-about-share" });
     expect(first.directive.type).toBe("CONCEDE_SHARE");
@@ -120,6 +125,29 @@ describe("director de la llamada", () => {
   it("quiere terminar -> cierre con contrato", () => {
     const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
     expect(decideCallDirective({ state, signal: "wants-to-end" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
+  });
+
+  it("no le interesa -> cierre CÁLIDO sin contrato (CLOSE_SOFT), pegajoso", () => {
+    const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    const decision = decideCallDirective({ state, signal: "not-interested" });
+    expect(decision.directive.type).toBe("CLOSE_SOFT");
+    expect(decision.nextState.closed).toBe(true);
+    // Pegajoso: si sigue hablando, repite el cierre cálido (NO el del contrato).
+    expect(decideCallDirective({ state: decision.nextState, signal: "follows-along" }).directive.type).toBe("CLOSE_SOFT");
+  });
+
+  it("no se entiende (unclear) -> pedir que repita, sin avanzar la agenda", () => {
+    const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    const before = [...state.coveredStages];
+    const decision = decideCallDirective({ state, signal: "unclear" });
+    expect(decision.directive.type).toBe("ASK_REPEAT");
+    expect(decision.nextState.coveredStages).toEqual(before);
+  });
+
+  it("defender el 70: primera queja (MONEY ya presentado) defiende, no baja todavía", () => {
+    let state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    state = decideCallDirective({ state, signal: "complains-about-share" }).nextState; // presenta 70/30
+    expect(decideCallDirective({ state, signal: "complains-about-share" }).directive.type).toBe("DEFEND_SHARE");
   });
 
   it("cierre PEGAJOSO: tras cerrar con el contrato no reabre negociación ni guion", () => {

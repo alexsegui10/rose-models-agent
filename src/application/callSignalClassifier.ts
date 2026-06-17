@@ -65,6 +65,11 @@ const FOLLOWUP_SHARE_COMPLAINT =
 const DISTRUST =
   /como se que\b|como se si\b|no me fio|me cuesta (creer|fiarme)|no me lo creo|(sera|no sera|sera esto) (una )?(estafa|timo|broma|mentira|verdad)|si (es|fuera|fuese|seria|esto es) (una )?(estafa|timo|fraude|mentira|engano)|y si me (estafan|enganan|timan|roban)|(esto es|es esto|esto sera) (real|seguro|legal|de verdad|fiable|verdad)|es (de )?fiar|me da (un poco de )?(cosa|miedo|reparo|cosica|repelus|no se que)|da (un poco de )?miedo|desconfi|no se si (fiarme|me fio|es verdad|esto es real)|(seguro que|de verdad) (es legal|me vais a pagar|esto funciona)|no (me )?(van|vais|vayais) a (pagar|estafar|enganar)|y si es mentira/;
 
+// Desinterés -> cierre cálido sin presionar (NO se le manda contrato). Se evalúa antes que "quiere
+// terminar" para no empujar el contrato a quien no le interesa.
+const NOT_INTERESTED =
+  /(no me interesa|no me interesan|no gracias|no, gracias|no quiero seguir|no me convence nada|mejor lo dejamos|paso de esto|no es para mi|no me llama|no quiero hacerlo|prefiero dejarlo|no me apetece)/;
+
 // Quiere terminar / colgar -> cerrar con contrato.
 const WANTS_TO_END =
   /(te dejo|te tengo que dejar|tengo que (irme|colgar|dejarlo|dejarte)|hablamos (luego|mas tarde|otro dia|en otro momento|manana)|ahora no puedo|no es buen momento|me tengo que ir|tengo prisa|me pillas (mal|liada)|adios|hasta luego|me voy|cuelgo)/;
@@ -85,7 +90,8 @@ const FOLLOWS_ALONG =
 export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal {
   const text = normalize(input.utterance ?? "");
   if (text.length === 0) {
-    return "none";
+    // Silencio / turno vacío: no se asume asentimiento, se pide que lo repita.
+    return "unclear";
   }
 
   // Orden de prioridad: lo más urgente/seguro primero.
@@ -95,11 +101,12 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // Queja de seguimiento durante la negociación (frase dirigida al dinero, sin repetir "reparto").
   if (input.moneyContext && FOLLOWUP_SHARE_COMPLAINT.test(text)) return "complains-about-share";
   if (DISTRUST.test(text)) return "distrust";
+  if (NOT_INTERESTED.test(text)) return "not-interested";
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
   if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
 
-  // No reconocido: el bot sigue el guion (limitación conocida; una capa LLM lo afinaría).
-  return "follows-along";
+  // No reconocido (ruido/STT roto / frase no contemplada): se pide que lo repita en vez de asumir un "sí".
+  return "unclear";
 }

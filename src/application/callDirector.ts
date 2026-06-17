@@ -30,6 +30,8 @@ export type CallCandidateSignal =
   | "distrust" // desconfianza leve ("¿cómo sé que es real?") -> tranquilizar y seguir
   | "wants-human" // pide hablar con una persona -> handoff
   | "hostile-or-suspicious" // agresión/insultos/sospecha grave -> handoff
+  | "not-interested" // desinterés ("no me interesa") -> cierre cálido sin presionar
+  | "unclear" // ruido / no se entiende -> pedir que lo repita (no asumir asentimiento)
   | "wants-to-end"; // quiere terminar -> cerrar con contrato
 
 export type CallDirectiveType =
@@ -37,10 +39,13 @@ export type CallDirectiveType =
   | "COVER_STAGE" // cubrir proactivamente una etapa de la agenda
   | "ANSWER_FROM_KNOWLEDGE" // responder una pregunta cubierta
   | "DEFER_TO_PARTNER" // "ese punto se lo comento a mi socio y te digo"
+  | "DEFEND_SHARE" // defender el valor del 70 una vez antes de bajar
   | "CONCEDE_SHARE" // bajar un escalón del reparto (con la nueva oferta)
   | "REASSURE" // tranquilizar desconfianza y continuar
+  | "ASK_REPEAT" // no se entendió: pedir que lo repita
   | "HANDOFF_TO_ALEX" // pasar la llamada a una persona
-  | "CLOSE_WITH_CONTRACT"; // cerrar: "ahora te paso el contrato"
+  | "CLOSE_WITH_CONTRACT" // cerrar: "ahora te paso el contrato"
+  | "CLOSE_SOFT"; // cierre cálido sin contrato (no le interesa): puerta abierta
 
 export type CallHandoffReason = "asked-for-human" | "suspicion-or-aggression" | "share-rejected-at-floor";
 
@@ -48,10 +53,14 @@ export interface CallDirectorState {
   disclosureGiven: boolean;
   coveredStages: CallAgendaStageId[];
   revenueShareStep: CallRevenueShareStep;
+  /** true cuando ya se defendió el 70 una vez (la siguiente queja ya negocia a la baja). */
+  shareDefended: boolean;
   handedOff: boolean;
   handoffReason?: CallHandoffReason;
-  /** true tras cerrar con el contrato: el cierre es pegajoso (no reabre guion ni negociación). */
+  /** true tras cualquier cierre: es pegajoso (no reabre guion ni negociación). */
   closed: boolean;
+  /** Qué cierre se dio, para repetirlo si la candidata sigue hablando tras cerrar. */
+  closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT";
 }
 
 export interface CallDirective {
@@ -70,7 +79,14 @@ export interface CallTurnDecision {
 }
 
 export function initialCallDirectorState(): CallDirectorState {
-  return { disclosureGiven: false, coveredStages: [], revenueShareStep: 0, handedOff: false, closed: false };
+  return {
+    disclosureGiven: false,
+    coveredStages: [],
+    revenueShareStep: 0,
+    shareDefended: false,
+    handedOff: false,
+    closed: false
+  };
 }
 
 export function decideCallDirective(input: { state: CallDirectorState; signal: CallCandidateSignal }): CallTurnDecision {
@@ -92,12 +108,12 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
     };
   }
 
-  // Cierre pegajoso: ya se dijo "te paso el contrato". No reabre guion ni negociación; solo escala por
-  // seguridad (agresión / pide persona). Cualquier otra cosa repite un cierre cálido.
+  // Cierre pegajoso: ya se cerró. No reabre guion ni negociación; solo escala por seguridad (agresión /
+  // pide persona). Cualquier otra cosa repite el MISMO cierre que se dio (contrato o cálido).
   if (state.closed) {
     if (signal === "hostile-or-suspicious") return handoff(state, "suspicion-or-aggression");
     if (signal === "wants-human") return handoff(state, "asked-for-human");
-    return { directive: { type: "CLOSE_WITH_CONTRACT" }, nextState: state };
+    return { directive: { type: state.closeDirective ?? "CLOSE_WITH_CONTRACT" }, nextState: state };
   }
 
   switch (signal) {
@@ -107,6 +123,11 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       return handoff(state, "asked-for-human");
     case "complains-about-share":
       return negotiateShare(state);
+    case "not-interested":
+      return closeSoft(state);
+    case "unclear":
+      // No se entendió: pedir que lo repita, sin avanzar el guion (no asumir asentimiento).
+      return { directive: { type: "ASK_REPEAT" }, nextState: state };
     case "asks-unknown":
       return { directive: { type: "DEFER_TO_PARTNER" }, nextState: state };
     case "asks-covered":
@@ -138,6 +159,10 @@ function negotiateShare(state: CallDirectorState): CallTurnDecision {
       nextState: { ...state, coveredStages: [...state.coveredStages, "MONEY"] }
     };
   }
+  // En la PRIMERA queja (escalón 0) se defiende el valor del 70 una vez antes de empezar a bajar.
+  if (state.revenueShareStep === 0 && !state.shareDefended) {
+    return { directive: { type: "DEFEND_SHARE" }, nextState: { ...state, shareDefended: true } };
+  }
   const currentOffer = callRevenueShareOfferForStep(state.revenueShareStep);
   if (currentOffer.isFloor) {
     // Ya en el suelo (60) y sigue rechazando: fuera del margen autorizado del bot -> lo decide Alex.
@@ -167,5 +192,16 @@ function closeWithContract(state: CallDirectorState): CallTurnDecision {
   // El cierre marca CLOSE como cubierta y fija `closed` (cierre pegajoso: no reabre guion ni negociación).
   const close: CallAgendaStageId = "CLOSE";
   const coveredStages = state.coveredStages.includes(close) ? state.coveredStages : [...state.coveredStages, close];
-  return { directive: { type: "CLOSE_WITH_CONTRACT" }, nextState: { ...state, coveredStages, closed: true } };
+  return {
+    directive: { type: "CLOSE_WITH_CONTRACT" },
+    nextState: { ...state, coveredStages, closed: true, closeDirective: "CLOSE_WITH_CONTRACT" }
+  };
+}
+
+// Cierre cálido sin contrato: la candidata no está interesada. No se presiona; puerta abierta. Pegajoso.
+function closeSoft(state: CallDirectorState): CallTurnDecision {
+  return {
+    directive: { type: "CLOSE_SOFT" },
+    nextState: { ...state, closed: true, closeDirective: "CLOSE_SOFT" }
+  };
 }

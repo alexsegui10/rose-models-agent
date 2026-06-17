@@ -64,7 +64,9 @@ describe("responder de turno de llamada (stateless por replay)", () => {
       { role: "assistant", content: "apertura..." },
       { role: "user", content: "el 30% es mucho" }, // presenta 70/30 (cubre MONEY)
       { role: "assistant", content: "te cuento el reparto..." },
-      { role: "user", content: "sigue siendo mucho, bajadlo" } // queja de seguimiento -> 65
+      { role: "user", content: "sigue siendo mucho" }, // defiende el 70 una vez
+      { role: "assistant", content: "el 70 es para ti..." },
+      { role: "user", content: "bajadlo, no me compensa" } // queja de seguimiento -> baja a 65
     ];
     const res = respondToCall({ messages });
     expect(res.directiveType).toBe("CONCEDE_SHARE");

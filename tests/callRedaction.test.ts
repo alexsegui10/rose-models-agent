@@ -41,7 +41,7 @@ describe("planificador de redacción de la llamada", () => {
 
   it("deferir / handoff / cierre son deterministas y dicen lo correcto", () => {
     expect(planCallUtterance({ directive: { type: "DEFER_TO_PARTNER" } }).deterministicText).toContain("socio");
-    expect(planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX" } }).deterministicText).toContain("Alex");
+    expect(planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX" } }).deterministicText).toContain("mi socio");
     expect(planCallUtterance({ directive: { type: "CLOSE_WITH_CONTRACT" } }).deterministicText).toContain("contrato");
   });
 
@@ -133,12 +133,21 @@ describe("planificador de redacción de la llamada", () => {
       { type: "DEFER_TO_PARTNER" },
       { type: "CONCEDE_SHARE", shareOffer: offer(65, false) },
       { type: "REASSURE" },
+      { type: "DEFEND_SHARE" },
+      { type: "ASK_REPEAT" },
       { type: "HANDOFF_TO_ALEX", handoffReason: "asked-for-human" },
-      { type: "CLOSE_WITH_CONTRACT" }
+      { type: "CLOSE_WITH_CONTRACT" },
+      { type: "CLOSE_SOFT" }
     ];
     for (const directive of directives) {
       const plan = planCallUtterance({ directive });
       expect(plan.fallbackText.trim().length, `directiva ${directive.type} sin fallback`).toBeGreaterThan(0);
     }
+  });
+
+  it("nuevas directivas (auditoría): textos correctos", () => {
+    expect(planCallUtterance({ directive: { type: "CLOSE_SOFT" } }).deterministicText?.toLowerCase()).toContain("te animas");
+    expect(planCallUtterance({ directive: { type: "ASK_REPEAT" } }).deterministicText?.toLowerCase()).toContain("repetir");
+    expect(planCallUtterance({ directive: { type: "DEFEND_SHARE" } }).deterministicText).toContain("70");
   });
 });
