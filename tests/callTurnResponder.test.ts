@@ -141,4 +141,32 @@ describe("responder de turno de llamada (stateless por replay)", () => {
     expect(res.directiveType).toBe("CONCEDE_SHARE");
     expect(res.content).toContain("65");
   });
+
+  it("con un redactor (LLM) válido, una etapa explicativa usa SU texto natural", async () => {
+    const drafter = { draft: async () => "Básicamente nosotros lo hacemos todo y tú solo mandas el contenido, ¿vale?" };
+    const res = await respondToCall({
+      messages: [sys, { role: "assistant", content: "apertura..." }, { role: "user", content: "vale, cuéntame" }],
+      drafter
+    });
+    expect(res.directiveType).toBe("COVER_STAGE");
+    expect(res.content).toContain("nosotros lo hacemos todo");
+  });
+
+  it("si el redactor se sale (porcentaje no autorizado), se descarta y cae al guion determinista", async () => {
+    const drafter = { draft: async () => "Te doy un 90% para ti, ¿qué tal?" };
+    const res = await respondToCall({
+      messages: [sys, { role: "assistant", content: "apertura..." }, { role: "user", content: "vale, cuéntame" }],
+      drafter
+    });
+    expect(res.content).not.toContain("90");
+    expect(res.content.toLowerCase()).toContain("te resumo"); // el guion determinista
+  });
+
+  it("lo crítico (apertura legal) NUNCA pasa por el redactor", async () => {
+    const drafter = { draft: async () => "TEXTO INVENTADO POR EL LLM" };
+    const res = await respondToCall({ messages: [sys], drafter });
+    expect(res.directiveType).toBe("GIVE_DISCLOSURE");
+    expect(res.content.toLowerCase()).toContain("automatizado");
+    expect(res.content).not.toContain("INVENTADO");
+  });
 });

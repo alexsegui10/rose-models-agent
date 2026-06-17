@@ -17,7 +17,9 @@ import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 import { runCallTurn, type CallTurnResult } from "./callBrain";
 import type { CallContext } from "./callContext";
+import type { CallUtteranceDrafter } from "./callDrafter";
 import { decideCallDirective, initialCallDirectorState, type CallDirectorState } from "./callDirector";
+import { validateCallUtterance } from "./callRedactionValidator";
 import { classifyCallSignal } from "./callSignalClassifier";
 import { LocalBusinessKnowledgeRetriever, type BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 
@@ -36,6 +38,9 @@ export interface RespondToCallInput {
   retriever?: BusinessKnowledgeRetriever;
   /** Si false, NO responde preguntas con el conocimiento (las defiere todas). Por defecto true. */
   answerFromKnowledge?: boolean;
+  /** Redactor de voz (LLM) opcional. Si se inyecta, redacta las etapas explicativas (con validación +
+   *  fallback); si no, se usa el guion determinista. Lo conecta el endpoint cuando hay clave/config. */
+  drafter?: CallUtteranceDrafter;
 }
 
 export interface CallResponderResult {
@@ -103,8 +108,42 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     resolveQuestion: () => coveringEntries
   });
 
-  // v1 determinista: texto fijo si lo hay, si no el fallback del plan (siempre presente, invariante 6).
-  const content = result.utterancePlan.deterministicText ?? result.utterancePlan.fallbackText;
+  const plan = result.utterancePlan;
+  let content: string;
+  let usedDrafter = false;
+  if (plan.deterministicText) {
+    // Crítico/guion (apertura, cifra del reparto, handoff, cierre): NUNCA pasa por el LLM.
+    content = plan.deterministicText;
+  } else if (plan.draftingBrief && input.drafter) {
+    // Redacción natural por LLM, SOLO si pasa el validador de voz; si no, fallback determinista (inv. 6).
+    const draft = await input.drafter.draft({
+      brief: plan.draftingBrief,
+      context: input.context,
+      directiveType: result.directive.type
+    });
+    if (draft && validateCallUtterance(draft, plan.draftingBrief).valid) {
+      content = draft;
+      usedDrafter = true;
+    } else {
+      content = plan.fallbackText;
+    }
+  } else {
+    content = plan.fallbackText;
+  }
+
+  // Observabilidad por turno (sin PII: ni nombre ni texto): la llamada deja de ser una caja negra.
+  console.log(
+    "[call-turn]",
+    JSON.stringify({
+      signal: result.signal,
+      directive: result.directive.type,
+      usedDrafter,
+      deterministic: Boolean(plan.deterministicText),
+      hasContext: Boolean(input.context),
+      handoffReason: result.directive.handoffReason ?? null
+    })
+  );
+
   return { content, signal: result.signal, directiveType: result.directive.type };
 }
 
