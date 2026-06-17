@@ -144,6 +144,20 @@ describe("director de la llamada", () => {
     expect(decision.nextState.coveredStages).toEqual(before);
   });
 
+  it("unclear repetido (3 seguidos) -> handoff a una persona; un unclear aislado no acumula", () => {
+    const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    const u1 = decideCallDirective({ state, signal: "unclear" });
+    expect(u1.directive.type).toBe("ASK_REPEAT");
+    const u2 = decideCallDirective({ state: u1.nextState, signal: "unclear" });
+    expect(u2.directive.type).toBe("ASK_REPEAT");
+    const u3 = decideCallDirective({ state: u2.nextState, signal: "unclear" });
+    expect(u3.directive.type).toBe("HANDOFF_TO_ALEX");
+    expect(u3.directive.handoffReason).toBe("audio-unintelligible");
+    // Si entre medias se entiende algo, la racha se reinicia (no acumula unclears no consecutivos).
+    const back = decideCallDirective({ state: u2.nextState, signal: "follows-along" });
+    expect(back.nextState.unclearStreak).toBe(0);
+  });
+
   it("defender el 70: primera queja (MONEY ya presentado) defiende, no baja todavía", () => {
     let state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
     state = decideCallDirective({ state, signal: "complains-about-share" }).nextState; // presenta 70/30

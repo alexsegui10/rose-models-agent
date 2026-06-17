@@ -10,6 +10,12 @@ export interface BusinessKnowledgeRetrievalInput {
   categories?: KnowledgeCategory[];
   includeDrafts?: boolean;
   limit?: number;
+  /**
+   * Ignora el gating por `allowedStates` (no el de DRAFT ni el de tags "sensitive"). Lo usa el bot de
+   * LLAMADA: la candidata ya está cualificada/agendada, así que cualquier hecho de negocio aprobado y no
+   * sensible es respondible, aunque las entradas estén marcadas para estados del funnel del DM.
+   */
+  ignoreStateGating?: boolean;
 }
 
 export interface BusinessKnowledgeRetriever {
@@ -47,6 +53,11 @@ function isUsableEntry(entry: KnowledgeEntry, input: BusinessKnowledgeRetrievalI
 
   const tags = tagsFromInput(input);
   if (entry.tags.includes("sensitive") && !tags.includes("sensitive")) return false;
+
+  // La llamada (ignoreStateGating) responde cualquier hecho aprobado y no sensible aunque la entrada esté
+  // marcada para estados del DM (la candidata ya está cualificada). El gating de DRAFT y "sensitive" se
+  // mantiene (el % sigue sin salir por aqui).
+  if (input.ignoreStateGating) return true;
 
   // En HUMAN_INTERVENTION_REQUIRED el estado pausa DECISIONES, no respuestas documentadas (fallo
   // real: bucle "lo hablo con mi socio"), pero SIN saltarse el gating de estados: solo son

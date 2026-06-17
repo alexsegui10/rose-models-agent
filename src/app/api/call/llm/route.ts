@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   const recorded = parsed.data.call_metadata?.recorded ?? (recordedEnv ? recordedEnv !== "0" : true);
   const candidateName = parsed.data.call_metadata?.candidateName;
 
-  const result = respondToCall({ messages, candidateName, recorded });
+  const result = await respondToCall({ messages, candidateName, recorded });
 
   const model = parsed.data.model ?? "rose-models-call-brain";
   const created = Math.floor(Date.now() / 1000);

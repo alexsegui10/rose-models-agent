@@ -47,7 +47,14 @@ export type CallDirectiveType =
   | "CLOSE_WITH_CONTRACT" // cerrar: "ahora te paso el contrato"
   | "CLOSE_SOFT"; // cierre cálido sin contrato (no le interesa): puerta abierta
 
-export type CallHandoffReason = "asked-for-human" | "suspicion-or-aggression" | "share-rejected-at-floor";
+export type CallHandoffReason =
+  | "asked-for-human"
+  | "suspicion-or-aggression"
+  | "share-rejected-at-floor"
+  | "audio-unintelligible";
+
+/** Tras esta racha de turnos seguidos sin entender, se pasa la llamada a una persona (STT roto). */
+const UNCLEAR_HANDOFF_THRESHOLD = 3;
 
 export interface CallDirectorState {
   disclosureGiven: boolean;
@@ -55,6 +62,8 @@ export interface CallDirectorState {
   revenueShareStep: CallRevenueShareStep;
   /** true cuando ya se defendió el 70 una vez (la siguiente queja ya negocia a la baja). */
   shareDefended: boolean;
+  /** Turnos consecutivos sin entender (se reinicia al entender algo); a UNCLEAR_HANDOFF_THRESHOLD -> handoff. */
+  unclearStreak: number;
   handedOff: boolean;
   handoffReason?: CallHandoffReason;
   /** true tras cualquier cierre: es pegajoso (no reabre guion ni negociación). */
@@ -84,6 +93,7 @@ export function initialCallDirectorState(): CallDirectorState {
     coveredStages: [],
     revenueShareStep: 0,
     shareDefended: false,
+    unclearStreak: 0,
     handedOff: false,
     closed: false
   };
@@ -116,30 +126,40 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
     return { directive: { type: state.closeDirective ?? "CLOSE_WITH_CONTRACT" }, nextState: state };
   }
 
+  // No se entendió (ruido/STT): pedir que lo repita, sin avanzar el guion. Si pasa varias veces seguidas,
+  // se pasa la llamada a una persona (audio roto persistente) en vez de quedarse en bucle.
+  if (signal === "unclear") {
+    const streak = state.unclearStreak + 1;
+    if (streak >= UNCLEAR_HANDOFF_THRESHOLD) {
+      return handoff(state, "audio-unintelligible");
+    }
+    return { directive: { type: "ASK_REPEAT" }, nextState: { ...state, unclearStreak: streak } };
+  }
+
+  // Cualquier otra señal (sí se entendió) reinicia la racha de "no entiendo".
+  const s: CallDirectorState = state.unclearStreak === 0 ? state : { ...state, unclearStreak: 0 };
+
   switch (signal) {
     case "hostile-or-suspicious":
-      return handoff(state, "suspicion-or-aggression");
+      return handoff(s, "suspicion-or-aggression");
     case "wants-human":
-      return handoff(state, "asked-for-human");
+      return handoff(s, "asked-for-human");
     case "complains-about-share":
-      return negotiateShare(state);
+      return negotiateShare(s);
     case "not-interested":
-      return closeSoft(state);
-    case "unclear":
-      // No se entendió: pedir que lo repita, sin avanzar el guion (no asumir asentimiento).
-      return { directive: { type: "ASK_REPEAT" }, nextState: state };
+      return closeSoft(s);
     case "asks-unknown":
-      return { directive: { type: "DEFER_TO_PARTNER" }, nextState: state };
+      return { directive: { type: "DEFER_TO_PARTNER" }, nextState: s };
     case "asks-covered":
-      return { directive: { type: "ANSWER_FROM_KNOWLEDGE" }, nextState: state };
+      return { directive: { type: "ANSWER_FROM_KNOWLEDGE" }, nextState: s };
     case "distrust":
-      return { directive: { type: "REASSURE" }, nextState: state };
+      return { directive: { type: "REASSURE" }, nextState: s };
     case "wants-to-end":
-      return closeWithContract(state);
+      return closeWithContract(s);
     case "follows-along":
     case "none":
     default:
-      return advanceAgenda(state);
+      return advanceAgenda(s);
   }
 }
 
