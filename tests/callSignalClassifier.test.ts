@@ -128,4 +128,12 @@ describe("clasificador: robustez (auditoría)", () => {
     expect(sig("como tú digas")).toBe("follows-along");
     expect(sig("lo que tú veas")).toBe("follows-along");
   });
+
+  it("muletillas de 'continúa' (¿y?, ¿qué más?, sigue) avanzan, no se defieren", () => {
+    expect(sig("¿y?")).toBe("follows-along");
+    expect(sig("¿y qué más?")).toBe("follows-along");
+    expect(sig("¿qué más?")).toBe("follows-along");
+    expect(sig("sigue, sigue")).toBe("follows-along");
+    expect(sig("vale, ¿y luego?")).toBe("follows-along");
+  });
 });

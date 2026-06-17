@@ -78,6 +78,11 @@ const WANTS_TO_END =
 const CONFORMITY =
   /(como tu (digas|veas|quieras)|como veas|lo que (tu )?(digas|veas|quieras|sea)|me parece que si|me da igual|tu mandas)/;
 
+// Muletillas de "continúa" ("¿y?", "¿y qué más?", "sigue", "cuenta", "y luego"): NO son preguntas a
+// deferir, son "dale, avanza". Se evalúan ANTES que QUESTION para que no se interpreten como duda.
+const CONTINUATION =
+  /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuenta(me)?\b/;
+
 // ¿Es una pregunta?
 const QUESTION =
   /\?\s*$|\b(que|como|cuando|cuanto|cuanta|cuantos|cual|cuales|donde|por que|porque|quien|para que)\b|(me puedes|puedes|podrias|podeis|me podeis|sabes|sabeis) (decir|explicar|contar|aclarar|mandar|ensenar|saber|si)|(tengo|una|otra) (duda|pregunta)/;
@@ -104,6 +109,7 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (NOT_INTERESTED.test(text)) return "not-interested";
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
+  if (CONTINUATION.test(text)) return "follows-along";
   if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
 

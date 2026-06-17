@@ -193,10 +193,12 @@ function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOf
   }
 
   // Etapas de puro guion (sin afirmaciones de negocio): pegamento conversacional.
+  // OJO: la apertura legal YA saluda y dice "hablamos por Instagram". Estas etapas NO deben volver a
+  // saludar (sonaría a doble presentación robótica): son transiciones cálidas hacia la explicación.
   const scripted: Partial<Record<CallAgendaStageId, string>> = {
-    RAPPORT: "¡Hola! Soy de Rose Models, hablamos por Instagram. ¿Qué tal, te pillo bien?",
+    RAPPORT: "¡Genial! Y gracias por cogerme la llamada, te robo solo un momentito.",
     FRAME:
-      "Te llamo porque vimos tu perfil y encajas; así te cuento bien cómo trabajamos y resolvemos cualquier duda que tengas.",
+      "Mira, te llamamos porque vimos tu perfil y encajas muy bien con lo que buscamos; te explico cómo trabajamos y lo que quieras me preguntas, ¿vale?",
     BOUNDARIES: "Y dime una cosa: ¿hay algún tipo de contenido que no quieras hacer? Lo respetamos sin problema."
   };
 
