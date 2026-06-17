@@ -74,6 +74,14 @@ En el panel de ElevenLabs, usa el **modo de prueba** del agente (texto o voz). E
 - Flujo de la llamada: le abres chat en WhatsApp → le mandas la **solicitud de permiso de llamada** → ella
   acepta → el bot la llama **dentro de 72 h**.
 
+## 6 bis. Ajustes avanzados (variables en Vercel, cuando pruebes)
+- **Quitar la apertura legal SOLO para probar la voz**: `CALL_DISCLOSURE=off`. ⚠️ Vuelve a ponerla `on`
+  (o bórrala) **antes de llamar a una candidata real** — declarar IA + grabación es obligatorio por ley.
+- **Encender la NATURALIDAD (que la IA redacte, no el guion fijo)**: pon `LLM_MODE=OPENAI` +
+  `OPENAI_API_KEY` (la misma del bot de DM) + `CALL_LLM_REDACTION=on`, y **redeploy**. La IA redactará las
+  partes explicativas pasando por un **validador** (nunca suelta un % mal ni promete ingresos; si falla,
+  habla el guion seguro). Enciéndelo y **afínalo escuchando llamadas reales**. Apagado por defecto.
+
 ## 7. La parte legal (tuya)
 - Aprueba el **texto de apertura** (está en `PLAN_BOT_LLAMADA.md`; dime si lo cambias).
 - Actualiza tu **política de privacidad** mencionando la llamada con IA + grabación + ElevenLabs/OpenAI.
