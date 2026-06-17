@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { respondToCall, type CallChatMessage } from "@/application/callTurnResponder";
+import { getCallDrafter } from "@/application/openaiCallDrafter";
 import { bearerMatches } from "@/server/bearerAuth";
 
 /**
@@ -89,7 +90,9 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
   const context = meta?.context ? { ...meta.context, concerns: meta.context.concerns ?? [] } : undefined;
   const candidateName = meta?.candidateName ?? context?.candidateName;
 
-  const result = await respondToCall({ messages, candidateName, recorded, context });
+  // Redactor LLM: solo si CALL_LLM_REDACTION=on + clave (si no, undefined -> guion determinista).
+  const drafter = getCallDrafter();
+  const result = await respondToCall({ messages, candidateName, recorded, context, drafter });
 
   const model = parsed.data.model ?? "rose-models-call-brain";
   const created = Math.floor(Date.now() / 1000);

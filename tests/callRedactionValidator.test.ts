@@ -35,4 +35,34 @@ describe("validador de la redacción de voz", () => {
     expect(ok("")).toBe(false);
     expect(ok("a ".repeat(400))).toBe(false);
   });
+
+  // Regresión de la auditoría: huecos que el LLM podría colar.
+  it("RECHAZA porcentajes NO autorizados escritos en PALABRAS", () => {
+    expect(ok("Te puedo dar un ochenta por ciento para ti.")).toBe(false);
+    expect(ok("Sería el noventa por ciento.")).toBe(false);
+    expect(ok("Lo dejamos a medias, fifty fifty.")).toBe(false);
+  });
+
+  it("acepta los porcentajes autorizados en PALABRAS", () => {
+    expect(ok("Es un setenta por ciento para ti.")).toBe(true);
+    expect(ok("Podemos dejarlo en un sesenta y cinco por ciento.")).toBe(true);
+  });
+
+  it("RECHAZA promesas de ingresos sin cifra ni símbolo", () => {
+    expect(ok("Aquí se gana muy bien, de verdad.")).toBe(false);
+    expect(ok("Con esto te vas a forrar.")).toBe(false);
+    expect(ok("Son ingresos asegurados.")).toBe(false);
+    expect(ok("Vas a ganar mucho dinero.")).toBe(false);
+    expect(ok("Es dinero fácil.")).toBe(false);
+  });
+
+  it("RECHAZA cifras de ingreso periódico en orden natural ('3000 al mes', 'tres mil al mes')", () => {
+    expect(ok("Sacas 3000 al mes tranquilamente.")).toBe(false);
+    expect(ok("Son tres mil al mes seguros.")).toBe(false);
+  });
+
+  it("no se pasa de celoso: frases benignas con 'asegurar/ganar' no relacionadas con dinero pasan", () => {
+    expect(ok("Te aseguro que somos una agencia seria y vamos paso a paso.")).toBe(true);
+    expect(ok("Así ganas más visibilidad en Instagram.")).toBe(true);
+  });
 });
