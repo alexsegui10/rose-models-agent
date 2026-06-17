@@ -16,6 +16,7 @@
 
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 import { callAgendaStage, type CallAgendaStageId } from "./callAgenda";
+import type { CallContext } from "./callContext";
 import { callOpeningDisclosure } from "./callDisclosure";
 import type { CallDirective } from "./callDirector";
 import type { CallRevenueShareOffer } from "./callNegotiation";
@@ -31,6 +32,8 @@ export interface CallDraftingBrief {
   mandatoryNuances: string[];
   /** Si conviene referenciar el DM ("como te dije por Instagram"), para que se note que es la misma persona. */
   referenceInstagram: boolean;
+  /** Contexto de la candidata (nombre, dudas previas, resumen del DM) para personalizar la redacción. */
+  context?: CallContext;
 }
 
 export interface CallUtterancePlan {
@@ -49,6 +52,8 @@ export interface PlanCallUtteranceInput {
   recorded?: boolean;
   /** Conocimiento de apoyo: de la etapa (COVER_STAGE) o recuperado por la pregunta (ANSWER/REASSURE). */
   knowledge?: KnowledgeEntry[];
+  /** Contexto de la candidata (del DM). Se adjunta al brief y aporta el nombre si no se pasó aparte. */
+  context?: CallContext;
 }
 
 const DEFER_TEXT =
@@ -88,7 +93,8 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
 
   switch (directive.type) {
     case "GIVE_DISCLOSURE": {
-      const text = callOpeningDisclosure({ candidateName: input.candidateName, recorded: input.recorded });
+      const candidateName = input.candidateName ?? input.context?.candidateName;
+      const text = callOpeningDisclosure({ candidateName, recorded: input.recorded });
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };
     }
     case "DEFER_TO_PARTNER":
@@ -108,13 +114,13 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };
     }
     case "ANSWER_FROM_KNOWLEDGE":
-      return planFromKnowledge(directive.type, input.knowledge, {
+      return planFromKnowledge(directive.type, input.knowledge, input.context, {
         instruction: "Responde a su pregunta de forma directa, breve y cercana, apoyándote solo en estos hechos.",
         referenceInstagram: false,
         emptyFallback: DEFER_TEXT
       });
     case "REASSURE":
-      return planFromKnowledge(directive.type, input.knowledge, {
+      return planFromKnowledge(directive.type, input.knowledge, input.context, {
         instruction: "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar, y retoma la conversación.",
         referenceInstagram: false,
         emptyFallback:
@@ -146,7 +152,8 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
     groundingFacts: gathered.points,
     prohibitedClaims: gathered.prohibited,
     mandatoryNuances: gathered.nuances,
-    referenceInstagram
+    referenceInstagram,
+    context: input.context
   };
 
   return {
@@ -159,6 +166,7 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
 function planFromKnowledge(
   directiveType: CallDirective["type"],
   knowledge: KnowledgeEntry[] | undefined,
+  context: CallContext | undefined,
   opts: { instruction: string; referenceInstagram: boolean; emptyFallback: string }
 ): CallUtterancePlan {
   const gathered = gatherKnowledge(knowledge);
@@ -167,7 +175,8 @@ function planFromKnowledge(
     groundingFacts: gathered.points,
     prohibitedClaims: gathered.prohibited,
     mandatoryNuances: gathered.nuances,
-    referenceInstagram: opts.referenceInstagram
+    referenceInstagram: opts.referenceInstagram,
+    context
   };
   const fallbackText = gathered.points.length > 0 ? gathered.points.slice(0, 2).join(" ") : opts.emptyFallback;
   return { directiveType, draftingBrief: brief, fallbackText };

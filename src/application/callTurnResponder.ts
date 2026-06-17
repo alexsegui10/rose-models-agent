@@ -16,6 +16,7 @@ import { businessKnowledgeEntries } from "@/content/business";
 import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 import { runCallTurn, type CallTurnResult } from "./callBrain";
+import type { CallContext } from "./callContext";
 import { decideCallDirective, initialCallDirectorState, type CallDirectorState } from "./callDirector";
 import { classifyCallSignal } from "./callSignalClassifier";
 import { LocalBusinessKnowledgeRetriever, type BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
@@ -29,6 +30,8 @@ export interface RespondToCallInput {
   messages: CallChatMessage[];
   candidateName?: string;
   recorded?: boolean;
+  /** Contexto de la candidata (del DM): el disparador de la llamada lo construye y lo pasa por metadata. */
+  context?: CallContext;
   /** Recuperador de conocimiento (inyectable para tests); por defecto el local sobre el contenido. */
   retriever?: BusinessKnowledgeRetriever;
   /** Si false, NO responde preguntas con el conocimiento (las defiere todas). Por defecto true. */
@@ -92,8 +95,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   const result = runCallTurn({
     state,
     utterance: lastUtterance,
-    candidateName: input.candidateName,
+    candidateName: input.candidateName ?? input.context?.candidateName,
     recorded: input.recorded,
+    context: input.context,
     // En el turno de apertura (el bot aún no habló) el bot INICIA: señal "none" (no "unclear" por vacío).
     signal: botHasSpoken ? undefined : "none",
     resolveQuestion: () => coveringEntries

@@ -16,6 +16,7 @@
 import { businessKnowledgeEntries } from "@/content/business";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 import { callAgendaStage } from "./callAgenda";
+import type { CallContext } from "./callContext";
 import { decideCallDirective, type CallCandidateSignal, type CallDirective, type CallDirectorState } from "./callDirector";
 import { classifyCallSignal } from "./callSignalClassifier";
 import { planCallUtterance, type CallUtterancePlan } from "./callRedaction";
@@ -42,6 +43,8 @@ export interface RunCallTurnInput {
   resolveQuestion?: (question: string) => KnowledgeEntry[];
   /** Señal explícita (salta la clasificación). La usa la apertura del turno inicial ("none"). */
   signal?: CallCandidateSignal;
+  /** Contexto de la candidata (del DM): nombre, dudas previas, resumen. Personaliza la redacción. */
+  context?: CallContext;
 }
 
 /** Ejecuta un turno del cerebro de la llamada. */
@@ -60,9 +63,10 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
   const knowledge = knowledgeForDirective(directive, coveringEntries);
   const utterancePlan = planCallUtterance({
     directive,
-    candidateName: input.candidateName,
+    candidateName: input.candidateName ?? input.context?.candidateName,
     recorded: input.recorded,
-    knowledge
+    knowledge,
+    context: input.context
   });
   return { signal, directive, utterancePlan, nextState };
 }

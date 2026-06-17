@@ -152,4 +152,13 @@ describe("planificador de redacción de la llamada", () => {
     expect(planCallUtterance({ directive: { type: "ASK_REPEAT" } }).deterministicText?.toLowerCase()).toContain("repetir");
     expect(planCallUtterance({ directive: { type: "DEFEND_SHARE" } }).deterministicText).toContain("70");
   });
+
+  it("el contexto de la candidata personaliza (nombre en la apertura) y llega al brief para el LLM", () => {
+    const context = { candidateName: "Marta", concerns: ["desconfianza"], dmSummary: "habló del reparto por Instagram" };
+    const disclosure = planCallUtterance({ directive: { type: "GIVE_DISCLOSURE" }, context });
+    expect(disclosure.deterministicText).toContain("Marta");
+    const cover = planCallUtterance({ directive: { type: "COVER_STAGE", stageId: "HOW_AGENCY_WORKS" }, context });
+    expect(cover.draftingBrief?.context?.candidateName).toBe("Marta");
+    expect(cover.draftingBrief?.context?.concerns).toContain("desconfianza");
+  });
 });

@@ -20,13 +20,38 @@ const MessageSchema = z.object({
   content: z.union([z.string(), z.null()]).optional()
 });
 
+// Contexto de la candidata (del DM) que llega como variable dinámica de la plataforma de voz.
+const ContextSchema = z
+  .object({
+    candidateName: z.string().optional(),
+    age: z.number().optional(),
+    country: z.string().optional(),
+    hasOnlyFans: z.boolean().optional(),
+    worksWithAnotherAgency: z.boolean().optional(),
+    scheduledSlot: z.string().optional(),
+    dmSummary: z.string().optional(),
+    concerns: z.array(z.string()).optional(),
+    interestLevel: z.string().optional()
+  })
+  .passthrough();
+
+const MetaSchema = z
+  .object({
+    candidateName: z.string().optional(),
+    recorded: z.boolean().optional(),
+    context: ContextSchema.optional()
+  })
+  .passthrough();
+
 const RequestSchema = z
   .object({
     messages: z.array(MessageSchema).default([]),
     model: z.string().optional(),
     stream: z.boolean().optional(),
-    // Metadatos opcionales que la plataforma puede inyectar (variables dinámicas).
-    call_metadata: z.object({ candidateName: z.string().optional(), recorded: z.boolean().optional() }).optional()
+    // ElevenLabs inyecta las variables dinámicas en `elevenlabs_extra_body`; otras plataformas usan
+    // `call_metadata`. Aceptamos ambos (el primero que venga).
+    elevenlabs_extra_body: MetaSchema.optional(),
+    call_metadata: MetaSchema.optional()
   })
   .passthrough();
 
@@ -57,11 +82,14 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
     .filter((m) => m.role === "system" || m.role === "user" || m.role === "assistant")
     .map((m) => ({ role: m.role as CallChatMessage["role"], content: m.content ?? "" }));
 
+  // ElevenLabs manda las variables dinámicas en elevenlabs_extra_body; otras plataformas en call_metadata.
+  const meta = parsed.data.elevenlabs_extra_body ?? parsed.data.call_metadata;
   const recordedEnv = process.env.CALL_RECORDED;
-  const recorded = parsed.data.call_metadata?.recorded ?? (recordedEnv ? recordedEnv !== "0" : true);
-  const candidateName = parsed.data.call_metadata?.candidateName;
+  const recorded = meta?.recorded ?? (recordedEnv ? recordedEnv !== "0" : true);
+  const context = meta?.context ? { ...meta.context, concerns: meta.context.concerns ?? [] } : undefined;
+  const candidateName = meta?.candidateName ?? context?.candidateName;
 
-  const result = await respondToCall({ messages, candidateName, recorded });
+  const result = await respondToCall({ messages, candidateName, recorded, context });
 
   const model = parsed.data.model ?? "rose-models-call-brain";
   const created = Math.floor(Date.now() / 1000);
