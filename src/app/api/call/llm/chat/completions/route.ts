@@ -1,7 +1,7 @@
 import { handleCallLlmRequest } from "@/server/callLlmHandler";
 
-// Endpoint "Custom LLM" OpenAI-compatible. Tambien disponible en /api/call/llm/chat/completions (ElevenLabs
-// añade /chat/completions a la URL base). Node runtime: usamos crypto y streaming SSE.
+// Ruta que usa ElevenLabs Custom LLM: pone la URL base .../api/call/llm y la plataforma añade
+// /chat/completions. Mismo handler que /api/call/llm. Node runtime: crypto + streaming SSE.
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<Response> {
