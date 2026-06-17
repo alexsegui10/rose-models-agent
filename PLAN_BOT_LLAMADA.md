@@ -148,8 +148,11 @@ latinas. Evitar las voces por defecto de Vapi/Retell/OpenAI (tiran a neutro/lati
 7. **Reintentos** si no contesta (cuántos, en qué horas) y **base legal + conservación** de la grabación.
 8. Firmar **DPAs** con los proveedores.
 
-## Pendiente de TU decisión (de la auditoría del cerebro, 17-jun) — NO tocado, esperando tu OK
-Estos son de comportamiento/producto o texto de cara a la candidata, así que no los he cambiado yo:
+## Decisiones de la auditoría (17-jun) — ✅ RESUELTAS E IMPLEMENTADAS
+Alex decidió las 6 y están programadas + probadas (782 tests, revisor OK): (1) "no me interesa" → cierre
+cálido sin contrato · (2) ruido → pedir repetir (y tras 3 seguidos, pasar a una persona) · (3) defender el
+70 una vez antes de bajar · (4) responder preguntas cubiertas por el conocimiento, deferir el resto · (5)
+apertura más natural · (6) identidad unificada a "mi socio". Detalle de lo que se preguntó, abajo:
 1. **"No me interesa" / desinterés**: ahora el bot lo toma como "sigue" y avanza el guion. ¿Qué prefieres?
    (a) cerrar amable con el contrato · (b) rebatir la objeción una vez · (c) pasártela a ti.
 2. **Ruido / cosas que el STT entiende mal**: ahora se toman como "sí, sigue" y el bot avanza. ¿Prefieres
