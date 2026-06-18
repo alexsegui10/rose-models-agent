@@ -71,6 +71,19 @@ export const OnboardingBlockerSchema = z.enum([
 ]);
 export type OnboardingBlocker = z.infer<typeof OnboardingBlockerSchema>;
 
+// Registro de la ULTIMA llamada de voz (lo escribe `recordCallOutcome` desde el webhook de fin).
+// Datos descriptivos, no de negocio: el % negociado lo decidio el codigo durante la llamada
+// (invariante 3); aqui solo se guarda lo que paso. `endedAt` en ISO para sobrevivir a JSON.
+export const CallRecordSchema = z.object({
+  result: z.enum(["COMPLETED", "NO_ANSWER"]),
+  durationSec: z.number().int().nonnegative().optional(),
+  negotiatedModelShare: z.number().int().min(0).max(100).optional(),
+  summary: z.string().default(""),
+  transcript: z.array(z.object({ role: z.string(), content: z.string() })).default([]),
+  endedAt: z.string().optional()
+});
+export type CallRecord = z.infer<typeof CallRecordSchema>;
+
 export const CandidateSchema = z.object({
   id: z.string(),
   instagramUsername: z.string().min(1),
@@ -99,6 +112,8 @@ export const CandidateSchema = z.object({
   // Franja propuesta/acordada para la llamada (texto libre, p. ej. "el lunes a las 18h"). La fija Alex
   // al confirmar la llamada desde el CRM; el bot la usa para confirmar a la candidata.
   scheduledCallSlot: z.string().optional(),
+  // Resultado de la ultima llamada de voz (duracion, % al que se negocio, resumen, transcripcion).
+  lastCall: CallRecordSchema.optional(),
   interestLevel: InterestLevelSchema.default("UNKNOWN"),
   objections: z.array(z.string()).default([]),
   // Cuantas veces la candidata ha objetado/dudado de mostrar la cara. La 1a vez se reconduce; si
@@ -184,6 +199,7 @@ export interface CandidatePatch {
   contentAvailability?: string;
   goals?: string;
   scheduledCallSlot?: string;
+  lastCall?: CallRecord;
   interestLevel?: InterestLevel;
   objections?: string[];
   faceObjectionCount?: number;

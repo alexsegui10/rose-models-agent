@@ -99,7 +99,7 @@ type SimulatorStatus = {
   writingModel: string;
 };
 
-type SimulatorTab = "DASHBOARD" | "EVALUACION" | "CHAT" | "CRM" | "AB";
+type SimulatorTab = "DASHBOARD" | "EVALUACION" | "CHAT" | "CRM" | "AB" | "LLAMADAS";
 
 type AdvanceAction = "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT" | "FOLLOW_REQUEST_SENT";
 
@@ -248,7 +248,7 @@ export default function Home() {
   // Solo activo en el CRM o con la ficha abierta, que es donde importa ver los cambios en vivo.
   useEffect(() => {
     if (!livePolling) return;
-    if (activeTab !== "CRM" && activeTab !== "DASHBOARD" && !drawerCandidate) return;
+    if (activeTab !== "CRM" && activeTab !== "DASHBOARD" && activeTab !== "LLAMADAS" && !drawerCandidate) return;
     const interval = setInterval(() => {
       if (loading) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
@@ -777,6 +777,13 @@ export default function Home() {
             CRM
           </button>
           <button
+            className={activeTab === "LLAMADAS" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("LLAMADAS")}
+          >
+            Llamadas
+          </button>
+          <button
             className={activeTab === "CHAT" ? "tab-button active" : "tab-button"}
             type="button"
             onClick={() => setActiveTab("CHAT")}
@@ -918,6 +925,92 @@ export default function Home() {
                         <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
                           <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
                           <span className="dash-list-state">{stateLabel(item.currentState)}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </section>
+            );
+          })()
+        : null}
+
+      {activeTab === "LLAMADAS"
+        ? (() => {
+            // Todo derivado de las candidatas: las hechas (lastCall), las agendadas/en curso, y metricas.
+            const done = candidates.filter((item) => item.lastCall);
+            const completed = done.filter((item) => item.lastCall?.result === "COMPLETED").length;
+            const noAnswer = done.filter((item) => item.lastCall?.result === "NO_ANSWER").length;
+            const shares = done
+              .map((item) => item.lastCall?.negotiatedModelShare)
+              .filter((share): share is number => typeof share === "number");
+            const avgShare = shares.length ? Math.round(shares.reduce((a, b) => a + b, 0) / shares.length) : null;
+            const upcoming = candidates.filter(
+              (item) => !item.lastCall && (item.currentState === "CALL_SCHEDULED" || Boolean(item.scheduledCallSlot))
+            );
+            const formatDuration = (seconds?: number): string =>
+              seconds != null ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : "—";
+            return (
+              <section className="panel dashboard">
+                <div>
+                  <h2>Llamadas</h2>
+                  <p className="muted">
+                    El bot de voz llama, explica la agencia, negocia el reparto y te pasa las que lo necesitan.
+                  </p>
+                </div>
+                <div className="dash-kpis">
+                  <div className="dash-kpi">
+                    <span className="dash-kpi-label">Llamadas hechas</span>
+                    <b>{done.length}</b>
+                  </div>
+                  <div className="dash-kpi">
+                    <span className="dash-kpi-label">Completadas</span>
+                    <b>{completed}</b>
+                  </div>
+                  <div className="dash-kpi">
+                    <span className="dash-kpi-label">No contestaron</span>
+                    <b>{noAnswer}</b>
+                  </div>
+                  <div className="dash-kpi">
+                    <span className="dash-kpi-label">Reparto medio</span>
+                    <b>{avgShare != null ? `${avgShare}%` : "—"}</b>
+                  </div>
+                </div>
+                <div className="dash-stack">
+                  <div className="dash-card">
+                    <h3>Llamadas recientes</h3>
+                    {done.length === 0 ? (
+                      <p className="muted">Aún no se ha registrado ninguna llamada.</p>
+                    ) : (
+                      done.map((item) => (
+                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
+                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
+                          <span className="call-row-meta">
+                            <span className="call-row-info">
+                              {formatDuration(item.lastCall?.durationSec)}
+                              {item.lastCall?.negotiatedModelShare != null ? ` · ${item.lastCall.negotiatedModelShare}%` : ""}
+                            </span>
+                            <span
+                              className={
+                                item.lastCall?.result === "COMPLETED" ? "dash-list-state call-ok" : "dash-list-state call-no"
+                              }
+                            >
+                              {item.lastCall?.result === "COMPLETED" ? "Completada" : "No contestó"}
+                            </span>
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <div className="dash-card">
+                    <h3>Agendadas / por llamar</h3>
+                    {upcoming.length === 0 ? (
+                      <p className="muted">Nada agendado. Aprueba candidatas y agéndalas desde el CRM.</p>
+                    ) : (
+                      upcoming.map((item) => (
+                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
+                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
+                          <span className="dash-list-state">{item.scheduledCallSlot || stateLabel(item.currentState)}</span>
                         </button>
                       ))
                     )}
@@ -1850,7 +1943,61 @@ export default function Home() {
 
               {drawerTab === "llamada" ? (
                 <div className="drawer-call">
-                  {drawerCandidate.scheduledCallSlot ? (
+                  {drawerCandidate.lastCall ? (
+                    <>
+                      <div className="call-stats">
+                        <div className="call-stat">
+                          <span className="drawer-field-label">Resultado</span>
+                          <span className={drawerCandidate.lastCall.result === "COMPLETED" ? "call-result ok" : "call-result no"}>
+                            {drawerCandidate.lastCall.result === "COMPLETED" ? "Completada" : "No contestó"}
+                          </span>
+                        </div>
+                        <div className="call-stat">
+                          <span className="drawer-field-label">Duración</span>
+                          <strong>
+                            {drawerCandidate.lastCall.durationSec != null
+                              ? `${Math.floor(drawerCandidate.lastCall.durationSec / 60)}m ${
+                                  drawerCandidate.lastCall.durationSec % 60
+                                }s`
+                              : "—"}
+                          </strong>
+                        </div>
+                        <div className="call-stat">
+                          <span className="drawer-field-label">Reparto acordado</span>
+                          <strong>
+                            {drawerCandidate.lastCall.negotiatedModelShare != null
+                              ? `${drawerCandidate.lastCall.negotiatedModelShare}% / ${
+                                  100 - drawerCandidate.lastCall.negotiatedModelShare
+                                }%`
+                              : "—"}
+                          </strong>
+                        </div>
+                      </div>
+                      {drawerCandidate.lastCall.summary ? (
+                        <div className="drawer-block">
+                          <span className="drawer-field-label">Resumen de la llamada</span>
+                          <p className="drawer-text">{drawerCandidate.lastCall.summary}</p>
+                        </div>
+                      ) : null}
+                      {drawerCandidate.lastCall.transcript.length > 0 ? (
+                        <div className="drawer-block">
+                          <span className="drawer-field-label">Transcripción</span>
+                          <div className="drawer-conversation">
+                            {drawerCandidate.lastCall.transcript.map((turn, index) => (
+                              <div className={`message ${turn.role}`} key={index}>
+                                {turn.content}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      {drawerCandidate.lastCall.endedAt ? (
+                        <p className="drawer-text muted">
+                          Terminó: {new Date(drawerCandidate.lastCall.endedAt).toLocaleString("es-ES")}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : drawerCandidate.scheduledCallSlot ? (
                     <p className="drawer-text">
                       📞 Llamada agendada: <strong>{drawerCandidate.scheduledCallSlot}</strong>
                     </p>

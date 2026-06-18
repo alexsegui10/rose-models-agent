@@ -57,4 +57,40 @@ describe("recordCallOutcome: resultado de la llamada de voz", () => {
     expect(result.candidate.currentState).toBe("QUALIFYING");
     expect(result.transitions).toHaveLength(0);
   });
+
+  it("guarda lastCall con duracion, % negociado, resumen y transcripcion", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED");
+    const result = await engine.recordCallOutcome({
+      candidateId: seeded.id,
+      outcome: "COMPLETED",
+      summary: "Negociamos al 65, acepta",
+      durationSec: 312,
+      negotiatedModelShare: 65,
+      transcript: [
+        { role: "agent", content: "Hola, te llamo de Rose Models" },
+        { role: "candidate", content: "Vale, cuentame" }
+      ]
+    });
+    expect(result.candidate.lastCall).toBeDefined();
+    expect(result.candidate.lastCall?.result).toBe("COMPLETED");
+    expect(result.candidate.lastCall?.durationSec).toBe(312);
+    expect(result.candidate.lastCall?.negotiatedModelShare).toBe(65);
+    expect(result.candidate.lastCall?.summary).toBe("Negociamos al 65, acepta");
+    expect(result.candidate.lastCall?.transcript).toHaveLength(2);
+    expect(result.candidate.lastCall?.endedAt).toBeTruthy();
+    // Se persiste (sobrevive a la normalizacion de lectura).
+    const reloaded = await repository.findCandidateById(seeded.id);
+    expect(reloaded?.lastCall?.negotiatedModelShare).toBe(65);
+  });
+
+  it("NO_ANSWER deja lastCall con result NO_ANSWER (sin inventar duracion/% )", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED");
+    const result = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "NO_ANSWER" });
+    expect(result.candidate.lastCall?.result).toBe("NO_ANSWER");
+    expect(result.candidate.lastCall?.durationSec).toBeUndefined();
+    expect(result.candidate.lastCall?.negotiatedModelShare).toBeUndefined();
+    expect(result.candidate.lastCall?.transcript).toEqual([]);
+  });
 });

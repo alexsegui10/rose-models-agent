@@ -1,4 +1,5 @@
 import type {
+  CallRecord,
   Candidate,
   CandidatePatch,
   CandidateState,
@@ -260,6 +261,9 @@ export class ConversationEngine {
     candidateId: string;
     outcome: "COMPLETED" | "NO_ANSWER";
     summary?: string;
+    durationSec?: number;
+    negotiatedModelShare?: number;
+    transcript?: Array<{ role: string; content: string }>;
   }): Promise<{ candidate: Candidate; transitions: StateTransition[] }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
@@ -283,10 +287,20 @@ export class ConversationEngine {
           ? "La llamada termino; Alex retoma el siguiente paso (enviar el contrato)."
           : "La candidata no contesto la llamada; pendiente de reagendar o seguimiento de Alex."
     });
+    // Registro descriptivo de la llamada (no decide negocio): lo muestra la ficha y la pestana Llamadas.
+    const lastCall: CallRecord = {
+      result: input.outcome,
+      durationSec: input.durationSec,
+      negotiatedModelShare: input.negotiatedModelShare,
+      summary: summary ?? "",
+      transcript: input.transcript ?? [],
+      endedAt: new Date().toISOString()
+    };
     const candidate: Candidate = {
       ...existing,
       currentState: toState,
       notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`],
+      lastCall,
       updatedAt: new Date()
     };
 

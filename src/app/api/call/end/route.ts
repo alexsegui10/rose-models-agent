@@ -18,8 +18,14 @@ const EndCallSchema = z
     candidateId: z.string().min(1),
     /** Disposición de la plataforma (answered/completed/no-answer/busy/failed...). */
     status: z.string().min(1),
-    /** Resumen/transcripción opcional de la llamada. */
-    summary: z.string().optional()
+    /** Resumen opcional de la llamada (lo genera la plataforma de voz). */
+    summary: z.string().optional(),
+    /** Duración de la llamada en segundos. */
+    durationSec: z.number().int().nonnegative().optional(),
+    /** % al que se negoció el reparto para la modelo (lo decidió el código durante la llamada). */
+    negotiatedModelShare: z.number().int().min(0).max(100).optional(),
+    /** Transcripción turno a turno de la llamada. */
+    transcript: z.array(z.object({ role: z.string(), content: z.string() })).optional()
   })
   .passthrough();
 
@@ -76,7 +82,10 @@ export async function POST(request: Request) {
   const result = await engine.recordCallOutcome({
     candidateId: parsed.data.candidateId,
     outcome,
-    summary: parsed.data.summary
+    summary: parsed.data.summary,
+    durationSec: parsed.data.durationSec,
+    negotiatedModelShare: parsed.data.negotiatedModelShare,
+    transcript: parsed.data.transcript
   });
 
   return NextResponse.json({

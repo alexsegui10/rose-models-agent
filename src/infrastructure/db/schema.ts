@@ -27,6 +27,7 @@ import {
   HumanReviewStatusSchema,
   InterestLevelSchema,
   ProfileVisibilitySchema,
+  type CallRecord,
   type OnboardingBlocker
 } from "../../domain/candidate";
 import {
@@ -120,6 +121,8 @@ export const candidates = pgTable("candidates", {
   goals: text("goals"),
   interestLevel: text("interest_level", { enum: InterestLevelSchema.options }).notNull().default("UNKNOWN"),
   scheduledCallSlot: text("scheduled_call_slot"),
+  // Resultado de la ultima llamada (documento completo: duracion, % negociado, resumen, transcripcion).
+  lastCall: jsonb("last_call").$type<CallRecord>(),
   objections: jsonb("objections").$type<string[]>().notNull().default([]),
   faceObjectionCount: integer("face_objection_count").notNull().default(0),
   notes: jsonb("notes").$type<string[]>().notNull().default([]),
