@@ -7,7 +7,12 @@ import { seedDemoCandidates } from "@/server/demoSeed";
  * Idempotente (ids fijos). Ruta fina. No expone datos sensibles.
  */
 export async function POST() {
-  const repository = getSimulatorRepository();
-  const count = await seedDemoCandidates(repository);
-  return NextResponse.json({ seeded: count });
+  try {
+    const repository = getSimulatorRepository();
+    const count = await seedDemoCandidates(repository);
+    return NextResponse.json({ seeded: count });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error desconocido al sembrar la demo.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }

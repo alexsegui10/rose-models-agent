@@ -344,13 +344,22 @@ export default function Home() {
 
   // Carga candidatas de demo (para ver el tablero/dashboard llenos sin Instagram). Idempotente.
   async function seedDemo() {
-    const response = await fetch("/api/simulator/seed-demo", { method: "POST" });
-    if (!response.ok) {
-      setCrmNotice("No se pudieron cargar las candidatas de demo.");
-      return;
+    try {
+      const response = await fetch("/api/simulator/seed-demo", { method: "POST" });
+      const data = (await response.json().catch(() => ({}))) as { seeded?: number; error?: string };
+      if (!response.ok) {
+        setCrmNotice(
+          response.status === 404
+            ? "La función de demo aún no está disponible (espera a que Vercel termine de desplegar y reintenta)."
+            : `No se pudieron cargar las candidatas de demo (${response.status}). ${data.error ?? ""}`.trim()
+        );
+        return;
+      }
+      await refreshCandidates();
+      setCrmNotice(`Cargadas ${data.seeded ?? 0} candidatas de demo.`);
+    } catch (error) {
+      setCrmNotice(`No se pudieron cargar las candidatas de demo: ${error instanceof Error ? error.message : "error de red"}.`);
     }
-    await refreshCandidates();
-    setCrmNotice("Candidatas de demo cargadas.");
   }
 
   async function importConversations() {
