@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CandidateStateSchema } from "@/domain/candidate";
-import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, stateLabel } from "@/application/crmView";
+import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, ringColorVar, stateLabel } from "@/application/crmView";
 import type { Candidate } from "@/domain/candidate";
 
 describe("crmView", () => {
@@ -31,5 +31,19 @@ describe("crmView", () => {
     expect(decisionStates.sort()).toEqual(
       ["HUMAN_INTERVENTION_REQUIRED", "PROFILE_READY_FOR_REVIEW", "WAITING_HUMAN_REVIEW"].sort()
     );
+  });
+
+  it("las que esperan decision caen en 'cualificando' (maqueta: 5 columnas, sin columna 'decision')", () => {
+    expect(crmColumnOf("PROFILE_READY_FOR_REVIEW")).toBe("cualificando");
+    expect(crmColumnOf("WAITING_HUMAN_REVIEW")).toBe("cualificando");
+    expect(crmColumnOf("HUMAN_INTERVENTION_REQUIRED")).toBe("cualificando");
+    expect(CRM_COLUMNS.map((column) => column.id)).toEqual(["nuevas", "cualificando", "agenda", "llamadas", "cerradas"]);
+  });
+
+  it("ringColorVar es ambar (--warn) para las que esperan decision, y el color de su columna si no", () => {
+    expect(ringColorVar({ currentState: "WAITING_HUMAN_REVIEW" } as Candidate)).toBe("--warn");
+    expect(ringColorVar({ currentState: "PROFILE_READY_FOR_REVIEW" } as Candidate)).toBe("--warn");
+    expect(ringColorVar({ currentState: "CALL_IN_PROGRESS" } as Candidate)).toBe("--purple");
+    expect(ringColorVar({ currentState: "QUALIFYING" } as Candidate)).toBe("--accent");
   });
 });

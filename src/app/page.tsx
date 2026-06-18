@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
-import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, stateLabel } from "@/application/crmView";
+import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, ringColorVar, stateColorVar, stateLabel } from "@/application/crmView";
 import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
@@ -895,8 +895,11 @@ export default function Home() {
                           <span className="dash-funnel-label">{column.title}</span>
                           <span className="dash-funnel-track">
                             <span
-                              className={`dash-funnel-fill tone-${column.tone}`}
-                              style={{ width: `${Math.round((column.count / maxCount) * 100)}%` }}
+                              className="dash-funnel-fill"
+                              style={{
+                                width: `${Math.round((column.count / maxCount) * 100)}%`,
+                                background: `var(${column.colorVar})`
+                              }}
                             />
                           </span>
                           <span className="dash-funnel-count">{column.count}</span>
@@ -1433,10 +1436,13 @@ export default function Home() {
 
       {activeTab === "CRM" ? (
         <section className="panel">
-          <h2>CRM de candidatas</h2>
-          <p className="muted">
-            Cada columna es una fase del embudo. Las que necesitan tu decision estan en <strong>⚠ Tu decision</strong>.
-          </p>
+          <div className="crm2-head">
+            <h2>CRM de candidatas</h2>
+            <p>
+              Cada columna es una fase del embudo. Las que esperan tu decisión llevan el anillo{" "}
+              <strong style={{ color: "var(--warn)" }}>ámbar</strong> ⚠️ en el avatar.
+            </p>
+          </div>
           {crmNotice ? <p className="status-bar">{crmNotice}</p> : null}
           {candidates.length === 0 ? (
             <p className="muted">Aun no hay candidatas. Inicia una conversacion en el chat de prueba.</p>
@@ -1484,24 +1490,57 @@ export default function Home() {
               ).length;
               return (
                 <>
-                  <div className="crm-toolbar">
-                    <input
-                      className="field crm-search"
-                      type="search"
-                      placeholder="Buscar por nombre o @usuario…"
-                      value={crmSearch}
-                      onChange={(event) => setCrmSearch(event.target.value)}
-                    />
-                    <div className="crm-summary">
-                      <span className="crm-kpi attention">
-                        <b>{attentionCount}</b> te esperan
+                  <div className="crm2-toolbar">
+                    <div className="crm2-search">
+                      <span className="crm2-search-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="11" cy="11" r="7" />
+                          <path d="m21 21-4.3-4.3" />
+                        </svg>
                       </span>
-                      <span className="crm-kpi">
-                        <b>{activeCount}</b> activas
-                      </span>
-                      <span className="crm-kpi">
-                        <b>{candidates.length}</b> total
-                      </span>
+                      <input
+                        type="search"
+                        placeholder="Buscar por nombre o @usuario…"
+                        value={crmSearch}
+                        onChange={(event) => setCrmSearch(event.target.value)}
+                      />
+                    </div>
+                    <div className="crm2-kpis">
+                      <div className="crm2-kpi" style={{ border: "1px solid color-mix(in srgb, var(--warn) 40%, var(--line))" }}>
+                        <span
+                          className="crm2-kpi-icon"
+                          style={{ background: "color-mix(in srgb, var(--warn) 16%, transparent)", color: "var(--warn)" }}
+                        >
+                          ⚠️
+                        </span>
+                        <div>
+                          <div className="crm2-kpi-value" style={{ color: "var(--warn)" }}>
+                            {attentionCount}
+                          </div>
+                          <div className="crm2-kpi-label">te esperan</div>
+                        </div>
+                      </div>
+                      <div className="crm2-kpi">
+                        <span
+                          className="crm2-kpi-icon"
+                          style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--accent)" }}
+                        >
+                          ⚡
+                        </span>
+                        <div>
+                          <div className="crm2-kpi-value">{activeCount}</div>
+                          <div className="crm2-kpi-label">activas</div>
+                        </div>
+                      </div>
+                      <div className="crm2-kpi">
+                        <span className="crm2-kpi-icon" style={{ background: "var(--panel-2)", color: "var(--muted)" }}>
+                          👥
+                        </span>
+                        <div>
+                          <div className="crm2-kpi-value">{candidates.length}</div>
+                          <div className="crm2-kpi-label">total</div>
+                        </div>
+                      </div>
                       <button
                         type="button"
                         className={livePolling ? "live-pill on" : "live-pill"}
@@ -1525,247 +1564,315 @@ export default function Home() {
                       </button>
                     </div>
                   ) : null}
-                  <div className="crm-board">
+                  <div className="crm2-board">
                     {CRM_COLUMNS.map((phase) => {
                       const cards = visible
                         .filter((item) => crmColumnOf(item.currentState) === phase.id)
                         .sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt));
                       return (
-                        <div key={phase.id} className={`crm-column tone-${phase.tone}`}>
-                          <div className="crm-column-head">
-                            <span className="crm-column-title">{phase.title}</span>
-                            <span className="crm-count">{cards.length}</span>
+                        <div key={phase.id} className="crm2-col">
+                          <div className="crm2-col-head">
+                            <span className="crm2-col-bar" style={{ background: `var(${phase.colorVar})` }} />
+                            <span className="crm2-col-title">{phase.title}</span>
+                            <span className="crm2-col-count">{cards.length}</span>
                           </div>
-                          {cards.length === 0 ? (
-                            <p className="crm-empty-col">—</p>
-                          ) : (
-                            cards.map((candidate) => {
-                              const paused = candidate.manualControlActive || candidate.automationPaused;
-                              const awaitingDecision =
-                                candidate.currentState === "WAITING_HUMAN_REVIEW" ||
-                                candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
-                              const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
-                              const awaitingProfileAccess = candidate.currentState === "WAITING_PROFILE_ACCESS";
-                              const awaitingCallConfirm =
-                                candidate.currentState === "COLLECTING_CALL_DETAILS" ||
-                                candidate.currentState === "READY_TO_SCHEDULE";
-                              const closed = candidate.currentState === "REJECTED" || candidate.currentState === "CLOSED";
-                              const isIgsid = /^\d{5,}$/.test(candidate.instagramUsername);
-                              const profile = igProfiles[candidate.instagramUsername];
-                              // @usuario real si se resolvio; si no, el usuario del simulador; para un IGSID sin resolver, nada.
-                              const handle = profile?.username ?? (isIgsid ? null : candidate.instagramUsername);
-                              const profileUrl = profile?.profileUrl ?? null;
-                              const picUrl = profile?.profilePicUrl ?? null;
-                              const hasName = Boolean(candidate.firstName?.trim());
-                              const displayName = candidate.firstName?.trim() || (handle ? `@${handle}` : "Candidata nueva");
-                              const initial = (candidate.firstName?.trim() || handle || candidate.instagramUsername || "?")
-                                .charAt(0)
-                                .toUpperCase();
-                              // Si te sigue, puedes ver su perfil aunque sea privado (sustituto oficial de is_private).
-                              const followsBusiness = profile?.followsBusiness === true;
-                              const followerCount = typeof profile?.followerCount === "number" ? profile.followerCount : null;
-                              const tags: string[] = [];
-                              if (candidate.age) tags.push(`${candidate.age} años`);
-                              if (typeof candidate.hasOnlyFans === "boolean")
-                                tags.push(candidate.hasOnlyFans ? "OF: si" : "OF: no");
-                              if (candidate.deviceModel) tags.push(candidate.deviceModel);
-                              if (candidate.country || candidate.city) tags.push((candidate.country || candidate.city) as string);
-                              if (followerCount !== null)
-                                tags.push(
-                                  followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg` : `${followerCount} seg`
-                                );
-                              if (candidate.phone) tags.push("📱");
-                              return (
-                                <article
-                                  key={candidate.id}
-                                  className={`crm-card tone-${phase.tone} crm-card-clickable`}
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={() => void openDrawer(candidate)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter" || event.key === " ") {
-                                      event.preventDefault();
-                                      void openDrawer(candidate);
-                                    }
-                                  }}
-                                >
-                                  <div className="crm-card-top">
-                                    <span className="crm-avatar">
-                                      {picUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          className="crm-avatar-img"
-                                          src={picUrl}
-                                          alt=""
-                                          referrerPolicy="no-referrer"
-                                          onError={(event) => {
-                                            event.currentTarget.style.display = "none";
+                          <div className="crm2-col-body" style={{ borderLeftColor: `var(${phase.colorVar})` }}>
+                            {cards.length === 0 ? (
+                              <div className="crm2-empty">
+                                <div className="crm2-empty-icon">{phase.emptyIcon}</div>
+                                <div className="crm2-empty-text">{phase.emptyText}</div>
+                              </div>
+                            ) : (
+                              cards.map((candidate) => {
+                                const paused = candidate.manualControlActive || candidate.automationPaused;
+                                const awaitingDecision =
+                                  candidate.currentState === "WAITING_HUMAN_REVIEW" ||
+                                  candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
+                                const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
+                                const awaitingProfileAccess = candidate.currentState === "WAITING_PROFILE_ACCESS";
+                                const awaitingCallConfirm =
+                                  candidate.currentState === "COLLECTING_CALL_DETAILS" ||
+                                  candidate.currentState === "READY_TO_SCHEDULE";
+                                const closed = candidate.currentState === "REJECTED" || candidate.currentState === "CLOSED";
+                                const isIgsid = /^\d{5,}$/.test(candidate.instagramUsername);
+                                const profile = igProfiles[candidate.instagramUsername];
+                                // @usuario real si se resolvio; si no, el usuario del simulador; para un IGSID sin resolver, nada.
+                                const handle = profile?.username ?? (isIgsid ? null : candidate.instagramUsername);
+                                const profileUrl = profile?.profileUrl ?? null;
+                                const picUrl = profile?.profilePicUrl ?? null;
+                                const hasName = Boolean(candidate.firstName?.trim());
+                                const displayName = candidate.firstName?.trim() || (handle ? `@${handle}` : "Candidata nueva");
+                                const initial = (candidate.firstName?.trim() || handle || candidate.instagramUsername || "?")
+                                  .charAt(0)
+                                  .toUpperCase();
+                                // Si te sigue, puedes ver su perfil aunque sea privado (sustituto oficial de is_private).
+                                const followsBusiness = profile?.followsBusiness === true;
+                                const followerCount = typeof profile?.followerCount === "number" ? profile.followerCount : null;
+                                const ringVar = ringColorVar(candidate);
+                                const pillVar = stateColorVar(candidate.currentState);
+                                const tags: string[] = [];
+                                if (candidate.age) tags.push(`${candidate.age} años`);
+                                if (typeof candidate.hasOnlyFans === "boolean")
+                                  tags.push(candidate.hasOnlyFans ? "OF: si" : "OF: no");
+                                if (candidate.deviceModel) tags.push(candidate.deviceModel);
+                                if (candidate.country || candidate.city)
+                                  tags.push((candidate.country || candidate.city) as string);
+                                if (followerCount !== null)
+                                  tags.push(
+                                    followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg` : `${followerCount} seg`
+                                  );
+                                if (candidate.phone) tags.push("📱");
+                                return (
+                                  <article
+                                    key={candidate.id}
+                                    className="crm2-card"
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => void openDrawer(candidate)}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault();
+                                        void openDrawer(candidate);
+                                      }
+                                    }}
+                                  >
+                                    <div className="crm2-card-top">
+                                      <span className="crm2-avatar-wrap">
+                                        <span
+                                          className="crm2-avatar"
+                                          style={{
+                                            background: `var(${ringVar})`,
+                                            boxShadow: `0 0 0 2px var(--panel), 0 0 0 4px var(${ringVar})`
                                           }}
-                                        />
-                                      ) : null}
-                                      {initial}
-                                    </span>
-                                    <span className="crm-card-id">
-                                      {!hasName && profileUrl ? (
-                                        <a
-                                          className="crm-card-name crm-card-link"
-                                          href={profileUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={(event) => event.stopPropagation()}
                                         >
-                                          {displayName} ↗
-                                        </a>
-                                      ) : (
-                                        <span className="crm-card-name">{displayName}</span>
-                                      )}
-                                      {hasName && handle ? (
-                                        profileUrl ? (
-                                          <a
-                                            className="crm-card-handle crm-card-link"
-                                            href={profileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            onClick={(event) => event.stopPropagation()}
-                                          >
-                                            @{handle} ↗
-                                          </a>
-                                        ) : (
-                                          <span className="crm-card-handle">@{handle}</span>
-                                        )
-                                      ) : null}
-                                    </span>
-                                    <span className="crm-bot" title={paused ? "Bot pausado" : "Bot activo"}>
-                                      <span className={paused ? "crm-bot-dot paused" : "crm-bot-dot"} />
-                                      {paused ? "Pausado" : "Activo"}
-                                    </span>
-                                  </div>
-                                  <span className={`crm-state tone-${phase.tone}`}>{stateLabel(candidate.currentState)}</span>
-                                  {awaitingDecision && candidate.humanReviewReason ? (
-                                    <span className="crm-reason" title="Motivo de escalada">
-                                      ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
-                                    </span>
-                                  ) : null}
-                                  {followsBusiness ? (
-                                    <span className="crm-follows" title="Te sigue: puedes ver su perfil aunque sea privado">
-                                      ✓ Te sigue
-                                    </span>
-                                  ) : null}
-                                  {profile?.isPrivate === true ? (
-                                    <span
-                                      className="crm-private"
-                                      title="Cuenta privada: mándale tú la solicitud para ver su perfil"
-                                    >
-                                      🔒 Privada
-                                    </span>
-                                  ) : profile?.isPrivate === false ? (
-                                    <span className="crm-public" title="Cuenta pública: puedes ver su perfil directamente">
-                                      🌐 Pública
-                                    </span>
-                                  ) : null}
-                                  {tags.length > 0 ? (
-                                    <div className="crm-meta">
-                                      {tags.map((tag, index) => (
-                                        <span key={index} className="crm-tag">
-                                          {tag}
+                                          {picUrl ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img
+                                              className="crm2-avatar-img"
+                                              src={picUrl}
+                                              alt=""
+                                              referrerPolicy="no-referrer"
+                                              onError={(event) => {
+                                                event.currentTarget.style.display = "none";
+                                              }}
+                                            />
+                                          ) : null}
+                                          {initial}
                                         </span>
-                                      ))}
+                                        <span
+                                          className="crm2-bot-dot"
+                                          title={paused ? "Bot pausado" : "Bot activo"}
+                                          style={{ background: paused ? "var(--faint)" : "var(--success)" }}
+                                        />
+                                      </span>
+                                      <div className="crm2-id">
+                                        <div className="crm2-name-row">
+                                          <span className="crm2-name">{displayName}</span>
+                                        </div>
+                                        {hasName && handle ? (
+                                          profileUrl ? (
+                                            <a
+                                              className="crm2-username"
+                                              href={profileUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={(event) => event.stopPropagation()}
+                                            >
+                                              @{handle} ↗
+                                            </a>
+                                          ) : (
+                                            <span className="crm2-username">@{handle}</span>
+                                          )
+                                        ) : null}
+                                      </div>
+                                      <span
+                                        className="crm2-pill"
+                                        style={{
+                                          color: `var(${pillVar})`,
+                                          background: `color-mix(in srgb, var(${pillVar}) 12%, transparent)`,
+                                          border: `1px solid color-mix(in srgb, var(${pillVar}) 33%, transparent)`
+                                        }}
+                                      >
+                                        {stateLabel(candidate.currentState)}
+                                      </span>
                                     </div>
-                                  ) : null}
-                                  <div className="crm-card-actions" onClick={(event) => event.stopPropagation()}>
-                                    {awaitingProfileAccess ? (
+                                    {(awaitingDecision && candidate.humanReviewReason) ||
+                                    followsBusiness ||
+                                    profile?.isPrivate !== undefined ? (
+                                      <div className="crm2-badges">
+                                        {awaitingDecision && candidate.humanReviewReason ? (
+                                          <span
+                                            className="crm2-badge"
+                                            style={{
+                                              color: "var(--warn)",
+                                              background: "color-mix(in srgb, var(--warn) 12%, transparent)",
+                                              border: "1px solid color-mix(in srgb, var(--warn) 33%, transparent)"
+                                            }}
+                                          >
+                                            ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
+                                          </span>
+                                        ) : null}
+                                        {followsBusiness ? (
+                                          <span
+                                            className="crm2-badge"
+                                            title="Te sigue: puedes ver su perfil aunque sea privado"
+                                            style={{
+                                              color: "var(--info)",
+                                              background: "color-mix(in srgb, var(--info) 12%, transparent)",
+                                              border: "1px solid color-mix(in srgb, var(--info) 33%, transparent)"
+                                            }}
+                                          >
+                                            ✓ Te sigue
+                                          </span>
+                                        ) : null}
+                                        {profile?.isPrivate === true ? (
+                                          <span
+                                            className="crm2-badge"
+                                            title="Cuenta privada: mándale tú la solicitud para ver su perfil"
+                                            style={{
+                                              color: "var(--muted)",
+                                              background: "var(--panel-2)",
+                                              border: "1px solid var(--line)"
+                                            }}
+                                          >
+                                            🔒 Privada
+                                          </span>
+                                        ) : profile?.isPrivate === false ? (
+                                          <span
+                                            className="crm2-badge"
+                                            title="Cuenta pública: puedes ver su perfil directamente"
+                                            style={{
+                                              color: "var(--muted)",
+                                              background: "var(--panel-2)",
+                                              border: "1px solid var(--line)"
+                                            }}
+                                          >
+                                            🌐 Pública
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    ) : null}
+                                    {tags.length > 0 ? (
+                                      <div className="crm2-metas">
+                                        {tags.map((tag, index) => (
+                                          <span key={index} className="crm2-meta">
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    <div className="crm2-actions" onClick={(event) => event.stopPropagation()}>
+                                      {awaitingProfileAccess ? (
+                                        <button
+                                          className="crm2-btn crm2-btn--teal"
+                                          type="button"
+                                          title="La cuenta es privada y ya le has enviado tú la solicitud de seguimiento"
+                                          onClick={() => void advanceStage(candidate, "FOLLOW_REQUEST_SENT")}
+                                        >
+                                          Ya le mandé la solicitud
+                                        </button>
+                                      ) : null}
+                                      {awaitingProfileReview ? (
+                                        <>
+                                          <button
+                                            className="crm2-btn crm2-btn--teal"
+                                            type="button"
+                                            onClick={() => void advanceStage(candidate, "PROFILE_FIT")}
+                                          >
+                                            Encaja
+                                          </button>
+                                          <button
+                                            className="crm2-btn crm2-btn--danger"
+                                            type="button"
+                                            onClick={() => void advanceStage(candidate, "PROFILE_NO_FIT")}
+                                          >
+                                            No encaja
+                                          </button>
+                                        </>
+                                      ) : null}
+                                      {awaitingDecision ? (
+                                        <>
+                                          <button
+                                            className="crm2-btn crm2-btn--teal"
+                                            type="button"
+                                            onClick={() => void applyHumanDecision(candidate, "APPROVE")}
+                                          >
+                                            Aprobar
+                                          </button>
+                                          <button
+                                            className="crm2-btn crm2-btn--danger"
+                                            type="button"
+                                            onClick={() => void advanceStage(candidate, "REJECT")}
+                                          >
+                                            Rechazar
+                                          </button>
+                                        </>
+                                      ) : null}
+                                      {awaitingCallConfirm ? (
+                                        <button
+                                          className="crm2-btn crm2-btn--teal"
+                                          type="button"
+                                          onClick={() => void advanceStage(candidate, "CONFIRM_CALL")}
+                                        >
+                                          Confirmar llamada
+                                        </button>
+                                      ) : null}
                                       <button
-                                        className="btn-xs accent"
+                                        className="crm2-btn crm2-btn--ghost"
                                         type="button"
-                                        title="La cuenta es privada y ya le has enviado tú la solicitud de seguimiento"
-                                        onClick={() => void advanceStage(candidate, "FOLLOW_REQUEST_SENT")}
+                                        onClick={() => void sendManualReply(candidate)}
                                       >
-                                        Ya le mandé la solicitud
+                                        Responder
                                       </button>
-                                    ) : null}
-                                    {awaitingProfileReview ? (
-                                      <>
+                                      {!closed ? (
                                         <button
-                                          className="btn-xs accent"
+                                          className="crm2-btn crm2-btn--ghost"
                                           type="button"
-                                          onClick={() => void advanceStage(candidate, "PROFILE_FIT")}
+                                          onClick={() => void setBotPaused(candidate, !paused)}
                                         >
-                                          Encaja
+                                          {paused ? "Reanudar" : "Pausar"}
                                         </button>
-                                        <button
-                                          className="btn-xs danger"
-                                          type="button"
-                                          onClick={() => void advanceStage(candidate, "PROFILE_NO_FIT")}
+                                      ) : null}
+                                      {!closed && !awaitingProfileReview && !awaitingDecision ? (
+                                        <>
+                                          <button
+                                            className="crm2-btn crm2-btn--ghost"
+                                            type="button"
+                                            onClick={() => void advanceStage(candidate, "PROFILE_OK")}
+                                          >
+                                            OK perfil
+                                          </button>
+                                          <button
+                                            className="crm2-btn crm2-btn--danger"
+                                            type="button"
+                                            onClick={() => void advanceStage(candidate, "REJECT")}
+                                          >
+                                            Rechazar
+                                          </button>
+                                        </>
+                                      ) : null}
+                                    </div>
+                                    {formatRelativeTime(candidate.lastMessageAt) ? (
+                                      <div className="crm2-footer">
+                                        <svg
+                                          width="11"
+                                          height="11"
+                                          viewBox="0 0 24 24"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
                                         >
-                                          No encaja
-                                        </button>
-                                      </>
+                                          <circle cx="12" cy="12" r="9" />
+                                          <path d="M12 7v5l3 2" />
+                                        </svg>
+                                        Último mensaje {formatRelativeTime(candidate.lastMessageAt)}
+                                      </div>
                                     ) : null}
-                                    {awaitingDecision ? (
-                                      <>
-                                        <button
-                                          className="btn-xs accent"
-                                          type="button"
-                                          onClick={() => void applyHumanDecision(candidate, "APPROVE")}
-                                        >
-                                          Aprobar
-                                        </button>
-                                        <button
-                                          className="btn-xs danger"
-                                          type="button"
-                                          onClick={() => void advanceStage(candidate, "REJECT")}
-                                        >
-                                          Rechazar
-                                        </button>
-                                      </>
-                                    ) : null}
-                                    {awaitingCallConfirm ? (
-                                      <button
-                                        className="btn-xs accent"
-                                        type="button"
-                                        onClick={() => void advanceStage(candidate, "CONFIRM_CALL")}
-                                      >
-                                        Confirmar llamada
-                                      </button>
-                                    ) : null}
-                                    <button className="btn-xs" type="button" onClick={() => void sendManualReply(candidate)}>
-                                      Responder
-                                    </button>
-                                    {!closed ? (
-                                      <button
-                                        className="btn-xs"
-                                        type="button"
-                                        onClick={() => void setBotPaused(candidate, !paused)}
-                                      >
-                                        {paused ? "Reanudar" : "Pausar"}
-                                      </button>
-                                    ) : null}
-                                    {!closed && !awaitingProfileReview && !awaitingDecision ? (
-                                      <>
-                                        <button
-                                          className="btn-xs"
-                                          type="button"
-                                          onClick={() => void advanceStage(candidate, "PROFILE_OK")}
-                                        >
-                                          OK perfil
-                                        </button>
-                                        <button
-                                          className="btn-xs danger"
-                                          type="button"
-                                          onClick={() => void advanceStage(candidate, "REJECT")}
-                                        >
-                                          Rechazar
-                                        </button>
-                                      </>
-                                    ) : null}
-                                  </div>
-                                  {formatRelativeTime(candidate.lastMessageAt) ? (
-                                    <span className="crm-foot">Ultimo mensaje {formatRelativeTime(candidate.lastMessageAt)}</span>
-                                  ) : null}
-                                </article>
-                              );
-                            })
-                          )}
+                                  </article>
+                                );
+                              })
+                            )}
+                          </div>
                         </div>
                       );
                     })}
