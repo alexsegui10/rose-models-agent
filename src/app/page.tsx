@@ -853,6 +853,18 @@ export default function Home() {
               const time = new Date(value).getTime();
               return Number.isNaN(time) ? 0 : time;
             };
+            const relTime = (value?: Date | string): string => {
+              const time = epochOf(value);
+              if (!time) return "";
+              const minutes = Math.round((Date.now() - time) / 60000);
+              if (minutes < 1) return "justo ahora";
+              if (minutes < 60) return `hace ${minutes} min`;
+              const hours = Math.round(minutes / 60);
+              if (hours < 24) return `hace ${hours} h`;
+              return `hace ${Math.round(hours / 24)} d`;
+            };
+            const countStates = (states: Candidate["currentState"][]): number =>
+              candidates.filter((item) => states.includes(item.currentState)).length;
             const total = candidates.length;
             const active = candidates.filter(
               (item) =>
@@ -862,101 +874,243 @@ export default function Home() {
                 item.currentState !== "CLOSED"
             ).length;
             const pendingList = candidates.filter((item) => needsHumanDecision(item));
-            const callCount = candidates.filter((item) => crmColumnOf(item.currentState) === "llamadas").length;
-            const byColumn = CRM_COLUMNS.map((column) => ({
-              ...column,
-              count: candidates.filter((item) => crmColumnOf(item.currentState) === column.id).length
-            }));
-            const maxCount = Math.max(1, ...byColumn.map((column) => column.count));
+            // Embudo de 6 fases (la "decisión" se separa visualmente del resto de cualificación).
+            const funnel = (
+              [
+                { label: "Nuevas", colorVar: "--faint", states: ["NEW_LEAD", "WAITING_PROFILE_ACCESS"] },
+                { label: "Cualificando", colorVar: "--accent", states: ["QUALIFYING"] },
+                {
+                  label: "Tu decisión",
+                  colorVar: "--warn",
+                  states: ["PROFILE_READY_FOR_REVIEW", "WAITING_HUMAN_REVIEW", "HUMAN_INTERVENTION_REQUIRED"]
+                },
+                {
+                  label: "Agenda",
+                  colorVar: "--info",
+                  states: ["APPROVED", "COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE", "CALL_SCHEDULED"]
+                },
+                { label: "Llamadas", colorVar: "--purple", states: ["CALL_IN_PROGRESS", "CALL_COMPLETED", "CALL_NO_ANSWER"] },
+                { label: "Cerradas", colorVar: "--faint", states: ["REJECTED", "CLOSED"] }
+              ] as { label: string; colorVar: string; states: Candidate["currentState"][] }[]
+            ).map((phase) => ({ ...phase, count: countStates(phase.states) }));
+            const funnelMax = Math.max(1, ...funnel.map((phase) => phase.count));
+            const agendaCount = funnel[3].count;
+            const llamadasCount = funnel[4].count;
+            const cerradasCount = funnel[5].count;
+            const todayCalls = candidates.filter(
+              (item) =>
+                item.currentState === "CALL_IN_PROGRESS" ||
+                (item.scheduledCallSlot ? /hoy|ahora/i.test(item.scheduledCallSlot) : false)
+            );
+            const pct = (value: number): string => (total > 0 ? `${Math.round((value / total) * 100)}%` : "—");
             const recent = [...candidates].sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt)).slice(0, 6);
+            const initialOf = (item: Candidate): string =>
+              (item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase();
             return (
-              <section className="panel dashboard">
-                <div className="dash-greeting">
+              <section className="panel">
+                <div className="dash2-head">
                   <div>
-                    <h2>Buenas, Alex 👋</h2>
-                    <p className="muted">Resumen de tu agencia, al día.</p>
+                    <h2 className="dash2-greeting">Buenas, Alex 👋</h2>
+                    <p className="dash2-subtitle">Esto es lo que pasa en tu embudo ahora mismo.</p>
                   </div>
                   {total === 0 ? (
-                    <button className="btn-xs accent" type="button" onClick={() => void seedDemo()}>
+                    <button className="dash2-waiting-btn" type="button" onClick={() => void seedDemo()}>
                       Cargar candidatas de demo
                     </button>
-                  ) : pendingList.length > 0 ? (
-                    <button className="btn-xs accent" type="button" onClick={() => setActiveTab("CRM")}>
-                      ⚠ {pendingList.length} {pendingList.length === 1 ? "espera" : "esperan"} tu decisión
-                    </button>
                   ) : (
-                    <span className="dash-allclear">Sin decisiones pendientes 🎉</span>
+                    <button className="dash2-waiting-btn" type="button" onClick={() => setActiveTab("CRM")}>
+                      ⚠️ {pendingList.length} {pendingList.length === 1 ? "espera" : "esperan"} tu decisión
+                    </button>
                   )}
                 </div>
 
-                <div className="dash-kpis">
-                  <div className="dash-kpi">
-                    <span className="dash-kpi-label">Candidatas</span>
-                    <b>{total}</b>
-                  </div>
-                  <div className="dash-kpi">
-                    <span className="dash-kpi-label">Activas</span>
-                    <b>{active}</b>
-                  </div>
-                  <div className="dash-kpi attention">
-                    <span className="dash-kpi-label">Esperan decisión</span>
-                    <b>{pendingList.length}</b>
-                  </div>
-                  <div className="dash-kpi">
-                    <span className="dash-kpi-label">En llamadas</span>
-                    <b>{callCount}</b>
-                  </div>
+                <div className="dash2-kpi-row">
+                  {(
+                    [
+                      { label: "Te esperan", value: pendingList.length, colorVar: "--warn", icon: "⚠️" },
+                      { label: "Activas", value: active, colorVar: "--accent", icon: "⚡" },
+                      { label: "Llamadas hoy", value: todayCalls.length, colorVar: "--purple", icon: "📞" },
+                      { label: "Total candidatas", value: total, colorVar: "--info", icon: "👥" }
+                    ] as { label: string; value: number; colorVar: string; icon: string }[]
+                  ).map((kpi) => (
+                    <div className="dash2-kpi" key={kpi.label}>
+                      <div
+                        className="dash2-kpi-glow"
+                        style={{
+                          background: `radial-gradient(120px 80px at 90% 0, color-mix(in srgb, var(${kpi.colorVar}) 16%, transparent), transparent)`
+                        }}
+                      />
+                      <div className="dash2-kpi-top">
+                        <span className="dash2-kpi-label">{kpi.label}</span>
+                        <span
+                          className="dash2-kpi-icon"
+                          style={{
+                            background: `color-mix(in srgb, var(${kpi.colorVar}) 16%, transparent)`,
+                            color: `var(${kpi.colorVar})`
+                          }}
+                        >
+                          {kpi.icon}
+                        </span>
+                      </div>
+                      <div className="dash2-kpi-valrow">
+                        <span className="dash2-kpi-value" style={{ color: `var(${kpi.colorVar})` }}>
+                          {kpi.value}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                <div className="dash-stack">
-                  <div className="dash-card">
-                    <h3>Embudo de candidatas</h3>
-                    {total === 0 ? (
-                      <p className="muted">Aún no hay candidatas. Prueba el núcleo en el chat.</p>
-                    ) : (
-                      byColumn.map((column) => (
-                        <button key={column.id} type="button" className="dash-funnel-row" onClick={() => setActiveTab("CRM")}>
-                          <span className="dash-funnel-label">{column.title}</span>
-                          <span className="dash-funnel-track">
-                            <span
-                              className="dash-funnel-fill"
+                <div className="dash2-stack">
+                  <div className="dash2-card">
+                    <div className="dash2-card-head">
+                      <h3 className="dash2-card-title">Embudo de candidatas</h3>
+                      <span className="dash2-card-meta">{total} en total</span>
+                    </div>
+                    <div className="dash2-funnel-list">
+                      {funnel.map((phase) => (
+                        <div
+                          key={phase.label}
+                          className="dash2-funnel-row"
+                          onClick={() => setActiveTab(phase.label === "Llamadas" ? "LLAMADAS" : "CRM")}
+                        >
+                          <span className="dash2-funnel-label">{phase.label}</span>
+                          <div className="dash2-funnel-track">
+                            <div
+                              className="dash2-funnel-bar"
                               style={{
-                                width: `${Math.round((column.count / maxCount) * 100)}%`,
-                                background: `var(${column.colorVar})`
+                                width: `${Math.round((phase.count / funnelMax) * 100)}%`,
+                                background: `linear-gradient(90deg, var(${phase.colorVar}), color-mix(in srgb, var(${phase.colorVar}) 60%, transparent))`,
+                                boxShadow: `0 0 16px color-mix(in srgb, var(${phase.colorVar}) 33%, transparent)`
                               }}
                             />
-                          </span>
-                          <span className="dash-funnel-count">{column.count}</span>
-                        </button>
-                      ))
-                    )}
+                          </div>
+                          <span className="dash2-funnel-count">{phase.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="dash2-conv">
+                      <div className="dash2-conv-cell">
+                        <div className="dash2-conv-label">Activas</div>
+                        <div className="dash2-conv-value">{pct(active)}</div>
+                      </div>
+                      <div className="dash2-conv-cell">
+                        <div className="dash2-conv-label">En llamadas</div>
+                        <div className="dash2-conv-value">{pct(llamadasCount)}</div>
+                      </div>
+                      <div className="dash2-conv-cell">
+                        <div className="dash2-conv-label">Cerradas</div>
+                        <div className="dash2-conv-value">{pct(cerradasCount)}</div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="dash-card">
-                    <h3>Pendientes de tu decisión</h3>
-                    {pendingList.length === 0 ? (
-                      <p className="muted">Nada pendiente ahora mismo.</p>
-                    ) : (
-                      pendingList.map((item) => (
-                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
-                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
-                          <span className="dash-list-state attention">{stateLabel(item.currentState)}</span>
+                  <div className="dash2-right">
+                    <div className="dash2-card dash2-card--pad18">
+                      <div className="dash2-card-head">
+                        <h3 className="dash2-card-title">Llamadas de hoy</h3>
+                        <button className="dash2-link-btn" type="button" onClick={() => setActiveTab("LLAMADAS")}>
+                          Ver todas →
                         </button>
-                      ))
-                    )}
-                    <h3 className="dash-subhead">Actividad reciente</h3>
-                    {recent.length === 0 ? (
-                      <p className="muted">Sin actividad todavía.</p>
-                    ) : (
-                      recent.map((item) => (
-                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
-                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
-                          <span className="dash-list-state">{stateLabel(item.currentState)}</span>
-                        </button>
-                      ))
-                    )}
+                      </div>
+                      <div className="dash2-calls-list">
+                        {todayCalls.length === 0 ? (
+                          <div className="dash2-empty">Sin llamadas para hoy.</div>
+                        ) : (
+                          todayCalls.map((item) => (
+                            <div key={item.id} className="dash2-call" onClick={() => void openDrawer(item)}>
+                              <span className="dash2-avatar" style={{ background: `var(${ringColorVar(item)})` }}>
+                                {initialOf(item)}
+                              </span>
+                              <div className="dash2-call-body">
+                                <div className="dash2-call-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
+                                <div className="dash2-call-slot">{item.scheduledCallSlot || "en curso"}</div>
+                              </div>
+                              <span
+                                style={{
+                                  flex: "none",
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  padding: "3px 9px",
+                                  borderRadius: 999,
+                                  whiteSpace: "nowrap",
+                                  color: `var(${stateColorVar(item.currentState)})`,
+                                  background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 12%, transparent)`,
+                                  border: `1px solid color-mix(in srgb, var(${stateColorVar(item.currentState)}) 33%, transparent)`
+                                }}
+                              >
+                                {stateLabel(item.currentState)}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="dash2-card dash2-card--pad18">
+                      <h3 className="dash2-activity-title">Actividad reciente</h3>
+                      {recent.length === 0 ? (
+                        <div className="dash2-empty">Sin actividad todavía.</div>
+                      ) : (
+                        <div className="dash2-activity-list">
+                          {recent.map((item, index) => (
+                            <div
+                              key={item.id}
+                              className="dash2-act-row"
+                              onClick={() => void openDrawer(item)}
+                              style={{ cursor: "pointer" }}
+                            >
+                              <div className="dash2-act-rail">
+                                <span
+                                  className="dash2-act-dot"
+                                  style={{
+                                    background: `var(${stateColorVar(item.currentState)})`,
+                                    boxShadow: `0 0 8px color-mix(in srgb, var(${stateColorVar(item.currentState)}) 60%, transparent)`
+                                  }}
+                                />
+                                {index < recent.length - 1 ? <span className="dash2-act-line" /> : null}
+                              </div>
+                              <div className="dash2-act-body">
+                                <div className="dash2-act-text">
+                                  <strong>{item.firstName?.trim() || `@${item.instagramUsername}`}</strong> ·{" "}
+                                  {stateLabel(item.currentState)}
+                                </div>
+                                <div className="dash2-act-time">{relTime(item.lastMessageAt)}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {pendingList.length > 0 ? (
+                  <div className="dash2-pending-card">
+                    <div className="dash2-pending-head">
+                      <span className="dash2-pending-badge">⚠️</span>
+                      <h3 className="dash2-card-title">Pendientes de tu decisión</h3>
+                    </div>
+                    <div className="dash2-pending-grid">
+                      {pendingList.map((item) => (
+                        <div key={item.id} className="dash2-pending-item" onClick={() => void openDrawer(item)}>
+                          <span className="dash2-pending-avatar" style={{ background: `var(${ringColorVar(item)})` }}>
+                            {initialOf(item)}
+                          </span>
+                          <div className="dash2-pending-body">
+                            <div className="dash2-pending-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
+                            <div className="dash2-pending-reason">
+                              {item.humanReviewReason
+                                ? (REVIEW_REASON_LABELS[item.humanReviewReason] ?? item.humanReviewReason)
+                                : stateLabel(item.currentState)}
+                            </div>
+                          </div>
+                          <span className="dash2-pending-arrow">→</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </section>
             );
           })()
