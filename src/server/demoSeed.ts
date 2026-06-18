@@ -233,15 +233,26 @@ function authorFor(role: ConversationRole): "CANDIDATE" | "AI_AGENT" | "ALEX" | 
   return "SYSTEM";
 }
 
+// IDs de demo: UUIDs VÁLIDOS con prefijo reconocible (la BD usa columnas uuid; un "demo-01" la
+// rompería y, además, findCandidateById/listMessages descartan ids no-uuid). El prefijo permite
+// localizarlas y borrarlas en bloque sin tocar candidatas reales.
+export const DEMO_ID_PREFIX = "00000000-0000-4000-8000-";
+const demoCandidateId = (n: number): string => `${DEMO_ID_PREFIX}${String(n).padStart(12, "0")}`;
+const demoMessageId = (n: number, msgIndex: number): string =>
+  `00000000-0000-4000-8001-${String(n * 100 + msgIndex).padStart(12, "0")}`;
+const specNumber = (specId: string): number => Number(specId.replace("demo-", ""));
+
 export async function seedDemoCandidates(repository: CandidateRepository): Promise<number> {
   const now = Date.now();
   const at = (minutesAgo: number): Date => new Date(now - minutesAgo * 60000);
 
   for (const spec of SPECS) {
+    const num = specNumber(spec.id);
+    const candidateId = demoCandidateId(num);
     const base = createCandidate({ instagramUsername: spec.username, displayName: spec.firstName });
     const candidate = normalizeCandidate({
       ...base,
-      id: spec.id,
+      id: candidateId,
       firstName: spec.firstName,
       currentState: spec.state,
       age: spec.age,
@@ -265,14 +276,13 @@ export async function seedDemoCandidates(repository: CandidateRepository): Promi
     const messages = spec.messages ?? [];
     for (let index = 0; index < messages.length; index += 1) {
       const message = messages[index];
-      const externalMessageId = `${spec.id}-msg-${index + 1}`;
       const stored: ConversationMessage = {
-        id: externalMessageId,
-        candidateId: spec.id,
+        id: demoMessageId(num, index + 1),
+        candidateId,
         role: message.role,
         author: authorFor(message.role),
         content: message.content,
-        externalMessageId,
+        externalMessageId: `demo-msg-${num}-${index + 1}`,
         createdAt: at(spec.minutesAgo + (messages.length - index) * 3)
       };
       await repository.addMessage(stored);
@@ -280,4 +290,14 @@ export async function seedDemoCandidates(repository: CandidateRepository): Promi
   }
 
   return SPECS.length;
+}
+
+// Borra TODAS las candidatas de demo (las que tienen el prefijo de id de demo). No toca reales.
+export async function clearDemoCandidates(repository: CandidateRepository): Promise<number> {
+  const all = await repository.listCandidates();
+  const demo = all.filter((candidate) => candidate.id.startsWith(DEMO_ID_PREFIX));
+  for (const candidate of demo) {
+    await repository.deleteCandidate(candidate.id);
+  }
+  return demo.length;
 }

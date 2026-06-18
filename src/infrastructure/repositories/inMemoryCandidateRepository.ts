@@ -38,6 +38,21 @@ export class InMemoryCandidateRepository implements CandidateRepository {
     return this.normalizeAndStore(candidate);
   }
 
+  async deleteCandidate(id: string): Promise<void> {
+    this.candidates.delete(id);
+    this.negotiationDecisions.delete(id);
+    for (let index = this.messages.length - 1; index >= 0; index -= 1) {
+      if (this.messages[index].candidateId === id) {
+        this.messages.splice(index, 1);
+      }
+    }
+    for (let index = this.transitions.length - 1; index >= 0; index -= 1) {
+      if (this.transitions[index].candidateId === id) {
+        this.transitions.splice(index, 1);
+      }
+    }
+  }
+
   async listMessages(candidateId: string, limit = 50): Promise<ConversationMessage[]> {
     return this.messages.filter((message) => message.candidateId === candidateId).slice(-limit);
   }

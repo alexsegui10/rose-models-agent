@@ -379,6 +379,22 @@ export default function Home() {
     }
   }
 
+  // Quita SOLO las candidatas de demo (por su prefijo de id). Nunca toca las reales.
+  async function clearDemo() {
+    try {
+      const response = await fetch("/api/simulator/seed-demo", { method: "DELETE" });
+      const data = (await response.json().catch(() => ({}))) as { removed?: number; error?: string };
+      if (!response.ok) {
+        setCrmNotice(`No se pudieron quitar las candidatas de demo (${response.status}). ${data.error ?? ""}`.trim());
+        return;
+      }
+      await refreshCandidates();
+      setCrmNotice(`Quitadas ${data.removed ?? 0} candidatas de demo.`);
+    } catch (error) {
+      setCrmNotice(`No se pudieron quitar las candidatas de demo: ${error instanceof Error ? error.message : "error de red"}.`);
+    }
+  }
+
   async function importConversations() {
     const response = await fetch("/api/simulator/conversation-import", {
       method: "POST",
@@ -1896,6 +1912,16 @@ export default function Home() {
                         <span className="live-dot" />
                         {livePolling ? "En vivo" : "Pausado"}
                       </button>
+                      {candidates.some((item) => item.id.startsWith("00000000-0000-4000-8000-")) ? (
+                        <button
+                          type="button"
+                          className="live-pill"
+                          title="Borra solo las candidatas de demo (las reales no se tocan)"
+                          onClick={() => void clearDemo()}
+                        >
+                          🗑️ Quitar demo
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   {candidates.length === 0 ? (

@@ -12,6 +12,7 @@ export interface CandidateRepository {
   findCandidateByInstagram(instagramUsername: string): Promise<Candidate | null>;
   listCandidates(): Promise<Candidate[]>;
   saveCandidate(candidate: Candidate): Promise<Candidate>;
+  deleteCandidate(id: string): Promise<void>;
   listMessages(candidateId: string, limit?: number): Promise<ConversationMessage[]>;
   findMessageByExternalId(candidateId: string, externalMessageId: string): Promise<ConversationMessage | null>;
   addMessage(message: ConversationMessage): Promise<void>;

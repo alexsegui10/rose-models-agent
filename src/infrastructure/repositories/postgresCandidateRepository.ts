@@ -48,6 +48,14 @@ export class PostgresCandidateRepository implements CandidateRepository {
     return normalized;
   }
 
+  async deleteCandidate(id: string): Promise<void> {
+    if (!isUuid(id)) {
+      return;
+    }
+    // La FK con ON DELETE CASCADE borra mensajes/transiciones/decisiones de la candidata.
+    await this.db.delete(candidates).where(eq(candidates.id, id));
+  }
+
   async listMessages(candidateId: string, limit = 50): Promise<ConversationMessage[]> {
     if (!isUuid(candidateId)) {
       return [];
