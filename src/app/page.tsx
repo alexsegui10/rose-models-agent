@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
+import { CRM_COLUMNS, crmColumnOf, stateLabel } from "@/application/crmView";
 import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
@@ -430,8 +431,12 @@ export default function Home() {
     setCrmNotice(
       paused ? `Bot pausado para @${candidate.instagramUsername}.` : `Bot reanudado para @${candidate.instagramUsername}.`
     );
+    const pausedCandidate = { ...candidate, manualControlActive: paused, automationPaused: paused };
     if (selectedCandidate?.id === candidate.id) {
-      setSelectedCandidate({ ...candidate, manualControlActive: paused, automationPaused: paused });
+      setSelectedCandidate(pausedCandidate);
+    }
+    if (drawerCandidate?.id === candidate.id) {
+      setDrawerCandidate(pausedCandidate);
     }
     await refreshCandidates();
   }
@@ -459,6 +464,9 @@ export default function Home() {
     }
     if (selectedCandidate?.id === candidate.id) {
       setSelectedCandidate(data.candidate);
+    }
+    if (drawerCandidate?.id === candidate.id) {
+      setDrawerCandidate(data.candidate);
     }
     await refreshCandidates();
   }
@@ -591,6 +599,9 @@ export default function Home() {
     }
     if (selectedCandidate?.id === candidate.id) {
       setSelectedCandidate(data.candidate);
+    }
+    if (drawerCandidate?.id === candidate.id) {
+      setDrawerCandidate(data.candidate);
     }
     await refreshCandidates();
   }
@@ -1193,37 +1204,8 @@ export default function Home() {
             <p className="muted">Aun no hay candidatas. Inicia una conversacion en el chat de prueba.</p>
           ) : (
             (() => {
-              const PHASES: { key: string; title: string; tone: string; states: Candidate["currentState"][] }[] = [
-                { key: "nuevas", title: "Nuevas", tone: "new", states: ["NEW_LEAD", "WAITING_PROFILE_ACCESS"] },
-                { key: "cualificando", title: "Cualificando", tone: "qualify", states: ["QUALIFYING"] },
-                {
-                  key: "decision",
-                  title: "⚠ Tu decision",
-                  tone: "attention",
-                  states: ["PROFILE_READY_FOR_REVIEW", "WAITING_HUMAN_REVIEW", "HUMAN_INTERVENTION_REQUIRED"]
-                },
-                {
-                  key: "agenda",
-                  title: "Agenda",
-                  tone: "schedule",
-                  states: ["APPROVED", "COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE", "CALL_SCHEDULED"]
-                },
-                { key: "cerradas", title: "Cerradas", tone: "closed", states: ["REJECTED", "CLOSED"] }
-              ];
-              const STATE_LABELS: Partial<Record<Candidate["currentState"], string>> = {
-                NEW_LEAD: "Nueva",
-                WAITING_PROFILE_ACCESS: "Esperando solicitud",
-                PROFILE_READY_FOR_REVIEW: "Revisar perfil",
-                QUALIFYING: "Cualificando",
-                WAITING_HUMAN_REVIEW: "Tu decision",
-                HUMAN_INTERVENTION_REQUIRED: "Intervencion",
-                APPROVED: "Aprobada",
-                COLLECTING_CALL_DETAILS: "Agendando",
-                READY_TO_SCHEDULE: "Lista para llamada",
-                CALL_SCHEDULED: "Llamada agendada",
-                REJECTED: "Rechazada",
-                CLOSED: "Cerrada"
-              };
+              // Columnas, etiquetas y agrupacion por estado viven en crmView.ts (capa de presentacion
+              // pura y exhaustiva sobre los 15 estados: ninguna candidata desaparece del tablero).
               const epochOf = (value?: Date | string): number => {
                 if (!value) return 0;
                 const time = new Date(value).getTime();
@@ -1293,12 +1275,12 @@ export default function Home() {
                     </div>
                   ) : null}
                   <div className="crm-board">
-                    {PHASES.map((phase) => {
+                    {CRM_COLUMNS.map((phase) => {
                       const cards = visible
-                        .filter((item) => phase.states.includes(item.currentState))
+                        .filter((item) => crmColumnOf(item.currentState) === phase.id)
                         .sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt));
                       return (
-                        <div key={phase.key} className={`crm-column tone-${phase.tone}`}>
+                        <div key={phase.id} className={`crm-column tone-${phase.tone}`}>
                           <div className="crm-column-head">
                             <span className="crm-column-title">{phase.title}</span>
                             <span className="crm-count">{cards.length}</span>
@@ -1407,9 +1389,7 @@ export default function Home() {
                                       {paused ? "Pausado" : "Activo"}
                                     </span>
                                   </div>
-                                  <span className={`crm-state tone-${phase.tone}`}>
-                                    {STATE_LABELS[candidate.currentState] ?? candidate.currentState}
-                                  </span>
+                                  <span className={`crm-state tone-${phase.tone}`}>{stateLabel(candidate.currentState)}</span>
                                   {awaitingDecision && candidate.humanReviewReason ? (
                                     <span className="crm-reason" title="Motivo de escalada">
                                       ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
@@ -1724,18 +1704,52 @@ export default function Home() {
             </div>
 
             <footer className="drawer-footer">
-              <button type="button" className="btn-xs accent" onClick={() => sendManualReply(drawerCandidate)}>
+              {/* Acciones segun estado, identicas a las tarjetas del CRM (mismos handlers deterministas). */}
+              {drawerCandidate.currentState === "PROFILE_READY_FOR_REVIEW" ? (
+                <>
+                  <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "PROFILE_FIT")}>
+                    Encaja
+                  </button>
+                  <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "PROFILE_NO_FIT")}>
+                    No encaja
+                  </button>
+                </>
+              ) : null}
+              {drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
+              drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-xs accent"
+                    onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
+                  >
+                    Aprobar
+                  </button>
+                  <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
+                    Rechazar
+                  </button>
+                </>
+              ) : null}
+              {drawerCandidate.currentState === "COLLECTING_CALL_DETAILS" ||
+              drawerCandidate.currentState === "READY_TO_SCHEDULE" ? (
+                <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "CONFIRM_CALL")}>
+                  Confirmar llamada
+                </button>
+              ) : null}
+              <button type="button" className="btn-xs" onClick={() => sendManualReply(drawerCandidate)}>
                 Responder a mano
               </button>
-              <button
-                type="button"
-                className="btn-xs"
-                onClick={() =>
-                  setBotPaused(drawerCandidate, !(drawerCandidate.manualControlActive || drawerCandidate.automationPaused))
-                }
-              >
-                {drawerCandidate.manualControlActive || drawerCandidate.automationPaused ? "Reactivar bot" : "Pausar bot"}
-              </button>
+              {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
+                <button
+                  type="button"
+                  className="btn-xs"
+                  onClick={() =>
+                    setBotPaused(drawerCandidate, !(drawerCandidate.manualControlActive || drawerCandidate.automationPaused))
+                  }
+                >
+                  {drawerCandidate.manualControlActive || drawerCandidate.automationPaused ? "Reactivar bot" : "Pausar bot"}
+                </button>
+              ) : null}
             </footer>
           </aside>
         </div>

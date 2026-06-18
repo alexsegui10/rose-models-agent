@@ -1057,6 +1057,21 @@ button {
   border-left-color: #3a4651;
   opacity: 0.72;
 }
+.crm-card.tone-call {
+  border-left-color: var(--purple);
+}
+.crm-column.tone-call .crm-column-title {
+  color: var(--purple);
+}
+.crm-card.tone-call .crm-avatar {
+  background: color-mix(in srgb, var(--purple) 18%, var(--panel));
+  color: var(--purple-strong);
+}
+.crm-state.tone-call {
+  background: color-mix(in srgb, var(--purple) 16%, transparent);
+  color: var(--purple-strong);
+  border-color: color-mix(in srgb, var(--purple) 32%, transparent);
+}
 
 .crm-card-top {
   display: flex;
