@@ -147,6 +147,12 @@ export default function Home() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [modalInput, setModalInput] = useState("");
+  // Ficha de candidata (drawer lateral): se abre al hacer clic en una tarjeta del CRM.
+  const [drawerCandidate, setDrawerCandidate] = useState<Candidate | null>(null);
+  const [drawerMessages, setDrawerMessages] = useState<ConversationMessage[]>([]);
+  const [drawerTransitions, setDrawerTransitions] = useState<StateTransition[]>([]);
+  const [drawerTab, setDrawerTab] = useState<"conversacion" | "ficha" | "llamada">("conversacion");
+  const [drawerLoading, setDrawerLoading] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   // Perfil de Instagram (foto + @usuario + enlace) resuelto por IGSID via la Graph API, para enriquecer
@@ -460,6 +466,31 @@ export default function Home() {
   function openModal(next: ModalState) {
     setModalInput(next.defaultValue ?? "");
     setModal(next);
+  }
+
+  async function openDrawer(candidate: Candidate) {
+    setDrawerCandidate(candidate);
+    setDrawerTab("conversacion");
+    setDrawerMessages([]);
+    setDrawerTransitions([]);
+    setDrawerLoading(true);
+    try {
+      const response = await fetch(`/api/candidates/${candidate.id}/conversation`);
+      if (response.ok) {
+        const data = (await response.json()) as {
+          messages: ConversationMessage[];
+          transitions: StateTransition[];
+        };
+        setDrawerMessages(data.messages ?? []);
+        setDrawerTransitions(data.transitions ?? []);
+      }
+    } finally {
+      setDrawerLoading(false);
+    }
+  }
+
+  function closeDrawer() {
+    setDrawerCandidate(null);
   }
 
   function sendManualReply(candidate: Candidate) {
@@ -1312,7 +1343,19 @@ export default function Home() {
                                 );
                               if (candidate.phone) tags.push("📱");
                               return (
-                                <article key={candidate.id} className={`crm-card tone-${phase.tone}`}>
+                                <article
+                                  key={candidate.id}
+                                  className={`crm-card tone-${phase.tone} crm-card-clickable`}
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => void openDrawer(candidate)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault();
+                                      void openDrawer(candidate);
+                                    }
+                                  }}
+                                >
                                   <div className="crm-card-top">
                                     <span className="crm-avatar">
                                       {picUrl ? (
@@ -1336,6 +1379,7 @@ export default function Home() {
                                           href={profileUrl}
                                           target="_blank"
                                           rel="noopener noreferrer"
+                                          onClick={(event) => event.stopPropagation()}
                                         >
                                           {displayName} ↗
                                         </a>
@@ -1349,6 +1393,7 @@ export default function Home() {
                                             href={profileUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
+                                            onClick={(event) => event.stopPropagation()}
                                           >
                                             @{handle} ↗
                                           </a>
@@ -1396,7 +1441,7 @@ export default function Home() {
                                       ))}
                                     </div>
                                   ) : null}
-                                  <div className="crm-card-actions">
+                                  <div className="crm-card-actions" onClick={(event) => event.stopPropagation()}>
                                     {awaitingProfileAccess ? (
                                       <button
                                         className="btn-xs accent"
@@ -1557,6 +1602,143 @@ export default function Home() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {drawerCandidate ? (
+        <div className="drawer-scrim" role="presentation" onClick={closeDrawer}>
+          <aside
+            className="drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ficha de candidata"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="drawer-header">
+              <div className="drawer-id">
+                <span className="drawer-avatar">
+                  {(drawerCandidate.firstName?.trim() || drawerCandidate.instagramUsername || "?").charAt(0).toUpperCase()}
+                </span>
+                <div>
+                  <h3 className="drawer-name">{drawerCandidate.firstName?.trim() || `@${drawerCandidate.instagramUsername}`}</h3>
+                  <span className="drawer-state-pill">{drawerCandidate.currentState}</span>
+                </div>
+              </div>
+              <button type="button" className="drawer-close" aria-label="Cerrar ficha" onClick={closeDrawer}>
+                ✕
+              </button>
+            </header>
+
+            <nav className="drawer-tabs">
+              <button
+                type="button"
+                className={drawerTab === "conversacion" ? "drawer-tab active" : "drawer-tab"}
+                onClick={() => setDrawerTab("conversacion")}
+              >
+                Conversación
+              </button>
+              <button
+                type="button"
+                className={drawerTab === "ficha" ? "drawer-tab active" : "drawer-tab"}
+                onClick={() => setDrawerTab("ficha")}
+              >
+                Ficha
+              </button>
+              <button
+                type="button"
+                className={drawerTab === "llamada" ? "drawer-tab active" : "drawer-tab"}
+                onClick={() => setDrawerTab("llamada")}
+              >
+                Llamada
+              </button>
+            </nav>
+
+            <div className="drawer-body">
+              {drawerTab === "conversacion" ? (
+                drawerLoading ? (
+                  <p className="muted">Cargando conversación…</p>
+                ) : drawerMessages.length === 0 ? (
+                  <p className="muted">Sin mensajes todavía.</p>
+                ) : (
+                  <div className="drawer-conversation">
+                    {drawerMessages.map((item) => (
+                      <div className={`message ${item.role}`} key={item.id}>
+                        {item.content}
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : null}
+
+              {drawerTab === "ficha" ? (
+                <div className="drawer-ficha">
+                  <div className="drawer-fields">
+                    {buildCandidatePanelRows(drawerCandidate).map(([label, value]) => (
+                      <div className="drawer-field" key={label}>
+                        <span className="drawer-field-label">{label}</span>
+                        <span className="drawer-field-value">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {drawerCandidate.objections && drawerCandidate.objections.length > 0 ? (
+                    <div className="drawer-block">
+                      <span className="drawer-field-label">Objeciones</span>
+                      <div className="drawer-chips">
+                        {drawerCandidate.objections.map((objection, index) => (
+                          <span className="drawer-chip danger" key={index}>
+                            {objection}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {drawerCandidate.conversationSummary ? (
+                    <div className="drawer-block">
+                      <span className="drawer-field-label">📝 Resumen</span>
+                      <p className="drawer-text">{drawerCandidate.conversationSummary}</p>
+                    </div>
+                  ) : null}
+                  {drawerCandidate.notes && drawerCandidate.notes.length > 0 ? (
+                    <div className="drawer-block">
+                      <span className="drawer-field-label">Notas</span>
+                      {drawerCandidate.notes.map((note, index) => (
+                        <p className="drawer-text" key={index}>
+                          {note}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {drawerTab === "llamada" ? (
+                <div className="drawer-call">
+                  {drawerCandidate.scheduledCallSlot ? (
+                    <p className="drawer-text">
+                      📞 Llamada agendada: <strong>{drawerCandidate.scheduledCallSlot}</strong>
+                    </p>
+                  ) : (
+                    <p className="muted">Aún no hay llamada. Aprueba a la candidata y agéndala desde el CRM.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            <footer className="drawer-footer">
+              <button type="button" className="btn-xs accent" onClick={() => sendManualReply(drawerCandidate)}>
+                Responder a mano
+              </button>
+              <button
+                type="button"
+                className="btn-xs"
+                onClick={() =>
+                  setBotPaused(drawerCandidate, !(drawerCandidate.manualControlActive || drawerCandidate.automationPaused))
+                }
+              >
+                {drawerCandidate.manualControlActive || drawerCandidate.automationPaused ? "Reactivar bot" : "Pausar bot"}
+              </button>
+            </footer>
+          </aside>
+        </div>
       ) : null}
 
       {modal ? (
