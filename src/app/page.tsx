@@ -1389,9 +1389,11 @@ export default function Home() {
       {activeTab === "CHAT" ? (
         <section className="panel">
           <header className="chat2-head">
-            <h2 className="chat2-title">Chat de prueba</h2>
+            <h2 className="chat2-title">Chat de prueba 🧪</h2>
             <p className="chat2-subtitle">
-              Simula una conversación como si fueras una candidata. El núcleo del bot responde y verás su razonamiento.
+              Es una <strong>prueba local</strong>: aquí escribes TÚ haciéndote pasar por una candidata para ver cómo responde el
+              bot. <strong>No se envía nada a Instagram.</strong> Las conversaciones reales llegan solas al CRM, y desde la ficha
+              de cada candidata puedes responder a mano (eso sí va a Instagram cuando esté conectado).
             </p>
           </header>
           <div className="chat2-grid">
@@ -2174,22 +2176,13 @@ export default function Home() {
                                         </button>
                                       ) : null}
                                       {!closed && !awaitingProfileReview && !awaitingDecision ? (
-                                        <>
-                                          <button
-                                            className="crm2-btn crm2-btn--ghost"
-                                            type="button"
-                                            onClick={() => void advanceStage(candidate, "PROFILE_OK")}
-                                          >
-                                            OK perfil
-                                          </button>
-                                          <button
-                                            className="crm2-btn crm2-btn--danger"
-                                            type="button"
-                                            onClick={() => void advanceStage(candidate, "REJECT")}
-                                          >
-                                            Rechazar
-                                          </button>
-                                        </>
+                                        <button
+                                          className="crm2-btn crm2-btn--danger"
+                                          type="button"
+                                          onClick={() => void advanceStage(candidate, "REJECT")}
+                                        >
+                                          Rechazar
+                                        </button>
                                       ) : null}
                                     </div>
                                     {formatRelativeTime(candidate.lastMessageAt) ? (
