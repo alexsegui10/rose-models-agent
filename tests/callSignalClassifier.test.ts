@@ -16,6 +16,15 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("¿me pasas con Alex?")).toBe("wants-human");
   });
 
+  it("pide humano de forma INDIRECTA o LATAM -> wants-human (escalar antes)", () => {
+    expect(sig("prefiero que me explique esto una persona")).toBe("wants-human");
+    expect(sig("¿no me puede comunicar con el señor Alex?")).toBe("wants-human");
+    expect(sig("quiero platicar con un humano, no con la grabación")).toBe("wants-human");
+    expect(sig("me comunican con el responsable porfa")).toBe("wants-human");
+    // No confundir con desconfianza ni con una referencia pasada a una persona:
+    expect(sig("una persona me dijo que esto era bueno")).not.toBe("wants-human");
+  });
+
   it("queja del reparto (término de % + término de queja) -> complains-about-share", () => {
     expect(sig("el 30% es mucho")).toBe("complains-about-share");
     expect(sig("¿no podéis bajar la comisión?")).toBe("complains-about-share");

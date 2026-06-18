@@ -45,9 +45,15 @@ function normalize(text: string): string {
 const HOSTILE =
   /\b(idiota|imbecil|gilipoll\w*|subnormal|cabron|cabrona|payas[oa]|capull\w*|sinverguenza|chorizos?|estafador\w*|timador\w*)\b|(una|que|vaya|menuda|de) mierda|me jode\b|no me jodas|vete a (la mierda|tomar)|(?<!\bsi )(es una|menuda|vaya|menudo) (estafa|timo|fraude|robo|porqueria|verguenza|tomadura de pelo)|(estafa|timo|fraude) de mierda|huele a (estafa|timo|fraude)|(?<!\bsi )(esto|eso) es (una )?(estafa|timo|fraude|ilegal|porqueria|tomadura de pelo)|(sois|son) unos? (estafadores|ladrones|mentirosos|sinverguenzas|rateros|tramposos|chorizos)|(me|nos) (estais|estan) (enganando|timando|estafando|tomando el pelo)|os voy a denunciar|voy a (denunciar|llamar a la policia|llamar a la guardia)|esto es ilegal|hijo de|callate|dejate de (gilipolleces|tonterias|chorradas|cuentos|historias|milongas)/;
 
-// Pide hablar con una persona / rechaza la máquina -> handoff. Cubre fraseos naturales y LATAM.
-const WANTS_HUMAN =
-  /(hablar|hablo|hable|hablamos|hablarlo) con (una persona|persona real|alguien|un humano|una humana|el responsable|un responsable|la responsable|el encargado|un encargado|un agente|alex|el jefe|la jefa|tu jefe|el dueno|la duena)|que (me atienda|me llame|se ponga|hable conmigo|me lo explique|me lo cuente|me comunique con|me comuniquen con) (una persona|alguien|un humano|una humana|el responsable|un responsable|alex|el jefe)|(me puede atender|puede atenderme|que me atienda) (una persona|alguien|un humano)|(pasame|paseme|pasenme|ponme|me pasas|comunicame|comuniqueme) con (alex|una persona|alguien|un humano|el jefe|el responsable)|(quiero|necesito|prefiero|me gustaria) (hablar con|que me llame|que me atienda|que me lo explique|que se ponga|que me comunique con) (una persona|alguien|un humano|alex|el responsable|el jefe)|(no quiero|prefiero no|no me gusta) hablar con (un |una )?(bot|maquina|robot|grabacion|contestador|inteligencia)|no me hables tu|que se ponga (alguien|una persona|un humano|alex)/;
+// Pide hablar con una persona / rechaza la máquina -> handoff. Enfoque por INTENCIÓN (no plantillas
+// rígidas): un REFERENTE humano + un VERBO de "ponme con / que me lo explique / comunícame", o un rechazo
+// explícito a la máquina. Cubre fraseos naturales y LATAM ("platicar", "me comunican con el responsable").
+const HUMAN_REF =
+  /\b(?:una persona|persona real|alguien|un humano|una humana|el responsable|la responsable|un responsable|el encargado|la encargada|un encargado|un agente|el señor alex|alex|el jefe|la jefa|tu jefe|el dueno|la duena)\b/;
+const WANT_HUMAN_VERB =
+  /\b(?:hablar con|hablarlo con|platicar con|que me (?:lo )?explique|que me (?:lo )?cuente|que me atienda|que me llame|que se ponga|que me comunique|que me comuniquen|me comunican con|me comunica con|comunicar con|comunicarme con|me pase con|pasame con|paseme con|ponme con|me pasas con|me puede atender|puede atenderme)\b/;
+const REJECT_MACHINE =
+  /(?:no quiero|prefiero no|no me gusta|deja de|dejate de) (?:hablar con |que me hable )?(?:un |una )?(?:bot|maquina|robot|grabacion|contestador|inteligencia)\b|no me hables tu|\bme regala (?:un|el) (?:numero|telefono)\b/;
 
 // Términos de reparto/dinero (para la queja del %). Cubre 2a y 3a persona.
 const SHARE_TERMS =
@@ -58,7 +64,7 @@ const COMPLAINT_TERMS =
 // Queja de SEGUIMIENTO en negociación: SOLO frases dirigidas al dinero (no términos sueltos como
 // "mucho"/"reducir" que podrían referirse al contenido/ritmo y regalarían un escalón sin queja real).
 const FOLLOWUP_SHARE_COMPLAINT =
-  /(bajad\w*|bajar\w*|bajal\w*|podeis bajar|baja(d|r) (un poco|algo|mas)|no me compensa|no me sale a cuenta|sigue siendo (mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo)|(es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (quedo|llevo) (con )?(muy )?poco)/;
+  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico)|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b/;
 
 // Desconfianza LEVE (worried) -> tranquilizar y seguir. Incluye sospecha HIPOTÉTICA ("y si es una
 // estafa?"), que NO es agresión: por eso HOSTILE excluye las formas precedidas de "si".
@@ -101,7 +107,7 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
 
   // Orden de prioridad: lo más urgente/seguro primero.
   if (HOSTILE.test(text)) return "hostile-or-suspicious";
-  if (WANTS_HUMAN.test(text)) return "wants-human";
+  if ((HUMAN_REF.test(text) && WANT_HUMAN_VERB.test(text)) || REJECT_MACHINE.test(text)) return "wants-human";
   if (SHARE_TERMS.test(text) && COMPLAINT_TERMS.test(text)) return "complains-about-share";
   // Queja de seguimiento durante la negociación (frase dirigida al dinero, sin repetir "reparto").
   if (input.moneyContext && FOLLOWUP_SHARE_COMPLAINT.test(text)) return "complains-about-share";
