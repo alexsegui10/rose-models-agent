@@ -154,6 +154,8 @@ export default function Home() {
   const [drawerTransitions, setDrawerTransitions] = useState<StateTransition[]>([]);
   const [drawerTab, setDrawerTab] = useState<"conversacion" | "ficha" | "llamada">("conversacion");
   const [drawerLoading, setDrawerLoading] = useState(false);
+  // Auto-refresco ("en vivo"): refresca el tablero/ficha cada pocos segundos. Alex puede pausarlo.
+  const [livePolling, setLivePolling] = useState(true);
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   // Perfil de Instagram (foto + @usuario + enlace) resuelto por IGSID via la Graph API, para enriquecer
@@ -239,6 +241,32 @@ export default function Home() {
         }
       });
   }, []);
+
+  // Tiempo real (auto-refresco). SOLO LECTURA: refresca el tablero y, si el drawer esta abierto, su
+  // conversacion; nunca decide flujo ni muta estado (invariante 1). Se pausa durante un envio en curso
+  // (loading) para no pisarlo, si Alex lo pausa, o si la pestaña no esta visible (ahorra peticiones).
+  // Solo activo en el CRM o con la ficha abierta, que es donde importa ver los cambios en vivo.
+  useEffect(() => {
+    if (!livePolling) return;
+    if (activeTab !== "CRM" && !drawerCandidate) return;
+    const interval = setInterval(() => {
+      if (loading) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void refreshCandidates();
+      if (drawerCandidate) {
+        void fetch(`/api/candidates/${drawerCandidate.id}/conversation`)
+          .then((response) => (response.ok ? response.json() : null))
+          .then((data: { messages: ConversationMessage[]; transitions: StateTransition[] } | null) => {
+            if (data) {
+              setDrawerMessages(data.messages ?? []);
+              setDrawerTransitions(data.transitions ?? []);
+            }
+          })
+          .catch(() => undefined);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [livePolling, activeTab, drawerCandidate, loading]);
 
   // Resuelve foto/@usuario/enlace de las candidatas reales (IGSID) una sola vez cada una. El ref evita
   // refetch y bucles de dependencia; el fallo es silencioso (la tarjeta cae al avatar de inicial).
@@ -1264,6 +1292,19 @@ export default function Home() {
                       <span className="crm-kpi">
                         <b>{candidates.length}</b> total
                       </span>
+                      <button
+                        type="button"
+                        className={livePolling ? "live-pill on" : "live-pill"}
+                        onClick={() => setLivePolling((value) => !value)}
+                        title={
+                          livePolling
+                            ? "Actualizando el tablero en vivo. Clic para pausar."
+                            : "Auto-refresco pausado. Clic para reanudar."
+                        }
+                      >
+                        <span className="live-dot" />
+                        {livePolling ? "En vivo" : "Pausado"}
+                      </button>
                     </div>
                   </div>
                   {candidates.length === 0 ? (
