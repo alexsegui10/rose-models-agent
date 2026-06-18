@@ -130,6 +130,7 @@ const FEEDBACK_STATUS_LABELS: Record<string, string> = {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<SimulatorTab>("EVALUACION");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   // Perfil de Instagram (foto + @usuario + enlace) resuelto por IGSID via la Graph API, para enriquecer
@@ -192,6 +193,14 @@ export default function Home() {
   const [technicalPanelOpen, setTechnicalPanelOpen] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const showDevelopmentPanel = process.env.NODE_ENV !== "production";
+
+  // Tema claro/oscuro: inicializa desde localStorage y aplica el atributo en <html>.
+  useEffect(() => {
+    const saved = window.localStorage.getItem("rm-theme");
+    const initial = saved === "light" || saved === "dark" ? saved : "dark";
+    setTheme(initial);
+    document.documentElement.dataset.theme = initial;
+  }, []);
 
   useEffect(() => {
     void refreshCandidates();
@@ -668,6 +677,20 @@ export default function Home() {
             A/B de modelos
           </button>
         </nav>
+        <button
+          type="button"
+          className="theme-toggle"
+          aria-label="Cambiar tema claro u oscuro"
+          title={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+          onClick={() => {
+            const next = theme === "dark" ? "light" : "dark";
+            setTheme(next);
+            document.documentElement.dataset.theme = next;
+            window.localStorage.setItem("rm-theme", next);
+          }}
+        >
+          {theme === "dark" ? "☀️" : "🌙"}
+        </button>
         <p className="status-bar">
           Persistencia: {runtimeStatus?.persistenceMode ?? "..."} · IA: {runtimeStatus?.llmMode ?? "..."} (
           {runtimeStatus?.writingModel ?? "..."})

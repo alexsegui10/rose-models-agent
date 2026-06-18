@@ -4,11 +4,14 @@
   --panel: #131b24;
   --panel-2: #18222d;
   --panel-muted: #0f1822;
+  --panel-3: #1d2935;
   --text: #e8eef4;
   --text-dim: #c2cdd7;
   --muted: #8593a0;
+  --faint: #5d6b78;
   --line: #243240;
   --line-soft: #1b2630;
+  --line-2: #2c3d4d;
   --accent: #2dd4bf;
   --accent-strong: #5eead4;
   --accent-deep: #0d9488;
@@ -16,10 +19,113 @@
   --danger-soft: #2a1a1d;
   --warn: #fbbf24;
   --info: #60a5fa;
+  --success: #22c55e;
+  /* Morado: color del bot de voz / sección Llamadas. */
+  --purple: #a78bfa;
+  --purple-strong: #c4b5fd;
+  --purple-deep: #7c3aed;
+  --header-bg: rgba(12, 17, 23, 0.72);
+  --scrim: rgba(4, 7, 10, 0.62);
   --radius: 14px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-pill: 999px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 20px 55px rgba(0, 0, 0, 0.55);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
   --ring: 0 0 0 1px rgba(45, 212, 191, 0.35), 0 0 22px rgba(45, 212, 191, 0.18);
+}
+
+/* Tema CLARO: se activa con <html data-theme="light">. Solo redefine tokens; las clases no cambian. */
+html[data-theme="light"] {
+  color-scheme: light;
+  --background: #eef1f5;
+  --panel: #ffffff;
+  --panel-2: #f5f8fb;
+  --panel-muted: #eef3f8;
+  --panel-3: #eef3f8;
+  --text: #10212c;
+  --text-dim: #2c3d4d;
+  --muted: #5b6f7d;
+  --faint: #8a9aa6;
+  --line: #e0e7ee;
+  --line-soft: #eef3f8;
+  --line-2: #d3dde6;
+  --accent: #0d9488;
+  --accent-strong: #0f766e;
+  --accent-deep: #115e59;
+  --danger: #dc2626;
+  --danger-soft: #fbeaea;
+  --warn: #d97706;
+  --info: #2563eb;
+  --success: #16a34a;
+  --purple: #7c3aed;
+  --purple-strong: #6d28d9;
+  --purple-deep: #5b21b6;
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --scrim: rgba(16, 33, 44, 0.32);
+  --shadow: 0 1px 2px rgba(16, 33, 44, 0.08);
+  --shadow-lg: 0 20px 55px rgba(16, 33, 44, 0.18);
+  --card-shadow: 0 1px 2px rgba(16, 33, 44, 0.06), 0 8px 24px rgba(16, 33, 44, 0.08);
+  --ring: 0 0 0 1px rgba(13, 148, 136, 0.4), 0 0 22px rgba(13, 148, 136, 0.15);
+}
+
+/* Animaciones para el rediseño (drawer de candidata, modal, punto "en directo" de llamada). */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(167, 139, 250, 0);
+  }
+}
+@keyframes drawerIn {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@keyframes scrimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pop {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes fadeUp {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 * {
@@ -50,6 +156,27 @@ textarea {
 button {
   border: 0;
   cursor: pointer;
+}
+
+.theme-toggle {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  width: 38px;
+  height: 38px;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  transition:
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+.theme-toggle:hover {
+  background: var(--panel-3);
+  transform: translateY(-1px);
 }
 
 ::-webkit-scrollbar {
