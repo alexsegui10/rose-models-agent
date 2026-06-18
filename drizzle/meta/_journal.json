@@ -15,6 +15,13 @@
       "when": 1781477721510,
       "tag": "0001_spotty_colleen_wing",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781781940891,
+      "tag": "0002_smart_preak",
+      "breakpoints": true
     }
   ]
 }
