@@ -171,6 +171,7 @@ export default function Home() {
   const [drawerTransitions, setDrawerTransitions] = useState<StateTransition[]>([]);
   const [drawerTab, setDrawerTab] = useState<"conversacion" | "ficha" | "llamada">("conversacion");
   const [drawerLoading, setDrawerLoading] = useState(false);
+  const [drawerReply, setDrawerReply] = useState("");
   // Auto-refresco ("en vivo"): refresca el tablero/ficha cada pocos segundos. Alex puede pausarlo.
   const [livePolling, setLivePolling] = useState(true);
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
@@ -580,6 +581,27 @@ export default function Home() {
 
   function closeDrawer() {
     setDrawerCandidate(null);
+    setDrawerReply("");
+  }
+
+  // Responder a mano DESDE la ficha, como en un chat (no popup). Se envía a Instagram si está conectado
+  // y recarga la conversación de la ficha para ver el mensaje al instante.
+  async function sendDrawerReply() {
+    if (!drawerCandidate || !drawerReply.trim()) return;
+    const candidate = drawerCandidate;
+    const text = drawerReply.trim();
+    setDrawerReply("");
+    await doSendManualReply(candidate, text);
+    try {
+      const response = await fetch(`/api/candidates/${candidate.id}/conversation`);
+      if (response.ok) {
+        const data = (await response.json()) as { messages: ConversationMessage[]; transitions: StateTransition[] };
+        setDrawerMessages(data.messages ?? []);
+        setDrawerTransitions(data.transitions ?? []);
+      }
+    } catch {
+      /* silencioso */
+    }
   }
 
   // Selecciona una candidata en el chat y carga su conversacion real (mensajes + transiciones).
@@ -1990,6 +2012,7 @@ export default function Home() {
                                     followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg` : `${followerCount} seg`
                                   );
                                 if (candidate.phone) tags.push("📱");
+                                if (candidate.humanProfileReviewStatus === "POTENTIAL_FIT") tags.push("✓ revisado");
                                 return (
                                   <article
                                     key={candidate.id}
@@ -2202,13 +2225,23 @@ export default function Home() {
                                         </button>
                                       ) : null}
                                       {!closed && !awaitingProfileReview && !awaitingDecision ? (
-                                        <button
-                                          className="crm2-btn crm2-btn--danger"
-                                          type="button"
-                                          onClick={() => void advanceStage(candidate, "REJECT")}
-                                        >
-                                          Rechazar
-                                        </button>
+                                        <>
+                                          <button
+                                            className="crm2-btn crm2-btn--teal"
+                                            type="button"
+                                            title="Marca el perfil como revisado y OK por ti"
+                                            onClick={() => void advanceStage(candidate, "PROFILE_OK")}
+                                          >
+                                            👍 Encaja
+                                          </button>
+                                          <button
+                                            className="crm2-btn crm2-btn--danger"
+                                            type="button"
+                                            onClick={() => void advanceStage(candidate, "REJECT")}
+                                          >
+                                            Rechazar
+                                          </button>
+                                        </>
                                       ) : null}
                                     </div>
                                     {formatRelativeTime(candidate.lastMessageAt) ? (
@@ -2317,7 +2350,10 @@ export default function Home() {
                 </span>
                 <div>
                   <h3 className="drawer-name">{drawerCandidate.firstName?.trim() || `@${drawerCandidate.instagramUsername}`}</h3>
-                  <span className="drawer-state-pill">{drawerCandidate.currentState}</span>
+                  <span className="drawer-state-pill">{stateLabel(drawerCandidate.currentState)}</span>
+                  {drawerCandidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
+                    <span className="drawer-reviewed">✓ Revisado por ti</span>
+                  ) : null}
                 </div>
               </div>
               <button type="button" className="drawer-close" aria-label="Cerrar ficha" onClick={closeDrawer}>
@@ -2475,51 +2511,90 @@ export default function Home() {
             </div>
 
             <footer className="drawer-footer">
-              {/* Acciones segun estado, identicas a las tarjetas del CRM (mismos handlers deterministas). */}
-              {drawerCandidate.currentState === "PROFILE_READY_FOR_REVIEW" ? (
-                <>
-                  <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "PROFILE_FIT")}>
-                    Encaja
+              <div className="drawer-actions">
+                {/* Encaja/Rechazar en CUALQUIER fase activa (asi Alex revisa perfiles cuando quiere). */}
+                {drawerCandidate.currentState === "PROFILE_READY_FOR_REVIEW" ? (
+                  <>
+                    <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "PROFILE_FIT")}>
+                      👍 Encaja
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-xs danger"
+                      onClick={() => advanceStage(drawerCandidate, "PROFILE_NO_FIT")}
+                    >
+                      Rechazar
+                    </button>
+                  </>
+                ) : drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
+                  drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-xs accent"
+                      onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
+                    >
+                      👍 Aprobar
+                    </button>
+                    <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
+                      Rechazar
+                    </button>
+                  </>
+                ) : drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-xs accent"
+                      onClick={() => void advanceStage(drawerCandidate, "PROFILE_OK")}
+                    >
+                      👍 Encaja
+                    </button>
+                    <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
+                      Rechazar
+                    </button>
+                  </>
+                ) : null}
+                {drawerCandidate.currentState === "COLLECTING_CALL_DETAILS" ||
+                drawerCandidate.currentState === "READY_TO_SCHEDULE" ? (
+                  <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "CONFIRM_CALL")}>
+                    Confirmar llamada
                   </button>
-                  <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "PROFILE_NO_FIT")}>
-                    No encaja
-                  </button>
-                </>
-              ) : null}
-              {drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
-              drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
-                <>
+                ) : null}
+                {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
                   <button
                     type="button"
-                    className="btn-xs accent"
-                    onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
+                    className="btn-xs"
+                    onClick={() =>
+                      setBotPaused(drawerCandidate, !(drawerCandidate.manualControlActive || drawerCandidate.automationPaused))
+                    }
                   >
-                    Aprobar
+                    {drawerCandidate.manualControlActive || drawerCandidate.automationPaused ? "Reactivar bot" : "Pausar bot"}
                   </button>
-                  <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
-                    Rechazar
-                  </button>
-                </>
-              ) : null}
-              {drawerCandidate.currentState === "COLLECTING_CALL_DETAILS" ||
-              drawerCandidate.currentState === "READY_TO_SCHEDULE" ? (
-                <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "CONFIRM_CALL")}>
-                  Confirmar llamada
-                </button>
-              ) : null}
-              <button type="button" className="btn-xs" onClick={() => sendManualReply(drawerCandidate)}>
-                Responder a mano
-              </button>
+                ) : null}
+              </div>
               {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
-                <button
-                  type="button"
-                  className="btn-xs"
-                  onClick={() =>
-                    setBotPaused(drawerCandidate, !(drawerCandidate.manualControlActive || drawerCandidate.automationPaused))
-                  }
-                >
-                  {drawerCandidate.manualControlActive || drawerCandidate.automationPaused ? "Reactivar bot" : "Pausar bot"}
-                </button>
+                <div className="drawer-reply">
+                  <textarea
+                    className="drawer-reply-input"
+                    value={drawerReply}
+                    onChange={(event) => setDrawerReply(event.target.value)}
+                    placeholder="Escribe una respuesta… (se envía a Instagram cuando esté conectado)"
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendDrawerReply();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="drawer-send"
+                    disabled={!drawerReply.trim()}
+                    onClick={() => void sendDrawerReply()}
+                  >
+                    Enviar ➤
+                  </button>
+                </div>
               ) : null}
             </footer>
           </aside>

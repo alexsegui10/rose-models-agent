@@ -455,9 +455,64 @@ button {
 }
 .drawer-footer {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 11px;
   padding: 14px 20px;
   border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.drawer-reply {
+  display: flex;
+  gap: 9px;
+  align-items: flex-end;
+}
+.drawer-reply-input {
+  flex: 1;
+  min-height: 42px;
+  max-height: 120px;
+  padding: 11px 13px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+.drawer-reply-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.drawer-send {
+  flex: none;
+  padding: 11px 16px;
+  border-radius: var(--r-sm);
+  border: none;
+  background: linear-gradient(140deg, var(--accent), var(--accent-deep));
+  color: #04110f;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.drawer-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* Marca visible de "perfil revisado por Alex" (feedback del boton Encaja). */
+.drawer-reviewed {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  border-radius: var(--r-pill);
+  padding: 2px 9px;
 }
 @media (max-width: 620px) {
   .drawer {
