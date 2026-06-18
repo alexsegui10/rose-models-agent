@@ -342,6 +342,17 @@ export default function Home() {
     setCandidates(data.candidates);
   }
 
+  // Carga candidatas de demo (para ver el tablero/dashboard llenos sin Instagram). Idempotente.
+  async function seedDemo() {
+    const response = await fetch("/api/simulator/seed-demo", { method: "POST" });
+    if (!response.ok) {
+      setCrmNotice("No se pudieron cargar las candidatas de demo.");
+      return;
+    }
+    await refreshCandidates();
+    setCrmNotice("Candidatas de demo cargadas.");
+  }
+
   async function importConversations() {
     const response = await fetch("/api/simulator/conversation-import", {
       method: "POST",
@@ -856,7 +867,11 @@ export default function Home() {
                     <h2>Buenas, Alex 👋</h2>
                     <p className="muted">Resumen de tu agencia, al día.</p>
                   </div>
-                  {pendingList.length > 0 ? (
+                  {total === 0 ? (
+                    <button className="btn-xs accent" type="button" onClick={() => void seedDemo()}>
+                      Cargar candidatas de demo
+                    </button>
+                  ) : pendingList.length > 0 ? (
                     <button className="btn-xs accent" type="button" onClick={() => setActiveTab("CRM")}>
                       ⚠ {pendingList.length} {pendingList.length === 1 ? "espera" : "esperan"} tu decisión
                     </button>
@@ -1445,7 +1460,19 @@ export default function Home() {
           </div>
           {crmNotice ? <p className="status-bar">{crmNotice}</p> : null}
           {candidates.length === 0 ? (
-            <p className="muted">Aun no hay candidatas. Inicia una conversacion en el chat de prueba.</p>
+            <div className="crm2-seed">
+              <div className="crm2-seed-icon">🗂️</div>
+              <p>Aún no hay candidatas.</p>
+              <p className="muted">Carga unas de ejemplo para ver cómo queda el tablero, o empieza en el chat de prueba.</p>
+              <div className="crm2-seed-actions">
+                <button className="crm2-btn crm2-btn--teal" type="button" onClick={() => void seedDemo()}>
+                  Cargar candidatas de demo
+                </button>
+                <button className="crm2-btn crm2-btn--ghost" type="button" onClick={() => setActiveTab("CHAT")}>
+                  Ir al chat de prueba
+                </button>
+              </div>
+            </div>
           ) : (
             (() => {
               // Columnas, etiquetas y agrupacion por estado viven en crmView.ts (capa de presentacion

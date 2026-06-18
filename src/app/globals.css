@@ -1946,3 +1946,29 @@ button {
     width: 100%;
   }
 }
+
+/* Estado vacio del CRM con boton de carga de demo. */
+.crm2-seed {
+  text-align: center;
+  padding: 48px 20px;
+  border: 1.5px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  background: var(--panel-2);
+}
+.crm2-seed-icon {
+  font-size: 38px;
+  opacity: 0.7;
+}
+.crm2-seed p {
+  margin: 8px 0 0;
+}
+.crm2-seed-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 16px;
+}
+.crm2-seed-actions .crm2-btn {
+  padding: 9px 16px;
+  font-size: 13px;
+}
