@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
-import { CRM_COLUMNS, crmColumnOf, stateLabel } from "@/application/crmView";
+import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, stateLabel } from "@/application/crmView";
 import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
@@ -99,7 +99,7 @@ type SimulatorStatus = {
   writingModel: string;
 };
 
-type SimulatorTab = "EVALUACION" | "CHAT" | "CRM" | "AB";
+type SimulatorTab = "DASHBOARD" | "EVALUACION" | "CHAT" | "CRM" | "AB";
 
 type AdvanceAction = "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT" | "FOLLOW_REQUEST_SENT";
 
@@ -144,7 +144,7 @@ const FEEDBACK_STATUS_LABELS: Record<string, string> = {
 };
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<SimulatorTab>("EVALUACION");
+  const [activeTab, setActiveTab] = useState<SimulatorTab>("DASHBOARD");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [modalInput, setModalInput] = useState("");
@@ -248,7 +248,7 @@ export default function Home() {
   // Solo activo en el CRM o con la ficha abierta, que es donde importa ver los cambios en vivo.
   useEffect(() => {
     if (!livePolling) return;
-    if (activeTab !== "CRM" && !drawerCandidate) return;
+    if (activeTab !== "CRM" && activeTab !== "DASHBOARD" && !drawerCandidate) return;
     const interval = setInterval(() => {
       if (loading) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
@@ -763,11 +763,18 @@ export default function Home() {
         </div>
         <nav className="tab-bar">
           <button
-            className={activeTab === "EVALUACION" ? "tab-button active" : "tab-button"}
+            className={activeTab === "DASHBOARD" ? "tab-button active" : "tab-button"}
             type="button"
-            onClick={() => setActiveTab("EVALUACION")}
+            onClick={() => setActiveTab("DASHBOARD")}
           >
-            Evaluacion
+            Resumen
+          </button>
+          <button
+            className={activeTab === "CRM" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("CRM")}
+          >
+            CRM
           </button>
           <button
             className={activeTab === "CHAT" ? "tab-button active" : "tab-button"}
@@ -777,11 +784,11 @@ export default function Home() {
             Chat de prueba
           </button>
           <button
-            className={activeTab === "CRM" ? "tab-button active" : "tab-button"}
+            className={activeTab === "EVALUACION" ? "tab-button active" : "tab-button"}
             type="button"
-            onClick={() => setActiveTab("CRM")}
+            onClick={() => setActiveTab("EVALUACION")}
           >
-            CRM
+            Evaluacion
           </button>
           <button
             className={activeTab === "AB" ? "tab-button active" : "tab-button"}
@@ -810,6 +817,116 @@ export default function Home() {
           {runtimeStatus?.writingModel ?? "..."})
         </p>
       </header>
+
+      {activeTab === "DASHBOARD"
+        ? (() => {
+            // Todo se DERIVA de las candidatas actuales (sin histórico): conteos reales, nada inventado.
+            const epochOf = (value?: Date | string): number => {
+              if (!value) return 0;
+              const time = new Date(value).getTime();
+              return Number.isNaN(time) ? 0 : time;
+            };
+            const total = candidates.length;
+            const active = candidates.filter(
+              (item) =>
+                !item.manualControlActive &&
+                !item.automationPaused &&
+                item.currentState !== "REJECTED" &&
+                item.currentState !== "CLOSED"
+            ).length;
+            const pendingList = candidates.filter((item) => needsHumanDecision(item));
+            const callCount = candidates.filter((item) => crmColumnOf(item.currentState) === "llamadas").length;
+            const byColumn = CRM_COLUMNS.map((column) => ({
+              ...column,
+              count: candidates.filter((item) => crmColumnOf(item.currentState) === column.id).length
+            }));
+            const maxCount = Math.max(1, ...byColumn.map((column) => column.count));
+            const recent = [...candidates].sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt)).slice(0, 6);
+            return (
+              <section className="panel dashboard">
+                <div className="dash-greeting">
+                  <div>
+                    <h2>Buenas, Alex 👋</h2>
+                    <p className="muted">Resumen de tu agencia, al día.</p>
+                  </div>
+                  {pendingList.length > 0 ? (
+                    <button className="btn-xs accent" type="button" onClick={() => setActiveTab("CRM")}>
+                      ⚠ {pendingList.length} {pendingList.length === 1 ? "espera" : "esperan"} tu decisión
+                    </button>
+                  ) : (
+                    <span className="dash-allclear">Sin decisiones pendientes 🎉</span>
+                  )}
+                </div>
+
+                <div className="dash-kpis">
+                  <div className="dash-kpi">
+                    <span className="dash-kpi-label">Candidatas</span>
+                    <b>{total}</b>
+                  </div>
+                  <div className="dash-kpi">
+                    <span className="dash-kpi-label">Activas</span>
+                    <b>{active}</b>
+                  </div>
+                  <div className="dash-kpi attention">
+                    <span className="dash-kpi-label">Esperan decisión</span>
+                    <b>{pendingList.length}</b>
+                  </div>
+                  <div className="dash-kpi">
+                    <span className="dash-kpi-label">En llamadas</span>
+                    <b>{callCount}</b>
+                  </div>
+                </div>
+
+                <div className="dash-stack">
+                  <div className="dash-card">
+                    <h3>Embudo de candidatas</h3>
+                    {total === 0 ? (
+                      <p className="muted">Aún no hay candidatas. Prueba el núcleo en el chat.</p>
+                    ) : (
+                      byColumn.map((column) => (
+                        <button key={column.id} type="button" className="dash-funnel-row" onClick={() => setActiveTab("CRM")}>
+                          <span className="dash-funnel-label">{column.title}</span>
+                          <span className="dash-funnel-track">
+                            <span
+                              className={`dash-funnel-fill tone-${column.tone}`}
+                              style={{ width: `${Math.round((column.count / maxCount) * 100)}%` }}
+                            />
+                          </span>
+                          <span className="dash-funnel-count">{column.count}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="dash-card">
+                    <h3>Pendientes de tu decisión</h3>
+                    {pendingList.length === 0 ? (
+                      <p className="muted">Nada pendiente ahora mismo.</p>
+                    ) : (
+                      pendingList.map((item) => (
+                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
+                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
+                          <span className="dash-list-state attention">{stateLabel(item.currentState)}</span>
+                        </button>
+                      ))
+                    )}
+                    <h3 className="dash-subhead">Actividad reciente</h3>
+                    {recent.length === 0 ? (
+                      <p className="muted">Sin actividad todavía.</p>
+                    ) : (
+                      recent.map((item) => (
+                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
+                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
+                          <span className="dash-list-state">{stateLabel(item.currentState)}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </section>
+            );
+          })()
+        : null}
 
       {activeTab === "EVALUACION" ? (
         <section className="panel eval-panel">
