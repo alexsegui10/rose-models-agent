@@ -143,6 +143,23 @@ const FEEDBACK_STATUS_LABELS: Record<string, string> = {
   REJECTED: "rechazada"
 };
 
+const CHAT_AUTHOR_LABELS: Record<string, string> = {
+  candidate: "Candidata",
+  agent: "Agente IA",
+  alex: "Alex (tú)",
+  system: "Sistema"
+};
+
+// Estilo inline de la pill de estado (color por estado, vía var CSS para respetar tema claro/oscuro).
+function statePillStyle(state: Candidate["currentState"]): { color: string; background: string; border: string } {
+  const colorVar = stateColorVar(state);
+  return {
+    color: `var(${colorVar})`,
+    background: `color-mix(in srgb, var(${colorVar}) 12%, transparent)`,
+    border: `1px solid color-mix(in srgb, var(${colorVar}) 33%, transparent)`
+  };
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<SimulatorTab>("DASHBOARD");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -547,6 +564,26 @@ export default function Home() {
 
   function closeDrawer() {
     setDrawerCandidate(null);
+  }
+
+  // Selecciona una candidata en el chat y carga su conversacion real (mensajes + transiciones).
+  async function loadChatCandidate(candidate: Candidate) {
+    setSelectedCandidate(candidate);
+    setInstagramUsername(candidate.instagramUsername);
+    setProfileVisibility(candidate.declaredProfileVisibility);
+    setMessage("");
+    setFeedbackStatus(null);
+    setLastResult(null);
+    try {
+      const response = await fetch(`/api/candidates/${candidate.id}/conversation`);
+      if (response.ok) {
+        const data = (await response.json()) as { messages: ConversationMessage[]; transitions: StateTransition[] };
+        setMessages(data.messages ?? []);
+        setTransitions(data.transitions ?? []);
+      }
+    } catch {
+      /* silencioso: si falla, se queda la conversacion actual */
+    }
   }
 
   function sendManualReply(candidate: Candidate) {
@@ -1350,266 +1387,379 @@ export default function Home() {
       ) : null}
 
       {activeTab === "CHAT" ? (
-        <main className="app-shell">
-          <aside className="panel">
-            <h2>Candidatas</h2>
-            <p className="muted">Simulador local sin Instagram real.</p>
-            <div className="candidate-list">
-              {candidates.map((candidate) => (
-                <button
-                  className="candidate-button"
-                  key={candidate.id}
-                  onClick={() => {
-                    setSelectedCandidate(candidate);
-                    setInstagramUsername(candidate.instagramUsername);
-                    setProfileVisibility(candidate.declaredProfileVisibility);
-                    // Limpia el composer al cambiar de candidata: evita enviar a B un texto escrito para A.
-                    setMessage("");
-                    setFeedbackStatus(null);
-                  }}
-                >
-                  <strong>@{candidate.instagramUsername}</strong>
-                  <span className="muted">{candidate.currentState}</span>
-                </button>
-              ))}
+        <section className="panel">
+          <header className="chat2-head">
+            <h2 className="chat2-title">Chat de prueba</h2>
+            <p className="chat2-subtitle">
+              Simula una conversación como si fueras una candidata. El núcleo del bot responde y verás su razonamiento.
+            </p>
+          </header>
+          <div className="chat2-grid">
+            <div className="chat2-panel chat2-left">
+              <div className="chat2-left-title">Candidatas</div>
+              <div className="chat2-list">
+                {candidates.length === 0 ? (
+                  <p className="muted" style={{ padding: "6px 8px", fontSize: 12 }}>
+                    Sin candidatas. Crea una con el botón de abajo o carga la demo en Resumen.
+                  </p>
+                ) : (
+                  candidates.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      className="chat2-cand"
+                      data-selected={selectedCandidate?.id === candidate.id}
+                      onClick={() => void loadChatCandidate(candidate)}
+                    >
+                      <span className="chat2-cand-avatar" style={{ background: `var(${ringColorVar(candidate)})` }}>
+                        {(candidate.firstName?.trim() || candidate.instagramUsername || "?").charAt(0).toUpperCase()}
+                      </span>
+                      <div className="chat2-cand-body">
+                        <div className="chat2-cand-name">@{candidate.instagramUsername}</div>
+                        <div className="chat2-cand-pill">{stateLabel(candidate.currentState)}</div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
-          </aside>
 
-          <section className="main-panel">
-            <header className="header">
-              <h2>Chat de prueba</h2>
-              <p className="muted">Chat de prueba para el nucleo conversacional.</p>
-            </header>
+            <div className="chat2-panel">
+              <div className="chat2-center-head">
+                <div className="chat2-center-peer">
+                  <span
+                    className="chat2-peer-avatar"
+                    style={{ background: currentCandidate ? `var(${ringColorVar(currentCandidate)})` : "var(--muted)" }}
+                  >
+                    {(currentCandidate?.firstName?.trim() || instagramUsername || "?").charAt(0).toUpperCase()}
+                  </span>
+                  <div>
+                    <div className="chat2-peer-name">{currentCandidate?.firstName?.trim() || `@${instagramUsername}`}</div>
+                    <div className="chat2-peer-username">@{currentCandidate?.instagramUsername ?? instagramUsername}</div>
+                  </div>
+                </div>
+                {currentCandidate ? (
+                  <span className="chat2-status" style={statePillStyle(currentCandidate.currentState)}>
+                    {stateLabel(currentCandidate.currentState)}
+                  </span>
+                ) : null}
+              </div>
 
-            <div className="messages">
-              {messages.length === 0 ? (
-                <p className="muted">Envia un mensaje como candidata para iniciar la conversacion.</p>
-              ) : (
-                messages.flatMap((item) =>
-                  item.role === "agent"
-                    ? splitIntoMessageBurst(item.content).map((chunk, index) => (
-                        <div className={`message ${item.role}`} key={`${item.id}-${index}`}>
+              <div className="chat2-stream">
+                {messages.length === 0 ? (
+                  <div className="chat2-empty">Envía un mensaje como candidata para iniciar la conversación.</div>
+                ) : (
+                  messages.flatMap((item) => {
+                    if (item.role === "system") {
+                      return [
+                        <div className="chat2-msg" data-role="system" key={item.id}>
+                          <span className="chat2-system">⚙ {item.content}</span>
+                        </div>
+                      ];
+                    }
+                    const chunks = item.role === "agent" ? splitIntoMessageBurst(item.content) : [item.content];
+                    return chunks.map((chunk, index) => (
+                      <div className="chat2-msg" data-role={item.role} key={`${item.id}-${index}`}>
+                        <span className="chat2-msg-label" data-role={item.role}>
+                          {CHAT_AUTHOR_LABELS[item.role] ?? item.role}
+                        </span>
+                        <div className="chat2-bubble" data-role={item.role}>
                           {chunk}
                         </div>
-                      ))
-                    : [
-                        <div className={`message ${item.role}`} key={item.id}>
-                          {item.content}
-                        </div>
-                      ]
-                )
-              )}
-            </div>
-
-            <form
-              className="composer"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void sendMessage();
-              }}
-            >
-              <div className="row">
-                <input
-                  className="field"
-                  value={instagramUsername}
-                  onChange={(event) => setInstagramUsername(event.target.value)}
-                  placeholder="instagram_username"
-                />
-                <select
-                  className="field"
-                  value={profileVisibility}
-                  onChange={(event) => setProfileVisibility(event.target.value as ProfileVisibility)}
-                >
-                  <option value="PUBLIC">Publico</option>
-                  <option value="PRIVATE">Privado</option>
-                  <option value="UNKNOWN">Desconocido</option>
-                </select>
-                <button
-                  className="secondary"
-                  type="button"
-                  title="Empieza una conversacion desde cero (candidata nueva) para ver el saludo inicial"
-                  onClick={() => {
-                    setInstagramUsername(`candidata_${Math.floor(Math.random() * 100000)}`);
-                    setSelectedCandidate(null);
-                    setMessages([]);
-                    setTransitions([]);
-                    setLastResult(null);
-                    setFeedbackStatus(null);
-                    setProfileVisibility("PUBLIC");
-                    setMessage("Hola, me interesa");
-                  }}
-                >
-                  Candidata nueva
-                </button>
+                      </div>
+                    ));
+                  })
+                )}
               </div>
-              <textarea className="textarea" value={message} onChange={(event) => setMessage(event.target.value)} />
-              <button className="primary" disabled={loading || !message.trim()} type="submit">
-                {loading ? "Enviando..." : "Enviar mensaje"}
-              </button>
-            </form>
-            {sendError ? <p className="error-text">{sendError}</p> : null}
-          </section>
 
-          <aside className="panel">
-            <h2>Revision de Alex</h2>
-            <p className="muted">Datos extraidos y cambios de estado.</p>
-            {currentCandidate ? <span className="state-pill">{currentCandidate.currentState}</span> : null}
-            <div className="data-grid">
-              {extractedRows.map(([label, value]) => (
-                <div className="data-row" key={label}>
-                  <span>{label}</span>
-                  <strong>{value}</strong>
+              <form
+                className="chat2-composer"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void sendMessage();
+                }}
+              >
+                <div className="chat2-composer-row1">
+                  <input
+                    className="chat2-input-username"
+                    value={instagramUsername}
+                    onChange={(event) => setInstagramUsername(event.target.value)}
+                    placeholder="instagram_username"
+                  />
+                  <select
+                    className="chat2-select-vis"
+                    value={profileVisibility}
+                    onChange={(event) => setProfileVisibility(event.target.value as ProfileVisibility)}
+                  >
+                    <option value="PUBLIC">Público</option>
+                    <option value="PRIVATE">Privado</option>
+                    <option value="UNKNOWN">Desconocido</option>
+                  </select>
+                  <button
+                    className="chat2-btn-new"
+                    type="button"
+                    title="Empieza una conversación desde cero (candidata nueva) para ver el saludo inicial"
+                    onClick={() => {
+                      setInstagramUsername(`candidata_${Math.floor(Math.random() * 100000)}`);
+                      setSelectedCandidate(null);
+                      setMessages([]);
+                      setTransitions([]);
+                      setLastResult(null);
+                      setFeedbackStatus(null);
+                      setProfileVisibility("PUBLIC");
+                      setMessage("Hola, me interesa");
+                    }}
+                  >
+                    + Candidata nueva
+                  </button>
                 </div>
-              ))}
-            </div>
-            <div className="data-grid">
-              {transitions.map((transition) => (
-                <div className="data-row" key={transition.id}>
-                  <span>{transition.trigger}</span>
-                  <strong>
-                    {transition.fromState} -&gt; {transition.toState}
-                  </strong>
+                <div className="chat2-composer-row2">
+                  <textarea
+                    className="chat2-textarea"
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder="Escribe como candidata…"
+                  />
+                  <button className="chat2-btn-send" disabled={loading || !message.trim()} type="submit">
+                    {loading ? "Enviando…" : "Enviar"}
+                  </button>
                 </div>
-              ))}
+                {sendError ? <div className="chat2-error">{sendError}</div> : null}
+              </form>
             </div>
 
-            {showDevelopmentPanel ? (
-              <section className="dev-panel">
-                <button className="secondary" type="button" onClick={() => setTechnicalPanelOpen((current) => !current)}>
-                  {technicalPanelOpen ? "Ocultar detalles tecnicos" : "Mostrar detalles tecnicos"}
-                </button>
-                {technicalPanelOpen ? (
-                  <>
-                    {styleEvaluation ? (
-                      <div className="data-row">
-                        <span>Evaluacion de estilo</span>
-                        <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
-                        <p className={(styleEvaluation.reasons?.length ?? 0) > 0 ? "alert-warn" : "muted"}>
-                          {(styleEvaluation.reasons?.length ?? 0) > 0
-                            ? styleEvaluation.reasons.join(" ")
-                            : "Sin alertas de estilo."}
-                        </p>
+            <div className="chat2-panel">
+              <div className="chat2-review-head">
+                <span className="chat2-review-title">Revisión de Alex</span>
+                {currentCandidate ? (
+                  <span className="chat2-status" style={statePillStyle(currentCandidate.currentState)}>
+                    {stateLabel(currentCandidate.currentState)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="chat2-review-body">
+                <div>
+                  <div className="chat2-section-label">Datos extraídos</div>
+                  <div className="chat2-extracted">
+                    {extractedRows.map(([label, value]) => (
+                      <div className="chat2-extracted-row" key={label}>
+                        <span className="chat2-extracted-key">{label}</span>
+                        <span className="chat2-extracted-val">{value}</span>
                       </div>
-                    ) : null}
-
-                    {factualValidation ? (
-                      <div className="data-row">
-                        <span>Validacion factual</span>
-                        <strong className={factualValidation.valid ? undefined : "alert-danger"}>
-                          {factualValidation.valid ? "Correcta" : "Revisar"}
-                        </strong>
-                        <p className={factualValidation.valid ? "muted" : "alert-danger"}>
-                          {(factualValidation.reasons?.length ?? 0) > 0
-                            ? factualValidation.reasons.join(" ")
-                            : "Sin alertas factuales."}
-                        </p>
-                      </div>
-                    ) : null}
-
-                    {responsePlan ? (
-                      <div className="data-row">
-                        <span>Plan de respuesta</span>
-                        <strong>{responsePlan.objective}</strong>
-                        <p className="muted">{responsePlan.humanReviewReason ?? "Sin revision humana requerida."}</p>
-                        <pre className="debug-json">{JSON.stringify(responsePlan, null, 2)}</pre>
-                      </div>
-                    ) : null}
-
-                    {lastResult ? (
-                      <div className="data-row">
-                        <span>Automatizacion</span>
-                        <strong>
-                          {lastResult.automationMode} / {lastResult.deliveryStatus}
-                        </strong>
-                        {lastResult.draft ? (
-                          <DraftTrace draft={lastResult.draft} />
-                        ) : (
-                          <p className="muted">Sin trazas de proveedor para esta respuesta.</p>
-                        )}
-                      </div>
-                    ) : null}
-
-                    {styleContext ? (
-                      <div className="data-row">
-                        <span>Versiones</span>
-                        <strong>{styleContext.styleProfileVersion}</strong>
-                        <p className="muted">{styleContext.retrieverVersion}</p>
-                      </div>
-                    ) : null}
-
-                    {lastResult ? (
-                      <div className="data-row">
-                        <span>Datos extraidos</span>
-                        <strong>Comprension</strong>
-                        <pre className="debug-json">{JSON.stringify(lastResult.understanding, null, 2)}</pre>
-                      </div>
-                    ) : null}
-
-                    <div className="data-grid">
-                      {knowledgeEntries.map((entry) => (
-                        <div className="data-row" key={entry.id}>
-                          <span>{entry.category}</span>
-                          <strong>{entry.title}</strong>
-                          <p className="muted">{entry.version}</p>
-                        </div>
-                      ))}
-
-                      {retrievedExamples.map((example) => (
-                        <div className="data-row" key={example.id}>
-                          <span>{example.category}</span>
-                          <strong>{example.title}</strong>
-                          <p className="muted">{example.tags?.join(", ") || "-"}</p>
+                    ))}
+                  </div>
+                </div>
+                {transitions.length > 0 ? (
+                  <div>
+                    <div className="chat2-section-label">Transiciones de estado</div>
+                    <div className="chat2-transitions">
+                      {transitions.map((transition) => (
+                        <div className="chat2-transition" key={transition.id}>
+                          <span className="chat2-transition-trigger">{transition.trigger}</span>
+                          <span className="chat2-transition-arrow">
+                            {" · "}
+                            {transition.fromState}
+                            {" → "}
+                          </span>
+                          <span className="chat2-transition-to">{transition.toState}</span>
                         </div>
                       ))}
                     </div>
-
-                    {selectedCandidate && messages.some((item) => item.role === "agent") ? (
-                      <div className="feedback-box">
-                        <textarea
-                          className="textarea"
-                          value={editedResponse}
-                          onChange={(event) => setEditedResponse(event.target.value)}
-                          placeholder="Respuesta editada por Alex"
-                        />
-                        <input
-                          className="field"
-                          value={feedbackReason}
-                          onChange={(event) => setFeedbackReason(event.target.value)}
-                          placeholder="¿Por qué editas o rechazas esta respuesta? (opcional)"
-                        />
-                        <select className="field" value={styleRating} onChange={(event) => setStyleRating(event.target.value)}>
-                          <option value="">Puntuacion estilo</option>
-                          <option value="1">1 - nunca lo diria</option>
-                          <option value="2">2 - poco parecido</option>
-                          <option value="3">3 - aceptable</option>
-                          <option value="4">4 - bastante parecido</option>
-                          <option value="5">5 - exactamente como lo diria</option>
-                        </select>
-                        <div className="row">
-                          <button className="secondary" type="button" onClick={() => void sendFeedback("APPROVED")}>
-                            Aprobar
-                          </button>
-                          <button className="secondary" type="button" onClick={() => void sendFeedback("EDITED")}>
-                            Editar y aprobar
-                          </button>
-                          <button className="danger" type="button" onClick={() => void sendFeedback("REJECTED")}>
-                            Rechazar
-                          </button>
-                          <button className="danger" type="button" onClick={() => void takeManualControl()}>
-                            Tomar control
-                          </button>
+                  </div>
+                ) : null}
+                <div>
+                  <div className="chat2-section-label">Traza LLM</div>
+                  {lastResult?.draft ? (
+                    <div className="chat2-trace">
+                      <div className="chat2-trace-head">
+                        <span className="chat2-trace-title">🔌 Proveedor</span>
+                        <span className="chat2-badge" data-kind={lastResult.draft.usedFallback ? "fallback" : "real"}>
+                          {lastResult.draft.usedFallback ? "⚠ Fallback" : "✓ Real"}
+                        </span>
+                      </div>
+                      <div className="chat2-trace-lines">
+                        <div className="chat2-trace-row">
+                          <span className="chat2-trace-key">proveedor</span>
+                          <span>{lastResult.draft.actualProvider}</span>
                         </div>
-                        {feedbackStatus ? (
-                          <p className="feedback-saved">✓ Guardado: {FEEDBACK_STATUS_LABELS[feedbackStatus] ?? feedbackStatus}</p>
+                        <div className="chat2-trace-row">
+                          <span className="chat2-trace-key">modelo</span>
+                          <span>{lastResult.draft.actualModel}</span>
+                        </div>
+                        <div className="chat2-trace-row">
+                          <span className="chat2-trace-key">duración</span>
+                          <span>{lastResult.draft.durationMs} ms</span>
+                        </div>
+                        {lastResult.draft.inputTokens != null ? (
+                          <div className="chat2-trace-row">
+                            <span className="chat2-trace-key">tokens</span>
+                            <span>
+                              {lastResult.draft.inputTokens} in / {lastResult.draft.outputTokens ?? 0} out
+                            </span>
+                          </div>
+                        ) : null}
+                        {lastResult.draft.estimatedCostUsd != null ? (
+                          <div className="chat2-trace-row">
+                            <span className="chat2-trace-key">coste</span>
+                            <span>${lastResult.draft.estimatedCostUsd.toFixed(6)}</span>
+                          </div>
                         ) : null}
                       </div>
+                    </div>
+                  ) : (
+                    <div className="chat2-trace">
+                      <div className="chat2-empty" style={{ padding: "10px 0", margin: 0 }}>
+                        Aún no hay respuesta generada.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {showDevelopmentPanel ? (
+                  <section className="dev-panel">
+                    <button className="secondary" type="button" onClick={() => setTechnicalPanelOpen((current) => !current)}>
+                      {technicalPanelOpen ? "Ocultar detalles tecnicos" : "Mostrar detalles tecnicos"}
+                    </button>
+                    {technicalPanelOpen ? (
+                      <>
+                        {styleEvaluation ? (
+                          <div className="data-row">
+                            <span>Evaluacion de estilo</span>
+                            <strong>{Math.round(styleEvaluation.score * 100)}%</strong>
+                            <p className={(styleEvaluation.reasons?.length ?? 0) > 0 ? "alert-warn" : "muted"}>
+                              {(styleEvaluation.reasons?.length ?? 0) > 0
+                                ? styleEvaluation.reasons.join(" ")
+                                : "Sin alertas de estilo."}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {factualValidation ? (
+                          <div className="data-row">
+                            <span>Validacion factual</span>
+                            <strong className={factualValidation.valid ? undefined : "alert-danger"}>
+                              {factualValidation.valid ? "Correcta" : "Revisar"}
+                            </strong>
+                            <p className={factualValidation.valid ? "muted" : "alert-danger"}>
+                              {(factualValidation.reasons?.length ?? 0) > 0
+                                ? factualValidation.reasons.join(" ")
+                                : "Sin alertas factuales."}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {responsePlan ? (
+                          <div className="data-row">
+                            <span>Plan de respuesta</span>
+                            <strong>{responsePlan.objective}</strong>
+                            <p className="muted">{responsePlan.humanReviewReason ?? "Sin revision humana requerida."}</p>
+                            <pre className="debug-json">{JSON.stringify(responsePlan, null, 2)}</pre>
+                          </div>
+                        ) : null}
+
+                        {lastResult ? (
+                          <div className="data-row">
+                            <span>Automatizacion</span>
+                            <strong>
+                              {lastResult.automationMode} / {lastResult.deliveryStatus}
+                            </strong>
+                            {lastResult.draft ? (
+                              <DraftTrace draft={lastResult.draft} />
+                            ) : (
+                              <p className="muted">Sin trazas de proveedor para esta respuesta.</p>
+                            )}
+                          </div>
+                        ) : null}
+
+                        {styleContext ? (
+                          <div className="data-row">
+                            <span>Versiones</span>
+                            <strong>{styleContext.styleProfileVersion}</strong>
+                            <p className="muted">{styleContext.retrieverVersion}</p>
+                          </div>
+                        ) : null}
+
+                        {lastResult ? (
+                          <div className="data-row">
+                            <span>Datos extraidos</span>
+                            <strong>Comprension</strong>
+                            <pre className="debug-json">{JSON.stringify(lastResult.understanding, null, 2)}</pre>
+                          </div>
+                        ) : null}
+
+                        <div className="data-grid">
+                          {knowledgeEntries.map((entry) => (
+                            <div className="data-row" key={entry.id}>
+                              <span>{entry.category}</span>
+                              <strong>{entry.title}</strong>
+                              <p className="muted">{entry.version}</p>
+                            </div>
+                          ))}
+
+                          {retrievedExamples.map((example) => (
+                            <div className="data-row" key={example.id}>
+                              <span>{example.category}</span>
+                              <strong>{example.title}</strong>
+                              <p className="muted">{example.tags?.join(", ") || "-"}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {selectedCandidate && messages.some((item) => item.role === "agent") ? (
+                          <div className="feedback-box">
+                            <textarea
+                              className="textarea"
+                              value={editedResponse}
+                              onChange={(event) => setEditedResponse(event.target.value)}
+                              placeholder="Respuesta editada por Alex"
+                            />
+                            <input
+                              className="field"
+                              value={feedbackReason}
+                              onChange={(event) => setFeedbackReason(event.target.value)}
+                              placeholder="¿Por qué editas o rechazas esta respuesta? (opcional)"
+                            />
+                            <select
+                              className="field"
+                              value={styleRating}
+                              onChange={(event) => setStyleRating(event.target.value)}
+                            >
+                              <option value="">Puntuacion estilo</option>
+                              <option value="1">1 - nunca lo diria</option>
+                              <option value="2">2 - poco parecido</option>
+                              <option value="3">3 - aceptable</option>
+                              <option value="4">4 - bastante parecido</option>
+                              <option value="5">5 - exactamente como lo diria</option>
+                            </select>
+                            <div className="row">
+                              <button className="secondary" type="button" onClick={() => void sendFeedback("APPROVED")}>
+                                Aprobar
+                              </button>
+                              <button className="secondary" type="button" onClick={() => void sendFeedback("EDITED")}>
+                                Editar y aprobar
+                              </button>
+                              <button className="danger" type="button" onClick={() => void sendFeedback("REJECTED")}>
+                                Rechazar
+                              </button>
+                              <button className="danger" type="button" onClick={() => void takeManualControl()}>
+                                Tomar control
+                              </button>
+                            </div>
+                            {feedbackStatus ? (
+                              <p className="feedback-saved">
+                                ✓ Guardado: {FEEDBACK_STATUS_LABELS[feedbackStatus] ?? feedbackStatus}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </>
                     ) : null}
-                  </>
+                  </section>
                 ) : null}
-              </section>
-            ) : null}
-          </aside>
-        </main>
+              </div>
+            </div>
+          </div>
+        </section>
       ) : null}
 
       {activeTab === "CRM" ? (
