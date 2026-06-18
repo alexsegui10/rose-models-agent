@@ -179,6 +179,83 @@ button {
   transform: translateY(-1px);
 }
 
+/* Modal reutilizable (sustituye window.prompt/confirm). */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: scrimIn 0.15s ease;
+}
+.modal-card {
+  width: min(440px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 22px;
+  animation: pop 0.16s ease;
+}
+.modal-card h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+.modal-card .muted {
+  margin: 0 0 14px;
+}
+.modal-input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+.modal-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.modal-btn {
+  padding: 9px 16px;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition:
+    filter 0.12s ease,
+    background 0.12s ease;
+}
+.modal-btn.ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--text);
+}
+.modal-btn.ghost:hover {
+  background: var(--panel-2);
+}
+.modal-btn.primary {
+  background: var(--accent);
+  color: #06231f;
+}
+.modal-btn.danger {
+  background: var(--danger);
+  color: #2a0d0d;
+}
+.modal-btn.primary:hover,
+.modal-btn.danger:hover {
+  filter: brightness(1.06);
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

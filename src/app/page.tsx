@@ -100,6 +100,20 @@ type SimulatorStatus = {
 
 type SimulatorTab = "EVALUACION" | "CHAT" | "CRM" | "AB";
 
+type AdvanceAction = "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT" | "FOLLOW_REQUEST_SENT";
+
+// Modal reutilizable (sustituye window.prompt/confirm). onConfirm recibe el texto del input (o "").
+type ModalState = {
+  title: string;
+  body?: string;
+  hasInput?: boolean;
+  inputPlaceholder?: string;
+  defaultValue?: string;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: (value: string) => void;
+};
+
 const EVALUATION_ISSUE_OPTIONS: EvaluationIssue[] = [
   "FACTUAL_ERROR",
   "STATE_ERROR",
@@ -131,6 +145,8 @@ const FEEDBACK_STATUS_LABELS: Record<string, string> = {
 export default function Home() {
   const [activeTab, setActiveTab] = useState<SimulatorTab>("EVALUACION");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [modal, setModal] = useState<ModalState | null>(null);
+  const [modalInput, setModalInput] = useState("");
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   // Perfil de Instagram (foto + @usuario + enlace) resuelto por IGSID via la Graph API, para enriquecer
@@ -441,11 +457,27 @@ export default function Home() {
     await refreshCandidates();
   }
 
-  async function sendManualReply(candidate: Candidate) {
-    // Responder a mano a una candidata (escalada o pausada). Se persiste como mensaje de Alex y se
-    // envia a Instagram si la integracion esta activa. Para ver el contexto completo, pestaña Chat.
-    const text = window.prompt(`Responder a @${candidate.instagramUsername} (se envia a Instagram):`);
-    if (text === null || !text.trim()) return;
+  function openModal(next: ModalState) {
+    setModalInput(next.defaultValue ?? "");
+    setModal(next);
+  }
+
+  function sendManualReply(candidate: Candidate) {
+    // Responder a mano a una candidata (escalada o pausada). Abre un modal; al confirmar se persiste como
+    // mensaje de Alex y se envia a Instagram si la integracion esta activa.
+    openModal({
+      title: `Responder a @${candidate.instagramUsername}`,
+      body: "Se envía a Instagram si la integración está activa.",
+      hasInput: true,
+      inputPlaceholder: "Escribe tu respuesta…",
+      confirmLabel: "Enviar",
+      onConfirm: (text) => {
+        if (text.trim()) void doSendManualReply(candidate, text.trim());
+      }
+    });
+  }
+
+  async function doSendManualReply(candidate: Candidate, text: string) {
     const response = await fetch("/api/simulator/manual-reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -464,22 +496,34 @@ export default function Home() {
     await refreshCandidates();
   }
 
-  async function advanceStage(
-    candidate: Candidate,
-    action: "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT" | "FOLLOW_REQUEST_SENT"
-  ) {
-    // Acciones del CRM: verificar/OK de perfil (en cualquier momento), confirmar llamada, rechazar.
-    let slot: string | undefined;
+  function advanceStage(candidate: Candidate, action: AdvanceAction) {
+    // CONFIRM_CALL pide la hora y REJECT pide confirmacion (mediante modal); el resto se aplica directo.
     if (action === "CONFIRM_CALL") {
-      const entered = window.prompt("Hora acordada para la llamada (opcional, p. ej. 'el lunes a las 18h'):");
-      // Cancelar/Escape (null) ABORTA: no se confirma la llamada por error. Vacio = confirmar sin hora.
-      if (entered === null) return;
-      slot = entered.trim() || undefined;
+      openModal({
+        title: "Confirmar llamada",
+        body: `Confirmar la llamada con @${candidate.instagramUsername}. La hora es opcional.`,
+        hasInput: true,
+        inputPlaceholder: "Hora acordada, p. ej. el lunes a las 18h",
+        confirmLabel: "Confirmar llamada",
+        onConfirm: (slot) => void doAdvanceStage(candidate, "CONFIRM_CALL", slot.trim() || undefined)
+      });
+      return;
     }
     if (action === "REJECT") {
       // Rechazar silencia el bot (deja de responder, sin gastar OpenAI): confirmar para evitar clics por error.
-      if (!window.confirm(`Rechazar a @${candidate.instagramUsername}? El bot dejara de responderle.`)) return;
+      openModal({
+        title: `¿Rechazar a @${candidate.instagramUsername}?`,
+        body: "El bot dejará de responderle.",
+        danger: true,
+        confirmLabel: "Rechazar",
+        onConfirm: () => void doAdvanceStage(candidate, "REJECT")
+      });
+      return;
     }
+    void doAdvanceStage(candidate, action);
+  }
+
+  async function doAdvanceStage(candidate: Candidate, action: AdvanceAction, slot?: string) {
     const response = await fetch("/api/simulator/advance-stage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1513,6 +1557,47 @@ export default function Home() {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {modal ? (
+        <div className="modal-scrim" role="presentation" onClick={() => setModal(null)}>
+          <div className="modal-card" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <h3>{modal.title}</h3>
+            {modal.body ? <p className="muted">{modal.body}</p> : null}
+            {modal.hasInput ? (
+              <input
+                className="modal-input"
+                autoFocus
+                value={modalInput}
+                placeholder={modal.inputPlaceholder}
+                onChange={(event) => setModalInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    const value = modalInput;
+                    setModal(null);
+                    modal.onConfirm(value);
+                  }
+                }}
+              />
+            ) : null}
+            <div className="modal-actions">
+              <button type="button" className="modal-btn ghost" onClick={() => setModal(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className={modal.danger ? "modal-btn danger" : "modal-btn primary"}
+                onClick={() => {
+                  const value = modalInput;
+                  setModal(null);
+                  modal.onConfirm(value);
+                }}
+              >
+                {modal.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
