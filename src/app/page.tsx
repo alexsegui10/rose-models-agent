@@ -592,6 +592,10 @@ export default function Home() {
     const text = drawerReply.trim();
     setDrawerReply("");
     await doSendManualReply(candidate, text);
+    // Al responder a mano, Alex toma el control: el bot se pausa hasta que lo reactive.
+    if (!(candidate.manualControlActive || candidate.automationPaused)) {
+      await setBotPaused(candidate, true);
+    }
     try {
       const response = await fetch(`/api/candidates/${candidate.id}/conversation`);
       if (response.ok) {
@@ -877,13 +881,6 @@ export default function Home() {
             onClick={() => setActiveTab("LLAMADAS")}
           >
             Llamadas
-          </button>
-          <button
-            className={activeTab === "CHAT" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("CHAT")}
-          >
-            Chat
           </button>
         </nav>
         <button
@@ -1905,13 +1902,12 @@ export default function Home() {
             <div className="crm2-seed">
               <div className="crm2-seed-icon">🗂️</div>
               <p>Aún no hay candidatas.</p>
-              <p className="muted">Carga unas de ejemplo para ver cómo queda el tablero, o empieza en el chat de prueba.</p>
+              <p className="muted">
+                Las candidatas entran solas por Instagram. Para ver cómo queda el tablero lleno, carga unas de ejemplo.
+              </p>
               <div className="crm2-seed-actions">
                 <button className="crm2-btn crm2-btn--teal" type="button" onClick={() => void seedDemo()}>
                   Cargar candidatas de demo
-                </button>
-                <button className="crm2-btn crm2-btn--ghost" type="button" onClick={() => setActiveTab("CHAT")}>
-                  Ir al chat de prueba
                 </button>
               </div>
             </div>
@@ -2035,14 +2031,6 @@ export default function Home() {
                       ) : null}
                     </div>
                   </div>
-                  {candidates.length === 0 ? (
-                    <div className="crm-empty-global">
-                      <p>Aún no hay candidatas. Prueba el núcleo conversacional en el chat de prueba.</p>
-                      <button className="btn-xs accent" type="button" onClick={() => setActiveTab("CHAT")}>
-                        Ir al chat de prueba
-                      </button>
-                    </div>
-                  ) : null}
                   <div className="crm2-board">
                     {CRM_COLUMNS.map((phase) => {
                       const cards = visible
@@ -2101,7 +2089,6 @@ export default function Home() {
                                     followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg` : `${followerCount} seg`
                                   );
                                 if (candidate.phone) tags.push("📱");
-                                if (candidate.humanProfileReviewStatus === "POTENTIAL_FIT") tags.push("✓ revisado");
                                 return (
                                   <article
                                     key={candidate.id}
@@ -2315,14 +2302,18 @@ export default function Home() {
                                       ) : null}
                                       {!closed && !awaitingProfileReview && !awaitingDecision ? (
                                         <>
-                                          <button
-                                            className="crm2-btn crm2-btn--teal"
-                                            type="button"
-                                            title="Marca el perfil como revisado y OK por ti"
-                                            onClick={() => void advanceStage(candidate, "PROFILE_OK")}
-                                          >
-                                            👍 Encaja
-                                          </button>
+                                          {candidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
+                                            <span className="crm2-ok-chip">✓ Revisado y OK</span>
+                                          ) : (
+                                            <button
+                                              className="crm2-btn crm2-btn--teal"
+                                              type="button"
+                                              title="Marca el perfil como revisado y OK por ti"
+                                              onClick={() => void advanceStage(candidate, "PROFILE_OK")}
+                                            >
+                                              👍 Encaja
+                                            </button>
+                                          )}
                                           <button
                                             className="crm2-btn crm2-btn--danger"
                                             type="button"
@@ -2631,13 +2622,17 @@ export default function Home() {
                   </>
                 ) : drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
                   <>
-                    <button
-                      type="button"
-                      className="btn-xs accent"
-                      onClick={() => void advanceStage(drawerCandidate, "PROFILE_OK")}
-                    >
-                      👍 Encaja
-                    </button>
+                    {drawerCandidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
+                      <span className="crm2-ok-chip">✓ Revisado y OK</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-xs accent"
+                        onClick={() => void advanceStage(drawerCandidate, "PROFILE_OK")}
+                      >
+                        👍 Encaja
+                      </button>
+                    )}
                     <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
                       Rechazar
                     </button>

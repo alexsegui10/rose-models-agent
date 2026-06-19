@@ -505,14 +505,17 @@ button {
   cursor: default;
 }
 /* Marca visible de "perfil revisado por Alex" (feedback del boton Encaja). */
-.drawer-reviewed {
+.drawer-reviewed,
+.crm2-ok-chip {
   font-size: 11px;
   font-weight: 700;
   color: var(--success);
   background: color-mix(in srgb, var(--success) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
   border-radius: var(--r-pill);
-  padding: 2px 9px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
 }
 @media (max-width: 620px) {
   .drawer {
