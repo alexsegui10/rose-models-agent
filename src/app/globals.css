@@ -701,19 +701,21 @@ button {
   box-shadow: var(--shadow);
 }
 
+/* Candidata = "ellos" (izquierda, gris). Agencia/bot = "nosotros" (derecha, verde). */
 .message.candidate {
-  align-self: flex-end;
-  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
-  color: #04181a;
-  border-bottom-right-radius: 5px;
-}
-
-.message.agent {
   align-self: flex-start;
   background: var(--panel-2);
   border: 1px solid var(--line);
   color: var(--text);
   border-bottom-left-radius: 5px;
+}
+
+.message.agent,
+.message.alex {
+  align-self: flex-end;
+  background: linear-gradient(180deg, var(--accent), var(--accent-deep));
+  color: #04181a;
+  border-bottom-right-radius: 5px;
 }
 
 .composer {
@@ -2561,11 +2563,11 @@ button {
   flex-direction: column;
 }
 .chat2-msg[data-role="candidate"] {
-  align-items: flex-end;
+  align-items: flex-start;
 }
 .chat2-msg[data-role="agent"],
 .chat2-msg[data-role="alex"] {
-  align-items: flex-start;
+  align-items: flex-end;
 }
 .chat2-msg[data-role="system"] {
   align-items: center;
@@ -2585,10 +2587,10 @@ button {
   margin-bottom: 3px;
 }
 .chat2-msg-label[data-role="candidate"] {
-  color: var(--accent);
+  color: var(--muted);
 }
 .chat2-msg-label[data-role="agent"] {
-  color: var(--muted);
+  color: var(--accent);
 }
 .chat2-msg-label[data-role="alex"] {
   color: var(--warn);
@@ -2603,12 +2605,12 @@ button {
   white-space: pre-wrap;
 }
 .chat2-bubble[data-role="candidate"] {
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
-}
-.chat2-bubble[data-role="agent"] {
   background: var(--panel-2);
   border: 1px solid var(--line);
+}
+.chat2-bubble[data-role="agent"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
 }
 .chat2-bubble[data-role="alex"] {
   background: color-mix(in srgb, var(--warn) 13%, transparent);
