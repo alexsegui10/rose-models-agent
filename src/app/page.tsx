@@ -3,17 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
 import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, ringColorVar, stateColorVar, stateLabel } from "@/application/crmView";
-import type { ImportedConversation } from "@/application/conversationImport";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
-import type {
-  ABEvaluationCase,
-  ABWinner,
-  EvaluationIssue,
-  EvaluationSession,
-  EvaluationSessionSummary,
-  PlaybackTurn
-} from "@/domain/evaluation";
 import type { ConversationFeedbackStatus, StyleEvaluation } from "@/domain/styleEvaluation";
 
 type SimulatorResponse = {
@@ -99,7 +90,7 @@ type SimulatorStatus = {
   writingModel: string;
 };
 
-type SimulatorTab = "DASHBOARD" | "EVALUACION" | "CHAT" | "CRM" | "AB" | "LLAMADAS";
+type SimulatorTab = "DASHBOARD" | "CHAT" | "CRM" | "LLAMADAS";
 
 type AdvanceAction = "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT" | "FOLLOW_REQUEST_SENT";
 
@@ -114,16 +105,6 @@ type ModalState = {
   danger?: boolean;
   onConfirm: (value: string) => void;
 };
-
-const EVALUATION_ISSUE_OPTIONS: EvaluationIssue[] = [
-  "FACTUAL_ERROR",
-  "STATE_ERROR",
-  "REPETITION",
-  "TOO_FORMAL",
-  "TOO_LONG",
-  "UNNECESSARY_QUESTION",
-  "MISSED_REAL_QUESTION"
-];
 
 // Etiquetas en espanol del motivo de escalada, para mostrarlo en la tarjeta del CRM y que Alex decida
 // sin abrir el chat.
@@ -213,26 +194,6 @@ export default function Home() {
   const [feedbackReason, setFeedbackReason] = useState("");
   const [styleRating, setStyleRating] = useState<string>("");
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
-  const [abMessages, setAbMessages] = useState("Hola, me interesa\nQue porcentaje seria?");
-  const [abModelA, setAbModelA] = useState("gpt-5.4-nano");
-  const [abModelB, setAbModelB] = useState("gpt-5.4-mini");
-  const [abBlind, setAbBlind] = useState(true);
-  const [abCase, setAbCase] = useState<ABEvaluationCase | null>(null);
-  const [abWinner, setAbWinner] = useState<ABWinner>("TIE");
-  const [abStyleRating, setAbStyleRating] = useState("");
-  const [abNote, setAbNote] = useState("");
-  const [abLoading, setAbLoading] = useState(false);
-  const [evaluationSession, setEvaluationSession] = useState<EvaluationSession | null>(null);
-  const [evalConversationId, setEvalConversationId] = useState("");
-  const [evalModel, setEvalModel] = useState("gpt-5.4-mini");
-  const [evalLoading, setEvalLoading] = useState(false);
-  const [evalError, setEvalError] = useState<string | null>(null);
-  const [turnIssues, setTurnIssues] = useState<Record<number, EvaluationIssue[]>>({});
-  const [turnRatings, setTurnRatings] = useState<Record<number, string>>({});
-  const [turnEdits, setTurnEdits] = useState<Record<number, string>>({});
-  const [importJson, setImportJson] = useState(sampleImportJson);
-  const [importedConversations, setImportedConversations] = useState<ImportedConversation[]>([]);
-  const [importStatus, setImportStatus] = useState<string | null>(null);
   const [technicalPanelOpen, setTechnicalPanelOpen] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const showDevelopmentPanel = process.env.NODE_ENV !== "production";
@@ -250,14 +211,6 @@ export default function Home() {
     void fetch("/api/simulator/status")
       .then((response) => response.json())
       .then((data: SimulatorStatus) => setRuntimeStatus(data));
-    void fetch("/api/simulator/conversation-import")
-      .then((response) => response.json())
-      .then((data: { conversations: ImportedConversation[] }) => {
-        setImportedConversations(data.conversations);
-        if (data.conversations[0]) {
-          setEvalConversationId(data.conversations[0].id);
-        }
-      });
   }, []);
 
   // Tiempo real (auto-refresco). SOLO LECTURA: refresca el tablero y, si el drawer esta abierto, su
@@ -351,8 +304,6 @@ export default function Home() {
 
   const currentCandidate = selectedCandidate;
   const extractedRows = useMemo(() => buildCandidatePanelRows(currentCandidate), [currentCandidate]);
-  const selectedImportedConversation =
-    importedConversations.find((conversation) => conversation.id === evalConversationId) ?? null;
 
   async function refreshCandidates() {
     const response = await fetch("/api/candidates");
@@ -442,24 +393,6 @@ export default function Home() {
     } catch (error) {
       setCrmNotice(`No se pudo iniciar la llamada: ${error instanceof Error ? error.message : "error de red"}.`);
     }
-  }
-
-  async function importConversations() {
-    const response = await fetch("/api/simulator/conversation-import", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ json: importJson })
-    });
-    const data = (await response.json()) as { conversations?: ImportedConversation[]; error?: string };
-    if (!response.ok) {
-      setImportStatus(data.error ?? "Importacion no valida.");
-      return;
-    }
-
-    const conversations = data.conversations ?? [];
-    setImportedConversations(conversations);
-    setEvalConversationId(conversations[0]?.id ?? evalConversationId);
-    setImportStatus(`${conversations.length} conversaciones importadas.`);
   }
 
   async function sendMessage() {
@@ -808,126 +741,6 @@ export default function Home() {
       setDrawerCandidate(data.candidate);
     }
     await refreshCandidates();
-  }
-
-  async function runABComparison() {
-    const messagesForRun = abMessages
-      .split("\n")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (messagesForRun.length === 0) return;
-
-    setAbLoading(true);
-    const response = await fetch("/api/simulator/ab-evaluation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: messagesForRun,
-        profileVisibility,
-        modelA: abModelA,
-        modelB: abModelB,
-        blind: abBlind
-      })
-    });
-    const data = (await response.json()) as { case: ABEvaluationCase };
-    setAbCase(data.case);
-    setAbWinner("TIE");
-    setAbStyleRating("");
-    setAbNote("");
-    setAbLoading(false);
-  }
-
-  async function saveABDecision() {
-    if (!abCase) return;
-
-    const response = await fetch("/api/simulator/ab-evaluation", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: abCase.id,
-        winner: abWinner,
-        styleRating: abStyleRating ? Number(abStyleRating) : undefined,
-        note: abNote || undefined
-      })
-    });
-    const data = (await response.json()) as { case: ABEvaluationCase };
-    setAbCase(data.case);
-  }
-
-  async function playConversationSession() {
-    if (!evalConversationId) {
-      setEvalError("Selecciona una conversacion importada primero.");
-      return;
-    }
-
-    setEvalLoading(true);
-    setEvalError(null);
-    try {
-      const response = await fetch("/api/simulator/evaluation-session/playback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationId: evalConversationId,
-          model: evalModel
-        })
-      });
-      const data = (await response.json()) as { session?: EvaluationSession; error?: unknown };
-      if (!response.ok || !data.session) {
-        setEvalError(formatApiError(data.error));
-        return;
-      }
-
-      const suggestedIssues: Record<number, EvaluationIssue[]> = {};
-      const generatedEdits: Record<number, string> = {};
-      for (const turn of data.session.playbackTurns ?? []) {
-        suggestedIssues[turn.turnIndex] = turn.suggestedIssues;
-        generatedEdits[turn.turnIndex] = turn.generatedResponse;
-      }
-      setTurnIssues(suggestedIssues);
-      setTurnEdits(generatedEdits);
-      setTurnRatings({});
-      setEvaluationSession(data.session);
-    } catch (error) {
-      setEvalError(error instanceof Error ? error.message : "No se pudo reproducir la conversacion.");
-    } finally {
-      setEvalLoading(false);
-    }
-  }
-
-  async function savePlaybackTurnFeedback(turn: PlaybackTurn, status: ConversationFeedbackStatus) {
-    if (!evaluationSession || !turn.generatedResponse) return;
-
-    const rating = turnRatings[turn.turnIndex];
-    const response = await fetch("/api/simulator/evaluation-session", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: evaluationSession.id,
-        turnIndex: turn.turnIndex,
-        status,
-        originalResponse: turn.generatedResponse,
-        editedResponse: status === "EDITED" ? (turnEdits[turn.turnIndex] ?? turn.generatedResponse) : undefined,
-        styleRating: rating ? Number(rating) : undefined,
-        issues: turnIssues[turn.turnIndex] ?? []
-      })
-    });
-    const data = (await response.json()) as { session?: EvaluationSession; error?: unknown };
-    if (!response.ok || !data.session) {
-      setEvalError(formatApiError(data.error));
-      return;
-    }
-    setEvalError(null);
-    setEvaluationSession(data.session);
-  }
-
-  function toggleTurnIssue(turnIndex: number, issue: EvaluationIssue, checked: boolean) {
-    setTurnIssues((current) => {
-      const currentIssues = current[turnIndex] ?? [];
-      return {
-        ...current,
-        [turnIndex]: checked ? [...currentIssues, issue] : currentIssues.filter((item) => item !== issue)
-      };
-    });
   }
 
   return (
@@ -1445,153 +1258,6 @@ export default function Home() {
             );
           })()
         : null}
-
-      {activeTab === "EVALUACION" ? (
-        <section className="panel eval-panel">
-          <h2>Evaluacion de conversaciones importadas</h2>
-          <p className="muted">Selecciona una conversacion, reproducela con el modelo elegido y evalua cada turno generado.</p>
-
-          {importedConversations.length === 0 ? (
-            <p className="muted">
-              No hay conversaciones importadas todavia. Ejecuta npm run import:replay o usa el bloque Importar mas conversaciones
-              (JSON) de abajo.
-            </p>
-          ) : (
-            <div className="conversation-card-list">
-              {importedConversations.map((conversation) => (
-                <button
-                  className={conversation.id === evalConversationId ? "conversation-card selected" : "conversation-card"}
-                  key={conversation.id}
-                  type="button"
-                  onClick={() => setEvalConversationId(conversation.id)}
-                >
-                  <strong>{conversation.id}</strong>
-                  <span className="muted">{conversation.category}</span>
-                  <span className="muted">{conversation.messages.length} mensajes</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="row">
-            <input
-              className="field"
-              value={evalModel}
-              onChange={(event) => setEvalModel(event.target.value)}
-              placeholder="Modelo de redaccion"
-            />
-            <button
-              className="primary"
-              disabled={evalLoading || !evalConversationId}
-              type="button"
-              onClick={() => void playConversationSession()}
-            >
-              {evalLoading ? "Reproduciendo..." : "Reproducir conversacion"}
-            </button>
-          </div>
-          {selectedImportedConversation ? (
-            <p className="muted">
-              Seleccionada: {selectedImportedConversation.id} / {selectedImportedConversation.category} /{" "}
-              {selectedImportedConversation.messages.length} mensajes
-            </p>
-          ) : null}
-          {evalError ? <p className="error-text">{evalError}</p> : null}
-
-          {evaluationSession ? (
-            <div className="feedback-box">
-              <p className="muted">
-                Sesion {evaluationSession.id} / {evaluationSession.model}
-              </p>
-              {(evaluationSession.playbackTurns ?? []).map((turn) => {
-                const savedFeedback = evaluationSession.turnFeedback.find((item) => item.turnIndex === turn.turnIndex);
-                return (
-                  <div className="ab-result" key={turn.turnIndex}>
-                    <div className="ab-run">
-                      <span>Turno {turn.turnIndex + 1} / Candidata</span>
-                      <p>{turn.candidateMessage}</p>
-                    </div>
-                    <div className="ab-run">
-                      <span>Respuesta generada / Estado: {turn.resultingState}</span>
-                      <p>{turn.generatedResponse || "Sin respuesta generada (automatizacion bloqueada)."}</p>
-                      <small>{formatTrace(turn.providerTrace)}</small>
-                    </div>
-                    <div className="ab-run">
-                      <span>Respuesta original</span>
-                      <p>{turn.originalResponse ?? "Sin respuesta original registrada."}</p>
-                    </div>
-                    <textarea
-                      className="textarea"
-                      value={turnEdits[turn.turnIndex] ?? turn.generatedResponse}
-                      onChange={(event) => setTurnEdits((current) => ({ ...current, [turn.turnIndex]: event.target.value }))}
-                      placeholder="Respuesta editada por Alex"
-                    />
-                    <div className="issue-grid">
-                      {EVALUATION_ISSUE_OPTIONS.map((issue) => (
-                        <label className="checkbox-row" key={issue}>
-                          <input
-                            checked={(turnIssues[turn.turnIndex] ?? []).includes(issue)}
-                            type="checkbox"
-                            onChange={(event) => toggleTurnIssue(turn.turnIndex, issue, event.target.checked)}
-                          />
-                          {issue}
-                        </label>
-                      ))}
-                    </div>
-                    <select
-                      className="field"
-                      value={turnRatings[turn.turnIndex] ?? ""}
-                      onChange={(event) => setTurnRatings((current) => ({ ...current, [turn.turnIndex]: event.target.value }))}
-                    >
-                      <option value="">Puntuacion estilo</option>
-                      <option value="1">1 - nunca lo diria</option>
-                      <option value="2">2 - poco parecido</option>
-                      <option value="3">3 - aceptable</option>
-                      <option value="4">4 - bastante parecido</option>
-                      <option value="5">5 - exactamente como lo diria</option>
-                    </select>
-                    <div className="row">
-                      <button className="secondary" type="button" onClick={() => void savePlaybackTurnFeedback(turn, "APPROVED")}>
-                        Aprobar
-                      </button>
-                      <button className="secondary" type="button" onClick={() => void savePlaybackTurnFeedback(turn, "EDITED")}>
-                        Editar y aprobar
-                      </button>
-                      <button className="danger" type="button" onClick={() => void savePlaybackTurnFeedback(turn, "REJECTED")}>
-                        Rechazar
-                      </button>
-                    </div>
-                    {savedFeedback ? <p className="muted">Feedback guardado: {savedFeedback.status}</p> : null}
-                  </div>
-                );
-              })}
-              {(evaluationSession.playbackTurns ?? []).length === 0 ? (
-                <p className="muted">Esta sesion no tiene turnos reproducidos.</p>
-              ) : null}
-              {evaluationSession.summary ? (
-                <div className="ab-run">
-                  <span>Resumen de la sesion</span>
-                  <p>{formatSessionSummary(evaluationSession.summary)}</p>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <details className="import-details">
-            <summary>Importar mas conversaciones (JSON)</summary>
-            <div className="feedback-box">
-              <textarea
-                className="textarea import-textarea"
-                value={importJson}
-                onChange={(event) => setImportJson(event.target.value)}
-              />
-              <button className="secondary" type="button" onClick={() => void importConversations()}>
-                Importar conversaciones
-              </button>
-              {importStatus ? <p className="muted">{importStatus}</p> : null}
-            </div>
-          </details>
-        </section>
-      ) : null}
 
       {activeTab === "CHAT" ? (
         <section className="panel">
@@ -2454,64 +2120,6 @@ export default function Home() {
         </section>
       ) : null}
 
-      {activeTab === "AB" ? (
-        <section className="panel eval-panel">
-          <h2>Evaluacion A/B</h2>
-          <p className="muted">Compara dos modelos con los mismos mensajes y guarda la decision de Alex.</p>
-          <textarea className="textarea" value={abMessages} onChange={(event) => setAbMessages(event.target.value)} />
-          <div className="row">
-            <input className="field" value={abModelA} onChange={(event) => setAbModelA(event.target.value)} />
-            <input className="field" value={abModelB} onChange={(event) => setAbModelB(event.target.value)} />
-          </div>
-          <label className="checkbox-row">
-            <input checked={abBlind} type="checkbox" onChange={(event) => setAbBlind(event.target.checked)} />
-            Ocultar modelos al evaluar
-          </label>
-          <button className="secondary" disabled={abLoading} type="button" onClick={() => void runABComparison()}>
-            {abLoading ? "Ejecutando..." : "Ejecutar A/B"}
-          </button>
-
-          {abCase ? (
-            <div className="ab-result">
-              <div className="ab-run">
-                <span>Respuesta A{abCase.blind ? "" : ` / ${abCase.runA.model}`}</span>
-                <p>{abCase.runA.response}</p>
-                <small>{formatTrace(abCase.runA.providerTrace)}</small>
-              </div>
-              <div className="ab-run">
-                <span>Respuesta B{abCase.blind ? "" : ` / ${abCase.runB.model}`}</span>
-                <p>{abCase.runB.response}</p>
-                <small>{formatTrace(abCase.runB.providerTrace)}</small>
-              </div>
-              <select className="field" value={abWinner} onChange={(event) => setAbWinner(event.target.value as ABWinner)}>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="TIE">EMPATE</option>
-                <option value="NONE">NINGUNA</option>
-              </select>
-              <select className="field" value={abStyleRating} onChange={(event) => setAbStyleRating(event.target.value)}>
-                <option value="">Puntuacion estilo</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
-              <input
-                className="field"
-                value={abNote}
-                onChange={(event) => setAbNote(event.target.value)}
-                placeholder="Nota de Alex"
-              />
-              <button className="secondary" type="button" onClick={() => void saveABDecision()}>
-                Guardar decision
-              </button>
-              {abCase.winner ? <p className="muted">Decision guardada: {abCase.winner}</p> : null}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
       {drawerCandidate ? (
         <div className="drawer-scrim" role="presentation" onClick={closeDrawer}>
           <aside
@@ -2878,59 +2486,3 @@ function formatApiError(error: unknown): string {
 
   return "La API no devolvio una respuesta valida. Revisa la consola del servidor.";
 }
-
-function formatTrace(trace: ABEvaluationCase["runA"]["providerTrace"]): string {
-  const cost = trace.estimatedCostUsd === null ? "-" : `$${trace.estimatedCostUsd.toFixed(6)}`;
-  const fallback = trace.usedFallback ? ` / fallback${formatFallbackStages(trace.fallbackReason)}` : "";
-  return `${trace.actualProvider} / ${trace.actualModel} / ${trace.durationMs} ms / ${trace.retryCount} reintentos / ${cost}${fallback}`;
-}
-
-function formatFallbackStages(fallbackReason: string | null | undefined): string {
-  if (!fallbackReason) return "";
-  const stages: string[] = [];
-  if (fallbackReason.includes("comprension:")) stages.push("comprension");
-  if (fallbackReason.includes("redaccion:")) stages.push("redaccion");
-  return stages.length > 0 ? ` ${stages.join(" + ")}` : "";
-}
-
-function formatSessionSummary(summary: EvaluationSessionSummary): string {
-  const style = summary.averageStyleRating === null ? "-" : summary.averageStyleRating.toFixed(1);
-  return `Aprobadas ${Math.round(summary.approvedWithoutChangesPct)}% · Editadas ${Math.round(summary.editedPct)}% · Rechazadas ${Math.round(summary.rejectedPct)}% · Estilo medio ${style}/5 · Errores factuales ${summary.factualErrors} · Coste $${summary.estimatedCostUsd.toFixed(4)}`;
-}
-
-const sampleImportJson = JSON.stringify(
-  {
-    version: "1",
-    conversations: [
-      {
-        id: "eval-demo-1",
-        status: "CORRECTED",
-        source: "ANONYMIZED_JSON",
-        purpose: "EVALUATION",
-        category: "qualification",
-        initialState: "NEW_LEAD",
-        stateBefore: "QUALIFYING",
-        tags: ["demo", "quality"],
-        messages: [
-          {
-            role: "candidate",
-            content: "Hola, quiero saber como funciona",
-            originalAlexResponse: "Hola, te cuento.",
-            correctedResponse: "Hola, cuentame un poco de ti y vemos si encaja.",
-            approved: true
-          }
-        ],
-        originalAlexResponses: ["Hola, te cuento."],
-        correctedResponses: ["Hola, cuentame un poco de ti y vemos si encaja."],
-        approved: true,
-        notes: "Conversacion de ejemplo anonimizada para evaluar calidad.",
-        outcome: "evaluation_only",
-        endedInCall: false,
-        candidateApproved: false,
-        anonymizedPersonalData: { instagram: "ANON_HANDLE" }
-      }
-    ]
-  },
-  null,
-  2
-);
