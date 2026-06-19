@@ -6,7 +6,7 @@ import type { Candidate, HumanReviewReason, StateTransition } from "@/domain/can
  * cuando hace falta. Secretos en `.env.local`; si no está configurado, el aviso es un no-op silencioso
  * y NUNCA tumba el turno (el procesamiento del mensaje es lo primero).
  */
-export type OperatorNotificationKind = "escalation" | "blocked" | "error" | "stop-request";
+export type OperatorNotificationKind = "escalation" | "blocked" | "error" | "stop-request" | "follow-request";
 
 // Peticion EXPLICITA de no ser contactada ("no me mandes nada", "dejame en paz"...). Se distingue de un
 // rechazo normal ("no me interesa"): ambos cierran la conversacion, pero este AVISA a Alex para que sepa
@@ -81,8 +81,29 @@ export function escalationNotificationFor(
   };
 }
 
+const PROFILE_ACCESS_STATE = "WAITING_PROFILE_ACCESS";
+
+/**
+ * Aviso para que ALEX envíe la solicitud de seguimiento: solo cuando la candidata ENTRA este turno en
+ * WAITING_PROFILE_ACCESS (cuenta detectada como privada en el opener). Igual que la escalada, se avisa al
+ * entrar, no en cada turno posterior. Devuelve la notificación o null.
+ */
+export function followRequestNotificationFor(
+  candidate: Pick<Candidate, "instagramUsername">,
+  plannedTransitions: Pick<StateTransition, "toState">[]
+): OperatorNotification | null {
+  const entered = plannedTransitions.some((transition) => transition.toState === PROFILE_ACCESS_STATE);
+  if (!entered) return null;
+  return { kind: "follow-request", conversationId: candidate.instagramUsername, state: PROFILE_ACCESS_STATE };
+}
+
 /** Mensaje corto y escaneable para el operador. Mínimo de datos (solo lo necesario para actuar). */
 export function formatOperatorMessage(notification: OperatorNotification): string {
+  if (notification.kind === "follow-request") {
+    const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
+    const profile = notification.profileUrl ? `\nPerfil: ${notification.profileUrl}` : "";
+    return `Rose Models 📩 Cuenta PRIVADA: envíale tú la solicitud de seguimiento desde la cuenta de la agencia.${who}${profile}\nEl bot ya le ha pedido que la acepte.`;
+  }
   if (notification.kind === "error") {
     return `Rose Models ⚠️ Error procesando un mensaje en el webhook${notification.detail ? `: ${notification.detail}` : "."} Revisa los logs.`;
   }

@@ -13,6 +13,7 @@ import {
   saveSnapshotAtomic,
   wrapWithPersistence
 } from "@/infrastructure/persistence/jsonSnapshotStore";
+import { InstagramOpenerPrivacyProvider } from "@/infrastructure/integrations/instagramOpenerPrivacyProvider";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 import { PostgresCandidateRepository } from "@/infrastructure/repositories/postgresCandidateRepository";
 import { PostgresConversationFeedbackRepository } from "@/infrastructure/repositories/postgresConversationFeedbackRepository";
@@ -352,11 +353,15 @@ export function getSimulatorRepository(): CandidateRepository {
 export function getSimulatorEngine(): ConversationEngine {
   if (!globalForSimulator.roseSimulatorEngine) {
     const providers = createLlmProviders();
+    // Detector de privada/publica para el opener: solo si hay APIFY_TOKEN (es quien da el flag). Sin el,
+    // se deja undefined -> el opener es el neutro (la deteccion no se intenta). Lleva su propio timeout.
+    const profilePrivacyProvider = process.env.APIFY_TOKEN?.trim() ? new InstagramOpenerPrivacyProvider() : undefined;
     globalForSimulator.roseSimulatorEngine = new ConversationEngine({
       repository: getSimulatorRepository(),
       understandingProvider: providers.understandingProvider,
       draftingProvider: providers.draftingProvider,
-      automationMode: providers.config.automationMode
+      automationMode: providers.config.automationMode,
+      profilePrivacyProvider
     });
   }
 

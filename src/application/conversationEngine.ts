@@ -19,6 +19,7 @@ import type { BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { LocalBusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 import { businessKnowledgeEntries } from "@/content/business";
 import { buildConsistentCandidatePatch } from "./dataConsistency";
+import type { ProfilePrivacyProvider } from "./profilePrivacyProvider";
 import { applyHumanReviewDecision, humanDecisionToState, type HumanReviewDecision } from "./humanReview";
 import { extractDeterministicUnderstanding, guaranteedMoneyDemandPattern } from "./dataExtractor";
 import type { ExampleRetriever } from "./exampleRetriever";
@@ -79,6 +80,9 @@ export interface ConversationEngineDependencies {
   draftingProvider?: ResponseDraftingProvider;
   automationMode?: AutomationMode;
   beforeSendCheck?: (candidate: Candidate) => Promise<Candidate>;
+  // Detecta privada/publica en el primer mensaje para elegir el opener. Opcional: sin el (tests/simulador),
+  // el opener es el neutro. Lleva su propio limite de tiempo en la implementacion (infra).
+  profilePrivacyProvider?: ProfilePrivacyProvider;
 }
 
 export class ConversationEngine {
@@ -92,6 +96,31 @@ export class ConversationEngine {
     this.styleEvaluator = dependencies.styleEvaluator ?? new DeterministicResponseStyleEvaluator();
     this.businessKnowledgeRetriever = dependencies.businessKnowledgeRetriever ?? new LocalBusinessKnowledgeRetriever();
     this.automationMode = dependencies.automationMode ?? "HUMAN_APPROVAL";
+  }
+
+  /**
+   * Visibilidad del perfil para elegir el opener. Si el llamador ya la da, se respeta. Si no, SOLO en el
+   * turno de apertura y cuando aun es desconocida, se consulta al detector (privada/publica). null/fallo
+   * -> queda como esta (UNKNOWN -> opener neutro). El detector lleva su propio limite de tiempo; aqui
+   * jamas se deja que un fallo de red rompa el turno (red de seguridad).
+   */
+  private async resolveOpenerVisibility(
+    candidate: Candidate,
+    provided: ProfileVisibility | undefined,
+    isOpenerTurn: boolean
+  ): Promise<ProfileVisibility | undefined> {
+    if (provided) return provided;
+    if (!isOpenerTurn || candidate.declaredProfileVisibility !== "UNKNOWN") return provided;
+    const provider = this.dependencies.profilePrivacyProvider;
+    if (!provider) return provided;
+    try {
+      const isPrivate = await provider.detectIsPrivate(candidate.instagramUsername);
+      if (isPrivate === true) return "PRIVATE";
+      if (isPrivate === false) return "PUBLIC";
+    } catch {
+      // Red de seguridad: cualquier fallo deja la visibilidad desconocida (opener neutro).
+    }
+    return provided;
   }
 
   async handleIncomingMessage(input: HandleIncomingMessageInput): Promise<HandleIncomingMessageResult> {
@@ -550,7 +579,10 @@ export class ConversationEngine {
       candidateClaimsFollowRequestAccepted:
         understanding.intent === "ACCEPTS_PROFILE_REQUEST" ? true : consistency.patch.candidateClaimsFollowRequestAccepted
     };
-    let updatedCandidate = applyExtractedData(activeCandidate, extractedPatch, input.profileVisibility);
+    // En el PRIMER mensaje detectamos privada/publica (si hay detector) para elegir el opener correcto.
+    // Red de seguridad: si no se sabe a tiempo, queda UNKNOWN -> opener neutro. Nunca rompe el turno.
+    const openerVisibility = await this.resolveOpenerVisibility(activeCandidate, input.profileVisibility, isOpenerTurn);
+    let updatedCandidate = applyExtractedData(activeCandidate, extractedPatch, openerVisibility);
     // Aviso para Alex siempre que la candidata toque el dinero: si negocia (requiresHumanReview), es una
     // peticion de negociacion (escala); si solo PREGUNTA por el porcentaje, NO escala (sigue el flujo) pero
     // queda el aviso para que Alex lo sepa (decision de Alex: no derivar, pero avisar).
@@ -1446,14 +1478,22 @@ function canonicalOpener(candidate: Candidate): string {
   // publico o desconocido se entra directo al marco de cualificacion (coherente con decideNextState,
   // que solo manda a WAITING_PROFILE_ACCESS si la visibilidad es PRIVATE). Asi el opener siempre lleva
   // el marco "te hago unas preguntas rapidas y luego agendamos una llamada" (peticion de Alex 15-jun).
+  // PRIVADA: no podemos ver el perfil -> gate de acceso (pedir aceptar la solicitud), sin pedir el nombre
+  // todavia. Tras aceptar, el guion continua pidiendo el nombre (primer slot).
   if (candidate.declaredProfileVisibility === "PRIVATE") {
     return `Hola, ${greeting} soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.`;
   }
 
-  // El opener pide el NOMBRE directamente (peticion de Alex: lo primero es el nombre). Asi, ademas, la
-  // respuesta de la candidata ("ana", "marta"...) llega con contexto de pregunta y se captura bien, en vez
-  // de perderse y dejar al bot en bucle "Como te llamas?" (fallo real visto en la simulacion 15-jun).
-  return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.\n\nPara empezar, como te llamas?`;
+  // PUBLICA: hemos podido ver el perfil, asi que lo decimos y entramos directos a pedir el NOMBRE
+  // (peticion de Alex: lo primero es el nombre). Asi, ademas, la respuesta de la candidata ("ana",
+  // "marta"...) llega con contexto de pregunta y se captura bien, en vez de perderse (fallo 15-jun).
+  if (candidate.declaredProfileVisibility === "PUBLIC") {
+    return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.\n\nPara empezar, como te llamas?`;
+  }
+
+  // DESCONOCIDA (no se pudo detectar privada/publica a tiempo): opener NEUTRO que NO afirma haber visto el
+  // perfil ni pide aceptar solicitud, pero pide el nombre igual. Es la red de seguridad de la deteccion.
+  return `Hola, ${greeting} soy Alex de Rose Models.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte como trabajamos.\n\nPara empezar, como te llamas?`;
 }
 
 // La candidata comparte una dificultad/duda/experiencia personal (no un dato a secas): "me cuesta",

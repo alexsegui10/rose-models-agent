@@ -8,7 +8,12 @@ import {
 } from "@/application/instagramWebhook";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
-import { escalationNotificationFor, getOperatorNotifier, isStopRequest } from "@/infrastructure/integrations/operatorNotifier";
+import {
+  escalationNotificationFor,
+  followRequestNotificationFor,
+  getOperatorNotifier,
+  isStopRequest
+} from "@/infrastructure/integrations/operatorNotifier";
 import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
 import { getSimulatorEngine } from "@/server/simulatorStore";
 
@@ -179,14 +184,18 @@ export async function POST(request: Request): Promise<NextResponse> {
       // el bot NO envia rafaga, asi que hay margen de tiempo para resolver el perfil (cacheado) y meter el
       // enlace a su cuenta en el WhatsApp; best-effort, jamas rompe el turno.
       const escalation = escalationNotificationFor(result.candidate, result.plannedTransitions);
+      // Cuenta PRIVADA detectada en el opener: la candidata entra en WAITING_PROFILE_ACCESS y se avisa a
+      // Alex para que ENVIE la solicitud de seguimiento desde la cuenta de la agencia (peticion de Alex).
+      const followRequest = followRequestNotificationFor(result.candidate, result.plannedTransitions);
       // Peticion explicita de no contacto ("no me mandes nada"): el bot cierra (CLOSED) pero AVISA a Alex
       // para que sepa lo que paso (peticion de Alex). Un "no me interesa" normal sigue cerrando en silencio.
       const enteredClosed = result.plannedTransitions.some((transition) => transition.toState === "CLOSED");
       const stopRequested = enteredClosed && isStopRequest(message.text);
-      if (escalation || stopRequested) {
+      if (escalation || followRequest || stopRequested) {
         const profile = await fetchInstagramProfile(message.senderId, config);
         const profileUrl = instagramProfileUrl(profile?.username) ?? undefined;
         if (escalation) await notifier.notify({ ...escalation, profileUrl });
+        if (followRequest) await notifier.notify({ ...followRequest, profileUrl });
         if (stopRequested) await notifier.notify({ kind: "stop-request", conversationId: message.senderId, profileUrl });
       }
     } catch (error) {
