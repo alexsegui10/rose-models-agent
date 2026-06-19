@@ -411,6 +411,34 @@ function bareNameFromReply(normalized: string): string | undefined {
   return firstWord.charAt(0).toUpperCase() + firstWord.slice(1);
 }
 
+/**
+ * ¿El "nombre" extraido es en realidad un filler/saludo/lugar o ruido ("claro", "vale", "madrid",
+ * "mmm")? Se aplica a CUALQUIER nombre, venga del extractor determinista o del LLM (en modo OpenAI el
+ * nombre que adivina el modelo se colaba sin estos guardas). Solo mira la primera palabra normalizada.
+ */
+export function isImplausibleFirstName(name: string): boolean {
+  const firstWord = normalize(name).trim().split(/\s+/)[0] ?? "";
+  if (firstWord.length < 2) return true;
+  if (/^(.)\1+$/.test(firstWord)) return true; // "mmm", "aaa"
+  if (nameRejectWords.has(firstWord)) return true;
+  if (nameStopwords.has(firstWord)) return true;
+  if (locationKeywords.some((entry) => entry.keyword === firstWord)) return true;
+  return false;
+}
+
+/**
+ * ¿El mensaje aporta un nombre de forma legitima? True si la candidata lo dice explicitamente
+ * ("me llamo X", "soy X") o si el agente acababa de preguntarlo. Replica las condiciones del extractor
+ * determinista, asi que NO rechaza ningun nombre que aquel ya capturaria; sirve para que el LLM no fije
+ * un nombre a partir de un "sii claro ya esta" donde no se ha dado ningun nombre.
+ */
+export function hasNameGivingContext(inboundMessage: string, lastAgentMessage: string | null): boolean {
+  const normalized = normalize(inboundMessage);
+  if (explicitNamePattern.test(normalized) || casualNamePattern.test(normalized)) return true;
+  const agent = lastAgentMessage ? normalize(lastAgentMessage) : "";
+  return agentAskedNamePattern.test(agent);
+}
+
 export function extractDeterministicUnderstanding(
   message: string,
   context: DeterministicExtractionContext = {}

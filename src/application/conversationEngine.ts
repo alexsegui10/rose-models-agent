@@ -542,7 +542,8 @@ export class ConversationEngine {
     const consistency = buildConsistentCandidatePatch({
       candidate: activeCandidate,
       extractedData: understanding.extractedData,
-      inboundMessage: groupedMessage.content
+      inboundMessage: groupedMessage.content,
+      lastAgentMessage: lastAgentMsg
     });
     const extractedPatch: CandidatePatch = {
       ...consistency.patch,

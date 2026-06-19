@@ -1,5 +1,6 @@
 import type { Candidate, CandidatePatch } from "@/domain/candidate";
 import type { ExtractedCandidateData } from "./llmProvider";
+import { hasNameGivingContext, isImplausibleFirstName } from "./dataExtractor";
 
 export interface DataConsistencyResult {
   patch: CandidatePatch;
@@ -40,6 +41,7 @@ export function buildConsistentCandidatePatch(input: {
   candidate: Candidate;
   extractedData: ExtractedCandidateData;
   inboundMessage: string;
+  lastAgentMessage?: string | null;
 }): DataConsistencyResult {
   const patch: CandidatePatch = {};
   const contradictions: string[] = [];
@@ -127,7 +129,15 @@ export function buildConsistentCandidatePatch(input: {
   // El LLM a veces vuelca marcadores vacios (":", "-", "") en estos campos de texto libre. Un ":" es
   // truthy y pasaba el `&&`, fijando firstName=":" o experienceDescription=":" -> el slot de nombre o
   // de OnlyFans se daba por respondido y el bot SE LO SALTABA. Se ignoran igual que en applyValue.
-  if (input.extractedData.firstName && !isMeaninglessString(input.extractedData.firstName) && !input.candidate.firstName)
+  // El nombre (lo adivine el LLM o el extractor) pasa ademas por dos guardas: no es un filler/saludo
+  // ("claro", "vale") y el mensaje realmente da un nombre (regresion: "sii carlo ya esta" -> "Carlo").
+  if (
+    input.extractedData.firstName &&
+    !isMeaninglessString(input.extractedData.firstName) &&
+    !isImplausibleFirstName(input.extractedData.firstName) &&
+    hasNameGivingContext(input.inboundMessage, input.lastAgentMessage ?? null) &&
+    !input.candidate.firstName
+  )
     patch.firstName = input.extractedData.firstName;
   if (
     input.extractedData.experienceDescription &&
