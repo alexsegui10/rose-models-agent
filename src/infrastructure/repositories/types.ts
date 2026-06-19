@@ -16,6 +16,13 @@ export interface CandidateRepository {
    * `scheduledCallStartMs` fijado). Lo usa el agendado determinista para no solapar dos llamadas.
    */
   listBookedCallStarts(): Promise<number[]>;
+  /**
+   * Candidatas candidatas a RE-ENGANCHE proactivo: inactivas (lastMessageAt <= idleSinceMs ms UTC),
+   * NO en estados terminales/cerrados al re-enganche (CLOSED/REJECTED/CALL_SCHEDULED/CALL_COMPLETED) y
+   * NO con control manual o automatizacion pausada. CALL_NO_ANSWER SI entra (para el reagendado tras 3
+   * llamadas sin respuesta). El cron las filtra despues con `planOutreach`.
+   */
+  listCandidatesForOutreach(idleSinceMs: number): Promise<Candidate[]>;
   saveCandidate(candidate: Candidate): Promise<Candidate>;
   deleteCandidate(id: string): Promise<void>;
   listMessages(candidateId: string, limit?: number): Promise<ConversationMessage[]>;

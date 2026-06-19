@@ -19,13 +19,23 @@ export class GraphApiInstagramMessagingProvider implements InstagramMessagingPro
     await this.sendTextMessage(input.instagramUsername, input.message);
   }
 
-  /** Envía un texto al IGSID indicado. Devuelve true si la API aceptó el envío. */
-  async sendTextMessage(recipientId: string, text: string): Promise<boolean> {
+  /**
+   * Envía un texto al IGSID indicado. Devuelve true si la API aceptó el envío.
+   *
+   * `options.humanAgentTag`: la mensajería estándar (`messaging_type: "RESPONSE"`) solo se puede usar
+   * DENTRO de las 24h del último mensaje de la candidata. Pasada esa ventana, Meta exige una etiqueta;
+   * para el re-enganche usamos `HUMAN_AGENT` (válida hasta 7 días). Por defecto (sin options o false) el
+   * comportamiento es el de siempre (RESPONSE), para no tocar las llamadas existentes del webhook.
+   */
+  async sendTextMessage(recipientId: string, text: string, options?: { humanAgentTag?: boolean }): Promise<boolean> {
     if (!this.config.isConfigured) {
       console.warn("[instagram] envío omitido: integración no configurada");
       return false;
     }
     const url = `${this.config.graphApiBaseUrl}/${this.config.graphApiVersion}/me/messages`;
+    const body = options?.humanAgentTag
+      ? { recipient: { id: recipientId }, message: { text }, messaging_type: "MESSAGE_TAG", tag: "HUMAN_AGENT" }
+      : { recipient: { id: recipientId }, message: { text }, messaging_type: "RESPONSE" };
     try {
       const response = await this.fetchImpl(url, {
         method: "POST",
@@ -33,10 +43,7 @@ export class GraphApiInstagramMessagingProvider implements InstagramMessagingPro
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.config.accessToken}`
         },
-        body: JSON.stringify({
-          recipient: { id: recipientId },
-          message: { text }
-        }),
+        body: JSON.stringify(body),
         // Timeout duro: si Instagram se cuelga, no agotar el techo de ~10s de Vercel a mitad de rafaga.
         signal: AbortSignal.timeout(3500)
       });

@@ -22,6 +22,27 @@ export const CandidateStateSchema = z.enum([
 
 export type CandidateState = z.infer<typeof CandidateStateSchema>;
 
+/**
+ * Estados que NO entran en el barrido de re-enganche proactivo (listCandidatesForOutreach). Filtra en el
+ * REPOSITORIO como defensa en profundidad: el barrido nunca debe ni siquiera traer a estas candidatas, y
+ * `planOutreach` reafirma despues su lista blanca de estados re-enganchables.
+ *  - Terminales: CLOSED, REJECTED (incluye cierres por edad — invariante 2).
+ *  - Revision humana: WAITING_HUMAN_REVIEW, HUMAN_INTERVENTION_REQUIRED (invariante 4: no sacarlas de ahi).
+ *  - Ya avanzadas: APPROVED, READY_TO_SCHEDULE, CALL_SCHEDULED, CALL_IN_PROGRESS, CALL_COMPLETED.
+ * CALL_NO_ANSWER NO esta aqui a proposito: SI entra (reagendado tras 3 llamadas sin respuesta).
+ */
+export const OUTREACH_EXCLUDED_STATES: ReadonlySet<CandidateState> = new Set<CandidateState>([
+  "CLOSED",
+  "REJECTED",
+  "WAITING_HUMAN_REVIEW",
+  "HUMAN_INTERVENTION_REQUIRED",
+  "APPROVED",
+  "READY_TO_SCHEDULE",
+  "CALL_SCHEDULED",
+  "CALL_IN_PROGRESS",
+  "CALL_COMPLETED"
+]);
+
 export const ProfileVisibilitySchema = z.enum(["PUBLIC", "PRIVATE", "UNKNOWN"]);
 export type ProfileVisibility = z.infer<typeof ProfileVisibilitySchema>;
 

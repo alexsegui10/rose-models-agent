@@ -35,8 +35,16 @@ export const allowedTransitions: Record<CandidateState, CandidateState[]> = {
   CALL_IN_PROGRESS: ["CALL_COMPLETED", "CALL_NO_ANSWER", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
   // Llamada hecha: el bot explico y dejo el siguiente paso; Alex lo retoma (o se reagenda/cierra).
   CALL_COMPLETED: ["READY_TO_SCHEDULE", "CALL_SCHEDULED", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
-  // No contesto: se reagenda/reintenta o lo retoma Alex.
-  CALL_NO_ANSWER: ["CALL_SCHEDULED", "READY_TO_SCHEDULE", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
+  // No contesto: se reagenda/reintenta o lo retoma Alex. COLLECTING_CALL_DETAILS habilita el
+  // re-enganche tras 3 llamadas sin respuesta (el bot reabre el agendado pidiendo dia/hora por IG).
+  CALL_NO_ANSWER: [
+    "CALL_SCHEDULED",
+    "READY_TO_SCHEDULE",
+    "COLLECTING_CALL_DETAILS",
+    "REJECTED",
+    "HUMAN_INTERVENTION_REQUIRED",
+    "CLOSED"
+  ],
   HUMAN_INTERVENTION_REQUIRED: [
     "WAITING_PROFILE_ACCESS",
     "PROFILE_READY_FOR_REVIEW",

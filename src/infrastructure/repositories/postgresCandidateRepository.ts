@@ -1,6 +1,12 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, notInArray, sql } from "drizzle-orm";
 import { NegotiationDecisionSchema, type NegotiationDecision } from "@/domain/businessKnowledge";
-import { normalizeCandidate, type Candidate, type ConversationMessage, type StateTransition } from "@/domain/candidate";
+import {
+  normalizeCandidate,
+  OUTREACH_EXCLUDED_STATES,
+  type Candidate,
+  type ConversationMessage,
+  type StateTransition
+} from "@/domain/candidate";
 import type { Database } from "../db/client";
 import { candidates, conversationMessages, negotiationDecisions, stateTransitions } from "../db/schema";
 import { isUuid, warnInvalidRow } from "./postgresUtils";
@@ -45,6 +51,25 @@ export class PostgresCandidateRepository implements CandidateRepository {
       .from(candidates)
       .where(and(eq(candidates.currentState, "CALL_SCHEDULED"), sql`${candidates.scheduledCallStartMs} is not null`));
     return rows.map((row) => row.scheduledCallStartMs).filter((value): value is number => value !== null && value !== undefined);
+  }
+
+  async listCandidatesForOutreach(idleSinceMs: number): Promise<Candidate[]> {
+    // Candidatas inactivas (last_message_at <= idleSinceMs), NO en estados excluidos del re-enganche y
+    // NO pausadas/en control manual. CALL_NO_ANSWER no esta excluido a proposito (reagendado).
+    const excluded = [...OUTREACH_EXCLUDED_STATES];
+    const rows = await this.db
+      .select()
+      .from(candidates)
+      .where(
+        and(
+          sql`${candidates.lastMessageAt} is not null`,
+          sql`${candidates.lastMessageAt} <= ${new Date(idleSinceMs)}`,
+          notInArray(candidates.currentState, excluded),
+          eq(candidates.automationPaused, false),
+          eq(candidates.manualControlActive, false)
+        )
+      );
+    return rows.map(rowToCandidate);
   }
 
   async saveCandidate(candidate: Candidate): Promise<Candidate> {

@@ -4,6 +4,7 @@ import {
   ConversationAuthorSchema,
   ConversationRoleSchema,
   normalizeCandidate,
+  OUTREACH_EXCLUDED_STATES,
   type Candidate,
   type CandidateNormalizationInput,
   type ConversationMessage,
@@ -39,6 +40,19 @@ export class InMemoryCandidateRepository implements CandidateRepository {
       .map((candidate) => normalizeCandidate(candidate))
       .filter((candidate) => candidate.currentState === "CALL_SCHEDULED" && candidate.scheduledCallStartMs !== undefined)
       .map((candidate) => candidate.scheduledCallStartMs as number);
+  }
+
+  async listCandidatesForOutreach(idleSinceMs: number): Promise<Candidate[]> {
+    return [...this.candidates.values()]
+      .map((candidate) => normalizeCandidate(candidate))
+      .filter(
+        (candidate) =>
+          !OUTREACH_EXCLUDED_STATES.has(candidate.currentState) &&
+          !candidate.manualControlActive &&
+          !candidate.automationPaused &&
+          candidate.lastMessageAt !== undefined &&
+          candidate.lastMessageAt.getTime() <= idleSinceMs
+      );
   }
 
   async saveCandidate(candidate: Candidate): Promise<Candidate> {

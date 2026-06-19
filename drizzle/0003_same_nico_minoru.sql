@@ -1,0 +1,2 @@
+ALTER TABLE "candidates" ADD COLUMN IF NOT EXISTS "scheduled_call_start_ms" bigint;--> statement-breakpoint
+ALTER TABLE "candidates" ADD COLUMN IF NOT EXISTS "call_attempts" integer DEFAULT 0 NOT NULL;

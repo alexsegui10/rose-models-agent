@@ -47,6 +47,9 @@ describe("state machine", () => {
     // Tras la llamada o un no-contesta se puede reagendar.
     expect(canTransition("CALL_COMPLETED", "READY_TO_SCHEDULE")).toBe(true);
     expect(canTransition("CALL_NO_ANSWER", "CALL_SCHEDULED")).toBe(true);
+    // Re-enganche tras 3 llamadas sin respuesta: se reabre el agendado por IG (volver a pedir dia/hora),
+    // que semanticamente es recoger los detalles de la llamada otra vez.
+    expect(canTransition("CALL_NO_ANSWER", "COLLECTING_CALL_DETAILS")).toBe(true);
     // Rechazo/cierre humano siguen disponibles en la fase de llamada.
     expect(canTransition("CALL_IN_PROGRESS", "REJECTED")).toBe(true);
     expect(canTransition("CALL_COMPLETED", "CLOSED")).toBe(true);

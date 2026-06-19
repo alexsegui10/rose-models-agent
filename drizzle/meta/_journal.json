@@ -22,6 +22,13 @@
       "when": 1781781940891,
       "tag": "0002_smart_preak",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781883333401,
+      "tag": "0003_same_nico_minoru",
+      "breakpoints": true
     }
   ]
 }

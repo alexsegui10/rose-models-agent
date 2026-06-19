@@ -8,19 +8,9 @@ import type { Candidate, HumanReviewReason, StateTransition } from "@/domain/can
  */
 export type OperatorNotificationKind = "escalation" | "blocked" | "error" | "stop-request" | "follow-request";
 
-// Peticion EXPLICITA de no ser contactada ("no me mandes nada", "dejame en paz"...). Se distingue de un
-// rechazo normal ("no me interesa"): ambos cierran la conversacion, pero este AVISA a Alex para que sepa
-// lo que paso (por si quiere gestionarlo personalmente). Patron conservador para no avisar de cada "no".
-const stopRequestPattern =
-  /\b(no me mandes? (?:nada|mas|mensajes)|no me escribas? (?:mas|nada)|dejame en paz|no me contactes|no me molestes|para de escribirme|no me vuelvas a escribir|deja de escribirme|no quiero que me escrib\w*|borrame|bloquea\w*)\b/;
-
-export function isStopRequest(message: string): boolean {
-  const normalized = message
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
-  return stopRequestPattern.test(normalized);
-}
+// isStopRequest vive ahora en domain (funcion pura) para que la compartan infra y application sin cruzar
+// capas; se re-exporta aqui para no romper los imports existentes (webhook).
+export { isStopRequest } from "@/domain/stopRequest";
 
 export interface OperatorNotification {
   kind: OperatorNotificationKind;
