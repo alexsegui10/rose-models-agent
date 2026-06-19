@@ -2483,6 +2483,8 @@ button {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .chat2-cand-avatar {
+  position: relative;
+  overflow: hidden;
   width: 30px;
   height: 30px;
   border-radius: 50%;
@@ -2492,6 +2494,21 @@ button {
   font-size: 12px;
   color: #04110f;
   flex: none;
+}
+.chat2-cand-avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chat2-peer-avatar {
+  position: relative;
+  overflow: hidden;
+}
+.chat2-fallback {
+  color: var(--warn);
+  font-weight: 700;
 }
 .chat2-cand-body {
   flex: 1;

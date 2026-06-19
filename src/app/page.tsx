@@ -640,6 +640,29 @@ export default function Home() {
     }
   }
 
+  // Responder a la candidata seleccionada DESDE la bandeja (Mensajes), como en Instagram: va a su Instagram
+  // y el bot se pausa (Alex toma el control). Recarga la conversacion al instante.
+  async function sendChatReply() {
+    if (!selectedCandidate || !message.trim()) return;
+    const candidate = selectedCandidate;
+    const text = message.trim();
+    setMessage("");
+    await doSendManualReply(candidate, text);
+    if (!(candidate.manualControlActive || candidate.automationPaused)) {
+      await setBotPaused(candidate, true);
+    }
+    try {
+      const response = await fetch(`/api/candidates/${candidate.id}/conversation`);
+      if (response.ok) {
+        const data = (await response.json()) as { messages: ConversationMessage[]; transitions: StateTransition[] };
+        setMessages(data.messages ?? []);
+        setTransitions(data.transitions ?? []);
+      }
+    } catch {
+      /* silencioso */
+    }
+  }
+
   function sendManualReply(candidate: Candidate) {
     // Responder a mano a una candidata (escalada o pausada). Abre un modal; al confirmar se persiste como
     // mensaje de Alex y se envia a Instagram si la integracion esta activa.
@@ -893,6 +916,13 @@ export default function Home() {
             onClick={() => setActiveTab("LLAMADAS")}
           >
             Llamadas
+          </button>
+          <button
+            className={activeTab === "CHAT" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("CHAT")}
+          >
+            Mensajes
           </button>
         </nav>
         <button
@@ -1525,11 +1555,10 @@ export default function Home() {
       {activeTab === "CHAT" ? (
         <section className="panel">
           <header className="chat2-head">
-            <h2 className="chat2-title">Chat</h2>
+            <h2 className="chat2-title">Mensajes</h2>
             <p className="chat2-subtitle">
-              Banco de pruebas del bot: escribe un mensaje de ejemplo (un mensaje entrante) y mira cómo respondería el bot.{" "}
-              <strong>No se envía nada a Instagram.</strong> Las conversaciones reales llegan solas al CRM, y desde la ficha de
-              cada candidata respondes a mano (eso sí va a Instagram cuando esté conectado).
+              Tus conversaciones reales con las candidatas. Abre una y respóndele aquí mismo:{" "}
+              <strong>tu mensaje se envía a su Instagram</strong> y el bot se pausa (tomas el control).
             </p>
           </header>
           <div className="chat2-grid">
@@ -1538,26 +1567,43 @@ export default function Home() {
               <div className="chat2-list">
                 {candidates.length === 0 ? (
                   <p className="muted" style={{ padding: "6px 8px", fontSize: 12 }}>
-                    Sin candidatas. Crea una con el botón de abajo o carga la demo en Resumen.
+                    Aún no hay candidatas. Entran solas por Instagram (o carga la demo en Resumen).
                   </p>
                 ) : (
-                  candidates.map((candidate) => (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      className="chat2-cand"
-                      data-selected={selectedCandidate?.id === candidate.id}
-                      onClick={() => void loadChatCandidate(candidate)}
-                    >
-                      <span className="chat2-cand-avatar" style={{ background: `var(${ringColorVar(candidate)})` }}>
-                        {(candidate.firstName?.trim() || candidate.instagramUsername || "?").charAt(0).toUpperCase()}
-                      </span>
-                      <div className="chat2-cand-body">
-                        <div className="chat2-cand-name">@{candidate.instagramUsername}</div>
-                        <div className="chat2-cand-pill">{stateLabel(candidate.currentState)}</div>
-                      </div>
-                    </button>
-                  ))
+                  candidates.map((candidate) => {
+                    const candProfile = igProfiles[candidate.instagramUsername];
+                    return (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        className="chat2-cand"
+                        data-selected={selectedCandidate?.id === candidate.id}
+                        onClick={() => void loadChatCandidate(candidate)}
+                      >
+                        <span className="chat2-cand-avatar" style={{ background: `var(${ringColorVar(candidate)})` }}>
+                          {candProfile?.profilePicUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              className="chat2-cand-avatar-img"
+                              src={candProfile.profilePicUrl}
+                              alt=""
+                              referrerPolicy="no-referrer"
+                              onError={(event) => {
+                                event.currentTarget.style.display = "none";
+                              }}
+                            />
+                          ) : null}
+                          {(candidate.firstName?.trim() || candidate.instagramUsername || "?").charAt(0).toUpperCase()}
+                        </span>
+                        <div className="chat2-cand-body">
+                          <div className="chat2-cand-name">
+                            {candidate.firstName?.trim() || `@${candProfile?.username ?? candidate.instagramUsername}`}
+                          </div>
+                          <div className="chat2-cand-pill">{stateLabel(candidate.currentState)}</div>
+                        </div>
+                      </button>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1569,11 +1615,31 @@ export default function Home() {
                     className="chat2-peer-avatar"
                     style={{ background: currentCandidate ? `var(${ringColorVar(currentCandidate)})` : "var(--muted)" }}
                   >
-                    {(currentCandidate?.firstName?.trim() || instagramUsername || "?").charAt(0).toUpperCase()}
+                    {currentCandidate && igProfiles[currentCandidate.instagramUsername]?.profilePicUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        className="chat2-cand-avatar-img"
+                        src={igProfiles[currentCandidate.instagramUsername]?.profilePicUrl ?? ""}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        onError={(event) => {
+                          event.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : null}
+                    {(currentCandidate?.firstName?.trim() || currentCandidate?.instagramUsername || "?").charAt(0).toUpperCase()}
                   </span>
                   <div>
-                    <div className="chat2-peer-name">{currentCandidate?.firstName?.trim() || `@${instagramUsername}`}</div>
-                    <div className="chat2-peer-username">@{currentCandidate?.instagramUsername ?? instagramUsername}</div>
+                    <div className="chat2-peer-name">
+                      {currentCandidate
+                        ? currentCandidate.firstName?.trim() || `@${currentCandidate.instagramUsername}`
+                        : "Elige una candidata"}
+                    </div>
+                    {currentCandidate ? (
+                      <div className="chat2-peer-username">
+                        @{igProfiles[currentCandidate.instagramUsername]?.username ?? currentCandidate.instagramUsername}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
                 {currentCandidate ? (
@@ -1584,8 +1650,10 @@ export default function Home() {
               </div>
 
               <div className="chat2-stream">
-                {messages.length === 0 ? (
-                  <div className="chat2-empty">Envía un mensaje como candidata para iniciar la conversación.</div>
+                {!currentCandidate ? (
+                  <div className="chat2-empty">Elige una candidata de la izquierda para ver vuestra conversación.</div>
+                ) : messages.length === 0 ? (
+                  <div className="chat2-empty">Aún no hay mensajes con esta candidata.</div>
                 ) : (
                   messages.flatMap((item) => {
                     if (item.role === "system") {
@@ -1595,11 +1663,13 @@ export default function Home() {
                         </div>
                       ];
                     }
+                    const usedFallback = item.role === "agent" && item.metadata?.draftUsedFallback === true;
                     const chunks = item.role === "agent" ? splitIntoMessageBurst(item.content) : [item.content];
                     return chunks.map((chunk, index) => (
                       <div className="chat2-msg" data-role={item.role} key={`${item.id}-${index}`}>
                         <span className="chat2-msg-label" data-role={item.role}>
                           {CHAT_AUTHOR_LABELS[item.role] ?? item.role}
+                          {usedFallback && index === 0 ? <span className="chat2-fallback"> · ⚠ sin IA (fallback)</span> : null}
                         </span>
                         <div className="chat2-bubble" data-role={item.role}>
                           {chunk}
@@ -1614,52 +1684,27 @@ export default function Home() {
                 className="chat2-composer"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void sendMessage();
+                  void sendChatReply();
                 }}
               >
-                <div className="chat2-composer-row1">
-                  <input
-                    className="chat2-input-username"
-                    value={instagramUsername}
-                    onChange={(event) => setInstagramUsername(event.target.value)}
-                    placeholder="instagram_username"
-                  />
-                  <select
-                    className="chat2-select-vis"
-                    value={profileVisibility}
-                    onChange={(event) => setProfileVisibility(event.target.value as ProfileVisibility)}
-                  >
-                    <option value="PUBLIC">Público</option>
-                    <option value="PRIVATE">Privado</option>
-                    <option value="UNKNOWN">Desconocido</option>
-                  </select>
-                  <button
-                    className="chat2-btn-new"
-                    type="button"
-                    title="Empieza una conversación desde cero (candidata nueva) para ver el saludo inicial"
-                    onClick={() => {
-                      setInstagramUsername(`candidata_${Math.floor(Math.random() * 100000)}`);
-                      setSelectedCandidate(null);
-                      setMessages([]);
-                      setTransitions([]);
-                      setLastResult(null);
-                      setFeedbackStatus(null);
-                      setProfileVisibility("PUBLIC");
-                      setMessage("Hola, me interesa");
-                    }}
-                  >
-                    + Candidata nueva
-                  </button>
-                </div>
                 <div className="chat2-composer-row2">
                   <textarea
                     className="chat2-textarea"
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
-                    placeholder="Escribe un mensaje de ejemplo…"
+                    placeholder={
+                      currentCandidate ? "Escribe tu respuesta… (se envía a su Instagram)" : "Elige una candidata para responder"
+                    }
+                    disabled={!currentCandidate}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendChatReply();
+                      }
+                    }}
                   />
-                  <button className="chat2-btn-send" disabled={loading || !message.trim()} type="submit">
-                    {loading ? "Enviando…" : "Enviar"}
+                  <button className="chat2-btn-send" disabled={loading || !currentCandidate || !message.trim()} type="submit">
+                    {loading ? "Enviando…" : "Enviar ➤"}
                   </button>
                 </div>
                 {sendError ? <div className="chat2-error">{sendError}</div> : null}
