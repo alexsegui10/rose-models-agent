@@ -50,24 +50,26 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
     expect(planFor({ candidate: candidateWith({ firstName: "Carla" }) }).questionToAsk).toBe("Que edad tienes?");
   });
 
-  it("asks for OnlyFans after age, never the city question", () => {
+  it("asks for the device (movil) after age, before OnlyFans (Alex 19-jun)", () => {
     const plan = planFor({ candidate: candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true }) });
-    expect(plan.questionToAsk).toBe("Me puedes contar si has tenido OF alguna vez?");
+    expect((plan.questionToAsk ?? "").toLowerCase()).toContain("que movil tienes");
     expect(plan.questionToAsk).not.toContain("ciudad");
   });
 
-  it("asks about other agencies after OnlyFans, then the device", () => {
-    const base = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true, hasOnlyFans: true });
-    expect(planFor({ candidate: base }).questionToAsk).toContain("otras agencias");
+  it("asks OnlyFans after the device, then about other agencies (a las que tienen OF)", () => {
+    const withDevice = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true, deviceEligibility: "APPROVED" });
+    expect((planFor({ candidate: withDevice }).questionToAsk ?? "").toLowerCase()).toContain("has tenido of");
 
-    const withAgencies = candidateWith({
+    // Nuevo orden (Alex 19-jun): movil antes de OF, PERO si tiene OF agencias sigue formando parte del
+    // guion esencial, asi que se pregunta antes de proponer la llamada (no se pierde la pregunta).
+    const withOf = candidateWith({
       firstName: "Carla",
       age: 27,
       isAdultConfirmed: true,
-      hasOnlyFans: true,
-      worksWithAnotherAgency: false
+      deviceEligibility: "APPROVED",
+      hasOnlyFans: true
     });
-    expect(planFor({ candidate: withAgencies }).questionToAsk).toContain("que movil tienes");
+    expect((planFor({ candidate: withOf }).questionToAsk ?? "").toLowerCase()).toContain("otras agencias");
   });
 
   it("no pregunta por agencias si la candidata no tiene OF (salta al movil)", () => {
@@ -113,7 +115,8 @@ describe("responsePlanner no-repeat guard (mata el bucle degenerado de iteracion
       candidate: candidateWith({ firstName: "Carla" }),
       recentAgentMessages: ["Perfecto. Que edad tienes?", "Te leo. Que edad tienes?"]
     });
-    expect(plan.questionToAsk).toBe("Me puedes contar si has tenido OF alguna vez?");
+    // Tras saltar la edad (preguntada 2 veces), el siguiente slot del nuevo orden es el movil.
+    expect((plan.questionToAsk ?? "").toLowerCase()).toContain("que movil tienes");
   });
 
   it("asks nothing when every pending slot was already asked twice", () => {

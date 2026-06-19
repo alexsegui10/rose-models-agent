@@ -748,9 +748,12 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
 
 describe("ConversationEngine contextual decline (un 'no' es un dato, no un rechazo)", () => {
   it("treats 'No' answering the OnlyFans question as data and keeps qualifying", async () => {
+    // Orden nuevo (Alex 19-jun): tras nombre+edad el bot pregunta el MOVIL, y solo despues OF. Para
+    // que el "No" responda de verdad a la pregunta de OF, primero se da el movil y se llega a OF.
     const { engine, repository } = createEngineWithStub([
       stubUnderstanding({ intent: "CONFIRMS_INTEREST" }),
       stubUnderstanding({ intent: "PROVIDES_AGE", extractedData: { firstName: "Carla", age: 24 } }),
+      stubUnderstanding({ extractedData: { deviceEligibility: "APPROVED" } }),
       stubUnderstanding({ intent: "DECLINES" })
     ]);
 
@@ -759,22 +762,32 @@ describe("ConversationEngine contextual decline (un 'no' es un dato, no un recha
       profileVisibility: "PUBLIC",
       message: "Hola, quiero informacion"
     });
-    const first = await engine.handleIncomingMessage({
+    const afterAge = await engine.handleIncomingMessage({
       candidateId: opener.candidate.id,
       instagramUsername: "lead_no_contextual",
       message: "Soy Carla, tengo 24 anos"
     });
-    expect(first.response.toLowerCase()).toContain("has tenido of");
+    // Tras nombre+edad, lo primero que pregunta es el movil (no OF todavia).
+    expect(afterAge.response.toLowerCase()).toContain("que movil tienes");
+
+    const askOnlyFans = await engine.handleIncomingMessage({
+      candidateId: afterAge.candidate.id,
+      instagramUsername: "lead_no_contextual",
+      message: "tengo un iphone 13"
+    });
+    // Con el movil ya dado, AHORA si pregunta por OF: el "No" siguiente responde a esta pregunta.
+    expect(askOnlyFans.response.toLowerCase()).toContain("has tenido of");
 
     const second = await engine.handleIncomingMessage({
-      candidateId: first.candidate.id,
+      candidateId: askOnlyFans.candidate.id,
       instagramUsername: "lead_no_contextual",
       message: "No"
     });
 
+    // El "No" a la pregunta de OF es un DATO (no tiene OF), no un rechazo: no cierra y sigue cualificando.
     expect(second.candidate.currentState).not.toBe("CLOSED");
     expect(second.candidate.hasOnlyFans).toBe(false);
-    const stored = await repository.findCandidateById(first.candidate.id);
+    const stored = await repository.findCandidateById(second.candidate.id);
     expect(stored?.currentState).not.toBe("CLOSED");
   });
 

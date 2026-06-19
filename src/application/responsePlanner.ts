@@ -52,8 +52,9 @@ interface QualificationSlot {
   optional?: boolean;
 }
 
-// Orden canonico del guion real de Alex (analisis 2026-06-10): nombre -> edad -> OF -> agencias -> movil.
-// "En que ciudad estas" NO existe en el guion real; el pais queda como pregunta tardia opcional.
+// Orden del guion (decision de Alex 19-jun): nombre -> edad -> MOVIL -> OF -> agencias. El movil va ANTES
+// de OF para filtrar pronto por calidad de camara (movil no apto = no seguir). "En que ciudad estas" NO
+// existe en el guion real; el pais queda como pregunta tardia opcional.
 const qualificationSlots: QualificationSlot[] = [
   {
     id: "name",
@@ -66,6 +67,13 @@ const qualificationSlots: QualificationSlot[] = [
     question: "Que edad tienes?",
     alreadyAskedPattern: /que edad tienes|cuantos anos tienes/,
     isMissing: (candidate) => !candidate.age
+  },
+  {
+    // Movil ANTES de OF/agencias (decision de Alex 19-jun): filtra pronto por calidad de camara.
+    id: "device",
+    question: "Y que movil tienes? Es importante para la calidad de fotos y videos.",
+    alreadyAskedPattern: /que movil tienes/,
+    isMissing: (candidate) => candidate.deviceEligibility === "UNKNOWN"
   },
   {
     id: "onlyfans-or-experience",
@@ -84,12 +92,6 @@ const qualificationSlots: QualificationSlot[] = [
     // agencias es redundante (peticion de Alex 15-jun: "si dijo que no tiene experiencia, por que le
     // pregunta por agencias"). Para las inexpertas, el pitch proactivo cubre el "como trabajamos".
     isMissing: (candidate) => candidate.worksWithAnotherAgency === undefined && candidate.hasOnlyFans === true
-  },
-  {
-    id: "device",
-    question: "Y que movil tienes? Es importante para la calidad de fotos y videos.",
-    alreadyAskedPattern: /que movil tienes/,
-    isMissing: (candidate) => candidate.deviceEligibility === "UNKNOWN"
   },
   {
     id: "country",
@@ -304,12 +306,18 @@ function questionToAskFor(
  * del motor; se mantiene local para no acoplar capas (el motor importa del planner, no al reves).
  */
 function essentialScriptDone(candidate: Candidate): boolean {
+  // Con el movil ya temprano (antes de OF, orden de Alex 19-jun), la pregunta de agencias forma parte del
+  // guion esencial SOLO si tiene OF (a las que ya trabajan Alex les pregunta por agencias); si no tiene OF,
+  // agencias se omite y no bloquea. Asi el movil va antes de OF PERO la pregunta de agencias sigue siendo
+  // alcanzable antes de proponer la llamada (si no, al saber movil+OF se agendaba y agencias no se pedia).
+  const agenciesResolved = candidate.hasOnlyFans !== true || candidate.worksWithAnotherAgency !== undefined;
   return (
     Boolean(candidate.firstName) &&
     Boolean(candidate.age) &&
     candidate.isAdultConfirmed &&
     candidate.hasOnlyFans !== undefined &&
-    candidate.deviceEligibility !== "UNKNOWN"
+    candidate.deviceEligibility !== "UNKNOWN" &&
+    agenciesResolved
   );
 }
 

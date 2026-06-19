@@ -16,7 +16,7 @@ function createEngine() {
 }
 
 describe("agency pitch is delivered proactively when the candidate has no agency experience", () => {
-  it("asks for the phone first and only then explains how the agency works (order: OF -> agencies -> movil -> pitch)", async () => {
+  it("asks for the movil first and only then explains how the agency works (orden nuevo: edad -> movil -> OF -> pitch)", async () => {
     const { engine } = createEngine();
     const username = "no_agency_pitch";
     const opener = await engine.handleIncomingMessage({
@@ -27,25 +27,28 @@ describe("agency pitch is delivered proactively when the candidate has no agency
     const id = opener.candidate.id;
     await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "me llamo ana" });
     await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "tengo 25" });
-    await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "si he tenido of" });
-    const afterAgencies = await engine.handleIncomingMessage({
+    // Orden nuevo (Alex 19-jun): el movil se pregunta ANTES que OF. La candidata responde lo de OF
+    // (es inexperta: nunca ha tenido OF) MIENTRAS el movil sigue pendiente, asi que el guion esencial
+    // todavia NO esta completo (falta el movil) y el pitch NO debe salir aun.
+    const afterOnlyFans = await engine.handleIncomingMessage({
       candidateId: id,
       instagramUsername: username,
-      message: "no, nunca con agencias"
+      message: "no, nunca he tenido of"
     });
 
-    expect(afterAgencies.candidate.worksWithAnotherAgency).toBe(false);
-    // Decision de Alex 15-jun: el movil va ANTES del pitch. Aqui todavia no se explica como trabajamos.
-    expect(afterAgencies.response.toLowerCase()).toContain("movil");
-    expect(afterAgencies.response.toLowerCase()).not.toMatch(/chatters|cuentas de instagram/);
+    expect(afterOnlyFans.candidate.hasOnlyFans).toBe(false);
+    // El pitch va DESPUES del movil: aqui el bot todavia esta pidiendo el movil, sin explicar nada.
+    expect(afterOnlyFans.response.toLowerCase()).toContain("movil");
+    expect(afterOnlyFans.response.toLowerCase()).not.toMatch(/chatters|cuentas de instagram/);
 
-    // Tras dar el movil, AHORA si llega el pitch operativo (cuentas de Instagram + chatters) y se cierra
-    // invitando a preguntar.
+    // Al dar el movil se COMPLETA el guion esencial: AHORA si llega el pitch operativo (cuentas de
+    // Instagram + chatters) y se cierra invitando a preguntar.
     const result = await engine.handleIncomingMessage({
       candidateId: id,
       instagramUsername: username,
       message: "tengo un iphone 13"
     });
+    expect(result.candidate.deviceEligibility).not.toBe("UNKNOWN");
     expect(result.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
     expect(result.response.toLowerCase()).toContain("cualquier duda me preguntas");
 

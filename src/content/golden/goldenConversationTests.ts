@@ -170,9 +170,10 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     title: "Ya habia contestado una pregunta",
     initialCandidate: { profileVisibility: "PUBLIC", firstName: "Carla", age: 27 },
     stateBefore: "QUALIFYING",
-    // Orden canonico del guion real: con nombre y edad conocidos, el siguiente slot es OF, no "ciudad".
+    // Orden nuevo del guion (Alex 19-jun): con nombre y edad conocidos, el siguiente slot es el MOVIL
+    // (va antes de OF), nunca "ciudad" ni re-preguntar la edad.
     messages: ["Como te dije, tengo 27"],
-    responseMustIncludeAny: ["has tenido of", "experiencia"],
+    responseMustIncludeAny: ["que movil tienes", "movil"],
     responseMustNotInclude: ["que edad tienes"]
   },
   {
@@ -180,8 +181,10 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     title: "Lead argentina vuelve despues de varios dias",
     initialCandidate: { profileVisibility: "PUBLIC", firstName: "Luz", age: 31, city: "Buenos Aires", country: "Argentina" },
     stateBefore: "QUALIFYING",
+    // Orden nuevo (Alex 19-jun): con nombre+edad ya conocidos, retoma el guion por el MOVIL (antes de
+    // OF), sin reiniciar la conversacion de cero.
     messages: ["Perdona, recien veo tu mensaje, estuve a full estos dias"],
-    responseMustIncludeAny: ["has tenido of", "experiencia", "disponibilidad"],
+    responseMustIncludeAny: ["que movil tienes", "movil"],
     responseMustNotInclude: ["empezamos de cero"]
   },
   {
@@ -203,7 +206,9 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     messages: ["Tengo 24 y soy de Madrid"],
     expectedTransition: "QUALIFYING",
     expectedExtractedFields: { age: 24, city: "Madrid", country: "España" },
-    responseMustIncludeAny: ["has tenido of", "experiencia"],
+    // Orden nuevo (Alex 19-jun): tras extraer la edad (con el nombre ya conocido) el siguiente slot es
+    // el MOVIL, antes de OF; nunca se re-pregunta la edad.
+    responseMustIncludeAny: ["que movil tienes", "movil"],
     responseMustNotInclude: ["que edad tienes"]
   },
   {

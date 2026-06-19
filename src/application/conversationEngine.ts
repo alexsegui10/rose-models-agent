@@ -2343,12 +2343,16 @@ function agencyExplanationBeat(
  * jamas debe "completar el guion" y recibir el pitch (invariante 2).
  */
 function essentialScriptComplete(candidate: Candidate): boolean {
+  // Espejo EXACTO de essentialScriptDone (responsePlanner): si tiene OF, agencias forma parte del guion
+  // esencial; si no, se omite. Mantener sincronizadas las dos (el movil va antes de OF, Alex 19-jun).
+  const agenciesResolved = candidate.hasOnlyFans !== true || candidate.worksWithAnotherAgency !== undefined;
   return (
     Boolean(candidate.firstName) &&
     Boolean(candidate.age) &&
     candidate.isAdultConfirmed &&
     candidate.hasOnlyFans !== undefined &&
-    candidate.deviceEligibility !== "UNKNOWN"
+    candidate.deviceEligibility !== "UNKNOWN" &&
+    agenciesResolved
   );
 }
 

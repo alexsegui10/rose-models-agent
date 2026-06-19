@@ -111,7 +111,7 @@ describe("ConversationEngine never re-asks the question the candidate just answe
     return { engine, repository, seeded };
   }
 
-  it("advances name -> age -> of -> agencias consuming each bare answer", async () => {
+  it("advances name -> age -> movil -> of consuming each bare answer (orden nuevo: movil antes de OF)", async () => {
     const { engine, seeded } = await seededQualifying("lead_respuestas_peladas");
 
     const askName = await engine.handleIncomingMessage({
@@ -130,22 +130,33 @@ describe("ConversationEngine never re-asks the question the candidate just answe
     expect(askAge.response.toLowerCase()).not.toContain("como te llamas");
     expect(askAge.response.toLowerCase()).toContain("que edad tienes");
 
-    const askOnlyFans = await engine.handleIncomingMessage({
+    // Orden nuevo (Alex 19-jun): tras la edad viene el MOVIL, antes que OF.
+    const askDevice = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: "lead_respuestas_peladas",
       message: "27"
     });
-    expect(askOnlyFans.candidate.age).toBe(27);
-    expect(askOnlyFans.response.toLowerCase()).not.toContain("que edad tienes");
+    expect(askDevice.candidate.age).toBe(27);
+    expect(askDevice.response.toLowerCase()).not.toContain("que edad tienes");
+    expect(askDevice.response.toLowerCase()).toContain("que movil tienes");
+
+    // Dado el movil, el bot consume el dato (no re-pregunta el movil) y avanza a OF.
+    const askOnlyFans = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_respuestas_peladas",
+      message: "tengo un samsung galaxy s23"
+    });
+    expect(askOnlyFans.candidate.deviceEligibility).not.toBe("UNKNOWN");
+    expect(askOnlyFans.response.toLowerCase()).not.toContain("que movil tienes");
     expect(askOnlyFans.response.toLowerCase()).toContain("has tenido of");
 
-    const askAgencies = await engine.handleIncomingMessage({
+    // Respuesta pelada a OF: se consume (hasOnlyFans queda fijado) y NO se vuelve a preguntar OF.
+    const afterOnlyFans = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: "lead_respuestas_peladas",
       message: "Es la primera vez que uso only"
     });
-    expect(askAgencies.candidate.hasOnlyFans).toBe(true);
-    expect(askAgencies.response.toLowerCase()).not.toContain("has tenido of");
-    expect(askAgencies.response.toLowerCase()).toContain("otras agencias");
+    expect(afterOnlyFans.candidate.hasOnlyFans).toBe(true);
+    expect(afterOnlyFans.response.toLowerCase()).not.toContain("has tenido of");
   });
 });
