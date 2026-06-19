@@ -15,22 +15,24 @@
  * Todo lo exportado lleva prefijo `call`/`Call` a proposito: este modulo es SOLO del canal de voz y no
  * debe importarse jamas desde el pipeline de chat/DM (el nombre lo deja claro y evita autocompletados).
  *
- * El % indicado es SIEMPRE el que se queda la modelo (la agencia se queda el resto).
+ * Los numeros de la escalera son SIEMPRE el % que se queda la AGENCIA (la modelo se queda el resto:
+ * 30/35/40). Coherente con la politica del chat (70 agencia / 30 modelo); en la llamada la agencia puede
+ * CEDER del 70 al 65 y, como mucho, al 60 (la modelo sube a 35 o 40). Confirmado por Alex (19-jun).
  */
 
-/** Porcentajes (para la modelo) de cada escalon, de la oferta inicial al suelo. No editar sin OK de Alex. */
+/** % que se queda la AGENCIA en cada escalon, de la oferta inicial (70) al suelo (60). No editar sin OK de Alex. */
 export const CALL_REVENUE_SHARE_LADDER = [70, 65, 60] as const;
 
-/** Suelo absoluto: por debajo de este % para la modelo no se negocia jamas en la llamada. */
+/** Suelo absoluto de la AGENCIA: no cede por debajo de este % en la llamada (la modelo no pasa del 40). */
 export const CALL_REVENUE_SHARE_FLOOR = 60;
 
 /** Escalon de la negociacion: 0 = oferta inicial (70), 1 = primera concesion (65), 2 = suelo (60). */
 export type CallRevenueShareStep = 0 | 1 | 2;
 
 export interface CallRevenueShareOffer {
-  /** % que se queda la modelo en este escalon (70 / 65 / 60). */
+  /** % que se queda la modelo en este escalon (30 / 35 / 40). */
   modelShare: number;
-  /** % que se queda la agencia (100 - modelShare). */
+  /** % que se queda la agencia en este escalon (70 / 65 / 60). */
   agencyShare: number;
   /** Escalon al que corresponde la oferta. */
   step: CallRevenueShareStep;
@@ -42,10 +44,11 @@ const LAST_STEP: CallRevenueShareStep = (CALL_REVENUE_SHARE_LADDER.length - 1) a
 
 /** Devuelve la oferta de reparto correspondiente a un escalon de la escalera. */
 export function callRevenueShareOfferForStep(step: CallRevenueShareStep): CallRevenueShareOffer {
-  const modelShare = CALL_REVENUE_SHARE_LADDER[step];
+  // La escalera es el % de la AGENCIA; la modelo se queda el resto (70->30, 65->35, 60->40).
+  const agencyShare = CALL_REVENUE_SHARE_LADDER[step];
   return {
-    modelShare,
-    agencyShare: 100 - modelShare,
+    modelShare: 100 - agencyShare,
+    agencyShare,
     step,
     isFloor: step >= LAST_STEP
   };
@@ -62,7 +65,7 @@ export function nextCallRevenueShareStep(currentStep: CallRevenueShareStep): Cal
   return (currentStep + 1) as CallRevenueShareStep;
 }
 
-/** Oferta inicial de la llamada (lo que se dice de entrada / si pregunta): 70 para la modelo. */
+/** Oferta inicial de la llamada (lo que se dice de entrada / si pregunta): 70 para la AGENCIA (30 modelo). */
 export function initialCallRevenueShareOffer(): CallRevenueShareOffer {
   return callRevenueShareOfferForStep(0);
 }

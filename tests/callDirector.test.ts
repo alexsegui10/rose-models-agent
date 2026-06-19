@@ -39,8 +39,8 @@ describe("director de la llamada", () => {
   it("al introducir MONEY adjunta la oferta inicial determinista 70/30", () => {
     const { directives } = run(["none", ...Array(8).fill("follows-along")] as CallCandidateSignal[]);
     const money = directives.find((d) => d.type === "COVER_STAGE" && d.stageId === "MONEY");
-    expect(money?.shareOffer?.modelShare).toBe(70);
-    expect(money?.shareOffer?.agencyShare).toBe(30);
+    expect(money?.shareOffer?.agencyShare).toBe(70);
+    expect(money?.shareOffer?.modelShare).toBe(30);
   });
 
   it("pregunta cubierta -> responde del conocimiento sin avanzar la agenda", () => {
@@ -86,7 +86,7 @@ describe("director de la llamada", () => {
     const decision = decideCallDirective({ state, signal: "complains-about-share" });
     expect(decision.directive.type).toBe("COVER_STAGE");
     expect(decision.directive.stageId).toBe("MONEY");
-    expect(decision.directive.shareOffer?.modelShare).toBe(70);
+    expect(decision.directive.shareOffer?.agencyShare).toBe(70);
     expect(decision.nextState.coveredStages).toContain("MONEY");
   });
 
@@ -105,12 +105,12 @@ describe("director de la llamada", () => {
 
     const first = decideCallDirective({ state, signal: "complains-about-share" });
     expect(first.directive.type).toBe("CONCEDE_SHARE");
-    expect(first.directive.shareOffer?.modelShare).toBe(65);
+    expect(first.directive.shareOffer?.agencyShare).toBe(65);
     state = first.nextState;
 
     const second = decideCallDirective({ state, signal: "complains-about-share" });
     expect(second.directive.type).toBe("CONCEDE_SHARE");
-    expect(second.directive.shareOffer?.modelShare).toBe(60);
+    expect(second.directive.shareOffer?.agencyShare).toBe(60);
     expect(second.directive.shareOffer?.isFloor).toBe(true);
     state = second.nextState;
 
