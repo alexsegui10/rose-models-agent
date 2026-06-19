@@ -8,6 +8,13 @@ export interface FactualValidationResult {
 }
 
 const forbiddenIncomePatterns = [/ingresos garantizados/i, /ganancias garantizadas/i, /te garantizamos/i, /vas a ganar/i];
+// Importe de pago/salario (400usd, 600 euros, $500, 500 dolares...): el bot NUNCA da cifras de pago de
+// forma proactiva. Los detalles de pago van a la llamada y el % solo se da si preguntan la cifra exacta
+// (filterCommercialAnswerFacts). Esto caza el importe pelado que forbiddenIncomePatterns no veia (sin la
+// palabra "garantizado"), justo donde Alex respondio mal en la realidad (400/800usd). Ancla en la moneda
+// para no confundir un modelo de movil o una hora con dinero.
+const forbiddenMoneyPattern =
+  /\d[\d.,]*\s?(?:usd|u\$s|d[oó]lar(?:es)?|euros?|eur|€|\$)|(?:usd|u\$s|d[oó]lar(?:es)?|euros?|eur|€|\$)\s?\d/i;
 const serviceClaims = [
   { pattern: /fotograf/i, label: "fotografia" },
   { pattern: /viajes/i, label: "viajes" },
@@ -39,6 +46,10 @@ export function validateFactualResponse(response: string, plan: ResponsePlan): F
 
   for (const pattern of forbiddenIncomePatterns) {
     if (pattern.test(response)) reasons.push("La respuesta promete ingresos o resultados economicos.");
+  }
+
+  if (forbiddenMoneyPattern.test(response)) {
+    reasons.push("La respuesta menciona un importe de pago/salario no autorizado (los importes van a la llamada).");
   }
 
   if (/contrato|clausula|cláusula|permanencia/i.test(response) && !hasAllowedContractClaim(plan)) {
