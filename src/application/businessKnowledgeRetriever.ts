@@ -203,6 +203,27 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("agency-responsibilities", "instagram", "operations");
   if (/\b(pruebas|demostrar|demuestren|demuestra|resultados de otras|otras modelos|garantias)\b/.test(message))
     tags.push("distrust", "objection");
+  // PETICION DE PRUEBAS sensibles (capturas del panel de ganancias, backend, "muestrame cuentas que
+  // llevais"): es material/datos sensibles. Decision de Alex 19-jun: SIEMPRE escalar a el (el bot se para
+  // y le llega un WhatsApp); el bot nunca inventa ni promete capturas. -> tag human-intervention.
+  const proofRequest =
+    /\b(capturas?|pantallazos?|panel de ganancias|backend|acceso real)\b/.test(message) ||
+    /\b(muestrame|muestrenme|ensename|ensenenme|quiero ver|puedo ver|me ensenas|me muestras)\b[^.!?]{0,40}\b(cuentas?|ganancias?|resultados?|modelos? que (?:llev|manej|gestion)|pruebas?)\b/.test(
+      message
+    );
+  if (proofRequest) tags.push("proof-request", "human-intervention", "distrust");
+  // MECANICA DEL DINERO / TESORERIA ("eres tu la que recibe los pagos?", "el dinero pasa por vosotros?"):
+  // el dinero lo controla la modelo (cobra ella en su cuenta via OF y abona a la agencia), pero confirmarlo
+  // por chat es justo donde Alex no quiere que el bot improvise. Decision de Alex 19-jun: escalar a el (para
+  // el bot + WhatsApp). NO confundir con "cuanto/cuando me pagais" (eso sigue su ruta comercial normal).
+  const paymentControl =
+    /\b(quien|tu|vosotros|ustedes|la agencia)\b[^.!?]{0,25}\b(recib\w+|cobr\w+|gestion\w+|maneja\w*)\b[^.!?]{0,20}\b(dinero|pago|pagos|cobros|plata|pasta)\b/.test(
+      message
+    ) ||
+    /\b(el dinero pasa por|donde (?:llega|va) (?:el )?dinero|a quien le? llega (?:el )?dinero|recib\w+ vosotros (?:el )?dinero)\b/.test(
+      message
+    );
+  if (paymentControl) tags.push("payment-control", "human-intervention");
   if (/\b(telegram|twitter|videollamadas|otras redes)\b/.test(message)) tags.push("traffic", "telegram", "twitter", "services");
 
   if (input.intent === "ASKS_ABOUT_PERCENTAGE") tags.push("percentage", "revenue-share");
