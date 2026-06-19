@@ -883,21 +883,7 @@ export default function Home() {
             type="button"
             onClick={() => setActiveTab("CHAT")}
           >
-            Chat de prueba
-          </button>
-          <button
-            className={activeTab === "EVALUACION" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("EVALUACION")}
-          >
-            Evaluacion
-          </button>
-          <button
-            className={activeTab === "AB" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("AB")}
-          >
-            A/B de modelos
+            Chat
           </button>
         </nav>
         <button
@@ -1427,11 +1413,11 @@ export default function Home() {
       {activeTab === "CHAT" ? (
         <section className="panel">
           <header className="chat2-head">
-            <h2 className="chat2-title">Chat de prueba 🧪</h2>
+            <h2 className="chat2-title">Chat</h2>
             <p className="chat2-subtitle">
-              Es una <strong>prueba local</strong>: aquí escribes TÚ haciéndote pasar por una candidata para ver cómo responde el
-              bot. <strong>No se envía nada a Instagram.</strong> Las conversaciones reales llegan solas al CRM, y desde la ficha
-              de cada candidata puedes responder a mano (eso sí va a Instagram cuando esté conectado).
+              Banco de pruebas del bot: escribe un mensaje de ejemplo (un mensaje entrante) y mira cómo respondería el bot.{" "}
+              <strong>No se envía nada a Instagram.</strong> Las conversaciones reales llegan solas al CRM, y desde la ficha de
+              cada candidata respondes a mano (eso sí va a Instagram cuando esté conectado).
             </p>
           </header>
           <div className="chat2-grid">
@@ -1558,7 +1544,7 @@ export default function Home() {
                     className="chat2-textarea"
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
-                    placeholder="Escribe como candidata…"
+                    placeholder="Escribe un mensaje de ejemplo…"
                   />
                   <button className="chat2-btn-send" disabled={loading || !message.trim()} type="submit">
                     {loading ? "Enviando…" : "Enviar"}
