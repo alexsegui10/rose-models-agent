@@ -19,7 +19,7 @@ const phonePatterns: readonly RegExp[] = [
 // Incluye cantidades/periodos ("14 mil seguidores", "15 dias libres", "3 meses"): sin esto, una
 // adulta que presume de seguidores ("no tengo 14 mil seguidores") se leia como edad 14 -> CLOSED.
 const ageCountNounLookahead =
-  "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?|a\\b))";
+  "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|reels?|tatuajes?|publicacion(?:es)?|pedidos?|kilos?|pesos?|euros?|dolares?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?|a\\b))";
 // La segunda rama solo acepta "anos"/"años" explicito: "a" suelta es la preposicion castellana ("de 9
 // a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
 // menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
@@ -48,7 +48,7 @@ const agePatternGlobal = new RegExp(agePattern.source, "gi");
 // NO se lea como edad 10 y cierre a una adulta. Un "cumplir N anos" SIN ese contexto ("voy a cumplir 18
 // anos") SI es edad y se trata como menor que aun no los tiene. Reusa el criterio de duracion del loop.
 const notAgeCountLookahead =
-  "(?!\\s*(?:mil(?:es)?|seguidor[ae]s?|cuentas?|euros?|dolares?|pesos?|fotos?|videos?|reels?|pedidos?|kilos?))(?!\\s*anos?\\s+(?:como|de|en|trabajand|haciend|dedicad|currand|junt|casad|sali|novi|relacion|pareja))";
+  "(?!\\s*(?:mil(?:es)?|seguidor[ae]s?|cuentas?|euros?|dolares?|pesos?|fotos?|videos?|reels?|tatuajes?|publicacion(?:es)?|pedidos?|kilos?))(?!\\s*anos?\\s+(?:como|de|en|trabajand|haciend|dedicad|currand|junt|casad|sali|novi|relacion|pareja))";
 const futureTimeMarker =
   "voy a|vas a|va a|vamos a|van a|cuando|pronto|manana|proxim\\w+|a punto de|en\\s+(?:\\d+|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|pocos?|unos?|unas?)\\s+(?:dias?|semanas?|meses?)|(?:la semana|el mes|el ano|el dia) que viene|este (?:finde|mes|lunes|martes|miercoles|jueves|viernes|sabado|domingo)|el (?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)";
 function notYetTurnsAge(normalized: string): number | null {
@@ -95,7 +95,7 @@ function declaredMinorAge(normalized: string): number | null {
   // "(aun|todavia) no tengo N" / "no tengo N (todavia|aun)" con N<=18 -> casi N, es menor (~N-1).
   // Se excluyen contables/dinero para no leer "no tengo 200 euros" como edad.
   const notYet = normalized.match(
-    /\bno tengo\s+(\d{1,2})\b(?!\s*(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|euros?|dolares?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?))/
+    /\bno tengo\s+(\d{1,2})\b(?!\s*(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|reels?|tatuajes?|publicacion(?:es)?|pedidos?|kilos?|euros?|dolares?|pesos?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?))/
   );
   if (notYet) {
     const declared = Number(notYet[1]);
@@ -340,6 +340,10 @@ const bareAgeMessagePattern = /^\s*(?:edad\s*:?\s*)?(\d{1,2})\s*(?:anos|años|an
 const bareYesPattern = /^\s*(si+(?:\s*si+)*|sip|claro|por supuesto|asi es|correcto|afirmativo|exacto|obvio|obviamente)\b/;
 // El "no" se admite doblado/alargado ("nono", "no no", "noo") igual que el "si" afirmativo.
 const bareNoPattern = /^\s*(no+(?:\s*no+)*|nop|nunca|jamas|negativo|para nada|que va)\b/;
+// Negacion CLARA dentro de la frase: "claro que no", "pues no", "no nunca", "que va". bareYesPattern casa
+// "claro"/"obvio" al inicio, asi que "claro que no, nunca tuve" se leia como SI: esta negacion tiene
+// prioridad sobre el si pelado para no invertir la respuesta (fallo real de la revision 19-jun).
+const clearNegationPattern = /\bque no\b|\bpues no\b|\bclaro que no\b|\bnunca\b|\bjamas\b|\bpara nada\b|\bque va\b|^\s*no\b/;
 
 // Fillers, saludos y dias de la semana que NUNCA son un nombre aunque el agente lo pida.
 const nameRejectWords = new Set([
@@ -476,16 +480,17 @@ export function extractDeterministicUnderstanding(
 
   // Si/no pelado a la pregunta de OF o de agencias: consume ese slot concreto.
   if (extractedData.hasOnlyFans === undefined && agentAskedOnlyFans) {
-    if (bareYesPattern.test(normalized)) extractedData.hasOnlyFans = true;
-    else if (bareNoPattern.test(normalized)) extractedData.hasOnlyFans = false;
+    // La negacion (pelada o clara "claro que no") se evalua ANTES que el si pelado para no invertir.
+    if (bareNoPattern.test(normalized) || clearNegationPattern.test(normalized)) extractedData.hasOnlyFans = false;
+    else if (bareYesPattern.test(normalized)) extractedData.hasOnlyFans = true;
     // "Tengo dos", "tengo una cuenta activa", "ya tengo" como respuesta a "¿tienes OF?" = SI lo tiene,
     // aunque no diga la palabra "of" (replay 15-jun: se repreguntaba OF en bucle). Excluye "tengo que".
     else if (/\b(?:ya\s+)?tengo\b/.test(normalized) && !/\bno tengo\b/.test(normalized) && !/\btengo que\b/.test(normalized))
       extractedData.hasOnlyFans = true;
   }
   if (extractedData.worksWithAnotherAgency === undefined && agentAskedAgencies) {
-    if (bareYesPattern.test(normalized)) extractedData.worksWithAnotherAgency = true;
-    else if (bareNoPattern.test(normalized)) extractedData.worksWithAnotherAgency = false;
+    if (bareNoPattern.test(normalized) || clearNegationPattern.test(normalized)) extractedData.worksWithAnotherAgency = false;
+    else if (bareYesPattern.test(normalized)) extractedData.worksWithAnotherAgency = true;
   }
 
   const deviceType = deviceTypeForDescription(normalized);
