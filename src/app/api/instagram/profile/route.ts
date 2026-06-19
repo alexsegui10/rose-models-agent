@@ -31,7 +31,9 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   // Modo diagnóstico (?debug=1): sin caché, expone el MOTIVO si no se pudo traer el perfil y si hay token.
   // No revela el token (solo si está presente o no). Útil para ver por qué no salen foto/@.
-  if (params.get("debug") === "1") {
+  // Gateado tras una env explicita: sin INSTAGRAM_PROFILE_DEBUG=on, el modo debug NO expone metadatos de
+  // configuracion (token presente, baseUrl...) y se cae al flujo normal. Evita filtrar config en prod.
+  if (params.get("debug") === "1" && process.env.INSTAGRAM_PROFILE_DEBUG === "on") {
     const config = getInstagramConfig();
     const result = await fetchInstagramProfileResult(id, config);
     return NextResponse.json({

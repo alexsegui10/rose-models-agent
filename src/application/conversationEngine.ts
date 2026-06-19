@@ -496,6 +496,16 @@ export class ConversationEngine {
       return null;
     }
 
+    // Red de seguridad ANTI-CARRERA (invariantes 1 y 4): el gate uso el candidato cargado al inicio del
+    // turno; entre medias (p.ej. durante la llamada al modelo) Alex pudo tomar el control manual / pausar
+    // via el CRM. Releemos fresco y, si lo hizo, ABORTAMOS el auto-agendado (devolvemos null): el turno
+    // sigue su curso normal y el guard de envio (canAutomationSend) lo bloqueara, sin pisar el control de
+    // Alex ni reactivar la automatizacion (applyCallScheduled, que resetea los flags, no llega a correr).
+    const latest = await this.dependencies.repository.findCandidateById(candidate.id);
+    if (latest && (latest.manualControlActive || latest.automationPaused)) {
+      return null;
+    }
+
     const bookedStarts = await this.dependencies.repository.listBookedCallStarts();
     if (conflictsWithBooked(parsed.startMsUtc, bookedStarts)) {
       // Hueco pillado: NO se cambia de estado; se pide otra hora. El mensaje entrante ya quedo guardado.
@@ -1278,7 +1288,11 @@ function decideNextState(
     return null;
   }
 
-  if (understanding.intent === "DECLINES") {
+  // Invariante 4: una candidata en HUMAN_INTERVENTION_REQUIRED solo sale por decision humana de Alex. Un
+  // DECLINES no debe auto-cerrarla desde ahi (la saca de la revision sin que Alex decida); en el resto de
+  // estados un rechazo real si cierra. (resolveContextualDecline ya neutraliza el "no" que solo responde a
+  // un slot, asi que aqui llegan rechazos genuinos.)
+  if (understanding.intent === "DECLINES" && candidate.currentState !== "HUMAN_INTERVENTION_REQUIRED") {
     return "CLOSED";
   }
 
@@ -1816,6 +1830,10 @@ function applyCallScheduled(
     currentState: "CALL_SCHEDULED",
     scheduledCallSlot: options.labelEs ?? existing.scheduledCallSlot,
     scheduledCallStartMs: options.startMsUtc ?? existing.scheduledCallStartMs,
+    // Reagendar concede un ciclo NUEVO de reintentos: si esta cita vuelve a quedar sin respuesta, el bot
+    // de voz puede volver a intentar hasta 3 veces (sin esto, una candidata reagendada tras 3 fallos ya
+    // no tendria reintentos).
+    callAttempts: 0,
     // Coherencia con APPROVE/PROFILE_FIT: una accion que avanza el funnel reanuda la automatizacion;
     // si no, el bot enmudeceria ante el siguiente mensaje de la candidata.
     manualControlActive: false,

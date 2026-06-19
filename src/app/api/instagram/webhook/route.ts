@@ -87,12 +87,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     // DIAGNOSTICO TEMPORAL: ni el secreto ni el cuerpo se filtran — solo longitudes y huellas no reversibles.
     console.warn("[ig-webhook] SKIP firma invalida — DIAG", {
       headerPresente: Boolean(sigHeader),
-      recibida: sigHeader ? sigHeader.slice(0, 20) : "-",
       bodyByteLen: buf.byteLength,
       bodyStrLen: rawBody.length,
       contentLength: request.headers.get("content-length"),
-      secretFingerprints: config.appSecretCandidates.map(secretFingerprint),
-      secretLens: config.appSecretCandidates.map((s) => s.length)
+      // Huellas no reversibles para comparar secretos sin filtrarlos. No se loguea el prefijo de la firma
+      // (recibida) ni la longitud de los secretos (secretLens), que daban pistas reaprovechables.
+      secretFingerprints: config.appSecretCandidates.map(secretFingerprint)
     });
     return new NextResponse("Invalid signature", { status: 403 });
   }

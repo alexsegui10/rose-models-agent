@@ -82,13 +82,16 @@ function resolveArgentinaDate(message: string, now: Date): { year: number; month
   const baseD = argentinaNow.getUTCDate();
   const todayUtcMidnight = Date.UTC(baseY, baseM, baseD);
 
+  // "de/por la manana" es la FRANJA del dia (8 de la manana), NO el dia "manana" (tomorrow): se elimina
+  // antes de detectar el marcador de dia para no agendar tomorrow cuando dicen "a las 8 de la manana".
+  const dayMessage = message.replace(/\b(?:de|por) la manana\b/g, " ");
   let offsetDays = 0;
-  if (/\bpasado\s+manana\b/.test(message)) {
+  if (/\bpasado\s+manana\b/.test(dayMessage)) {
     offsetDays = 2;
-  } else if (/\bmanana\b/.test(message)) {
+  } else if (/\bmanana\b/.test(dayMessage)) {
     offsetDays = 1;
   } else {
-    const weekdayIndex = WEEKDAY_NAMES.findIndex((name) => new RegExp(`\\b${name}\\b`).test(message));
+    const weekdayIndex = WEEKDAY_NAMES.findIndex((name) => new RegExp(`\\b${name}\\b`).test(dayMessage));
     if (weekdayIndex >= 0) {
       const todayWeekday = new Date(todayUtcMidnight).getUTCDay();
       // Próxima ocurrencia ESTRICTAMENTE futura de ese día de la semana (1..7 días adelante).
@@ -138,8 +141,14 @@ function parseArgentinaHour(message: string): { hour: number; minute: number } |
 // Lleva una hora 1-12 a formato 24h según el meridiano explícito (am/pm) o la franja del día ("tarde",
 // "noche", "mediodia"). Si la hora ya es 13-23 o no hay pista, se respeta tal cual.
 function applyMeridiem(hour: number, meridiem: string | undefined, context: string): number {
+  // "12 de la noche/madrugada" es MEDIANOCHE (00:00), no mediodia; "12 del mediodia/tarde" es 12:00.
+  if (hour === 12) {
+    if (/\b(de la noche|por la noche|de la madrugada|por la madrugada)\b/.test(context)) return 0;
+    if (meridiem === "am") return 0;
+    return 12;
+  }
   if (meridiem === "pm" && hour < 12) return hour + 12;
-  if (meridiem === "am") return hour === 12 ? 0 : hour;
+  if (meridiem === "am") return hour;
   // Sin meridiano explícito: usar la franja del día si la hay (6 de la tarde -> 18).
   if (hour >= 1 && hour <= 11) {
     if (/\b(de la tarde|de la noche|por la tarde|por la noche)\b/.test(context)) return hour + 12;
@@ -171,6 +180,11 @@ export function parseProposedCallTime(message: string, now: Date): { startMsUtc:
   const date = resolveArgentinaDate(normalized, now);
   // Instante UTC de esa hora de pared argentina: AR menos su offset (-3) => AR + 3h.
   const startMsUtc = Date.UTC(date.year, date.month, date.day, time.hour - ARGENTINA_UTC_OFFSET_HOURS, time.minute);
+  // No agendar en el PASADO: "hoy a las 10" cuando ya son las 11 (sin marcador de dia futuro) es ambiguo;
+  // devolvemos null para que el bot vuelva a pedir la hora en vez de agendar una cita ya pasada.
+  if (startMsUtc <= now.getTime()) {
+    return null;
+  }
   const onDate = new Date(Date.UTC(date.year, date.month, date.day));
   const spain = argentinaToSpainClock(time.hour, time.minute, onDate);
   // El label se expresa en hora de España (la que vive Alex/el bot): el día también es el de España en ese
