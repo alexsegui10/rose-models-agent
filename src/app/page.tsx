@@ -408,6 +408,42 @@ export default function Home() {
     }
   }
 
+  // Dispara la llamada saliente por WhatsApp (ElevenLabs). Pide confirmacion (es una accion real con coste).
+  function startCall(candidate: Candidate) {
+    if (!candidate.phone?.trim()) {
+      setCrmNotice(`@${candidate.instagramUsername} no tiene número de WhatsApp guardado todavía.`);
+      return;
+    }
+    openModal({
+      title: "¿Llamar por WhatsApp?",
+      body: `Se enviará a ${candidate.firstName?.trim() || "la candidata"} una solicitud de permiso por WhatsApp; el bot la llamará en cuanto la acepte.`,
+      confirmLabel: "Llamar",
+      onConfirm: () => void doStartCall(candidate)
+    });
+  }
+
+  async function doStartCall(candidate: Candidate) {
+    try {
+      const response = await fetch("/api/call/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId: candidate.id })
+      });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!response.ok) {
+        setCrmNotice(
+          response.status === 503
+            ? "Las llamadas aún no están configuradas (faltan las claves de ElevenLabs en Vercel)."
+            : `No se pudo iniciar la llamada (${response.status}). ${data.error ?? ""}`.trim()
+        );
+        return;
+      }
+      setCrmNotice(`📞 Solicitud de llamada enviada a @${candidate.instagramUsername}. El bot la llamará cuando acepte.`);
+    } catch (error) {
+      setCrmNotice(`No se pudo iniciar la llamada: ${error instanceof Error ? error.message : "error de red"}.`);
+    }
+  }
+
   async function importConversations() {
     const response = await fetch("/api/simulator/conversation-import", {
       method: "POST",
@@ -2582,6 +2618,16 @@ export default function Home() {
 
               {drawerTab === "llamada" ? (
                 <div className="drawer-call">
+                  {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
+                    <button
+                      type="button"
+                      className="btn-xs accent drawer-call-btn"
+                      onClick={() => startCall(drawerCandidate)}
+                      title="Lanza la llamada por WhatsApp (ElevenLabs le pide permiso y la llama al aceptar)"
+                    >
+                      📞 Llamar por WhatsApp
+                    </button>
+                  ) : null}
                   {drawerCandidate.lastCall ? (
                     <>
                       <div className="call-stats">
