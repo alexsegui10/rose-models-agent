@@ -275,6 +275,35 @@ function runRepositoryContract(getRepos: () => RepositorySet) {
       expect(found?.lastMessageAt?.getTime()).toBe(lastMessageAt.getTime());
     });
 
+    it("persiste y recupera lastCall (resultado de la llamada de voz) en el roundtrip", async () => {
+      const { candidateRepository } = getRepos();
+      const candidate = buildCandidate({
+        currentState: "CALL_COMPLETED",
+        lastCall: {
+          result: "COMPLETED",
+          durationSec: 312,
+          negotiatedModelShare: 65,
+          summary: "Negociamos al 65, acepta.",
+          transcript: [
+            { role: "agent", content: "Hola, te llamo de Rose Models" },
+            { role: "candidate", content: "Vale, cuéntame" }
+          ],
+          endedAt: new Date(Date.now() - 120_000).toISOString()
+        }
+      });
+
+      await candidateRepository.saveCandidate(candidate);
+      const found = await candidateRepository.findCandidateById(candidate.id);
+
+      expect(found?.lastCall).toBeDefined();
+      expect(found?.lastCall?.result).toBe("COMPLETED");
+      expect(found?.lastCall?.durationSec).toBe(312);
+      expect(found?.lastCall?.negotiatedModelShare).toBe(65);
+      expect(found?.lastCall?.summary).toBe("Negociamos al 65, acepta.");
+      expect(found?.lastCall?.transcript).toHaveLength(2);
+      expect(found?.lastCall?.endedAt).toBe(candidate.lastCall?.endedAt);
+    });
+
     it("findCandidateById devuelve null para un id desconocido o con formato no-uuid", async () => {
       const { candidateRepository } = getRepos();
       expect(await candidateRepository.findCandidateById(randomUUID())).toBeNull();

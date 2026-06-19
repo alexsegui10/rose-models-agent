@@ -635,16 +635,17 @@ export default function Home() {
   // Responder a mano DESDE la ficha, como en un chat (no popup). Se envía a Instagram si está conectado
   // y recarga la conversación de la ficha para ver el mensaje al instante.
   async function sendDrawerReply() {
-    if (!drawerCandidate || !drawerReply.trim()) return;
+    if (!drawerCandidate || !drawerReply.trim() || loading) return;
     const candidate = drawerCandidate;
     const text = drawerReply.trim();
     setDrawerReply("");
-    await doSendManualReply(candidate, text);
-    // Al responder a mano, Alex toma el control: el bot se pausa hasta que lo reactive.
-    if (!(candidate.manualControlActive || candidate.automationPaused)) {
-      await setBotPaused(candidate, true);
-    }
+    setLoading(true); // da feedback en el boton y pausa el auto-refresco mientras se envia
     try {
+      await doSendManualReply(candidate, text);
+      // Al responder a mano, Alex toma el control: el bot se pausa hasta que lo reactive.
+      if (!(candidate.manualControlActive || candidate.automationPaused)) {
+        await setBotPaused(candidate, true);
+      }
       const response = await fetch(`/api/candidates/${candidate.id}/conversation`);
       if (response.ok) {
         const data = (await response.json()) as { messages: ConversationMessage[]; transitions: StateTransition[] };
@@ -653,6 +654,8 @@ export default function Home() {
       }
     } catch {
       /* silencioso */
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -679,15 +682,16 @@ export default function Home() {
   // Responder a la candidata seleccionada DESDE la bandeja (Mensajes), como en Instagram: va a su Instagram
   // y el bot se pausa (Alex toma el control). Recarga la conversacion al instante.
   async function sendChatReply() {
-    if (!selectedCandidate || !message.trim()) return;
+    if (!selectedCandidate || !message.trim() || loading) return;
     const candidate = selectedCandidate;
     const text = message.trim();
     setMessage("");
-    await doSendManualReply(candidate, text);
-    if (!(candidate.manualControlActive || candidate.automationPaused)) {
-      await setBotPaused(candidate, true);
-    }
+    setLoading(true); // feedback en el boton + pausa el auto-refresco mientras se envia
     try {
+      await doSendManualReply(candidate, text);
+      if (!(candidate.manualControlActive || candidate.automationPaused)) {
+        await setBotPaused(candidate, true);
+      }
       const response = await fetch(`/api/candidates/${candidate.id}/conversation`);
       if (response.ok) {
         const data = (await response.json()) as { messages: ConversationMessage[]; transitions: StateTransition[] };
@@ -696,6 +700,8 @@ export default function Home() {
       }
     } catch {
       /* silencioso */
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1030,7 +1036,6 @@ export default function Home() {
               ] as { label: string; colorVar: string; states: Candidate["currentState"][] }[]
             ).map((phase) => ({ ...phase, count: countStates(phase.states) }));
             const funnelMax = Math.max(1, ...funnel.map((phase) => phase.count));
-            const agendaCount = funnel[3].count;
             const llamadasCount = funnel[4].count;
             const cerradasCount = funnel[5].count;
             const todayCalls = candidates.filter(
@@ -2258,7 +2263,7 @@ export default function Home() {
                                     </div>
                                     {(awaitingDecision && candidate.humanReviewReason) ||
                                     followsBusiness ||
-                                    profile?.isPrivate !== undefined ? (
+                                    profile?.isPrivate != null ? (
                                       <div className="crm2-badges">
                                         {awaitingDecision && candidate.humanReviewReason ? (
                                           <span
@@ -2776,10 +2781,10 @@ export default function Home() {
                   <button
                     type="button"
                     className="drawer-send"
-                    disabled={!drawerReply.trim()}
+                    disabled={loading || !drawerReply.trim()}
                     onClick={() => void sendDrawerReply()}
                   >
-                    Enviar ➤
+                    {loading ? "Enviando…" : "Enviar ➤"}
                   </button>
                 </div>
               ) : null}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { respondToCall, type CallChatMessage } from "@/application/callTurnResponder";
+import type { CallContext } from "@/application/callContext";
 import { getCallDrafter } from "@/application/openaiCallDrafter";
 import { bearerMatches } from "@/server/bearerAuth";
 
@@ -56,6 +57,57 @@ const RequestSchema = z
   })
   .passthrough();
 
+// Coerciones para variables dinámicas PLANAS (ElevenLabs las manda como string/number/boolean).
+function asMetaString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+function asMetaNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) return Number(value);
+  return undefined;
+}
+function asMetaBool(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return undefined;
+}
+
+// Construye el contexto del DM desde variables dinámicas PLANAS en snake_case (las que envía el disparador
+// outbound). Devuelve undefined si no hay ninguna, para no fabricar un contexto vacío.
+export function contextFromFlatVars(raw: Record<string, unknown>): CallContext | undefined {
+  const concernsRaw = raw.concerns;
+  const concerns =
+    typeof concernsRaw === "string"
+      ? concernsRaw
+          .split(/[;\n]/)
+          .map((c) => c.trim())
+          .filter((c) => c.length > 0)
+      : Array.isArray(concernsRaw)
+        ? concernsRaw.filter((c): c is string => typeof c === "string")
+        : [];
+  const context = {
+    candidateName: asMetaString(raw.candidate_name),
+    age: asMetaNumber(raw.age),
+    country: asMetaString(raw.country),
+    hasOnlyFans: asMetaBool(raw.has_onlyfans),
+    worksWithAnotherAgency: asMetaBool(raw.works_with_another_agency),
+    scheduledSlot: asMetaString(raw.scheduled_slot),
+    dmSummary: asMetaString(raw.dm_summary),
+    interestLevel: asMetaString(raw.interest_level),
+    concerns
+  };
+  const hasAny =
+    context.candidateName !== undefined ||
+    context.age !== undefined ||
+    context.country !== undefined ||
+    context.hasOnlyFans !== undefined ||
+    context.scheduledSlot !== undefined ||
+    context.dmSummary !== undefined ||
+    concerns.length > 0;
+  return hasAny ? context : undefined;
+}
+
 export async function handleCallLlmRequest(request: Request): Promise<Response> {
   const apiKey = process.env.CALL_LLM_API_KEY;
   if (!apiKey) {
@@ -87,8 +139,12 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
   const meta = parsed.data.elevenlabs_extra_body ?? parsed.data.call_metadata;
   const recordedEnv = process.env.CALL_RECORDED;
   const recorded = meta?.recorded ?? (recordedEnv ? recordedEnv !== "0" : true);
-  const context = meta?.context ? { ...meta.context, concerns: meta.context.concerns ?? [] } : undefined;
-  const candidateName = meta?.candidateName ?? context?.candidateName;
+  // El contexto puede venir ANIDADO (meta.context) o PLANO en snake_case (lo que envía nuestro disparador
+  // outbound como dynamic_variables). Aceptamos ambos para que el bot SIEMPRE sepa con quién habla.
+  const rawMeta = (meta ?? {}) as Record<string, unknown>;
+  const nestedContext = meta?.context ? { ...meta.context, concerns: meta.context.concerns ?? [] } : undefined;
+  const context = nestedContext ?? contextFromFlatVars(rawMeta);
+  const candidateName = meta?.candidateName ?? context?.candidateName ?? asMetaString(rawMeta.candidate_name);
 
   // Redactor LLM: solo si CALL_LLM_REDACTION=on + clave (si no, undefined -> guion determinista).
   const drafter = getCallDrafter();
