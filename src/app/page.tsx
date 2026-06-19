@@ -700,17 +700,15 @@ export default function Home() {
       PROFILE_FIT: `Perfil de @${candidate.instagramUsername} verificado: sigue la cualificacion.`,
       PROFILE_NO_FIT: `@${candidate.instagramUsername} descartada en la revision de perfil.`,
       CONFIRM_CALL: `Llamada confirmada para @${candidate.instagramUsername}.`,
-      PROFILE_OK: `Perfil de @${candidate.instagramUsername} marcado como OK.`,
+      PROFILE_OK: `✓ Perfil de @${candidate.instagramUsername} marcado como revisado y OK.`,
       REJECT: `@${candidate.instagramUsername} rechazada: el bot deja de responderle.`,
       FOLLOW_REQUEST_SENT: `Solicitud enviada a @${candidate.instagramUsername}: el bot deja de pedirla y pasa a revision de perfil.`
     };
-    // Si el motor no aplico nada (estado incompatible), no mentir con un aviso de exito. PROFILE_OK puede
-    // no cambiar de estado pero si marcar el perfil como OK: eso tambien cuenta como aplicado.
-    const profileFlagChanged = data.candidate.humanProfileReviewStatus !== candidate.humanProfileReviewStatus;
+    // Si el motor no aplico nada (estado incompatible), no mentir con un aviso de exito. PROFILE_OK
+    // (marcar el perfil como OK) es idempotente y SIEMPRE cuenta como aplicado (deja constancia + badge),
+    // aunque ya estuviera marcado: no debe decir "sin cambios".
     const appliedNothing =
-      !data.proposedMessage &&
-      data.candidate.currentState === candidate.currentState &&
-      !(action === "PROFILE_OK" && profileFlagChanged);
+      !data.proposedMessage && data.candidate.currentState === candidate.currentState && action !== "PROFILE_OK";
     if (appliedNothing) {
       setCrmNotice(`Sin cambios para @${candidate.instagramUsername}: la accion no aplica en su estado actual.`);
     } else {
@@ -1179,83 +1177,186 @@ export default function Home() {
 
       {activeTab === "LLAMADAS"
         ? (() => {
-            // Todo derivado de las candidatas: las hechas (lastCall), las agendadas/en curso, y metricas.
-            const done = candidates.filter((item) => item.lastCall);
-            const completed = done.filter((item) => item.lastCall?.result === "COMPLETED").length;
-            const noAnswer = done.filter((item) => item.lastCall?.result === "NO_ANSWER").length;
-            const shares = done
+            // Todo derivado de las candidatas (sin histórico): conteos reales, nada inventado.
+            const isCallRelated = (item: Candidate): boolean =>
+              item.lastCall != null ||
+              item.currentState === "CALL_IN_PROGRESS" ||
+              item.currentState === "CALL_COMPLETED" ||
+              item.currentState === "CALL_NO_ANSWER" ||
+              item.currentState === "CALL_SCHEDULED" ||
+              Boolean(item.scheduledCallSlot);
+            const callList = candidates.filter(isCallRelated).sort((a, b) => {
+              const live = (item: Candidate) => (item.currentState === "CALL_IN_PROGRESS" ? 1 : 0);
+              return live(b) - live(a);
+            });
+            const by = (state: Candidate["currentState"]) => callList.filter((item) => item.currentState === state).length;
+            const completed = by("CALL_COMPLETED");
+            const noans = by("CALL_NO_ANSWER");
+            const inprog = by("CALL_IN_PROGRESS");
+            const sched = callList.filter(
+              (item) => item.currentState === "CALL_SCHEDULED" || (!item.lastCall && Boolean(item.scheduledCallSlot))
+            ).length;
+            const attempted = completed + noans;
+            const durations = callList
+              .map((item) => item.lastCall?.durationSec)
+              .filter((value): value is number => typeof value === "number");
+            const avgDurSec = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null;
+            const shares = callList
               .map((item) => item.lastCall?.negotiatedModelShare)
-              .filter((share): share is number => typeof share === "number");
+              .filter((value): value is number => typeof value === "number");
             const avgShare = shares.length ? Math.round(shares.reduce((a, b) => a + b, 0) / shares.length) : null;
-            const upcoming = candidates.filter(
-              (item) => !item.lastCall && (item.currentState === "CALL_SCHEDULED" || Boolean(item.scheduledCallSlot))
-            );
-            const formatDuration = (seconds?: number): string =>
-              seconds != null ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : "—";
+            const fmtDur = (seconds?: number | null): string =>
+              seconds != null ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}` : "—";
+            const kpis: { label: string; value: string | number; colorVar: string }[] = [
+              { label: "Llamadas hechas", value: attempted, colorVar: "--text" },
+              { label: "Completadas", value: completed, colorVar: "--success" },
+              { label: "No contestó", value: noans, colorVar: "--danger" },
+              { label: "En curso", value: inprog, colorVar: "--purple" },
+              { label: "Agendadas", value: sched, colorVar: "--info" },
+              { label: "Duración media", value: fmtDur(avgDurSec), colorVar: "--accent" }
+            ];
+            const outcomeMax = Math.max(1, sched, inprog, completed, noans);
+            const outcomes: { label: string; count: number; colorVar: string }[] = [
+              { label: "Agendadas", count: sched, colorVar: "--info" },
+              { label: "En curso", count: inprog, colorVar: "--purple" },
+              { label: "Hechas", count: completed, colorVar: "--success" },
+              { label: "No contestó", count: noans, colorVar: "--danger" }
+            ];
+            const resultText = (item: Candidate): string => {
+              if (item.currentState === "CALL_IN_PROGRESS") return "En curso…";
+              if (item.lastCall?.summary) return item.lastCall.summary;
+              if (item.lastCall?.result === "COMPLETED") return "Completada";
+              if (item.lastCall?.result === "NO_ANSWER") return "Sin respuesta";
+              return item.scheduledCallSlot ? "Agendada" : "—";
+            };
             return (
-              <section className="panel dashboard">
-                <div>
-                  <h2>Llamadas</h2>
-                  <p className="muted">
-                    El bot de voz llama, explica la agencia, negocia el reparto y te pasa las que lo necesitan.
+              <section className="panel">
+                <div className="calls2-head">
+                  <h2 className="calls2-title">Llamadas</h2>
+                  <p className="calls2-subtitle">
+                    El bot de voz llama a las candidatas aprobadas, negocia el reparto y te pasa las que lo necesitan.
                   </p>
                 </div>
-                <div className="dash-kpis">
-                  <div className="dash-kpi">
-                    <span className="dash-kpi-label">Llamadas hechas</span>
-                    <b>{done.length}</b>
-                  </div>
-                  <div className="dash-kpi">
-                    <span className="dash-kpi-label">Completadas</span>
-                    <b>{completed}</b>
-                  </div>
-                  <div className="dash-kpi">
-                    <span className="dash-kpi-label">No contestaron</span>
-                    <b>{noAnswer}</b>
-                  </div>
-                  <div className="dash-kpi">
-                    <span className="dash-kpi-label">Reparto medio</span>
-                    <b>{avgShare != null ? `${avgShare}%` : "—"}</b>
-                  </div>
+
+                <div className="calls2-kpis">
+                  {kpis.map((kpi) => (
+                    <div className="calls2-kpi" key={kpi.label}>
+                      <div className="calls2-kpi-label">{kpi.label}</div>
+                      <div className="calls2-kpi-value" style={{ color: `var(${kpi.colorVar})` }}>
+                        {kpi.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="dash-stack">
-                  <div className="dash-card">
-                    <h3>Llamadas recientes</h3>
-                    {done.length === 0 ? (
-                      <p className="muted">Aún no se ha registrado ninguna llamada.</p>
+
+                <div className="calls2-stack">
+                  <div className="calls2-list">
+                    {callList.length === 0 ? (
+                      <div className="calls2-empty">
+                        <div className="calls2-empty-icon">📞</div>
+                        <div className="calls2-empty-text">Aún no hay llamadas. Aprueba candidatas y agéndalas.</div>
+                      </div>
                     ) : (
-                      done.map((item) => (
-                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
-                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
-                          <span className="call-row-meta">
-                            <span className="call-row-info">
-                              {formatDuration(item.lastCall?.durationSec)}
-                              {item.lastCall?.negotiatedModelShare != null ? ` · ${item.lastCall.negotiatedModelShare}%` : ""}
+                      callList.map((item) => (
+                        <div key={item.id} className="calls2-card" onClick={() => void openDrawer(item)}>
+                          <div className="calls2-card-top">
+                            <span className="calls2-avatar" style={{ background: `var(${ringColorVar(item)})` }}>
+                              {(item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase()}
                             </span>
-                            <span
-                              className={
-                                item.lastCall?.result === "COMPLETED" ? "dash-list-state call-ok" : "dash-list-state call-no"
-                              }
-                            >
-                              {item.lastCall?.result === "COMPLETED" ? "Completada" : "No contestó"}
-                            </span>
-                          </span>
-                        </button>
+                            <div className="calls2-id">
+                              <div className="calls2-name-row">
+                                <span className="calls2-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
+                                <span className="calls2-username">@{item.instagramUsername}</span>
+                              </div>
+                              <div className="calls2-slot">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="12" r="9" />
+                                  <path d="M12 7v5l3 2" />
+                                </svg>
+                                {item.scheduledCallSlot || "Sin franja"}
+                              </div>
+                            </div>
+                            <div className="calls2-status-wrap">
+                              <span className="calls2-status" style={statePillStyle(item.currentState)}>
+                                {stateLabel(item.currentState)}
+                              </span>
+                              {item.currentState === "CALL_IN_PROGRESS" ? (
+                                <div className="calls2-live">
+                                  <span className="calls2-live-dot" />
+                                  en directo
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="calls2-metrics">
+                            <div className="calls2-metric calls2-metric--dur">
+                              <div className="calls2-metric-label">Duración</div>
+                              <div className="calls2-metric-value">{fmtDur(item.lastCall?.durationSec)}</div>
+                            </div>
+                            <div className="calls2-metric calls2-metric--split">
+                              <div className="calls2-metric-label">Reparto</div>
+                              <div className="calls2-metric-value">
+                                {item.lastCall?.negotiatedModelShare != null ? `${item.lastCall.negotiatedModelShare}%` : "—"}
+                              </div>
+                            </div>
+                            <div className="calls2-metric calls2-metric--result">
+                              <div className="calls2-metric-label">Resultado</div>
+                              <div className="calls2-metric-value">{resultText(item)}</div>
+                            </div>
+                          </div>
+
+                          <div className="calls2-actions" onClick={(event) => event.stopPropagation()}>
+                            <button className="calls2-btn calls2-btn--ghost" type="button" onClick={() => void openDrawer(item)}>
+                              Ver ficha
+                            </button>
+                          </div>
+                        </div>
                       ))
                     )}
                   </div>
-                  <div className="dash-card">
-                    <h3>Agendadas / por llamar</h3>
-                    {upcoming.length === 0 ? (
-                      <p className="muted">Nada agendado. Aprueba candidatas y agéndalas desde el CRM.</p>
-                    ) : (
-                      upcoming.map((item) => (
-                        <button key={item.id} type="button" className="dash-list-row" onClick={() => void openDrawer(item)}>
-                          <span className="dash-list-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
-                          <span className="dash-list-state">{item.scheduledCallSlot || stateLabel(item.currentState)}</span>
-                        </button>
-                      ))
-                    )}
+
+                  <div className="calls2-panel-col">
+                    <div className="calls2-panel">
+                      <h3 className="calls2-panel-title">Resultados de llamadas</h3>
+                      <div className="calls2-outcomes">
+                        {outcomes.map((outcome) => (
+                          <div className="calls2-outcome" key={outcome.label}>
+                            <span className="calls2-outcome-label">{outcome.label}</span>
+                            <div className="calls2-bar-track">
+                              <div
+                                className="calls2-bar-fill"
+                                style={{
+                                  width: `${Math.round((outcome.count / outcomeMax) * 100)}%`,
+                                  background: `var(${outcome.colorVar})`
+                                }}
+                              />
+                            </div>
+                            <span className="calls2-outcome-count">{outcome.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="calls2-panel">
+                      <div className="calls2-panel-headrow">
+                        <h3 className="calls2-panel-title">Duración media</h3>
+                        <span className="calls2-avgdur-value">{fmtDur(avgDurSec)}</span>
+                      </div>
+                      <div className="calls2-spark-caption">
+                        {durations.length > 0
+                          ? `media de ${durations.length} llamada(s) registrada(s)`
+                          : "sin llamadas registradas"}
+                      </div>
+                    </div>
+
+                    <div className="calls2-panel">
+                      <div className="calls2-panel-headrow">
+                        <h3 className="calls2-panel-title">Reparto medio negociado</h3>
+                        <span className="calls2-avgdur-value">{avgShare != null ? `${avgShare}%` : "—"}</span>
+                      </div>
+                      <div className="calls2-spark-caption">% medio para la modelo en las llamadas hechas</div>
+                    </div>
                   </div>
                 </div>
               </section>
