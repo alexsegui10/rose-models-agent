@@ -710,7 +710,9 @@ export default function Home() {
     const appliedNothing =
       !data.proposedMessage && data.candidate.currentState === candidate.currentState && action !== "PROFILE_OK";
     if (appliedNothing) {
-      setCrmNotice(`Sin cambios para @${candidate.instagramUsername}: la accion no aplica en su estado actual.`);
+      setCrmNotice(
+        `Sin cambios para @${candidate.instagramUsername}: esa acción no aplica en su estado actual (${stateLabel(candidate.currentState)}).`
+      );
     } else {
       setCrmNotice(
         data.proposedMessage
