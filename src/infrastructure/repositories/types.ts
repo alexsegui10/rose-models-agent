@@ -11,6 +11,11 @@ export interface CandidateRepository {
   findCandidateById(id: string): Promise<Candidate | null>;
   findCandidateByInstagram(instagramUsername: string): Promise<Candidate | null>;
   listCandidates(): Promise<Candidate[]>;
+  /**
+   * Instantes de inicio (ms UTC) de las llamadas YA agendadas (candidatas en CALL_SCHEDULED con
+   * `scheduledCallStartMs` fijado). Lo usa el agendado determinista para no solapar dos llamadas.
+   */
+  listBookedCallStarts(): Promise<number[]>;
   saveCandidate(candidate: Candidate): Promise<Candidate>;
   deleteCandidate(id: string): Promise<void>;
   listMessages(candidateId: string, limit?: number): Promise<ConversationMessage[]>;

@@ -34,6 +34,13 @@ export class InMemoryCandidateRepository implements CandidateRepository {
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
+  async listBookedCallStarts(): Promise<number[]> {
+    return [...this.candidates.values()]
+      .map((candidate) => normalizeCandidate(candidate))
+      .filter((candidate) => candidate.currentState === "CALL_SCHEDULED" && candidate.scheduledCallStartMs !== undefined)
+      .map((candidate) => candidate.scheduledCallStartMs as number);
+  }
+
   async saveCandidate(candidate: Candidate): Promise<Candidate> {
     return this.normalizeAndStore(candidate);
   }

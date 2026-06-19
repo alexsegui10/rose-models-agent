@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   doublePrecision,
   foreignKey,
@@ -121,6 +122,12 @@ export const candidates = pgTable("candidates", {
   goals: text("goals"),
   interestLevel: text("interest_level", { enum: InterestLevelSchema.options }).notNull().default("UNKNOWN"),
   scheduledCallSlot: text("scheduled_call_slot"),
+  // Instante de inicio de la llamada agendada en ms UTC. bigint (mode number): cabe en Number con holgura
+  // (ms hasta el ano ~275760) y el dominio lo trata como z.number().int().optional().
+  scheduledCallStartMs: bigint("scheduled_call_start_ms", { mode: "number" }),
+  // Intentos de llamada disparados (incrementa noteCallAttempt al iniciar la llamada, no al recibir el
+  // resultado): gobierna el reintento diferido.
+  callAttempts: integer("call_attempts").notNull().default(0),
   // Resultado de la ultima llamada (documento completo: duracion, % negociado, resumen, transcripcion).
   lastCall: jsonb("last_call").$type<CallRecord>(),
   objections: jsonb("objections").$type<string[]>().notNull().default([]),

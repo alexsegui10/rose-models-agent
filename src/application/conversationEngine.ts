@@ -34,7 +34,8 @@ import type {
 } from "./llmProvider";
 import { promptRegistry } from "./promptRegistry";
 import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
-import { buildResponsePlan, PHONE_QUESTION } from "./responsePlanner";
+import { conflictsWithBooked, parseProposedCallTime } from "./callScheduling";
+import { buildResponsePlan, PHONE_QUESTION, proposesConcreteTime } from "./responsePlanner";
 import { safeFallbackResponse, validateAgentResponse } from "./responseValidator";
 import { buildStyleContext, immediateObjectiveFor, type BuiltStyleContext } from "./styleContextBuilder";
 import { DeterministicResponseStyleEvaluator, type ResponseStyleEvaluator } from "./styleEvaluator";
@@ -84,6 +85,9 @@ export interface ConversationEngineDependencies {
   // el opener es el neutro. Lleva su propio limite de tiempo en la implementacion (infra).
   profilePrivacyProvider?: ProfilePrivacyProvider;
 }
+
+// Máximo de intentos de llamada antes de pasar a seguimiento humano (decisión de Alex: 3 intentos).
+const MAX_CALL_ATTEMPTS = 3;
 
 export class ConversationEngine {
   private readonly exampleRetriever: ExampleRetriever;
@@ -281,10 +285,34 @@ export class ConversationEngine {
   }
 
   /**
+   * Marca que se ha DISPARADO un intento de llamada saliente. Lo llama `/api/call/start` ANTES de iniciar
+   * la llamada real (startOutboundWhatsAppCall): el contador se incrementa al DISPARAR, no al recibir el
+   * resultado. Asi `recordCallOutcome` solo LEE callAttempts para decidir el reintento diferido. Idempotente
+   * respecto al estado: no cambia de estado, solo incrementa y persiste el contador.
+   */
+  async noteCallAttempt(candidateId: string): Promise<{ candidate: Candidate }> {
+    const existing = await this.dependencies.repository.findCandidateById(candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    const candidate: Candidate = {
+      ...existing,
+      callAttempts: existing.callAttempts + 1,
+      updatedAt: new Date()
+    };
+    await this.dependencies.repository.saveCandidate(candidate);
+    return { candidate };
+  }
+
+  /**
    * Registra el resultado de la llamada de voz (lo llama el webhook de fin de llamada de la plataforma).
    * COMPLETED -> CALL_COMPLETED (Alex retoma el siguiente paso: enviar el contrato); NO_ANSWER ->
    * CALL_NO_ANSWER (reagendar/seguimiento). Solo desde CALL_SCHEDULED o CALL_IN_PROGRESS; en otro estado
    * no fuerza nada (idempotente). Solo registra el hecho (resumen en notas); no decide negocio.
+   *
+   * Reintento DIFERIDO en la rama NO_ANSWER: devuelve `shouldRetryCall` (true si callAttempts < 3) y
+   * `attemptsUsed`. NO re-llama de forma sincrona ni incrementa el contador (eso es de noteCallAttempt al
+   * disparar). Si ya se agotaron los 3 intentos, deja una nota de seguimiento humano para Alex.
    */
   async recordCallOutcome(input: {
     candidateId: string;
@@ -293,7 +321,7 @@ export class ConversationEngine {
     durationSec?: number;
     negotiatedModelShare?: number;
     transcript?: Array<{ role: string; content: string }>;
-  }): Promise<{ candidate: Candidate; transitions: StateTransition[] }> {
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; shouldRetryCall?: boolean; attemptsUsed?: number }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
@@ -325,17 +353,27 @@ export class ConversationEngine {
       transcript: input.transcript ?? [],
       endedAt: new Date().toISOString()
     };
+
+    // Reintento DIFERIDO: solo en NO_ANSWER se LEE el contador (no se incrementa). Hasta 3 intentos; al
+    // agotarlos, nota de seguimiento humano para que Alex lo retome a mano.
+    const attemptsUsed = input.outcome === "NO_ANSWER" ? existing.callAttempts : undefined;
+    const shouldRetryCall = input.outcome === "NO_ANSWER" ? existing.callAttempts < MAX_CALL_ATTEMPTS : undefined;
+    const followUpNote =
+      input.outcome === "NO_ANSWER" && !shouldRetryCall
+        ? [`CALL_FOLLOWUP_REQUIRED: no contesto tras ${existing.callAttempts} intentos; lo retoma Alex a mano.`]
+        : [];
+
     const candidate: Candidate = {
       ...existing,
       currentState: toState,
-      notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`],
+      notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`, ...followUpNote],
       lastCall,
       updatedAt: new Date()
     };
 
     await this.dependencies.repository.saveCandidate(candidate);
     await this.dependencies.repository.addTransition(transition);
-    return { candidate, transitions: [transition] };
+    return { candidate, transitions: [transition], shouldRetryCall, attemptsUsed };
   }
 
   /**
@@ -428,27 +466,14 @@ export class ConversationEngine {
     }
 
     const slot = input.slot?.trim() ? input.slot.trim() : undefined;
-    const transition = createTransition({
-      candidate: existing,
-      toState: "CALL_SCHEDULED",
+    const { candidate, transition, proposedMessage } = applyCallScheduled(existing, {
+      labelEs: slot,
       trigger: "HUMAN_CONFIRM_CALL",
-      reason: slot ? `Alex confirmo la llamada: ${slot}.` : "Alex confirmo la llamada."
+      reason: slot ? `Alex confirmo la llamada: ${slot}.` : "Alex confirmo la llamada.",
+      proposedMessage: slot
+        ? `Genial, te confirmo la llamada por WhatsApp ${slot}. Cualquier cosa me dices, hablamos pronto!`
+        : "Genial, te confirmo la llamada por WhatsApp. En breve hablamos, cualquier cosa me dices!"
     });
-
-    const candidate: Candidate = {
-      ...existing,
-      currentState: "CALL_SCHEDULED",
-      scheduledCallSlot: slot ?? existing.scheduledCallSlot,
-      // Coherencia con APPROVE/PROFILE_FIT: una accion humana que avanza el funnel reanuda la
-      // automatizacion; si no, el bot enmudeceria ante el siguiente mensaje de la candidata.
-      manualControlActive: false,
-      automationPaused: false,
-      updatedAt: new Date()
-    };
-
-    const proposedMessage = slot
-      ? `Genial, te confirmo la llamada por WhatsApp ${slot}. Cualquier cosa me dices, hablamos pronto!`
-      : "Genial, te confirmo la llamada por WhatsApp. En breve hablamos, cualquier cosa me dices!";
 
     await this.dependencies.repository.saveCandidate(candidate);
     await this.dependencies.repository.addTransition(transition);
@@ -457,6 +482,54 @@ export class ConversationEngine {
     );
 
     return { candidate, transitions: [transition], proposedMessage };
+  }
+
+  /**
+   * Auto-agendado determinista dentro del turno: parsea la hora propuesta (en hora Argentina), comprueba
+   * que no choque con otra llamada ya reservada y, si esta libre, pasa a CALL_SCHEDULED confirmando a la
+   * candidata. El llamante ya verifico el gate de invariante 4 (estado + fit aprobado). Devuelve null si
+   * no hay hora clara (parser=null), para que el turno siga su curso y el planner vuelva a pedir el dia/hora.
+   */
+  private async tryAutoScheduleCall(candidate: Candidate, message: string): Promise<HandleIncomingMessageResult | null> {
+    const parsed = parseProposedCallTime(message, new Date());
+    if (!parsed) {
+      return null;
+    }
+
+    const bookedStarts = await this.dependencies.repository.listBookedCallStarts();
+    if (conflictsWithBooked(parsed.startMsUtc, bookedStarts)) {
+      // Hueco pillado: NO se cambia de estado; se pide otra hora. El mensaje entrante ya quedo guardado.
+      const clashMessage = `Uf, esa hora justo la tengo pillada. ¿Me dices otra y la cuadramos?`;
+      await this.dependencies.repository.addMessage(
+        agentMessage(candidate.id, clashMessage, { provider: "deterministic", trigger: "CALL_SLOT_CLASH", proactive: false })
+      );
+      return skippedResult(candidate, clashMessage, false, "Hora propuesta ocupada por otra llamada; se pide otra.", {
+        deliveryStatus: "SENT"
+      });
+    }
+
+    const {
+      candidate: scheduled,
+      transition,
+      proposedMessage
+    } = applyCallScheduled(candidate, {
+      labelEs: parsed.labelEs,
+      startMsUtc: parsed.startMsUtc,
+      trigger: "AUTO_SCHEDULE_CALL",
+      reason: `Auto-agendada por el bot: ${parsed.labelEs}.`,
+      proposedMessage: `Genial, te llamo por WhatsApp ${parsed.labelEs}. Cualquier cosa me dices, hablamos pronto!`
+    });
+
+    await this.dependencies.repository.saveCandidate(scheduled);
+    await this.dependencies.repository.addTransition(transition);
+    await this.dependencies.repository.addMessage(
+      agentMessage(scheduled.id, proposedMessage, { provider: "deterministic", trigger: "AUTO_SCHEDULE_CALL", proactive: false })
+    );
+
+    return skippedResult(scheduled, proposedMessage, false, `Llamada auto-agendada: ${parsed.labelEs}.`, {
+      deliveryStatus: "SENT",
+      plannedTransitions: [transition]
+    });
   }
 
   async handleIncomingTurn(
@@ -489,16 +562,23 @@ export class ConversationEngine {
     };
     await this.dependencies.repository.saveCandidate(activeCandidate);
 
-    // Bot silenciado (decision de Alex 15-jun): si la candidata ya esta RECHAZADA por Alex o la
-    // conversacion esta CERRADA, no se responde NI se llama a OpenAI (ahorro de tokens). El mensaje
-    // entrante ya quedo guardado arriba para el historial; el turno termina aqui sin coste de modelo.
+    // Bot silenciado (decision de Alex 15-jun): si la candidata ya esta RECHAZADA por Alex, la
+    // conversacion esta CERRADA o la llamada ya esta AGENDADA (CALL_SCHEDULED), no se responde NI se
+    // llama a OpenAI (ahorro de tokens). El mensaje entrante ya quedo guardado arriba para el historial.
+    // EXCEPCION en CALL_SCHEDULED: si la candidata pide CAMBIAR/CANCELAR la llamada, NO se silencia; el
+    // turno sigue su curso para que la escalada a Alex (wantsToChangeScheduledCall) funcione. La deteccion
+    // es determinista (regex), no necesita el modelo.
     if (isSilencedState(activeCandidate.currentState)) {
-      return skippedResult(
-        activeCandidate,
-        "",
-        false,
-        `Bot silenciado (estado ${activeCandidate.currentState}): sin respuesta ni gasto de OpenAI.`
-      );
+      const wantsCallChangeWhileScheduled =
+        activeCandidate.currentState === "CALL_SCHEDULED" && wantsCallChangePattern.test(normalizeText(groupedMessage.content));
+      if (!wantsCallChangeWhileScheduled) {
+        return skippedResult(
+          activeCandidate,
+          "",
+          false,
+          `Bot silenciado (estado ${activeCandidate.currentState}): sin respuesta ni gasto de OpenAI.`
+        );
+      }
     }
 
     // DOS ventanas de contexto con proposito distinto: recentMessages(8) alimenta estilo/ritmo y el
@@ -563,6 +643,7 @@ export class ConversationEngine {
         internalNotes: [...understanding.internalNotes, "Cambio/cancelacion de llamada agendada: lo decide Alex."]
       };
     }
+
     // Primer turno del agente con un lead nuevo: toca el opener canonico (plantilla real de Alex),
     // nunca una pregunta de cualificacion. Los leads sembrados a mitad de funnel no lo necesitan.
     const isOpenerTurn =
@@ -626,6 +707,32 @@ export class ConversationEngine {
     };
 
     const criticalHumanReviewReason = criticalRestrictionReason(updatedCandidate, understanding, consistency.contradictions);
+
+    // AUTO-AGENDADO determinista (decision de Alex 19-jun): tras el OK de Alex, si la candidata propone una
+    // hora concreta, el bot la convierte (Argentina->Espana), comprueba que no choque con otra llamada y la
+    // agenda + pausa el bot de IG. Va DESPUES de criticalHumanReviewReason para HEREDAR TODAS sus guardas:
+    // control manual/pausa de Alex, contradicciones duras y movil no apto NUNCA auto-agendan. Ademas se
+    // bloquea a menores (alreadyMinor sobre el dato ya consolidado) y a la edad dudosa (requiresHumanReview).
+    // El parseo de la hora y la decision de agendar son del CODIGO, jamas del modelo (invariante 1); nunca
+    // corre desde HIR/WAITING_HUMAN_REVIEW (invariante 4). La rama "sin OK -> WAITING_HUMAN_REVIEW" no se toca.
+    const alreadyMinor = updatedCandidate.age !== undefined && updatedCandidate.age < 18;
+    const canAutoSchedule =
+      (updatedCandidate.currentState === "COLLECTING_CALL_DETAILS" || updatedCandidate.currentState === "READY_TO_SCHEDULE") &&
+      updatedCandidate.humanFitDecision === "APPROVED" &&
+      !criticalHumanReviewReason &&
+      !updatedCandidate.manualControlActive &&
+      !updatedCandidate.automationPaused &&
+      !understanding.requiresHumanReview &&
+      !alreadyMinor &&
+      proposesConcreteTime(normalizeText(groupedMessage.content));
+    if (canAutoSchedule) {
+      const autoScheduled = await this.tryAutoScheduleCall(updatedCandidate, groupedMessage.content);
+      if (autoScheduled) {
+        return autoScheduled;
+      }
+      // parseProposedCallTime devolvio null (sin hora clara, negada o vaga): no se agenda; el turno sigue
+      // su curso normal y el planner pedira de nuevo el dia y la hora.
+    }
 
     const knowledgeEntries = await this.businessKnowledgeRetriever.retrieve({
       candidate: updatedCandidate,
@@ -1686,6 +1793,39 @@ function candidateMessage(candidateId: string, content: string, externalMessageI
   };
 }
 
+/**
+ * Núcleo determinista del paso a CALL_SCHEDULED, compartido por la confirmación humana de Alex
+ * (`confirmScheduledCall`) y el auto-agendado del bot (`handleIncomingTurn`). Construye la transición,
+ * fija `scheduledCallSlot` (label) y `scheduledCallStartMs`, y reanuda la automatización (igual que el
+ * resto de acciones que avanzan el funnel). NO persiste ni decide el gate de invariante 4: eso lo hace el
+ * llamante. NUNCA lo decide la salida del modelo (invariante 1): la hora ya viene parseada por código.
+ */
+function applyCallScheduled(
+  existing: Candidate,
+  options: { labelEs?: string; startMsUtc?: number; trigger: string; reason: string; proposedMessage: string }
+): { candidate: Candidate; transition: StateTransition; proposedMessage: string } {
+  const transition = createTransition({
+    candidate: existing,
+    toState: "CALL_SCHEDULED",
+    trigger: options.trigger,
+    reason: options.reason
+  });
+
+  const candidate: Candidate = {
+    ...existing,
+    currentState: "CALL_SCHEDULED",
+    scheduledCallSlot: options.labelEs ?? existing.scheduledCallSlot,
+    scheduledCallStartMs: options.startMsUtc ?? existing.scheduledCallStartMs,
+    // Coherencia con APPROVE/PROFILE_FIT: una accion que avanza el funnel reanuda la automatizacion;
+    // si no, el bot enmudeceria ante el siguiente mensaje de la candidata.
+    manualControlActive: false,
+    automationPaused: false,
+    updatedAt: new Date()
+  };
+
+  return { candidate, transition, proposedMessage: options.proposedMessage };
+}
+
 function agentMessage(
   candidateId: string,
   content: string,
@@ -2647,10 +2787,13 @@ function canAutomationSend(candidate: Candidate, tokenVersion: number): boolean 
 /**
  * Estados en los que el bot queda SILENCIADO: ni responde ni se llama a OpenAI en el turno (ahorro de
  * tokens, decision de Alex). REJECTED = Alex la descarto; CLOSED = conversacion terminada (menor,
- * rechazo educado o decline). El mensaje entrante se sigue guardando para el historial.
+ * rechazo educado o decline); CALL_SCHEDULED = la llamada ya esta cuadrada, el bot de IG calla y deja el
+ * siguiente paso a la llamada de voz. El mensaje entrante se sigue guardando para el historial. NOTA: en
+ * CALL_SCHEDULED el silencio es CONDICIONAL (lo aplica el gate de handleIncomingTurn): si la candidata
+ * pide cambiar/cancelar la llamada, el turno NO se silencia para que la escalada a Alex siga funcionando.
  */
 function isSilencedState(state: CandidateState): boolean {
-  return state === "REJECTED" || state === "CLOSED";
+  return state === "REJECTED" || state === "CLOSED" || state === "CALL_SCHEDULED";
 }
 
 function deliveryStatusFor(
@@ -2670,7 +2813,13 @@ function deliveryStatusFor(
   return "SENT";
 }
 
-function skippedResult(candidate: Candidate, response: string, duplicate: boolean, reason: string): HandleIncomingMessageResult {
+function skippedResult(
+  candidate: Candidate,
+  response: string,
+  duplicate: boolean,
+  reason: string,
+  overrides?: { deliveryStatus?: DraftDeliveryStatus; plannedTransitions?: StateTransition[] }
+): HandleIncomingMessageResult {
   const understanding: ModelConversationOutput = {
     intent: "OTHER",
     extractedData: {},
@@ -2753,7 +2902,7 @@ function skippedResult(candidate: Candidate, response: string, duplicate: boolea
     duplicate,
     automationBlocked: false,
     automationMode: "HUMAN_APPROVAL",
-    deliveryStatus: "BLOCKED",
+    deliveryStatus: overrides?.deliveryStatus ?? "BLOCKED",
     draft: {
       response,
       provider: "deterministic",
@@ -2773,7 +2922,7 @@ function skippedResult(candidate: Candidate, response: string, duplicate: boolea
     },
     contradictions: [],
     corrections: [],
-    plannedTransitions: []
+    plannedTransitions: overrides?.plannedTransitions ?? []
   };
 }
 

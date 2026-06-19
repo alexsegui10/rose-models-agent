@@ -39,6 +39,14 @@ export class PostgresCandidateRepository implements CandidateRepository {
     return rows.map(rowToCandidate);
   }
 
+  async listBookedCallStarts(): Promise<number[]> {
+    const rows = await this.db
+      .select({ scheduledCallStartMs: candidates.scheduledCallStartMs })
+      .from(candidates)
+      .where(and(eq(candidates.currentState, "CALL_SCHEDULED"), sql`${candidates.scheduledCallStartMs} is not null`));
+    return rows.map((row) => row.scheduledCallStartMs).filter((value): value is number => value !== null && value !== undefined);
+  }
+
   async saveCandidate(candidate: Candidate): Promise<Candidate> {
     // Misma semántica que InMemoryCandidateRepository.normalizeAndStore: normalizar ANTES de
     // escribir para que lo persistido y lo devuelto coincidan.
@@ -244,6 +252,8 @@ function rowToCandidate(row: CandidateRow): Candidate {
     interestLevel: row.interestLevel,
     objections: row.objections,
     scheduledCallSlot: row.scheduledCallSlot ?? undefined,
+    scheduledCallStartMs: row.scheduledCallStartMs ?? undefined,
+    callAttempts: row.callAttempts,
     lastCall: row.lastCall ?? undefined,
     faceObjectionCount: row.faceObjectionCount,
     notes: row.notes,
@@ -289,6 +299,8 @@ function candidateToRow(candidate: Candidate): CandidateInsert {
     goals: candidate.goals ?? null,
     interestLevel: candidate.interestLevel,
     scheduledCallSlot: candidate.scheduledCallSlot ?? null,
+    scheduledCallStartMs: candidate.scheduledCallStartMs ?? null,
+    callAttempts: candidate.callAttempts,
     lastCall: candidate.lastCall ?? null,
     objections: candidate.objections,
     faceObjectionCount: candidate.faceObjectionCount,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSimulatorRepository } from "@/server/simulatorStore";
+import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { getElevenLabsOutboundConfig, startOutboundWhatsAppCall } from "@/infrastructure/integrations/elevenLabsOutbound";
 
 export const runtime = "nodejs";
@@ -38,5 +38,9 @@ export async function POST(request: Request) {
   if (!result.ok) {
     return NextResponse.json({ error: result.reason ?? "No se pudo iniciar la llamada." }, { status: 502 });
   }
+
+  // El contador de intentos se incrementa SOLO cuando la llamada ARRANCÓ de verdad (un 502 al iniciar no
+  // gasta intento): así recordCallOutcome solo lo lee para decidir el reintento diferido (hasta 3).
+  await getSimulatorEngine().noteCallAttempt(parsed.data.candidateId);
   return NextResponse.json({ ok: true, conversationId: result.conversationId ?? null });
 }

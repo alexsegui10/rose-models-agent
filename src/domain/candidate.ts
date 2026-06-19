@@ -112,6 +112,12 @@ export const CandidateSchema = z.object({
   // Franja propuesta/acordada para la llamada (texto libre, p. ej. "el lunes a las 18h"). La fija Alex
   // al confirmar la llamada desde el CRM; el bot la usa para confirmar a la candidata.
   scheduledCallSlot: z.string().optional(),
+  // Instante de inicio de la llamada agendada en ms UTC (lo calcula el agendado determinista a partir de
+  // la hora que propone la candidata). Sirve para detectar choques entre llamadas (ventana de 30 min).
+  scheduledCallStartMs: z.number().int().optional(),
+  // Veces que se ha DISPARADO la llamada saliente a esta candidata. Se incrementa al iniciar la llamada
+  // (noteCallAttempt), no al recibir el resultado; gobierna el reintento diferido (max 3 intentos).
+  callAttempts: z.number().int().nonnegative().default(0),
   // Resultado de la ultima llamada de voz (duracion, % al que se negocio, resumen, transcripcion).
   lastCall: CallRecordSchema.optional(),
   interestLevel: InterestLevelSchema.default("UNKNOWN"),
@@ -199,6 +205,8 @@ export interface CandidatePatch {
   contentAvailability?: string;
   goals?: string;
   scheduledCallSlot?: string;
+  scheduledCallStartMs?: number;
+  callAttempts?: number;
   lastCall?: CallRecord;
   interestLevel?: InterestLevel;
   objections?: string[];
@@ -273,6 +281,7 @@ export function normalizeCandidate(candidate: CandidateNormalizationInput): Cand
     commercialTier: candidate.commercialTier ?? "STANDARD",
     objections: candidate.objections ?? [],
     faceObjectionCount: candidate.faceObjectionCount ?? 0,
+    callAttempts: candidate.callAttempts ?? 0,
     notes: candidate.notes ?? [],
     conversationSummary: candidate.conversationSummary ?? "",
     interestLevel: candidate.interestLevel ?? "UNKNOWN",

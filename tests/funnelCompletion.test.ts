@@ -128,23 +128,29 @@ describe("Cierre del funnel: confirmacion de llamada (-> CALL_SCHEDULED)", () =>
     expect(result.proposedMessage).toBeNull();
   });
 
-  it("confirmar la llamada reanuda la automatizacion (el bot no enmudece despues)", async () => {
+  it("confirmar la llamada reanuda la automatizacion (no deja automationPaused, solo silencio por estado)", async () => {
+    // El silencio en CALL_SCHEDULED es por ESTADO (isSilencedState), no por automationPaused: confirmar
+    // NO debe dejar el flag de pausa puesto (eso se leeria como HIR/control manual). Asi, si la candidata
+    // pide cambiar la llamada, el turno fluye y la escalada a Alex funciona (no queda muteada de raiz).
     const { engine, repository } = createEngine();
     const seeded = await seed(repository, "COLLECTING_CALL_DETAILS", { phone: "612345678" });
     const result = await engine.confirmScheduledCall({ candidateId: seeded.id, slot: "el lunes a las 18h" });
     expect(result.candidate.automationPaused).toBe(false);
     expect(result.candidate.manualControlActive).toBe(false);
 
+    // Una peticion de cambio NO se silencia: se procesa y escala a Alex.
     const reply = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: "funnel_case",
-      message: "vale gracias"
+      message: "oye necesito cambiar la llamada a otro dia"
     });
-    expect(reply.response.length).toBeGreaterThan(0);
-    expect(reply.automationBlocked).not.toBe(true);
+    expect(reply.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(reply.candidate.notes.some((note) => note.startsWith("CALL_CHANGE_REQUEST"))).toBe(true);
   });
 
-  it("en CALL_SCHEDULED el bot responde con confirmacion, no con el dead-end generico", async () => {
+  it("en CALL_SCHEDULED un mensaje benigno NO recibe respuesta (bot silenciado, sin gasto de OpenAI)", async () => {
+    // Cambio 19-jun: con la llamada ya agendada el bot de IG calla (CALL_SCHEDULED en isSilencedState).
+    // El siguiente paso lo lleva la llamada de voz; un "vale, gracias" ya no genera respuesta ni coste.
     const { engine, repository } = createEngine();
     const seeded = await seed(repository, "CALL_SCHEDULED", {
       scheduledCallSlot: "el martes a las 17h",
@@ -158,8 +164,9 @@ describe("Cierre del funnel: confirmacion de llamada (-> CALL_SCHEDULED)", () =>
       message: "vale perfecto, gracias"
     });
 
-    expect(reply.response.toLowerCase()).not.toContain("cualquier duda que tengas me dices");
-    expect(reply.response.length).toBeGreaterThan(0);
+    expect(reply.response).toBe("");
+    // El estado se mantiene: no se reabre el guion.
+    expect(reply.candidate.currentState).toBe("CALL_SCHEDULED");
   });
 
   it("si la candidata pide cambiar/cancelar la llamada ya agendada, escala a Alex (no reconfirma)", async () => {

@@ -300,6 +300,7 @@ describe("commercial and device policy", () => {
         humanFitDecision: "PENDING",
         objections: [],
         faceObjectionCount: 0,
+        callAttempts: 0,
         notes: [],
         conversationSummary: "",
         currentState: "QUALIFYING",

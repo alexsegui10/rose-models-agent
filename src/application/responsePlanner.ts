@@ -39,7 +39,7 @@ const negatedTimePattern =
   /\bno\b[^.!?]{0,12}\b(ahora|hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|mediodia)\b|\b(ahora|hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|mediodia)\b[^.!?]{0,15}\bno\b/;
 
 /** Una propuesta de momento real: hay palabra de tiempo y no esta negada. */
-function proposesConcreteTime(message: string): boolean {
+export function proposesConcreteTime(message: string): boolean {
   return timeProposalPattern.test(message) && !negatedTimePattern.test(message);
 }
 
