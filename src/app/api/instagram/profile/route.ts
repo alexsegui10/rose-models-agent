@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import {
   fetchInstagramProfile,
+  fetchInstagramProfileResult,
   instagramProfileUrl,
   type InstagramProfile
 } from "@/infrastructure/integrations/instagramProfileProvider";
@@ -22,9 +23,26 @@ const cache = new Map<string, { profile: InstagramProfile | null; isPrivate: boo
  * que sí y null en el resto; el CRM hace fallback con elegancia.
  */
 export async function GET(request: Request): Promise<NextResponse> {
-  const id = new URL(request.url).searchParams.get("id")?.trim() ?? "";
+  const params = new URL(request.url).searchParams;
+  const id = params.get("id")?.trim() ?? "";
   if (!id) {
     return NextResponse.json({ ok: false, error: "missing-id" }, { status: 400 });
+  }
+
+  // Modo diagnóstico (?debug=1): sin caché, expone el MOTIVO si no se pudo traer el perfil y si hay token.
+  // No revela el token (solo si está presente o no). Útil para ver por qué no salen foto/@.
+  if (params.get("debug") === "1") {
+    const config = getInstagramConfig();
+    const result = await fetchInstagramProfileResult(id, config);
+    return NextResponse.json({
+      ok: Boolean(result.profile),
+      reason: result.reason ?? null,
+      hasAccessToken: Boolean(config.accessToken),
+      isConfigured: config.isConfigured,
+      graphApiBaseUrl: config.graphApiBaseUrl,
+      username: result.profile?.username ?? null,
+      hasPhoto: Boolean(result.profile?.profilePicUrl)
+    });
   }
 
   const now = Date.now();

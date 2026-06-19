@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { InstagramConfig } from "@/application/instagramConfig";
-import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
+import {
+  fetchInstagramProfile,
+  fetchInstagramProfileResult,
+  instagramProfileUrl
+} from "@/infrastructure/integrations/instagramProfileProvider";
 
 function config(overrides: Partial<InstagramConfig> = {}): InstagramConfig {
   return {
@@ -66,6 +70,35 @@ describe("fetchInstagramProfile", () => {
 
     const failing = (() => Promise.reject(new Error("net"))) as unknown as typeof fetch;
     await expect(fetchInstagramProfile(IGSID, config(), failing)).resolves.toBeNull();
+  });
+
+  it("reintenta con campos basicos si los completos fallan (trae al menos foto + @usuario)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { message: "campo no permitido" } })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ name: "Ana", username: "ana_real", profile_pic: "https://cdn/x.jpg" })
+      } as Response);
+    const profile = await fetchInstagramProfile(IGSID, config(), fetchMock as unknown as typeof fetch);
+    expect(profile?.username).toBe("ana_real");
+    expect(profile?.profilePicUrl).toBe("https://cdn/x.jpg");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // El segundo intento usa solo los campos basicos (sin follower_count).
+    expect(String(fetchMock.mock.calls[1][0])).not.toContain("follower_count");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("profile_pic");
+  });
+
+  it("fetchInstagramProfileResult informa el motivo cuando falta el token", async () => {
+    const fetchMock = vi.fn();
+    const result = await fetchInstagramProfileResult(IGSID, config({ accessToken: "" }), fetchMock as unknown as typeof fetch);
+    expect(result.profile).toBeNull();
+    expect(result.reason).toContain("INSTAGRAM_ACCESS_TOKEN");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("instagramProfileUrl construye el enlace permanente", () => {
