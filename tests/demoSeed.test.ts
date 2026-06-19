@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearDemoCandidates, DEMO_ID_PREFIX, seedDemoCandidates } from "@/server/demoSeed";
+import { clearDemoCandidates, clearNonRealCandidates, DEMO_ID_PREFIX, seedDemoCandidates } from "@/server/demoSeed";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
 describe("seedDemoCandidates", () => {
@@ -33,6 +33,23 @@ describe("seedDemoCandidates", () => {
     await repository.saveCandidate(real);
 
     const removed = await clearDemoCandidates(repository);
+    expect(removed).toBeGreaterThan(0);
+
+    const remaining = await repository.listCandidates();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(real.id);
+  });
+
+  it("clearNonRealCandidates borra pruebas + demo y deja solo las de IGSID real", async () => {
+    const repository = new InMemoryCandidateRepository();
+    await seedDemoCandidates(repository); // demo (usuarios con nombre, no IGSID)
+    const { createCandidate } = await import("@/domain/candidate");
+    const real = createCandidate({ instagramUsername: "17841447161456284" }); // IGSID real
+    await repository.saveCandidate(real);
+    const test = createCandidate({ instagramUsername: "candidata_12345" }); // prueba del chat
+    await repository.saveCandidate(test);
+
+    const removed = await clearNonRealCandidates(repository);
     expect(removed).toBeGreaterThan(0);
 
     const remaining = await repository.listCandidates();

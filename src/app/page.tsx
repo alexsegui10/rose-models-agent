@@ -381,18 +381,30 @@ export default function Home() {
   }
 
   // Quita SOLO las candidatas de demo (por su prefijo de id). Nunca toca las reales.
-  async function clearDemo() {
+  // Borra las candidatas de prueba/demo (las que no son de Instagram real). Pide confirmacion.
+  function clearTest() {
+    const fakeCount = candidates.filter((item) => !/^\d{5,}$/.test(item.instagramUsername)).length;
+    openModal({
+      title: "¿Limpiar candidatas de prueba?",
+      body: `Se borrarán ${fakeCount} candidata(s) de prueba/demo (las que no son de Instagram real). Las candidatas reales NO se tocan.`,
+      danger: true,
+      confirmLabel: "Limpiar pruebas",
+      onConfirm: () => void doClearTest()
+    });
+  }
+
+  async function doClearTest() {
     try {
-      const response = await fetch("/api/simulator/seed-demo", { method: "DELETE" });
+      const response = await fetch("/api/simulator/clear-test", { method: "POST" });
       const data = (await response.json().catch(() => ({}))) as { removed?: number; error?: string };
       if (!response.ok) {
-        setCrmNotice(`No se pudieron quitar las candidatas de demo (${response.status}). ${data.error ?? ""}`.trim());
+        setCrmNotice(`No se pudieron limpiar las pruebas (${response.status}). ${data.error ?? ""}`.trim());
         return;
       }
       await refreshCandidates();
-      setCrmNotice(`Quitadas ${data.removed ?? 0} candidatas de demo.`);
+      setCrmNotice(`Limpiadas ${data.removed ?? 0} candidatas de prueba.`);
     } catch (error) {
-      setCrmNotice(`No se pudieron quitar las candidatas de demo: ${error instanceof Error ? error.message : "error de red"}.`);
+      setCrmNotice(`No se pudieron limpiar las pruebas: ${error instanceof Error ? error.message : "error de red"}.`);
     }
   }
 
@@ -2019,14 +2031,14 @@ export default function Home() {
                         <span className="live-dot" />
                         {livePolling ? "En vivo" : "Pausado"}
                       </button>
-                      {candidates.some((item) => item.id.startsWith("00000000-0000-4000-8000-")) ? (
+                      {candidates.some((item) => !/^\d{5,}$/.test(item.instagramUsername)) ? (
                         <button
                           type="button"
                           className="live-pill"
-                          title="Borra solo las candidatas de demo (las reales no se tocan)"
-                          onClick={() => void clearDemo()}
+                          title="Borra las candidatas de prueba y demo (las reales de Instagram no se tocan)"
+                          onClick={() => clearTest()}
                         >
-                          🗑️ Quitar demo
+                          🗑️ Limpiar pruebas
                         </button>
                       ) : null}
                     </div>

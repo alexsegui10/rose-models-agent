@@ -301,3 +301,22 @@ export async function clearDemoCandidates(repository: CandidateRepository): Prom
   }
   return demo.length;
 }
+
+// Una candidata es REAL si su instagramUsername es un IGSID (cadena numerica larga del webhook).
+// Las de prueba (chat: "candidata_123") y las de demo (nombres) NO lo son.
+function isRealInstagramCandidate(instagramUsername: string): boolean {
+  return /^\d{5,}$/.test(instagramUsername);
+}
+
+/**
+ * Borra TODAS las candidatas que NO son de Instagram real (pruebas del chat + demo), dejando solo las
+ * que entraron de verdad por el webhook (IGSID numerico). Para limpiar el CRM real de datos de prueba.
+ */
+export async function clearNonRealCandidates(repository: CandidateRepository): Promise<number> {
+  const all = await repository.listCandidates();
+  const fake = all.filter((candidate) => !isRealInstagramCandidate(candidate.instagramUsername));
+  for (const candidate of fake) {
+    await repository.deleteCandidate(candidate.id);
+  }
+  return fake.length;
+}
