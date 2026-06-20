@@ -5,14 +5,21 @@ export function evaluateQualificationReadiness(candidate: Candidate): Qualificat
   const missingRequiredFields: string[] = [];
   const blockingReasons: string[] = [];
 
+  // El guion esencial (decision de Alex): nombre, edad adulta, OF/experiencia, movil y -solo si tiene OF-
+  // agencias. Completado esto, la candidata pasa a WAITING_HUMAN_REVIEW (el bot dice "lo hablo con mi socio
+  // y te digo") y ESPERA a que Alex le de a "Encaja". Pais y disponibilidad son OPCIONALES: se cubren en la
+  // llamada y NO deben bloquear que llegue a tu revision (antes lo hacian y el bot proponia la llamada solo).
   if (!candidate.age || !candidate.isAdultConfirmed) missingRequiredFields.push("adultAgeConfirmed");
   if (!candidate.firstName && !candidate.displayName && !candidate.instagramUsername) missingRequiredFields.push("name");
-  if (!candidate.country) missingRequiredFields.push("country");
   if (!candidate.experienceDescription && candidate.hasOnlyFans === undefined) missingRequiredFields.push("experienceOrOnlyFans");
-  if (!candidate.contentAvailability) missingRequiredFields.push("contentAvailability");
+  if (candidate.hasOnlyFans === true && candidate.worksWithAnotherAgency === undefined) missingRequiredFields.push("agencies");
   if (candidate.deviceEligibility === "UNKNOWN") missingRequiredFields.push("deviceKnown");
 
-  if (candidate.declaredProfileVisibility === "PRIVATE" && !candidate.humanVerifiedProfileAccess && candidate.humanProfileReviewStatus === "NOT_REVIEWED") {
+  if (
+    candidate.declaredProfileVisibility === "PRIVATE" &&
+    !candidate.humanVerifiedProfileAccess &&
+    candidate.humanProfileReviewStatus === "NOT_REVIEWED"
+  ) {
     blockingReasons.push("profileAccessNotVerified");
   }
 
@@ -44,7 +51,8 @@ export function onboardingBlockersFor(candidate: Candidate): OnboardingBlocker[]
   const blockers: OnboardingBlocker[] = [];
 
   if (candidate.deviceEligibility === "PENDING_UPGRADE") blockers.push("DEVICE_UPGRADE_REQUIRED");
-  if (candidate.deviceEligibility === "PENDING_QUALITY_TEST" || candidate.deviceEligibility === "UNKNOWN") blockers.push("DEVICE_QUALITY_TEST_REQUIRED");
+  if (candidate.deviceEligibility === "PENDING_QUALITY_TEST" || candidate.deviceEligibility === "UNKNOWN")
+    blockers.push("DEVICE_QUALITY_TEST_REQUIRED");
   blockers.push("IDENTITY_VERIFICATION_REQUIRED", "CONTRACT_REQUIRED");
 
   return blockers;

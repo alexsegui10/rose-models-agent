@@ -626,8 +626,9 @@ describe("ConversationEngine answers documented knowledge inside HUMAN_INTERVENT
 });
 
 describe("ConversationEngine conversion moment (regresiones de amnesia de datos de iteracion 1)", () => {
-  // Sin contentAvailability: una candidata 100% completa saltaria a WAITING_HUMAN_REVIEW y el
-  // turno respondria la plantilla de revision en vez de cerrar la llamada.
+  // Candidata con el guion esencial completo (nombre+edad+OF+movil) pero SIN el OK de Alex: pasa a
+  // WAITING_HUMAN_REVIEW y el bot dice "lo hablo con mi socio". NO propone ni agenda la llamada hasta
+  // que Alex le da a "Encaja" (decision de Alex 20-jun). Pais/disponibilidad ya no bloquean la revision.
   async function qualifiedCandidate(repository: InMemoryCandidateRepository, username: string) {
     return repository.saveCandidate({
       ...createCandidate({ instagramUsername: username, profileVisibility: "PUBLIC" }),
@@ -642,27 +643,21 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
     });
   }
 
-  it("captures a bare short number after asking for the phone and never re-asks it (replay-14 T9)", async () => {
+  it("SIN el OK de Alex, una candidata cualificada que propone hora NO agenda ni pide telefono: difiere (Alex 20-jun)", async () => {
     const repository = new InMemoryCandidateRepository();
     const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
     const seeded = await qualifiedCandidate(repository, "lead_numero_pelado");
 
-    const askPhone = await engine.handleIncomingMessage({
+    const result = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: "lead_numero_pelado",
       message: "Podemos hacer la llamada el domingo a las 11?"
     });
-    expect(askPhone.response.toLowerCase()).toContain("numero de whatsapp");
 
-    const givesPhone = await engine.handleIncomingMessage({
-      candidateId: seeded.id,
-      instagramUsername: "lead_numero_pelado",
-      message: "5550147"
-    });
-
-    expect(givesPhone.candidate.phone).toBe("5550147");
-    expect(givesPhone.response.toLowerCase()).not.toContain("numero de whatsapp");
-    expect(givesPhone.response.toLowerCase()).toContain("lo apunto");
+    // Hasta el "Encaja" de Alex: difiere (lo hablo con mi socio), no agenda ni pide el numero.
+    expect(result.candidate.currentState).not.toBe("CALL_SCHEDULED");
+    expect(result.response.toLowerCase()).toContain("socio");
+    expect(result.response.toLowerCase()).not.toContain("numero de whatsapp");
   });
 
   it("does not resurrect an already-capped question turns later (ventana ancha anti-bucle, replay-10)", async () => {
@@ -691,7 +686,7 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
 
   // Cierre de agenda (taxonomia 3 de iteracion 3): a la propuesta de hora se responde confirmando
   // el momento y pidiendo el numero, nunca re-cualificando ni con un acuse vacio.
-  it("confirms the agreed time and asks for the phone when she proposes a time (replay-13 T11)", async () => {
+  it("SIN el OK de Alex, a 'podemos hacer una llamada?' el bot difiere, no propone agenda (Alex 20-jun)", async () => {
     const repository = new InMemoryCandidateRepository();
     const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
     const seeded = await repository.saveCandidate({
@@ -705,21 +700,16 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
       deviceEligibility: "APPROVED"
     });
 
-    const askSchedule = await engine.handleIncomingMessage({
+    const result = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: "lead_quedamos",
       message: "Podemos hacer una llamada?"
     });
-    expect(askSchedule.response.toLowerCase()).toContain("que dia y hora");
-    expect(askSchedule.response.toLowerCase()).not.toContain("disponibilidad");
 
-    const proposesTime = await engine.handleIncomingMessage({
-      candidateId: seeded.id,
-      instagramUsername: "lead_quedamos",
-      message: "El domingo tipo 11 entonces"
-    });
-    expect(proposesTime.response.toLowerCase()).toContain("quedamos");
-    expect(proposesTime.response.toLowerCase()).toContain("numero de whatsapp");
+    // Cualificada pero sin "Encaja" de Alex: difiere a su socio, NO propone dia/hora ni agenda.
+    expect(result.candidate.currentState).not.toBe("CALL_SCHEDULED");
+    expect(result.response.toLowerCase()).toContain("socio");
+    expect(result.response.toLowerCase()).not.toContain("que dia y hora");
   });
 
   it("enforces the device gate on a budget Motorola (replay-10 T1: 'Perfecto' a un Motorola E32)", async () => {
