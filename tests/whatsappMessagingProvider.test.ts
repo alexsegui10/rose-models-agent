@@ -17,6 +17,21 @@ describe("getWhatsAppConfig", () => {
     expect(config.graphApiBaseUrl).toBe("https://graph.facebook.com");
     expect(config.phoneNumberId).toBe("PHONE_ID");
   });
+
+  it("reutiliza el App Secret de Instagram si no se pone WHATSAPP_APP_SECRET (misma Meta app)", () => {
+    const env = {
+      WHATSAPP_VERIFY_TOKEN: "verify",
+      WHATSAPP_ACCESS_TOKEN: "token",
+      WHATSAPP_PHONE_NUMBER_ID: "PHONE_ID",
+      INSTAGRAM_APP_SECRET: "ig-secret",
+      INSTAGRAM_APP_SECRET_ALT: "ig-secret-alt"
+    } as unknown as NodeJS.ProcessEnv;
+    const config = getWhatsAppConfig(env);
+    expect(config.isConfigured).toBe(true);
+    expect(config.appSecret).toBe("ig-secret");
+    expect(config.appSecretCandidates).toContain("ig-secret");
+    expect(config.appSecretCandidates).toContain("ig-secret-alt");
+  });
 });
 
 describe("GraphApiWhatsAppMessagingProvider.sendTextMessage", () => {
