@@ -394,9 +394,9 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
 
   return (
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
-    (/\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(message) ||
+    (/\b(me dais|dame|negociar|negociamos|excepcion|mejora\w*|baj[ae]\w*|sub[ei]\w*|mas para mi)\b/.test(message) ||
       guaranteedMoneyDemandPattern.test(message) ||
-      (/\b\d{1,3}\s?%/.test(message) && !/(70\s?%|30\s?%|70\/30)/.test(message)))
+      ((/\b\d{1,3}\s?%/.test(message) || /\b\d{1,2}\/\d{1,2}\b/.test(message)) && !/(70\s?%|30\s?%|70\/30)/.test(message)))
   );
 }
 
@@ -406,9 +406,13 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
   // reparto?") SI se responde con el 70/30 (decision de Alex; invariante 3: solo si preguntan la cifra,
   // nunca proactivo). OJO: una pregunta del MODELO de pago ("porcentaje o salario fijo?", "que
   // porcentaje es?") NO pide el reparto -> sin cifra; por eso NO basta con que aparezca "porcentaje".
+  // Incluye la pregunta por la PROPIA parte ("cuanto me llevo yo", "mi parte", "como es el reparto"): es
+  // pedir la cifra exacta (la suya = 30/70), asi que SI se responde con el 70/30 (invariante 3 — solo si
+  // preguntan la cifra). Antes solo se cubria el lado-agencia ("os quedais") y se le ocultaba a quien
+  // preguntaba lo suyo.
   const exactPercentageQuestion =
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
-    /\b(cual es el (porcentaje|reparto)|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued)\b/.test(
+    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano yo|cuanto es para mi)\b/.test(
       message
     );
   const generalCommercialQuestion =

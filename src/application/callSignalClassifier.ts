@@ -64,12 +64,25 @@ const COMPLAINT_TERMS =
 // Queja de SEGUIMIENTO en negociación: SOLO frases dirigidas al dinero (no términos sueltos como
 // "mucho"/"reducir" que podrían referirse al contenido/ritmo y regalarían un escalón sin queja real).
 const FOLLOWUP_SHARE_COMPLAINT =
-  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico)|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b/;
+  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico)|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b/;
 
 // Desconfianza LEVE (worried) -> tranquilizar y seguir. Incluye sospecha HIPOTÉTICA ("y si es una
 // estafa?"), que NO es agresión: por eso HOSTILE excluye las formas precedidas de "si".
 const DISTRUST =
   /como se que\b|como se si\b|no me fio|me cuesta (creer|fiarme)|no me lo creo|(sera|no sera|sera esto) (una )?(estafa|timo|broma|mentira|verdad)|si (es|fuera|fuese|seria|esto es) (una )?(estafa|timo|fraude|mentira|engano)|y si me (estafan|enganan|timan|roban)|(esto es|es esto|esto sera) (real|seguro|legal|de verdad|fiable|verdad)|es (de )?fiar|me da (un poco de )?(cosa|miedo|reparo|cosica|repelus|no se que)|da (un poco de )?miedo|desconfi|no se si (fiarme|me fio|es verdad|esto es real)|(seguro que|de verdad) (es legal|me vais a pagar|esto funciona)|no (me )?(van|vais|vayais) a (pagar|estafar|enganar)|y si es mentira/;
+
+// Sospecha HIPOTÉTICA ("y si esto es una estafa?", "y si esto fuera un timo"): NO es agresión, es duda
+// -> tranquilizar. Se evalúa ANTES que HOSTILE porque "si esto es una estafa" contiene "es una estafa",
+// que HOSTILE marcaría como acusación directa (el guard `si` no alcanza al haber "esto" en medio). La
+// coma de "sí, esto es una estafa" (afirmación) no entra: exige whitespace tras "si" y misma cláusula.
+const HYPOTHETICAL_SUSPICION =
+  /\bsi\s+(?:esto|eso|es|fuera|fuese|seria)\b[^,.!?]{0,25}\b(?:estafa|timo|fraude|mentira|engano|robo|ilegal)\b/;
+
+// Quiere PENSARLO / consultarlo (no es desinterés ni ruido): cierre cálido, sin contrato, puerta abierta.
+// Exige un verbo de deliberación (tengo que / voy a / necesito / dejame...) antes de pensar/mirar/consultar
+// para no confundir "pienso que esta bien" (opinión, asentimiento) con "me lo tengo que pensar" (duda).
+const WANTS_TO_THINK =
+  /\b(?:tengo que|me lo tengo que|voy a|me lo voy a|necesito|quiero|deja(?:me)?(?: que)?|dame tiempo (?:para|de)|necesito tiempo (?:para|de))\s+(?:lo\s+|me lo\s+)?(?:pensar\w*|piense\w*|consultar\w*)\b|\bme lo pienso\b|\blo (?:consulto|hablo) con (?:mi|mis|el|la)\s+(?:pareja|marido|novi[oa]|familia|madre|hermana|chic[oa])\b/;
 
 // Desinterés -> cierre cálido sin presionar (NO se le manda contrato). Se evalúa antes que "quiere
 // terminar" para no empujar el contrato a quien no le interesa.
@@ -106,12 +119,15 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   }
 
   // Orden de prioridad: lo más urgente/seguro primero.
+  // Sospecha hipotética ("y si esto es una estafa?") -> tranquilizar, va ANTES de HOSTILE (ver arriba).
+  if (HYPOTHETICAL_SUSPICION.test(text)) return "distrust";
   if (HOSTILE.test(text)) return "hostile-or-suspicious";
   if ((HUMAN_REF.test(text) && WANT_HUMAN_VERB.test(text)) || REJECT_MACHINE.test(text)) return "wants-human";
   if (SHARE_TERMS.test(text) && COMPLAINT_TERMS.test(text)) return "complains-about-share";
   // Queja de seguimiento durante la negociación (frase dirigida al dinero, sin repetir "reparto").
   if (input.moneyContext && FOLLOWUP_SHARE_COMPLAINT.test(text)) return "complains-about-share";
   if (DISTRUST.test(text)) return "distrust";
+  if (WANTS_TO_THINK.test(text)) return "wants-to-think";
   if (NOT_INTERESTED.test(text)) return "not-interested";
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";

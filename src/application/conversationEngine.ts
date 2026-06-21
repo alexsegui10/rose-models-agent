@@ -1511,7 +1511,7 @@ function generateResponse(
   }
 
   if (responsePlan.answerFacts.length > 0 && isBusinessAnswerIntent(understanding, responsePlan)) {
-    return businessResponseFromPlan(responsePlan);
+    return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
   }
 
   // Opener canonico de Alex en tres pasos (identidad + validacion/gate + marco), SIN preguntas:
@@ -1719,7 +1719,7 @@ function canonicalOpener(candidate: Candidate): string {
 // "lo deje", "me da miedo", "no estoy segura"... Detectarlo permite un acuse EMPATICO medido en vez
 // de uno neutro frio. Es deteccion determinista: el acuse es una frase fija, jamas inventa nada.
 const sharesPersonalConcernPattern =
-  /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da\b[^.!?]{0,14}\b(miedo|verguenza|cosa|palo|apuro|reparo|inseguridad|corte|vertigo)|no se si|no estoy segura|no estaba segura|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza|inseguridad|insegura|no me atrevo|nunca he hecho esto|nunca lo he hecho|estaf|me robaron|me timaron|mala experiencia|me enganaron|dejaron de contestar|desaparecieron)\b/;
+  /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da\b[^.!?]{0,14}\b(miedo|verguenza|cosa|palo|apuro|reparo|inseguridad|corte|vertigo|pereza)|no se si|no estoy segura|no estaba segura|no me convence|no me termina de convencer|no me acaba de convencer|no se yo|no lo (?:veo|tengo) claro|tengo mis dudas|no estoy convencid\w*|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza|inseguridad|insegura|no me atrevo|nunca he hecho esto|nunca lo he hecho|estaf|me robaron|me timaron|mala experiencia|me enganaron|dejaron de contestar|desaparecieron)\b/;
 
 // Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.
 export function acknowledgementFor(understanding: ModelConversationOutput, inboundMessage = ""): string {
@@ -1733,7 +1733,12 @@ export function acknowledgementFor(understanding: ModelConversationOutput, inbou
   return "Vale pues";
 }
 
-function businessResponseFromPlan(responsePlan: ResponsePlan): string {
+// Cuenta signos de interrogacion (para detectar multi-pregunta: "cual es el proceso? y cuanto cuesta?").
+function countQuestionMarks(message: string): number {
+  return (message.match(/\?/g) ?? []).length;
+}
+
+function businessResponseFromPlan(responsePlan: ResponsePlan, multiQuestion = false): string {
   if (
     responsePlan.knowledgeEntryIds.includes("commercial-revenue-share-general") &&
     responsePlan.answerFacts.some((fact) => fact.includes("70%"))
@@ -1749,6 +1754,25 @@ function businessResponseFromPlan(responsePlan: ResponsePlan): string {
     ];
     if (responsePlan.questionToAsk) parts.push(bridgeBackToQuestion(responsePlan.questionToAsk));
     return parts.join("\n\n");
+  }
+
+  // MULTI-PREGUNTA (QA 21-jun): SOLO cuando el mensaje trae 2+ preguntas reales (multiQuestion). Se
+  // contestan los 2-3 hechos principales en rafaga corta en vez de responder un solo tema y descartar el
+  // resto. El % se EXCLUYE siempre (su rama dedicada va arriba; invariante 3: la cifra nunca proactiva).
+  // Gateado por multiQuestion para no secuestrar una pregunta simple que recupere varias entradas de apoyo.
+  if (multiQuestion) {
+    const distinctFacts: string[] = [];
+    for (const fact of responsePlan.answerFacts) {
+      if (/70%|30%|70\/30/.test(fact)) continue;
+      if (!distinctFacts.includes(fact)) distinctFacts.push(fact);
+    }
+    if (distinctFacts.length >= 2) {
+      const parts = distinctFacts.slice(0, 3);
+      if (responsePlan.questionToAsk && !parts.some((p) => p.includes("?"))) {
+        parts.push(bridgeBackToQuestion(responsePlan.questionToAsk));
+      }
+      return parts.join("\n\n");
+    }
   }
 
   // Respuesta canonica de dinero sin cifra (analisis 2026-06-10): "trabajamos con porcentaje" +
@@ -2422,9 +2446,13 @@ function suppressBenignModelEscalation(
   // garantizado, una cifra concreta DEMANDADA, o un porcentaje que NO sea el estandar 70/30. El codigo
   // decide por la senal del mensaje, no por el flag del modelo (invariante 1). Mismo criterio que
   // isCommercialEscalation del planner (incluye guaranteedMoneyDemandPattern para no divergir).
-  const offersNonStandardPercentage = /\b\d{1,3}\s?%/.test(message) && !/\b(70\s?%|30\s?%|70\/30)\b/.test(message);
+  // Mismo criterio (ampliado) que isCommercialEscalation/asksForException: cubre voseo/imperativos
+  // ("subime", "bajame", "mejorame") y el formato "60/40", para que la negociacion real escale a Alex
+  // (invariante 3). Sin esto el supresor desescalaba "subime al 40" o "60/40" y la dejaba en el funnel.
+  const offersNonStandardPercentage =
+    (/\b\d{1,3}\s?%/.test(message) || /\b\d{1,2}\/\d{1,2}\b/.test(message)) && !/\b(70\s?%|30\s?%|70\/30)\b/.test(message);
   const isPercentageNegotiation =
-    /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(message) ||
+    /\b(me dais|dame|negociar|negociamos|excepcion|mejora\w*|baj[ae]\w*|sub[ei]\w*|mas para mi)\b/.test(message) ||
     guaranteedMoneyDemandPattern.test(message) ||
     offersNonStandardPercentage ||
     demandsSpecificPercentage(understanding, message);

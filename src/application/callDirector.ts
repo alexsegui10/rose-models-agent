@@ -31,6 +31,7 @@ export type CallCandidateSignal =
   | "wants-human" // pide hablar con una persona -> handoff
   | "hostile-or-suspicious" // agresión/insultos/sospecha grave -> handoff
   | "not-interested" // desinterés ("no me interesa") -> cierre cálido sin presionar
+  | "wants-to-think" // quiere pensarlo/consultarlo ("me lo tengo que pensar") -> cierre cálido sin contrato
   | "unclear" // ruido / no se entiende -> pedir que lo repita (no asumir asentimiento)
   | "wants-to-end"; // quiere terminar -> cerrar con contrato
 
@@ -147,6 +148,10 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
     case "complains-about-share":
       return negotiateShare(s);
     case "not-interested":
+      return closeSoft(s);
+    case "wants-to-think":
+      // Quiere pensarlo: mismo trato que un cierre cálido (sin contrato, puerta abierta), nunca DEFER ni
+      // "¿me lo repites?". Alex puede hacer seguimiento luego. No se fuerza el contrato a quien duda.
       return closeSoft(s);
     case "asks-unknown":
       return { directive: { type: "DEFER_TO_PARTNER" }, nextState: s };

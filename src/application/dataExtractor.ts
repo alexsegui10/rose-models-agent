@@ -344,6 +344,11 @@ const agentAskedNamePattern = /\b(como te llamas|cual es tu nombre|tu nombre|te 
 const agentAskedAgePattern = /\b(que edad tienes|cuantos anos|tu edad)\b/;
 const agentAskedOnlyFansPattern = /\b(tienes of|has tenido of|tienes onlyfans|has tenido onlyfans|of activo)\b/;
 const agentAskedAgenciesPattern = /\botras? agencias?\b/;
+const agentAskedDevicePattern =
+  /\b(que movil tienes|que movil|con que movil|que telefono|que dispositivo|movil tienes|grabas con|con que grabas|tienes (?:un |buen )?(?:iphone|movil))\b/;
+// Descriptor de mala calidad del movil (para resolver el dead-end cuando NO se nombra el aparato).
+const deviceQualityReplyPattern =
+  /\b(viej[oa]|mal[oa]|malisim[oa]|mala calidad|roto|rota|gama baja|antigu[oa]|cascad[oa]|destrozad[oa]|fatal|para el arrastre|hecho polvo|una caca|de mierda|cutre|lent[oa]|no sirve|no graba bien)\b/;
 
 // Una edad pelada es uno o dos digitos como respuesta a "que edad tienes?", admitiendo el prefijo
 // "edad:" y ruido final de puntuacion/emoji ("17!", "17 :)", "edad: 17"). No matchea numeros con un
@@ -486,6 +491,7 @@ export function extractDeterministicUnderstanding(
   const agentAskedAge = agentAskedAgePattern.test(lastAgent);
   const agentAskedOnlyFans = agentAskedOnlyFansPattern.test(lastAgent);
   const agentAskedAgencies = agentAskedAgenciesPattern.test(lastAgent);
+  const agentAskedDevice = agentAskedDevicePattern.test(lastAgent);
 
   const firstName = extractFirstName(normalized) ?? (agentAskedName ? bareNameFromReply(normalized) : undefined);
   if (firstName) extractedData.firstName = firstName;
@@ -519,7 +525,15 @@ export function extractDeterministicUnderstanding(
   // disparar NOT_ELIGIBLE. Los moviles malos reales SIEMPRE nombran el dispositivo (samsung viejo,
   // redmi antiguo, movil roto), asi que mentionsDevice los cubre.
   const mentionsDevice = deviceType !== "UNKNOWN" || Boolean(deviceModel);
-  const deviceEligibility = mentionsDevice ? deviceEligibilityForDescription(normalized) : "UNKNOWN";
+  let deviceEligibility = mentionsDevice ? deviceEligibilityForDescription(normalized) : "UNKNOWN";
+  // P1-8 (QA 21-jun): respuesta de mala calidad a la pregunta del movil SIN nombrar el aparato ("uno
+  // viejo", "malisimo", "esta roto") -> NO dejarla en UNKNOWN (dead-end/bucle de "Okeyy"). Se clasifica
+  // con el texto (viejo/malo/roto -> NOT_ELIGIBLE); si aun asi no se reconoce, PENDING_QUALITY_TEST para
+  // pedir el modelo exacto. Gateado por agentAskedDevice para no leer "estoy mala y vieja" (sobre ella).
+  if (!mentionsDevice && agentAskedDevice && deviceQualityReplyPattern.test(normalized)) {
+    const fromText = deviceEligibilityForDescription(normalized);
+    deviceEligibility = fromText !== "UNKNOWN" ? fromText : "PENDING_QUALITY_TEST";
+  }
   if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
 
   if (/\b(iphone|i phone|ios)\b/.test(normalized)) {
@@ -646,7 +660,13 @@ export function extractDeterministicUnderstanding(
     return baseOutput("PROMPT_INJECTION", extractedData, 0.9, true, "Intento de obtener instrucciones internas.", internalNotes);
   }
 
-  if (/\b(eres ia|eres una ia|eres un bot|sois ia|hablo con una ia|hablo con un bot)\b/.test(normalized)) {
+  // ¿Habla con una IA/bot? Cubre tuteo ("eres"), voseo LATAM ("sos") y formas con "esto es / o un bot"
+  // ("sos una persona real o un bot?"). Dispara la respuesta de transparencia (reason con "ia"/"bot").
+  if (
+    /\b(?:eres|sos|sois|esto es|es esto|sera esto|hablo con|estoy hablando con|estoy con)\b[^.!?]{0,15}?\b(?:una?\s+)?(?:ia|bot|maquina|robot|contestador|grabacion|inteligencia artificial)\b|\bo (?:un|una)\s+(?:bot|ia|maquina|robot)\b/.test(
+      normalized
+    )
+  ) {
     return baseOutput("REQUESTS_HUMAN", extractedData, 0.88, true, "Pregunta si habla con una IA o bot.", internalNotes);
   }
 
@@ -679,8 +699,11 @@ export function extractDeterministicUnderstanding(
     /\b\d{1,3}\s?%/.test(normalized) ||
     demandsGuaranteedMoney
   ) {
-    const asksForException = /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi)\b/.test(normalized);
-    const asksNonStandardNumber = /\b\d{1,3}\s?%/.test(normalized) && !/(70\s?%|30\s?%|70\/30)/.test(normalized);
+    const asksForException = /\b(me dais|dame|negociar|negociamos|excepcion|mejora\w*|baj[ae]\w*|sub[ei]\w*|mas para mi)\b/.test(
+      normalized
+    );
+    const asksNonStandardNumber =
+      (/\b\d{1,3}\s?%/.test(normalized) || /\b\d{1,2}\/\d{1,2}\b/.test(normalized)) && !/(70\s?%|30\s?%|70\/30)/.test(normalized);
     const requiresHumanReview = asksForException || asksNonStandardNumber || demandsGuaranteedMoney;
     return baseOutput(
       "ASKS_ABOUT_PERCENTAGE",
