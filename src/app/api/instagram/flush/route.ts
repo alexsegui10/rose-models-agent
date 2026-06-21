@@ -3,6 +3,12 @@ import { z } from "zod";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import { getQStashConfig } from "@/application/qstashConfig";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
+import {
+  escalationNotificationFor,
+  followRequestNotificationFor,
+  getOperatorNotifier
+} from "@/infrastructure/integrations/operatorNotifier";
+import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { getSimulatorEngine } from "@/server/simulatorStore";
 import { bearerMatches } from "@/server/bearerAuth";
@@ -73,6 +79,19 @@ export async function POST(request: Request): Promise<NextResponse> {
         const sent = await provider.sendTextMessage(senderId, chunks[i]);
         if (!sent) break;
       }
+    }
+
+    // Paridad con el webhook directo: avisar a Alex por WhatsApp si la candidata ENTRO en revision humana
+    // (escalada) o si su cuenta privada necesita que el envie la solicitud. Sin esto, con el debounce ON,
+    // Alex se perderia esos avisos. notify() nunca lanza (best-effort).
+    const escalation = escalationNotificationFor(result.candidate, result.plannedTransitions);
+    const followRequest = followRequestNotificationFor(result.candidate, result.plannedTransitions);
+    if (escalation || followRequest) {
+      const notifier = getOperatorNotifier();
+      const profile = await fetchInstagramProfile(senderId, config);
+      const profileUrl = instagramProfileUrl(profile?.username) ?? undefined;
+      if (escalation) await notifier.notify({ ...escalation, profileUrl });
+      if (followRequest) await notifier.notify({ ...followRequest, profileUrl });
     }
     return NextResponse.json({ ok: true, flushed: true });
   } catch (error) {
