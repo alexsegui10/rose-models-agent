@@ -9,7 +9,7 @@ import type {
   StateTransition
 } from "@/domain/candidate";
 import type { AutomationMode, DraftDeliveryStatus } from "@/domain/automation";
-import { createCandidate } from "@/domain/candidate";
+import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 import { canTransition, createTransition } from "@/domain/stateMachine";
 import type { CandidateRepository } from "@/infrastructure/repositories/types";
 import type { ConversationExample } from "@/domain/conversationExample";
@@ -290,7 +290,7 @@ export class ConversationEngine {
    * resultado. Asi `recordCallOutcome` solo LEE callAttempts para decidir el reintento diferido. Idempotente
    * respecto al estado: no cambia de estado, solo incrementa y persiste el contador.
    */
-  async noteCallAttempt(candidateId: string): Promise<{ candidate: Candidate }> {
+  async noteCallAttempt(candidateId: string, conversationId?: string): Promise<{ candidate: Candidate }> {
     const existing = await this.dependencies.repository.findCandidateById(candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
@@ -298,10 +298,43 @@ export class ConversationEngine {
     const candidate: Candidate = {
       ...existing,
       callAttempts: existing.callAttempts + 1,
+      // Id de la conversacion de ElevenLabs (para reproducir la grabacion luego); conserva el previo si no llega uno nuevo.
+      lastCallConversationId: conversationId ?? existing.lastCallConversationId,
       updatedAt: new Date()
     };
     await this.dependencies.repository.saveCandidate(candidate);
     return { candidate };
+  }
+
+  /**
+   * Registra mensajes ENTRANTES de WhatsApp (bandeja del numero de la agencia) SIN responder. A diferencia
+   * de Instagram (handleIncomingTurn corre el bot), en WhatsApp el bot NO auto-responde (decision de Alex):
+   * solo guardamos el mensaje para que Alex lo vea y conteste a mano. La candidata de WhatsApp se identifica
+   * con la clave `wa:<digitos>` (separada de las de Instagram; NO se fusiona con ellas). Idempotente por
+   * externalMessageId (lo garantiza addMessage). No decide negocio ni cambia de estado (invariante 1).
+   */
+  async recordWhatsAppInbound(input: {
+    phone: string;
+    messages: Array<{ content: string; externalMessageId?: string }>;
+  }): Promise<{ candidate: Candidate; stored: number }> {
+    const digits = input.phone.replace(/\D/g, "");
+    const key = `wa:${digits}`;
+    let candidate = await this.dependencies.repository.findCandidateByInstagram(key);
+    if (!candidate) {
+      candidate = normalizeCandidate({
+        ...createCandidate({ instagramUsername: key, displayName: `+${digits}` }),
+        phone: digits
+      });
+      await this.dependencies.repository.saveCandidate(candidate);
+    }
+    let stored = 0;
+    for (const message of input.messages) {
+      const content = message.content.trim();
+      if (!content) continue;
+      await this.dependencies.repository.addMessage(candidateMessage(candidate.id, content, message.externalMessageId));
+      stored += 1;
+    }
+    return { candidate, stored };
   }
 
   /**

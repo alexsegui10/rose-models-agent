@@ -129,6 +129,9 @@ export function planOutreach(input: PlanOutreachInput): OutreachPlan | null {
   const { candidate, recentMessages, now } = input;
 
   // --- Skips de seguridad (orden: lo mas barato/critico primero) ---
+  // Candidata SOLO de WhatsApp (clave `wa:<digitos>`): NUNCA se re-engancha por Instagram (su "username"
+  // es un numero, no un IGSID real). Blinda el invariante 1 frente al cron de outreach (NOTA del revisor).
+  if (candidate.instagramUsername.startsWith("wa:")) return null;
   if (TERMINAL_STATES.has(candidate.currentState)) return null;
   if (candidate.manualControlActive || candidate.automationPaused) return null;
   // Peticion explicita de no-contacto en CUALQUIER mensaje de la candidata: no se la vuelve a tocar.

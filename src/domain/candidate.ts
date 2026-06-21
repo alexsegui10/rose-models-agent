@@ -141,6 +141,9 @@ export const CandidateSchema = z.object({
   callAttempts: z.number().int().nonnegative().default(0),
   // Resultado de la ultima llamada de voz (duracion, % al que se negocio, resumen, transcripcion).
   lastCall: CallRecordSchema.optional(),
+  // Id de la conversacion de ElevenLabs de la ultima llamada disparada (para reproducir la grabacion en la
+  // ficha). Lo fija el disparador outbound (noteCallAttempt); sobrevive aunque aun no haya resultado.
+  lastCallConversationId: z.string().optional(),
   interestLevel: InterestLevelSchema.default("UNKNOWN"),
   objections: z.array(z.string()).default([]),
   // Cuantas veces la candidata ha objetado/dudado de mostrar la cara. La 1a vez se reconduce; si
@@ -229,6 +232,7 @@ export interface CandidatePatch {
   scheduledCallStartMs?: number;
   callAttempts?: number;
   lastCall?: CallRecord;
+  lastCallConversationId?: string;
   interestLevel?: InterestLevel;
   objections?: string[];
   faceObjectionCount?: number;

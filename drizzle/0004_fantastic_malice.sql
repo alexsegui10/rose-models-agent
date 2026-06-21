@@ -1,0 +1,1 @@
+ALTER TABLE "candidates" ADD COLUMN "last_call_conversation_id" text;

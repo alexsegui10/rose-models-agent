@@ -41,6 +41,6 @@ export async function POST(request: Request) {
 
   // El contador de intentos se incrementa SOLO cuando la llamada ARRANCÓ de verdad (un 502 al iniciar no
   // gasta intento): así recordCallOutcome solo lo lee para decidir el reintento diferido (hasta 3).
-  await getSimulatorEngine().noteCallAttempt(parsed.data.candidateId);
+  await getSimulatorEngine().noteCallAttempt(parsed.data.candidateId, result.conversationId ?? undefined);
   return NextResponse.json({ ok: true, conversationId: result.conversationId ?? null });
 }

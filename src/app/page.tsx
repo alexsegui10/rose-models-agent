@@ -2241,6 +2241,19 @@ export default function Home() {
                       📞 Llamar por WhatsApp
                     </button>
                   ) : null}
+                  {drawerCandidate.lastCallConversationId ? (
+                    <div className="drawer-block">
+                      <span className="drawer-field-label">Grabación de la llamada</span>
+                      <audio
+                        controls
+                        preload="none"
+                        className="drawer-audio"
+                        src={`/api/call/${encodeURIComponent(drawerCandidate.lastCallConversationId)}/audio`}
+                      >
+                        Tu navegador no puede reproducir el audio.
+                      </audio>
+                    </div>
+                  ) : null}
                   {drawerCandidate.lastCall ? (
                     <>
                       <div className="call-stats">

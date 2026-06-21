@@ -44,6 +44,16 @@ describe("planOutreach — skips de seguridad (devuelve null)", () => {
     }
   });
 
+  it("NUNCA re-engancha a una candidata solo-WhatsApp (clave wa:<digitos>): su 'username' es un numero, no un IGSID", () => {
+    const c = candidate({
+      instagramUsername: "wa:34699111222",
+      currentState: "QUALIFYING",
+      lastMessageAt: new Date(NOW.getTime() - 30 * HOUR)
+    });
+    const msgs = [agentMsg("hola, sigues ahi?", 30 * HOUR)];
+    expect(planOutreach({ candidate: c, recentMessages: msgs, now: NOW })).toBeNull();
+  });
+
   it("no toca si manualControlActive o automationPaused", () => {
     const base = { currentState: "QUALIFYING" as const, lastMessageAt: new Date(NOW.getTime() - 30 * HOUR) };
     const msgs = [agentMsg("sigues ahi?", 30 * HOUR)];

@@ -130,6 +130,8 @@ export const candidates = pgTable("candidates", {
   callAttempts: integer("call_attempts").notNull().default(0),
   // Resultado de la ultima llamada (documento completo: duracion, % negociado, resumen, transcripcion).
   lastCall: jsonb("last_call").$type<CallRecord>(),
+  // Id de la conversacion de ElevenLabs de la ultima llamada (para reproducir la grabacion en la ficha).
+  lastCallConversationId: text("last_call_conversation_id"),
   objections: jsonb("objections").$type<string[]>().notNull().default([]),
   faceObjectionCount: integer("face_objection_count").notNull().default(0),
   notes: jsonb("notes").$type<string[]>().notNull().default([]),
