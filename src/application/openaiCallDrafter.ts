@@ -39,7 +39,10 @@ export class OpenAiCallDrafter implements CallUtteranceDrafter {
         {
           model: this.config.model,
           input: [{ role: "system", content: buildDraftPrompt(request) }],
-          temperature: 0.5,
+          // 0.7 (sube de 0.5): mas variacion entre turnos = menos robotico. Seguro porque es la ruta de VOZ
+          // (texto plano) y `validateCallUtterance` protege cifras/promesas. NUNCA subir asi la ruta de TEXTO
+          // (usa salida estructurada JSON -> mas temperatura = mas riesgo de parse fallido).
+          temperature: 0.7,
           max_output_tokens: 220,
           truncation: "auto"
         },

@@ -109,6 +109,7 @@ export const alexStyleProfile = {
     "lenguaje corporativo de atencion al cliente",
     "listas y parrafos largos en mensajes en vivo",
     "voseo argentino al teclear en vivo",
+    "dialecto IA: guion largo (—), punto y coma, conectores de ensayo (Ademas/Sin embargo/Por lo tanto/En conclusion/Cabe destacar), enumerar de tres en tres, o hedging (depende de varios factores, en general)",
     "revelar el porcentaje de reparto de forma proactiva",
     "garantizar o cuantificar ingresos",
     "promesas economicas",
