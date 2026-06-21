@@ -124,7 +124,24 @@ export async function POST(request: Request): Promise<NextResponse> {
   const provider = new GraphApiInstagramMessagingProvider(config);
   // Avisos al operador (Alex) por WhatsApp: no-op si no hay claves de CallMeBot en el entorno.
   const notifier = getOperatorNotifier();
-  for (const message of inbound) {
+
+  // Agrupar por remitente: si la misma candidata mando VARIOS mensajes seguidos en este payload, se
+  // responden como UN turno (groupMessagesForTurn los une dentro de handleIncomingTurn), no uno a uno,
+  // para que el bot no conteste a cada linea por separado. (La espera ~Ns para "dejarla terminar" entre
+  // payloads distintos es la fase con cola/QStash, aparte.)
+  const groupedBySender = new Map<string, { senderId: string; text: string; messageId?: string }>();
+  for (const m of inbound) {
+    const prev = groupedBySender.get(m.senderId);
+    if (prev) {
+      prev.text = `${prev.text}\n${m.text}`.trim();
+      prev.messageId = [prev.messageId, m.messageId].filter(Boolean).join("|") || undefined;
+    } else {
+      groupedBySender.set(m.senderId, { senderId: m.senderId, text: m.text, messageId: m.messageId });
+    }
+  }
+  const groupedInbound = [...groupedBySender.values()];
+
+  for (const message of groupedInbound) {
     try {
       const result = await engine.handleIncomingTurn({
         // El IGSID es la clave de la conversación (Instagram no da el @username en el webhook).
