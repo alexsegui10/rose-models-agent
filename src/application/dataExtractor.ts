@@ -92,6 +92,23 @@ function declaredMinorAge(normalized: string): number | null {
   ) {
     return 17;
   }
+  // "casi (tengo) N", "tengo casi N", "casi 18": AUN no tiene N -> con N<=18 es la menor que todavia es
+  // (~N-1). CRITICO invariante 2: sin esto "casi tengo 18" leia "tengo 18" como ADULTA (peor fallo, QA
+  // 21-jun) y "tengo casi 18" se quedaba sin edad (limbo). Las tres formas EXCLUYEN contables y duraciones
+  // ("casi 18 mil seguidores", "tengo casi 10 anos en esto", "tengo casi 18 euros", "casi 3 hijos") para no
+  // cerrar a una ADULTA por error (invariante 2 en sentido inverso). La forma suelta "casi N" ademas se
+  // restringe a 15-18 (es donde esta el riesgo de menor) para no tragarse cualquier cifra suelta.
+  const almostExcl =
+    "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|reels?|tatuajes?|publicacion(?:es)?|pedidos?|kilos?|pesos?|euros?|dolares?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?))" +
+    "(?!\\s*anos?\\s+(?:como|de|en|trabajand|haciend|dedicad|currand|junt|casad|sali|novi|relacion|pareja))";
+  const almostAge =
+    normalized.match(new RegExp(`\\bcasi\\s+tengo\\s+(\\d{1,2})\\b${almostExcl}`)) ??
+    normalized.match(new RegExp(`\\btengo\\s+casi\\s+(\\d{1,2})\\b${almostExcl}`)) ??
+    normalized.match(new RegExp(`\\bcasi\\s+(1[5-8])\\b${almostExcl}`));
+  if (almostAge) {
+    const declaredAlmost = Number(almostAge[1]);
+    if (declaredAlmost <= 18) return Math.max(1, declaredAlmost - 1);
+  }
   // "(aun|todavia) no tengo N" / "no tengo N (todavia|aun)" con N<=18 -> casi N, es menor (~N-1).
   // Se excluyen contables/dinero para no leer "no tengo 200 euros" como edad.
   const notYet = normalized.match(
@@ -697,7 +714,7 @@ export function extractDeterministicUnderstanding(
   // Desconfianza (incluida la leve: "como se que es real?", "mala espina", "sois de fiar?") y AGRESION
   // (insultos): decision de Alex (16-jun) -> escalan a el (HUMAN_INTERVENTION_REQUIRED) y le llega aviso.
   if (
-    /\b(estafa|estafador\w*|timador\w*|enfadada|enfadado|enfado|me molesta|me suena raro|no me fio|mala espina|como se que (?:es real|es verdad|sois reales|no es estafa)|sois de fiar|me puedo fiar|sois fiables|no sera (?:una )?estafa|sera (?:una )?estafa|fraude|que asco|sois una basura|panda de|os (?:voy a )?denunci\w*|os denuncio|ladron\w*|ladrones|sinverguenza\w*|mierda)\b/.test(
+    /\b(estaf\w*|tim[oa]\w*|timador\w*|enfadada|enfadado|enfado|me molesta|me suena raro|no me fio|mala espina|como se que (?:es real|es verdad|sois reales|no es estafa)|sois de fiar|me puedo fiar|sois fiables|no sera (?:una )?estafa|sera (?:una )?estafa|fraude|que asco|sois una basura|panda de|os (?:voy a )?denunci\w*|os denuncio|ladron\w*|ladrones|sinverguenza\w*|mierda)\b/.test(
       normalized
     )
   ) {

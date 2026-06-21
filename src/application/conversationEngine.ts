@@ -828,6 +828,10 @@ export class ConversationEngine {
       !updatedCandidate.automationPaused &&
       !understanding.requiresHumanReview &&
       !alreadyMinor &&
+      // Sin WhatsApp NO se agenda (QA 21-jun): el bot de voz necesita un numero al que llamar; auto-agendar
+      // sin telefono confirmaba "te llamo por WhatsApp" con phone vacio -> llamada imposible. Si falta, no
+      // se agenda y el turno sigue: el planner pide el numero (PHONE_QUESTION) y se agenda cuando lo de.
+      Boolean(updatedCandidate.phone && updatedCandidate.phone.trim()) &&
       proposesConcreteTime(normalizeText(groupedMessage.content));
     if (canAutoSchedule) {
       const autoScheduled = await this.tryAutoScheduleCall(updatedCandidate, groupedMessage.content);
@@ -2789,7 +2793,7 @@ function softDeferResponse(message: string, questionToAsk: string | null): strin
 }
 
 const faceRecognitionPattern =
-  /\b(me reconozca|me reconozcan|que me vean|me vea alguien|me vean en mi pais|en mi pais|conocidos|gente que conozco|me da miedo que me|privacidad|que no me vea)\b/;
+  /\b(me reconozca|me reconozcan|que me vean?|me vea alguien|me vean? en mi pais|en mi pais|conocid[oa]s?|gente conocida|gente que conozco|me da miedo que me|privacidad|que no me vea|mi ex)\b/;
 
 function classifyFaceConcern(inboundMessage: string): FaceConcernKind | null {
   const message = normalizeText(inboundMessage);
