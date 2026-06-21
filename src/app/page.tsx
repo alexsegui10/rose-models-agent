@@ -182,6 +182,8 @@ export default function Home() {
   const [instagramUsername, setInstagramUsername] = useState("candidata_demo");
   const [profileVisibility, setProfileVisibility] = useState<ProfileVisibility>("PUBLIC");
   const [message, setMessage] = useState("Hola, me interesa. Tengo 22 anos y soy de Madrid.");
+  // Canal activo en la bandeja de Mensajes: Instagram (candidatas normales) o WhatsApp (clave wa:<digitos>).
+  const [chatChannel, setChatChannel] = useState<"instagram" | "whatsapp">("instagram");
   const [loading, setLoading] = useState(false);
   const [retrievedExamples, setRetrievedExamples] = useState<RetrievedExample[]>([]);
   const [knowledgeEntries, setKnowledgeEntries] = useState<RetrievedKnowledgeEntry[]>([]);
@@ -654,7 +656,10 @@ export default function Home() {
   }
 
   async function doSendManualReply(candidate: Candidate, text: string) {
-    const response = await fetch("/api/simulator/manual-reply", {
+    // Candidata de WhatsApp (clave wa:<digitos>) -> se responde por la Cloud API de WhatsApp; el resto, por
+    // Instagram. El bot nunca auto-responde por WhatsApp: esto es Alex escribiendo a mano.
+    const isWhatsApp = candidate.instagramUsername.startsWith("wa:");
+    const response = await fetch(isWhatsApp ? "/api/whatsapp/send" : "/api/simulator/manual-reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ candidateId: candidate.id, message: text.trim() })
@@ -663,12 +668,22 @@ export default function Home() {
       setCrmNotice("No se pudo enviar la respuesta.");
       return;
     }
-    const data = (await response.json()) as { sentToInstagram: boolean };
-    setCrmNotice(
-      data.sentToInstagram
-        ? `Respuesta enviada a @${candidate.instagramUsername} por Instagram.`
-        : `Respuesta guardada para @${candidate.instagramUsername} (Instagram no conectado todavia).`
-    );
+    if (isWhatsApp) {
+      const data = (await response.json()) as { sentToWhatsApp: boolean };
+      const num = candidate.phone || candidate.instagramUsername.replace(/^wa:/, "");
+      setCrmNotice(
+        data.sentToWhatsApp
+          ? `Respuesta enviada por WhatsApp a +${num}.`
+          : `Respuesta guardada para +${num} (no se pudo enviar: revisa la conexion o la ventana de 24h).`
+      );
+    } else {
+      const data = (await response.json()) as { sentToInstagram: boolean };
+      setCrmNotice(
+        data.sentToInstagram
+          ? `Respuesta enviada a @${candidate.instagramUsername} por Instagram.`
+          : `Respuesta guardada para @${candidate.instagramUsername} (Instagram no conectado todavia).`
+      );
+    }
     await refreshCandidates();
   }
 
@@ -1271,14 +1286,54 @@ export default function Home() {
           <div className="chat2-grid">
             <div className="chat2-panel chat2-left">
               <div className="chat2-left-title">Candidatas</div>
+              <div style={{ display: "flex", gap: 4, padding: "4px 8px 8px" }}>
+                {(["instagram", "whatsapp"] as const).map((ch) => (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => setChatChannel(ch)}
+                    style={{
+                      flex: 1,
+                      padding: "5px 8px",
+                      fontSize: 12,
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      border: "1px solid rgba(127,127,127,0.3)",
+                      fontWeight: chatChannel === ch ? 700 : 400,
+                      background: chatChannel === ch ? "rgba(127,127,127,0.18)" : "transparent",
+                      color: "inherit"
+                    }}
+                  >
+                    {ch === "instagram" ? "Instagram" : "WhatsApp"}
+                  </button>
+                ))}
+              </div>
               <div className="chat2-list">
-                {candidates.length === 0 ? (
-                  <p className="muted" style={{ padding: "6px 8px", fontSize: 12 }}>
-                    Aún no hay candidatas. Entran solas por Instagram (o carga la demo en Resumen).
-                  </p>
-                ) : (
-                  candidates.map((candidate) => {
+                {(() => {
+                  const wantWhatsApp = chatChannel === "whatsapp";
+                  const list = candidates.filter((candidate) => candidate.instagramUsername.startsWith("wa:") === wantWhatsApp);
+                  if (list.length === 0) {
+                    return (
+                      <p className="muted" style={{ padding: "6px 8px", fontSize: 12 }}>
+                        {wantWhatsApp
+                          ? "Aún no hay chats de WhatsApp. Aparecen cuando una candidata escribe al número de la agencia."
+                          : "Aún no hay candidatas. Entran solas por Instagram (o carga la demo en Resumen)."}
+                      </p>
+                    );
+                  }
+                  return list.map((candidate) => {
                     const candProfile = igProfiles[candidate.instagramUsername];
+                    const waNumber = candidate.phone || candidate.instagramUsername.replace(/^wa:/, "");
+                    const label = wantWhatsApp
+                      ? candidate.firstName?.trim() || `+${waNumber}`
+                      : candidate.firstName?.trim() || `@${candProfile?.username ?? candidate.instagramUsername}`;
+                    const initial = (
+                      candidate.firstName?.trim() ||
+                      (wantWhatsApp ? waNumber : candidate.instagramUsername) ||
+                      "?"
+                    )
+                      .charAt(0)
+                      .toUpperCase();
                     return (
                       <button
                         key={candidate.id}
@@ -1300,18 +1355,16 @@ export default function Home() {
                               }}
                             />
                           ) : null}
-                          {(candidate.firstName?.trim() || candidate.instagramUsername || "?").charAt(0).toUpperCase()}
+                          {initial}
                         </span>
                         <div className="chat2-cand-body">
-                          <div className="chat2-cand-name">
-                            {candidate.firstName?.trim() || `@${candProfile?.username ?? candidate.instagramUsername}`}
-                          </div>
+                          <div className="chat2-cand-name">{label}</div>
                           <div className="chat2-cand-pill">{stateLabel(candidate.currentState)}</div>
                         </div>
                       </button>
                     );
-                  })
-                )}
+                  });
+                })()}
               </div>
             </div>
 
