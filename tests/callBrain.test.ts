@@ -45,8 +45,8 @@ describe("cerebro de la llamada (end-to-end por turnos)", () => {
     expect(types).toContain("COVER_STAGE");
     // Acaba cerrando con el contrato.
     expect(types[types.length - 1]).toBe("CLOSE_WITH_CONTRACT");
-    // El dinero referencia Instagram y lleva la cifra 70/30.
-    expect(moneyFallback).toContain("Instagram");
+    // El dinero se presenta FRESCO (sin "como te dije por Instagram") y lleva la cifra 70/30.
+    expect(moneyFallback).not.toContain("Instagram");
     expect(moneyFallback).toContain("70");
     expect(moneyFallback).toContain("30");
   });

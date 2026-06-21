@@ -33,9 +33,9 @@ export interface CallAgendaStage {
 }
 
 /**
- * Agenda en orden. El dinero se menciona proactivamente (referenciando el DM: "como te dije por
- * Instagram, 70/30"); la negociación a la baja solo se activa si la candidata se queja (la decide el
- * código vía `callNegotiation.ts`, nunca esta agenda).
+ * Agenda en orden. El dinero se presenta proactivamente y FRESCO en la llamada (70/30, sin dar por
+ * hecho que se dijo por Instagram); la negociación a la baja solo se activa si la candidata se queja
+ * (la decide el código vía `callNegotiation.ts`, nunca esta agenda).
  */
 export const CALL_AGENDA: readonly CallAgendaStage[] = [
   {
@@ -62,22 +62,17 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
   {
     id: "CONTENT_AND_FACE",
     order: 3,
-    label: "Contenido, cara y privacidad",
+    label: "Contenido",
     objective:
-      "Volumen inicial (~5 días, 2-3 fotos/día) y recurrente (Reels), contenido nuevo para Instagram y reutilizable en OnlyFans; la cara es imprescindible y cómo se cuida la privacidad (identidad española).",
-    knowledgeRefs: [
-      "content-production-volume",
-      "content-new-and-old-material",
-      "face-requirement-mandatory",
-      "geo-privacy-three-layers"
-    ]
+      "Volumen inicial (~5 días, 2-3 fotos/día) y recurrente (Reels), contenido nuevo para Instagram y reutilizable en OnlyFans. La cara y la privacidad NO se mencionan proactivamente (decisión de Alex jun-2026): solo se responden si la candidata pregunta (el conocimiento las cubre de forma reactiva).",
+    knowledgeRefs: ["content-production-volume", "content-new-and-old-material"]
   },
   {
     id: "MONEY",
     order: 4,
     label: "Reparto y cobro",
     objective:
-      "Recordar el reparto 70/30 (referenciando que ya se habló por Instagram), liquidación cada 14 días (ella cobra primero), sin salario fijo y sin prometer cifras. La negociación a la baja la decide el código si se queja.",
+      "Presentar el reparto 70/30 FRESCO en la llamada (sin dar por hecho que ya se dijo por Instagram), liquidación cada 14 días (ella cobra primero), sin salario fijo y sin prometer cifras. La negociación a la baja la decide el código si se queja.",
     knowledgeRefs: [
       "commercial-revenue-share-general",
       "commercial-revenue-share-settlement",

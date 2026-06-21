@@ -68,22 +68,27 @@ const CLOSE_TEXT =
  * hablar (no los snippets cortos del chat). El conocimiento sigue alimentando el brief del LLM y los
  * hechos; estas son las líneas deterministas de la llamada. MONEY se construye con la cifra autorizada.
  */
+// Guion conversacional (Alex jun-2026): turnos cortos que terminan invitando a responder, pero SIN
+// preguntar en cada frase (solo en los momentos clave). La cara y la privacidad NO se mencionan
+// proactivamente: solo se responden si la candidata pregunta (las cubre el conocimiento de forma reactiva).
 const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
   HOW_AGENCY_WORKS:
-    "Genial. Mira, te resumo cómo trabajamos: tú solo te encargas de mandarnos el contenido y nosotros hacemos todo lo demás. El tráfico lo generamos con cuentas de Instagram con nombres y ubicaciones de España, y cuando ya tienen bastantes seguidores ponemos el link a tu OnlyFans y un equipo de chatters lo monetiza las 24 horas.",
+    "Pues mira, te lo resumo fácil: tú solo te encargas de mandarnos el contenido y de todo lo demás nos ocupamos nosotros. El tráfico lo generamos con cuentas de Instagram españolas, y cuando ya tienen seguidores ponemos el link a tu OnlyFans y un equipo de chatters lo lleva las 24 horas. Tú no escribes con nadie. ¿Me sigues?",
   HER_RESPONSIBILITIES:
     "Por tu parte es sencillo: creas el contenido, lo subes a una carpeta de Drive que compartimos, sigues unas referencias que te pasamos y nos dices siempre tus límites. Con responder en un día o dos, de sobra.",
   CONTENT_AND_FACE:
-    "Al principio son unos cinco días suaves, 2 o 3 fotos al día, y luego vamos a vídeos cada semana. Te adelanto algo importante: la cara se enseña, eso es imprescindible, pero cuidamos mucho tu privacidad, todo va con identidad española.",
+    "Sobre el contenido: al principio son unos cinco días suaves, dos o tres fotos al día, y luego pasamos a vídeos cada semana.",
   BOUNDARIES:
-    "Una cosa que siempre pregunto: ¿hay algún tipo de contenido que no quieras hacer o algún límite que deba tener en cuenta? Lo respetamos sin problema."
+    "Una última cosa que siempre pregunto: ¿hay algún tipo de contenido que no quieras hacer o algún límite que deba tener en cuenta? Lo respetamos sin problema."
 };
 // Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
 const CLOSE_SOFT_TEXT =
   "Te entiendo perfectamente, sin ningún problema. Lo dejamos aquí entonces; si en algún momento te animas, aquí nos tienes, ¿vale? Gracias por tu tiempo y un saludo.";
 // Defensa del 70 una vez antes de bajar (el porqué del reparto; el modelo de la agencia ya documentado).
+// Defensa HONESTA del reparto (fix Alex jun-2026): la AGENCIA se queda el 70 PORQUE hace todo el
+// trabajo; ella se queda el 30. NUNCA decir "ese 70 es para ti" (era un bug que invertía el reparto).
 const DEFEND_SHARE_TEXT =
-  "Te entiendo. Mira, ese 70 es para ti, que es de lo mejor que vas a encontrar; y a cambio nosotros llevamos todo el tráfico, el equipo de chatters y toda la gestión, tú solo subes el contenido. De verdad que te sale muy a cuenta, ¿lo ves?";
+  "Te entiendo, es justo preguntarlo. Mira, nosotros nos quedamos ese 70% porque hacemos todo el trabajo: el tráfico, el equipo de chatters las 24 horas y toda la gestión, y tú solo subes el contenido. Por eso el reparto es así. ¿Cómo lo ves?";
 // No se entendió bien lo que dijo (ruido/STT): pedir que lo repita, sin asumir asentimiento.
 const ASK_REPEAT_TEXT = "Perdona, no te he pillado bien con la línea. ¿Me lo puedes repetir?";
 
@@ -145,7 +150,10 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
   const stageId = input.directive.stageId ?? "HOW_AGENCY_WORKS";
   const stage = callAgendaStage(stageId);
   const gathered = gatherKnowledge(input.knowledge);
-  const referenceInstagram = stageId === "MONEY";
+  // Alex (jun-2026): NO referenciar "como te dije por Instagram" para el %, porque el % casi nunca se
+  // menciona en el DM. Se presenta FRESCO en la llamada. (Futuro: condicionar a que el contexto del DM
+  // confirme que ella preguntó la cifra exacta.)
+  const referenceInstagram = false;
 
   const brief: CallDraftingBrief = {
     instruction: stage.objective,
@@ -209,11 +217,12 @@ function dedupe(values: string[]): string[] {
  */
 function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOffer?: CallRevenueShareOffer): string {
   if (stageId === "MONEY") {
-    // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"); referencia el DM.
+    // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"). FRESCA, sin referenciar el DM.
     if (shareOffer) {
-      return `Y del dinero, como ya te dije por Instagram, es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para nosotros; se liquida cada 14 días y cobras tú primero.`;
+      return `Y el dinero, que es lo importante: el reparto es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para la agencia. Se liquida cada 14 días y cobras tú primero. ¿Qué te parece?`;
     }
-    return points[0] ?? "Como te comenté por Instagram, el reparto es el que ya hablamos.";
+    // Sin oferta autorizada NO inventamos ni referenciamos el DM (no deberia ocurrir: el director siempre la pasa).
+    return points[0] ?? DEFER_TEXT;
   }
 
   // Guion propio de la llamada (la voz de Alex). Si una etapa no lo tiene, cae a los puntos aprobados del

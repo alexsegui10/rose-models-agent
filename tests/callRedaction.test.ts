@@ -60,13 +60,15 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.deterministicText).toContain("socio");
   });
 
-  it("cubrir MONEY: referencia Instagram y el fallback lleva la cifra 70/30", () => {
+  it("cubrir MONEY: NO referencia Instagram (se presenta fresco), lleva la cifra 70/30 e invita a responder", () => {
     const directive: CallDirective = { type: "COVER_STAGE", stageId: "MONEY", shareOffer: offer(70, false) };
     const plan = planCallUtterance({ directive });
-    expect(plan.draftingBrief?.referenceInstagram).toBe(true);
-    expect(plan.fallbackText).toContain("Instagram");
+    // Fix Alex jun-2026: el % no se da por dicho en el DM; se presenta fresco.
+    expect(plan.draftingBrief?.referenceInstagram).toBe(false);
+    expect(plan.fallbackText).not.toContain("Instagram");
     expect(plan.fallbackText).toContain("70");
     expect(plan.fallbackText).toContain("30");
+    expect(plan.fallbackText.trim().endsWith("?")).toBe(true);
   });
 
   it("cubrir etapa con conocimiento: el brief lleva los puntos aprobados (para el LLM); el fallback es el guion propio", () => {
@@ -86,8 +88,9 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.draftingBrief?.groundingFacts).toContain("Nosotros llevamos toda la gestión y la monetización.");
     expect(plan.draftingBrief?.prohibitedClaims).toContain("No prometemos ingresos concretos.");
     expect(plan.draftingBrief?.mandatoryNuances).toContain("El volumen de contenido es orientativo, no contractual.");
-    // El fallback determinista es el guion propio de la llamada (la voz de Alex).
-    expect(plan.fallbackText.toLowerCase()).toContain("te resumo cómo trabajamos");
+    // El fallback determinista es el guion propio de la llamada (la voz de Alex), conversacional.
+    expect(plan.fallbackText.toLowerCase()).toContain("te lo resumo");
+    expect(plan.fallbackText.trim().endsWith("?")).toBe(true);
   });
 
   it("cubrir una etapa devuelve el guion propio de la llamada (no vacío) + brief presente", () => {
@@ -150,7 +153,10 @@ describe("planificador de redacción de la llamada", () => {
   it("nuevas directivas (auditoría): textos correctos", () => {
     expect(planCallUtterance({ directive: { type: "CLOSE_SOFT" } }).deterministicText?.toLowerCase()).toContain("te animas");
     expect(planCallUtterance({ directive: { type: "ASK_REPEAT" } }).deterministicText?.toLowerCase()).toContain("repetir");
-    expect(planCallUtterance({ directive: { type: "DEFEND_SHARE" } }).deterministicText).toContain("70");
+    const defend = planCallUtterance({ directive: { type: "DEFEND_SHARE" } });
+    expect(defend.deterministicText).toContain("70");
+    // Fix Alex jun-2026: defender el 70 de la AGENCIA, nunca decir que el 70 "es para ti" (ella tiene el 30).
+    expect(defend.deterministicText?.toLowerCase()).not.toContain("para ti");
   });
 
   it("el contexto de la candidata personaliza (nombre en la apertura) y llega al brief para el LLM", () => {

@@ -159,7 +159,7 @@ describe("responder de turno de llamada (stateless por replay)", () => {
       drafter
     });
     expect(res.content).not.toContain("90");
-    expect(res.content.toLowerCase()).toContain("te resumo"); // el guion determinista
+    expect(res.content.toLowerCase()).toContain("te lo resumo"); // el guion determinista
   });
 
   it("lo crítico (apertura legal) NUNCA pasa por el redactor", async () => {
