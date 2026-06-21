@@ -28,10 +28,17 @@ const entries: KnowledgeEntryInput[] = [
     id: "commercial-no-fixed-salary",
     category: "COMMERCIAL",
     title: "Rose Models no trabaja con salario fijo",
-    facts: ["Rose Models no trabaja mediante salario fijo.", "El modelo comercial se explica con detalle durante la llamada."],
+    facts: [
+      "Rose Models no trabaja mediante salario fijo.",
+      "El modelo comercial se explica con detalle durante la llamada.",
+      "Cuanto se gana depende de cada modelo: su constancia, la calidad del contenido y como se exploten las cuentas; no hay una cifra fija ni garantizada."
+    ],
     approvedAnswerPoints: [
       "No funciona como un salario fijo.",
       "Va por reparto.",
+      // Hueco confirmado por Alex (jun-2026): "cuanto se gana" se responde honesto, depende de ella,
+      // SIN cifras ni promesas de ingresos (invariante 3 + prohibitedClaims de abajo lo blindan).
+      "Cuanto se gana depende mucho de ti: de tu constancia y de la calidad del contenido, y de como se exploten las cuentas.",
       "Los detalles se explican mejor en llamada para que quede claro."
     ],
     prohibitedClaims: [
@@ -45,10 +52,10 @@ const entries: KnowledgeEntryInput[] = [
     allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["salary", "commercial", "payment"],
     requiresHumanReview: false,
-    version: "commercial-no-fixed-salary-2026-06-12.1",
+    version: "commercial-no-fixed-salary-2026-06-20.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-12"
+    updatedAt: "2026-06-20"
   },
   {
     id: "commercial-revenue-share-general",

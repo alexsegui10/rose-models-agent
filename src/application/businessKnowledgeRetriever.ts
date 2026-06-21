@@ -93,6 +93,14 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("salary", "payment", "commercial");
+  // Hueco jun-2026: "esto me cuesta algo?" / "tengo que pagar o invertir?" pregunta si la CANDIDATA paga
+  // (distinto de "cuanto me pagais", que es salary). Respuesta: no hay coste para ella -> faq-no-cost-to-join.
+  if (
+    /\b(me cuesta|cuesta algo|cuesta dinero|tengo que pagar|tengo que poner|hay que pagar|hay que poner|debo pagar|pagar para (?:entrar|empezar|trabajar)|invertir|inversion|es gratis|sale gratis|cuota|matricula|inscripcion|me cobrais|cobrais algo|me cobras|tengo que invertir|poner dinero|coste para mi)\b/.test(
+      message
+    )
+  )
+    tags.push("no-cost", "cost", "faq");
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
   if (/\b(70\/30|quien recibe|quien se queda)\b/.test(message)) tags.push("percentage", "revenue-share");
   if (/\b(por que.*70|porque.*70|porcentaje.*alto|os quedais.*70)\b/.test(message)) tags.push("why-70", "percentage", "services");
@@ -175,6 +183,14 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("countries", "market", "faq");
   }
   if (/\b(seleccion|requisitos para entrar|como entro|que buscais)\b/.test(message)) tags.push("selection", "process", "faq");
+  // Hueco jun-2026: "que edad buscais?" -> franja objetivo (perfil maduro, ~30-50). Pregunta sobre la edad
+  // del PUBLICO objetivo; no toca el corte de mayoria de edad (invariante 2 vive en candidate-requirements-adult).
+  if (
+    /\b(que edad|edad buscais|edades|que edades|hasta que edad|limite de edad|edad minima|edad maxima|soy (?:muy |demasiado )?mayor|muy mayor|demasiado mayor|sirve mi edad|importa la edad|por mi edad|por la edad)\b/.test(
+      message
+    )
+  )
+    tags.push("age", "target-profile", "selection", "faq");
   if (
     /\b(bloquear|bloqueo|bloqueen|que no me vean|me reconozcan|me vea alguien|privacidad|anonimato|mi pais|conocidos)\b/.test(
       message

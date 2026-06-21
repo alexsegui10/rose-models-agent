@@ -43,9 +43,17 @@ const entries: KnowledgeEntryInput[] = [
       "iPhone 13 o superior y Galaxy S23 o superior nos sirven directamente.",
       "Si es iPhone anterior al 13, otro Samsung u otro movil de gama alta, Alex revisa la calidad."
     ],
-    prohibitedClaims: ["Aprobar incorporacion con movil de mala calidad.", "Decir que cualquier Android sirve.", "Bloquear automaticamente un Galaxy S23 o superior."],
+    prohibitedClaims: [
+      "Aprobar incorporacion con movil de mala calidad.",
+      "Decir que cualquier Android sirve.",
+      "Bloquear automaticamente un Galaxy S23 o superior."
+    ],
     mandatoryNuances: ["Preguntar de forma natural durante la cualificacion.", "Distinguir llamada de incorporacion final."],
-    escalationConditions: ["iPhone anterior al 13 u otro movil de gama alta requiere prueba manual.", "Compra futura deja incorporacion pendiente.", "No responde claramente."],
+    escalationConditions: [
+      "iPhone anterior al 13 u otro movil de gama alta requiere prueba manual.",
+      "Compra futura deja incorporacion pendiente.",
+      "No responde claramente."
+    ],
     allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
     tags: ["device", "quality", "qualification", "iphone", "galaxy"],
     requiresHumanReview: false,
@@ -64,17 +72,29 @@ const entries: KnowledgeEntryInput[] = [
       "No es obligatorio tener seguidores, experiencia ni OnlyFans activo.",
       "La valoracion fisica la realiza unicamente Alex."
     ],
-    approvedAnswerPoints: ["No hace falta tener seguidores ni experiencia para que podamos valorarlo.", "La revision final del perfil la hace Alex."],
-    prohibitedClaims: ["Puntuar atractivo.", "Analizar el cuerpo.", "Comunicar motivos fisicos de rechazo.", "Usar criterios como cara espanola."],
+    approvedAnswerPoints: [
+      "No hace falta tener seguidores ni experiencia para que podamos valorarlo.",
+      // Hueco confirmado por Alex (jun-2026): "que edad buscais?" se responde con la franja objetivo,
+      // pero suave y caso a caso. La franja NO toca el corte de mayoria de edad (invariante 2: <18 -> CLOSED
+      // lo gobierna candidate-requirements-adult, aqui solo se describe el publico objetivo del proyecto).
+      "Buscamos sobre todo perfiles maduros, a partir de los 30 aproximadamente, pero lo valoramos caso a caso.",
+      "La revision final del perfil la hace Alex."
+    ],
+    prohibitedClaims: [
+      "Puntuar atractivo.",
+      "Analizar el cuerpo.",
+      "Comunicar motivos fisicos de rechazo.",
+      "Usar criterios como cara espanola."
+    ],
     mandatoryNuances: ["El chatbot recopila datos y pasa el perfil a revision humana."],
     escalationConditions: ["Cualquier valoracion fisica o duda de encaje visual."],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_HUMAN_REVIEW"],
-    tags: ["target-profile", "physical-review", "followers", "experience"],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_PROFILE_ACCESS", "WAITING_HUMAN_REVIEW", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["target-profile", "physical-review", "followers", "experience", "age", "selection", "faq"],
     requiresHumanReview: false,
-    version: "candidate-requirements-target-profile-2026-06-09.1",
+    version: "candidate-requirements-target-profile-2026-06-20.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-06-20"
   }
 ];
 
