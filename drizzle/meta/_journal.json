@@ -36,6 +36,13 @@
       "when": 1782045149938,
       "tag": "0004_fantastic_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782072487479,
+      "tag": "0005_gifted_black_knight",
+      "breakpoints": true
     }
   ]
 }

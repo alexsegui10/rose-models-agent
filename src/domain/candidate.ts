@@ -105,6 +105,15 @@ export const CallRecordSchema = z.object({
 });
 export type CallRecord = z.infer<typeof CallRecordSchema>;
 
+// Mensaje entrante EN ESPERA (debounce con QStash): se guarda al llegar y se responde junto con el resto
+// de su rafaga cuando ella deja de escribir. `receivedAt` en ISO para sobrevivir a JSON.
+export const PendingInboundMessageSchema = z.object({
+  content: z.string(),
+  externalMessageId: z.string().optional(),
+  receivedAt: z.string()
+});
+export type PendingInboundMessage = z.infer<typeof PendingInboundMessageSchema>;
+
 export const CandidateSchema = z.object({
   id: z.string(),
   instagramUsername: z.string().min(1),
@@ -144,6 +153,9 @@ export const CandidateSchema = z.object({
   // Id de la conversacion de ElevenLabs de la ultima llamada disparada (para reproducir la grabacion en la
   // ficha). Lo fija el disparador outbound (noteCallAttempt); sobrevive aunque aun no haya resultado.
   lastCallConversationId: z.string().optional(),
+  // Mensajes entrantes EN ESPERA (debounce con QStash): se guardan al llegar y se responden juntos cuando
+  // ella deja de escribir (~55s). Vacio = nada pendiente. Solo se usa si INBOUND_DEBOUNCE + QStash estan ON.
+  pendingInbound: z.array(PendingInboundMessageSchema).default([]),
   interestLevel: InterestLevelSchema.default("UNKNOWN"),
   objections: z.array(z.string()).default([]),
   // Cuantas veces la candidata ha objetado/dudado de mostrar la cara. La 1a vez se reconduce; si
@@ -233,6 +245,7 @@ export interface CandidatePatch {
   callAttempts?: number;
   lastCall?: CallRecord;
   lastCallConversationId?: string;
+  pendingInbound?: PendingInboundMessage[];
   interestLevel?: InterestLevel;
   objections?: string[];
   faceObjectionCount?: number;

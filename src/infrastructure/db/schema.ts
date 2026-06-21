@@ -29,7 +29,8 @@ import {
   InterestLevelSchema,
   ProfileVisibilitySchema,
   type CallRecord,
-  type OnboardingBlocker
+  type OnboardingBlocker,
+  type PendingInboundMessage
 } from "../../domain/candidate";
 import {
   ABWinnerSchema,
@@ -132,6 +133,8 @@ export const candidates = pgTable("candidates", {
   lastCall: jsonb("last_call").$type<CallRecord>(),
   // Id de la conversacion de ElevenLabs de la ultima llamada (para reproducir la grabacion en la ficha).
   lastCallConversationId: text("last_call_conversation_id"),
+  // Mensajes entrantes en espera (debounce con QStash): se responden juntos cuando la candidata para.
+  pendingInbound: jsonb("pending_inbound").$type<PendingInboundMessage[]>().notNull().default([]),
   objections: jsonb("objections").$type<string[]>().notNull().default([]),
   faceObjectionCount: integer("face_objection_count").notNull().default(0),
   notes: jsonb("notes").$type<string[]>().notNull().default([]),

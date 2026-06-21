@@ -1,0 +1,1 @@
+ALTER TABLE "candidates" ADD COLUMN "pending_inbound" jsonb DEFAULT '[]'::jsonb NOT NULL;

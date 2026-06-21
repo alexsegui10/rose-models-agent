@@ -16,6 +16,8 @@ import {
 } from "@/infrastructure/integrations/operatorNotifier";
 import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
 import { getSimulatorEngine } from "@/server/simulatorStore";
+import { getQStashConfig } from "@/application/qstashConfig";
+import { scheduleInboundFlush } from "@/infrastructure/integrations/qstashClient";
 
 // postgres.js necesita runtime Node (no Edge). maxDuration: en Hobby el techo real es 10s igualmente.
 export const runtime = "nodejs";
@@ -140,6 +142,46 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
   const groupedInbound = [...groupedBySender.values()];
+
+  // DEBOUNCE entrante (QStash + INBOUND_DEBOUNCE=on): en vez de responder al instante, se GUARDA el mensaje
+  // EN ESPERA y se programa una llamada de vuelta a +Ns; cuando ella deja de escribir, el flush responde a
+  // toda la rafaga de una vez. APAGADO por defecto -> sigue el comportamiento de siempre (responder ya).
+  const qstash = getQStashConfig();
+  if (qstash.isConfigured && qstash.debounceEnabled) {
+    const flushUrl = `${new URL(request.url).origin}/api/instagram/flush`;
+    const flushSecret = process.env.CRON_SECRET ?? "";
+    for (const message of groupedInbound) {
+      try {
+        await engine.bufferInboundForDebounce({
+          instagramUsername: message.senderId,
+          messages: [{ content: message.text, externalMessageId: message.messageId }]
+        });
+        const scheduled = await scheduleInboundFlush({
+          config: qstash,
+          flushUrl,
+          flushSecret,
+          senderId: message.senderId,
+          delaySeconds: Math.round(qstash.debounceMs / 1000)
+        });
+        if (!scheduled) {
+          // No se pudo programar el flush: el mensaje quedo EN ESPERA sin callback -> 503 para que Meta
+          // reintente (bufferInboundForDebounce es idempotente por mid, el reintento no duplica). Asi no
+          // se queda un mensaje colgado sin respuesta si QStash falla.
+          console.warn("[ig-webhook] no se pudo programar el flush (debounce) -> 503 para reintento");
+          return new NextResponse("Could not schedule debounce flush, please retry", { status: 503 });
+        }
+        console.log("[ig-webhook] mensaje EN ESPERA (debounce)", { delaySec: Math.round(qstash.debounceMs / 1000) });
+      } catch (error) {
+        console.error("[ig-webhook] error al bufferizar (debounce)", {
+          message: error instanceof Error ? error.message : String(error)
+        });
+        if (isLikelyTransientError(error)) {
+          return new NextResponse("Transient processing error, please retry", { status: 503 });
+        }
+      }
+    }
+    return NextResponse.json({ ok: true, debounced: groupedInbound.length });
+  }
 
   for (const message of groupedInbound) {
     try {

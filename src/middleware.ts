@@ -9,7 +9,13 @@ import type { NextRequest } from "next/server";
  */
 
 // Endpoints de máquina (no navegador): tienen su propio bearer y deben quedar fuera del Basic Auth.
-const MACHINE_PATHS = ["/api/call/llm", "/api/call/end", "/api/instagram/webhook", "/api/whatsapp/webhook"];
+const MACHINE_PATHS = [
+  "/api/call/llm",
+  "/api/call/end",
+  "/api/instagram/webhook",
+  "/api/instagram/flush",
+  "/api/whatsapp/webhook"
+];
 
 export function middleware(request: NextRequest): NextResponse {
   const password = process.env.SITE_PASSWORD;

@@ -338,6 +338,67 @@ export class ConversationEngine {
   }
 
   /**
+   * DEBOUNCE entrante (cola QStash): GUARDA los mensajes entrantes EN ESPERA sin responder. Se acumulan en
+   * candidate.pendingInbound; flushPendingInbound responde a TODA la rafaga cuando ella deja de escribir.
+   * Idempotente por externalMessageId (no duplica un mensaje ya en espera ni ya en la conversacion). NO
+   * corre el bot ni cambia de estado: solo bufferiza (decision de Alex: dejarla terminar de escribir).
+   */
+  async bufferInboundForDebounce(
+    input: CandidateLookupInput & { messages: IncomingTurnMessage[]; now?: Date }
+  ): Promise<{ candidate: Candidate; buffered: number }> {
+    const candidate = await this.loadOrCreateCandidate(input);
+    const now = input.now ?? new Date();
+    const pending = [...candidate.pendingInbound];
+    let buffered = 0;
+    for (const message of input.messages) {
+      const content = message.content.trim();
+      if (!content) continue;
+      const id = message.externalMessageId;
+      if (id) {
+        if (pending.some((p) => p.externalMessageId === id)) continue; // ya en espera
+        const already = await this.dependencies.repository.findMessageByExternalId(candidate.id, id);
+        if (already) continue; // ya en la conversacion
+      }
+      pending.push({ content, externalMessageId: id, receivedAt: now.toISOString() });
+      buffered += 1;
+    }
+    const updated: Candidate = { ...candidate, pendingInbound: pending, updatedAt: now };
+    await this.dependencies.repository.saveCandidate(updated);
+    return { candidate: updated, buffered };
+  }
+
+  /**
+   * Vacia la espera: si la candidata lleva >= windowMs sin escribir, responde a TODA su rafaga pendiente de
+   * una vez (via handleIncomingTurn, que la anade a la conversacion y genera la respuesta) y limpia la
+   * espera. Si sigue dentro de la ventana (escribiendo) o no hay nada pendiente, devuelve null. Lo llama el
+   * endpoint de flush (callback diferido de QStash). Idempotente: tras vaciar, un callback repetido da null.
+   */
+  async flushPendingInbound(
+    input: CandidateLookupInput & { windowMs: number; now?: Date }
+  ): Promise<HandleIncomingMessageResult | null> {
+    const candidate = await this.loadOrCreateCandidate(input);
+    const pending = candidate.pendingInbound;
+    if (pending.length === 0) return null;
+    const now = input.now ?? new Date();
+    const newest = pending.reduce((max, p) => Math.max(max, Date.parse(p.receivedAt) || 0), 0);
+    if (now.getTime() - newest < input.windowMs) return null; // sigue escribiendo: esperar a otro flush
+    // Responder a toda la rafaga. handleIncomingTurn anade los mensajes (con dedup por mid) y genera la
+    // respuesta. SOLO tras procesar con exito limpiamos los pendientes ya tratados (receivedAt <= newest):
+    // asi, si algo falla antes, no se pierden y un reintento de QStash los recupera. Conservamos los que
+    // hayan llegado mientras tanto (receivedAt > newest). Re-leemos para no pisar los cambios del turno.
+    const result = await this.handleIncomingTurn({
+      instagramUsername: candidate.instagramUsername,
+      messages: pending.map((p) => ({ content: p.content, externalMessageId: p.externalMessageId }))
+    });
+    const fresh = await this.dependencies.repository.findCandidateById(candidate.id);
+    if (fresh) {
+      const remaining = fresh.pendingInbound.filter((p) => (Date.parse(p.receivedAt) || 0) > newest);
+      await this.dependencies.repository.saveCandidate({ ...fresh, pendingInbound: remaining, updatedAt: now });
+    }
+    return result;
+  }
+
+  /**
    * Registra el resultado de la llamada de voz (lo llama el webhook de fin de llamada de la plataforma).
    * COMPLETED -> CALL_COMPLETED (Alex retoma el siguiente paso: enviar el contrato); NO_ANSWER ->
    * CALL_NO_ANSWER (reagendar/seguimiento). Solo desde CALL_SCHEDULED o CALL_IN_PROGRESS; en otro estado

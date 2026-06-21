@@ -301,6 +301,7 @@ describe("commercial and device policy", () => {
         objections: [],
         faceObjectionCount: 0,
         callAttempts: 0,
+        pendingInbound: [],
         notes: [],
         conversationSummary: "",
         currentState: "QUALIFYING",
