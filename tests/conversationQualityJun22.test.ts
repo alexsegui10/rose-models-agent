@@ -121,4 +121,29 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
     expect(r.response.toLowerCase()).not.toContain("lo reviso yo");
     expect(r.response.toLowerCase()).not.toContain("no me vale");
   });
+
+  it("movil CLARAMENTE malo (iPhone 8) PAUSA (HIR); DUDOSO (iPhone 11) sigue cualificando (Alex 22-jun)", async () => {
+    const { engine, repository } = setup();
+    const malo = await seedQualifying(repository, {
+      deviceEligibility: "UNKNOWN",
+      deviceModel: undefined,
+      hasOnlyFans: undefined
+    });
+    const rMalo = await engine.handleIncomingTurn({
+      instagramUsername: malo.instagramUsername,
+      messages: [{ content: "tengo un iphone 8" }]
+    });
+    expect(rMalo.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+
+    const dudoso = await seedQualifying(repository, {
+      deviceEligibility: "UNKNOWN",
+      deviceModel: undefined,
+      hasOnlyFans: undefined
+    });
+    const rDudoso = await engine.handleIncomingTurn({
+      instagramUsername: dudoso.instagramUsername,
+      messages: [{ content: "tengo un iphone 11" }]
+    });
+    expect(rDudoso.candidate.currentState).toBe("QUALIFYING");
+  });
 });

@@ -179,6 +179,17 @@ describe("commercial and device policy", () => {
     expect(deviceEligibilityForDescription("Tengo iPhone 12")).toBe("PENDING_QUALITY_TEST");
   });
 
+  it("iPhone <=10 y Samsung de gama baja (A/J) = CLARAMENTE malo -> NOT_ELIGIBLE (pausa; Alex 22-jun)", () => {
+    // Dudoso (iPhone 11/12) sigue cualificando; claramente viejo/gama baja pausa para decision de Alex (HIR).
+    expect(deviceEligibilityForDescription("Tengo iPhone 8")).toBe("NOT_ELIGIBLE");
+    expect(deviceEligibilityForDescription("tengo un iphone 10")).toBe("NOT_ELIGIBLE");
+    expect(deviceEligibilityForDescription("tengo un samsung a15")).toBe("NOT_ELIGIBLE");
+    expect(deviceEligibilityForDescription("galaxy a54")).toBe("NOT_ELIGIBLE");
+    // Frontera: 11/12 siguen siendo dudosos (no rechazados) y S23+ aprobado.
+    expect(deviceEligibilityForDescription("iPhone 11")).toBe("PENDING_QUALITY_TEST");
+    expect(deviceEligibilityForDescription("galaxy s24")).toBe("APPROVED");
+  });
+
   it("tolerates common iphone typos so the device slot is not re-asked (spot-check de Alex: 'ipone 13')", () => {
     // "ipone 13" daba UNKNOWN -> el slot del movil se preguntaba en bucle.
     expect(deviceEligibilityForDescription("ipone 13")).toBe("APPROVED");
