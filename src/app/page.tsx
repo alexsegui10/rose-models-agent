@@ -1919,10 +1919,13 @@ export default function Home() {
                               </div>
                             ) : (
                               cards.map((candidate) => {
-                                const paused = candidate.manualControlActive || candidate.automationPaused;
                                 const awaitingDecision =
                                   candidate.currentState === "WAITING_HUMAN_REVIEW" ||
                                   candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
+                                // El bot esta RETENIDO (no responde solo) tanto si Alex lo paus0 a mano como si
+                                // escalo y espera su decision (HIR/revision): el indicador y el boton lo reflejan
+                                // ("Reanudar"), aunque el reanudado real de una escalada sea via Aprobar/Rechazar.
+                                const paused = candidate.manualControlActive || candidate.automationPaused || awaitingDecision;
                                 const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
                                 const awaitingProfileAccess = candidate.currentState === "WAITING_PROFILE_ACCESS";
                                 const awaitingCallConfirm =

@@ -124,10 +124,10 @@ const entries: KnowledgeEntryInput[] = [
       "Alex calcula manualmente cada liquidacion."
     ],
     approvedAnswerPoints: [
-      // Solo la cadencia general (analisis 2026-06-10): el metodo de pago concreto (Skrill) y el
-      // calculo manual son tecnicismos de liquidacion que salen de los puntos de cara a la candidata.
-      "La liquidacion va cada 14 dias desde que la cuenta genera ingresos.",
-      "La plataforma te paga a ti directamente y despues se hace la liquidacion con la agencia."
+      // Lenguaje CLARO (Alex 22-jun): "pagos", NUNCA "liquidacion" (jerga que la candidata no entiende y le
+      // hacia preguntar). Solo la cadencia general; el metodo concreto (Skrill) y el calculo manual no salen.
+      "Los pagos son cada 14 dias desde que la cuenta empieza a generar ingresos.",
+      "La plataforma te paga a ti directamente y despues nos pasas la parte de la agencia."
     ],
     prohibitedClaims: [
       "Prometer automatizacion de pagos.",
@@ -139,10 +139,10 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["Explicar solo si pregunta.", "No pedir informacion sensible de pago en esta fase."],
     escalationConditions: ["Pide excepciones de pago.", "Pide condiciones no previstas."],
     requiresHumanReview: false,
-    version: "commercial-revenue-share-settlement-2026-06-12.2",
+    version: "commercial-revenue-share-settlement-2026-06-22.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-12"
+    updatedAt: "2026-06-22"
   },
   {
     id: "commercial-why-agency-70",

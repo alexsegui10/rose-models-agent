@@ -243,14 +243,16 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(telegram|twitter|videollamadas|otras redes)\b/.test(message)) tags.push("traffic", "telegram", "twitter", "services");
 
   if (input.intent === "ASKS_ABOUT_PERCENTAGE") tags.push("percentage", "revenue-share");
-  // FIX 2: el modelo en vivo a veces etiqueta una pregunta benigna de proceso/seleccion/como-funciona
-  // como ASKS_ABOUT_CONTRACT. Forzar aqui las etiquetas contractuales (que arrastran la entrada HIR
-  // contract-questions-human-review) escalaba una pregunta que SI tiene respuesta activa
-  // (faq-selection-process). Solo se fuerza la etiqueta contractual cuando hay una especificacion
-  // contractual GENUINA en el mensaje, o cuando NO es una pregunta generica de proceso. Las dudas
-  // contractuales reales (contrato/clausula/permanencia/firmar/exclusividad) ya las captura la linea
-  // de mensaje de arriba y/o este intent, asi que la escalada genuina nunca se debilita.
-  if (input.intent === "ASKS_ABOUT_CONTRACT" && (hasGenuineContractSpecifics(message) || !isGenericProcessQuestion(message)))
+  // FIX 2 + 3 (Alex 22-jun): el modelo en vivo a veces etiqueta como ASKS_ABOUT_CONTRACT una pregunta
+  // benigna (proceso, "como funciona", o una ACLARACION de un termino que el propio bot uso, p.ej. "que es
+  // eso de la liquidacion/los pagos"). Forzar aqui las etiquetas contractuales (que arrastran la entrada HIR
+  // contract-questions-human-review) ESCALABA esas preguntas (WhatsApp + pausa) sin motivo. Ahora SOLO se
+  // fuerza la escalada contractual cuando hay una especificacion contractual GENUINA en el mensaje
+  // (contrato/clausula/permanencia/exclusividad/firmar/salir/baja...). Una aclaracion de pago/proceso ya NO
+  // escala: la recuperan sus propios tags (settlement/payment para "liquidacion", proceso para "como va") y
+  // se responde con la respuesta ACTIVA. Las dudas contractuales reales con palabra clave tambien las capta
+  // la linea de mensaje de arriba (contract/legal/human-review), asi que la escalada genuina no se debilita.
+  if (input.intent === "ASKS_ABOUT_CONTRACT" && hasGenuineContractSpecifics(message))
     tags.push("contract", "legal", "human-review");
   if (input.intent === "REQUESTS_CALL") tags.push("call", "schedule");
 
@@ -265,16 +267,8 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
 const genuineContractSpecificsPattern =
   /\b(contrato|contractual|clausula|permanencia|exclusividad|firmar|terminos legales|legal|abogad|preaviso|penalizacion|salir|salirme|dejar|dejarlo|baja|darme de baja|desvincul|terminar|finalizar|rescind|compromiso|comprometer|obligan|obligacion|tiempo minimo)\b/;
 
-// Pregunta generica de proceso/seleccion/como-funciona: tiene respuesta activa y NO debe escalar.
-const genericProcessQuestionPattern =
-  /\b(proceso|seleccion|como funciona|como va|como es|que pasos|requisitos|como entro|como me uno|como empiezo)\b/;
-
 function hasGenuineContractSpecifics(message: string): boolean {
   return genuineContractSpecificsPattern.test(message);
-}
-
-function isGenericProcessQuestion(message: string): boolean {
-  return genericProcessQuestionPattern.test(message);
 }
 
 function normalize(value: string): string {
