@@ -88,7 +88,14 @@ const entries: KnowledgeEntryInput[] = [
       "Repetir la anomalia real '75% agencia / 25% para ti': ese reparto no existe y nunca debe mencionarse.",
       "Ofrecer proactivamente un salario fijo o cifras de sueldo."
     ],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
+    allowedStates: [
+      "NEW_LEAD",
+      "QUALIFYING",
+      "WAITING_HUMAN_REVIEW",
+      "APPROVED",
+      "COLLECTING_CALL_DETAILS",
+      "HUMAN_INTERVENTION_REQUIRED"
+    ],
     tags: ["percentage", "revenue-share"],
     mandatoryNuances: [
       "No mencionar porcentajes si la candidata no pregunta.",
@@ -101,7 +108,7 @@ const entries: KnowledgeEntryInput[] = [
       "La candidata pide condiciones fuera de la politica."
     ],
     requiresHumanReview: false,
-    version: "commercial-revenue-share-general-2026-06-12.2",
+    version: "commercial-revenue-share-general-2026-06-22.1",
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-12"

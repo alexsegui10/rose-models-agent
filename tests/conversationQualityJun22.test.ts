@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+import { ConversationEngine } from "@/application/conversationEngine";
+import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
+import { LocalBusinessKnowledgeRetriever } from "@/application/businessKnowledgeRetriever";
+import { LocalExampleRetriever } from "@/application/exampleRetriever";
+import { createCandidate, normalizeCandidate, type CandidateState } from "@/domain/candidate";
+import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
+
+// Calidad de conversacion (prueba E2E de Alex 22-jun). Fallos vistos: el bot derivaba a revision sin
+// responder "cuanto me pagan" (deberia dar 70/30), saltaba a revision cortando su pregunta, y la frase del
+// movil dudoso era negativa ("lo reviso yo / no me vale"). Modo determinista en tests (en prod redacta OpenAI
+// dentro del mismo plan). Invariante 3: 70/30 solo si pregunta la cifra; negociacion -> revision.
+
+function setup() {
+  const repository = new InMemoryCandidateRepository();
+  const engine = new ConversationEngine({
+    repository,
+    understandingProvider: new DeterministicUnderstandingProvider(),
+    businessKnowledgeRetriever: new LocalBusinessKnowledgeRetriever(),
+    exampleRetriever: new LocalExampleRetriever()
+  });
+  return { engine, repository };
+}
+
+async function seedQualifying(repository: InMemoryCandidateRepository, overrides: Record<string, unknown> = {}) {
+  return repository.saveCandidate(
+    normalizeCandidate({
+      ...createCandidate({ instagramUsername: `quality_${Math.random()}`, profileVisibility: "PUBLIC" }),
+      firstName: "Alba",
+      age: 38,
+      isAdultConfirmed: true,
+      hasOnlyFans: false,
+      deviceType: "IPHONE",
+      deviceModel: "iphone 11",
+      deviceEligibility: "PENDING_QUALITY_TEST",
+      currentState: "QUALIFYING" as CandidateState,
+      ...overrides
+    })
+  );
+}
+
+describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
+  it("'¿y cuanto dinero me pagan?' responde 70/30 y NO salta a revision ese turno", async () => {
+    const { engine, repository } = setup();
+    const c = await seedQualifying(repository);
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "y cuanto dinero me pagan?" }]
+    });
+
+    // Responde la politica (no la oculta ni deriva sin contestar).
+    expect(r.response).toMatch(/70/);
+    expect(r.response).toMatch(/30/);
+    // Sigue en QUALIFYING: la revision ("lo comento con mi socio") NO corta su pregunta.
+    expect(r.candidate.currentState).toBe("QUALIFYING");
+  });
+
+  it("tras responder, sin mas preguntas -> pasa a revision (el 'lo comento con mi socio' sale AL FINAL)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedQualifying(repository);
+    await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "y cuanto dinero me pagan?" }]
+    });
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "vale, gracias" }]
+    });
+
+    expect(r.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
+  });
+
+  it("NEGOCIACION ('dame el 50%') NO libera cifra y escala a revision humana (invariante 3)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedQualifying(repository);
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "dame el 50% para mi" }]
+    });
+
+    expect(r.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+  });
+
+  // Fuga que cazo el revisor: negociacion SIN "%" mezclada con pregunta de pago. Garantia INNEGOCIABLE
+  // (invariante 3): la pregunta de pago NO gana al escalado -> NUNCA se suelta la cifra 70/30 ante una
+  // negociacion, y la candidata cae en revision humana (HIR o WAITING_HUMAN_REVIEW), nunca auto-resuelta.
+  it.each(["cuanto me pagan? quiero el 50 para mi", "cuanto cobro? quiero ganar mas", "cuanto gano? quiero el 45 para mi"])(
+    "negociacion disfrazada de pregunta de pago NO suelta el 70/30 y cae en revision: %s",
+    async (message) => {
+      const { engine, repository } = setup();
+      const c = await seedQualifying(repository);
+
+      const r = await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: message }] });
+
+      // Lo critico: ni una cifra de reparto ante una negociacion.
+      expect(r.response).not.toMatch(/70\s?%|30\s?%/);
+      // Y no se auto-resuelve: queda en una decision humana (HIR o revision), nunca avanzando hacia la llamada.
+      expect(["HUMAN_INTERVENTION_REQUIRED", "WAITING_HUMAN_REVIEW"]).toContain(r.candidate.currentState);
+    }
+  );
+
+  it("movil dudoso (iPhone 11): la frase es suave ('mi socio'), sin 'lo reviso yo' ni 'no me vale'", async () => {
+    const { engine, repository } = setup();
+    // En QUALIFYING, recien preguntado el movil y con el OF AUN sin responder (como en el caso real: da el
+    // movil antes del OF), para que quede una pregunta pendiente y se acuse el movil en vez de pasar al pitch.
+    const c = await seedQualifying(repository, {
+      deviceEligibility: "UNKNOWN",
+      deviceModel: undefined,
+      hasOnlyFans: undefined
+    });
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "tengo un iphone 11" }]
+    });
+
+    expect(r.response.toLowerCase()).toContain("mi socio");
+    expect(r.response.toLowerCase()).not.toContain("lo reviso yo");
+    expect(r.response.toLowerCase()).not.toContain("no me vale");
+  });
+});

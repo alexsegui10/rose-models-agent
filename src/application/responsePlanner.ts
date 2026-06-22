@@ -396,6 +396,11 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
   return (
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
     (/\b(me dais|dame|negociar|negociamos|excepcion|mejora\w*|baj[ae]\w*|sub[ei]\w*|mas para mi)\b/.test(message) ||
+      // Pedir una cifra para SI MISMA sin "%" ("quiero el 50", "quiero un 40", "quiero ganar mas", "50 para
+      // mi") es negociacion -> revision, no una pregunta de cifra a la que se responda 70/30 (invariante 3).
+      /\bquiero\s+(el\s+|un\s+)?\d{1,3}\b/.test(message) ||
+      /\bquiero\s+(ganar\s+)?mas\b/.test(message) ||
+      /\b\d{1,3}\s+para mi\b/.test(message) ||
       guaranteedMoneyDemandPattern.test(message) ||
       ((/\b\d{1,3}\s?%/.test(message) || /\b\d{1,2}\/\d{1,2}\b/.test(message)) && !/(70\s?%|30\s?%|70\/30)/.test(message)))
   );
@@ -411,9 +416,18 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
   // pedir la cifra exacta (la suya = 30/70), asi que SI se responde con el 70/30 (invariante 3 — solo si
   // preguntan la cifra). Antes solo se cubria el lado-agencia ("os quedais") y se le ocultaba a quien
   // preguntaba lo suyo.
+  // Tambien la pregunta directa de PAGO en PRIMERA PERSONA ("cuanto me pagan", "cuanto dinero me pagan",
+  // "cuanto gano/cobro yo") pide su cifra y se responde con 70/30 (Alex 22-jun): el extractor ya la cuenta
+  // como ASKS_ABOUT_PERCENTAGE pero el planner la dejaba caer en la rama general que OCULTABA el reparto. Se
+  // exige el "me"/primera persona a proposito: la pregunta VAGA "cuanto pagan?" (sin "me") sigue dando la
+  // respuesta sin-cifra (invariante 3 conservador). La negociacion (pedir mas, regatear, cifra no estandar)
+  // escala antes via isCommercialEscalation -> requiresHumanReview, asi que esto no la toca.
   const exactPercentageQuestion =
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
-    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano yo|cuanto es para mi)\b/.test(
+    // Una NEGOCIACION nunca libera la cifra (gana el escalado): aunque el mensaje tambien parezca pregunta
+    // de pago ("cuanto me pagan? quiero el 50 para mi"), se trata como negociacion -> revision (invariante 3).
+    !isCommercialEscalation(input) &&
+    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro)\b/.test(
       message
     );
   const generalCommercialQuestion =

@@ -1659,7 +1659,17 @@ function decideNextState(
   }
 
   if (candidate.currentState === "QUALIFYING" && evaluateQualificationReadiness(candidate).readyForHumanReview) {
-    return "WAITING_HUMAN_REVIEW";
+    // No saltar a revision en el MISMO turno en que la candidata hace una pregunta RESPONDIBLE (%, contrato):
+    // primero se le responde (sigue en QUALIFYING) y al turno siguiente, sin pregunta nueva, pasa a revision.
+    // Asi el "lo comento con mi socio" sale AL FINAL, no cortando su pregunta (peticion de Alex 22-jun). La
+    // negociacion ya escalo antes (requiresHumanReview -> HIR), asi que aqui solo se difiere una duda legitima.
+    const hasAnswerablePendingQuestion =
+      responsePlan.answerFacts.length > 0 &&
+      !responsePlan.requiresHumanReview &&
+      (understanding.intent === "ASKS_ABOUT_PERCENTAGE" || understanding.intent === "ASKS_ABOUT_CONTRACT");
+    if (!hasAnswerablePendingQuestion) {
+      return "WAITING_HUMAN_REVIEW";
+    }
   }
 
   return null;
@@ -1721,6 +1731,19 @@ function generateResponse(
   }
 
   if (candidate.currentState === "WAITING_HUMAN_REVIEW") {
+    // Defensa P0 (Alex 22-jun): SOLO si la candidata hace una pregunta de % o de contrato estando YA en
+    // revision, se le RESPONDE (p.ej. "cuanto me pagan" -> 70/30) en vez de soltar el holding que ignora su
+    // pregunta. Acotado a esos dos intents a proposito: cualquier otro mensaje (acuse, info, etc.) mantiene
+    // el holding "lo comento con mi socio" (no se reabre la cualificacion). El caso normal lo cubre el timing
+    // (decideNextState difiere la entrada a revision); esto es la red por si llega ya en revision. No cambia
+    // de estado (invariante 4 intacto).
+    if (
+      (understanding.intent === "ASKS_ABOUT_PERCENTAGE" || understanding.intent === "ASKS_ABOUT_CONTRACT") &&
+      responsePlan.answerFacts.length > 0 &&
+      isBusinessAnswerIntent(understanding, responsePlan)
+    ) {
+      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
+    }
     // Coherencia (fallo real: el bot repetia "lo comento con mi socio" en bucle si la candidata seguia
     // escribiendo): la primera vez se explica; despues se reconoce de forma breve y variada, sin repetir.
     return alreadyAwaitingPartner
@@ -1750,6 +1773,21 @@ function generateResponse(
     understanding.intent !== "REQUESTS_HUMAN"
   ) {
     return `Genial, con ese movil perfecto.\n\n${responsePlan.questionToAsk}`;
+  }
+  // Movil DUDOSO recien dado (iPhone <13 -> PENDING_QUALITY_TEST): frase SUAVE (Alex 22-jun). El LLM libre lo
+  // redactaba negativo y en 3a persona sobre Alex ("lo reviso yo, no me vale directo"); aqui se reconduce con
+  // calidez, "mi socio" (nunca "lo reviso yo"/"no me vale") y se sigue el guion. La revision real del movil
+  // sigue siendo al final (WAITING_HUMAN_REVIEW); esto solo arregla el TONO del acuse en cualificacion.
+  if (
+    understanding.extractedData.deviceEligibility === "PENDING_QUALITY_TEST" &&
+    responsePlan.questionToAsk &&
+    onlyDeviceKnowledge &&
+    !understanding.requiresHumanReview &&
+    understanding.intent !== "ASKS_ABOUT_PERCENTAGE" &&
+    understanding.intent !== "ASKS_ABOUT_CONTRACT" &&
+    understanding.intent !== "REQUESTS_HUMAN"
+  ) {
+    return `Ese movil lo tendria que valorar bien con mi socio, Instagram penaliza mucho la calidad.\n\n${responsePlan.questionToAsk}`;
   }
 
   if (responsePlan.answerFacts.length > 0 && isBusinessAnswerIntent(understanding, responsePlan)) {

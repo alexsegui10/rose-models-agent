@@ -41,7 +41,9 @@ const entries: KnowledgeEntryInput[] = [
     approvedAnswerPoints: [
       "Por cierto, una cosa importante: que movil tienes?",
       "iPhone 13 o superior y Galaxy S23 o superior nos sirven directamente.",
-      "Si es iPhone anterior al 13, otro Samsung u otro movil de gama alta, Alex revisa la calidad."
+      // Tono SUAVE (Alex 22-jun): "lo valoramos con mi socio", NUNCA "Alex revisa"/"lo reviso yo"/"no me
+      // vale" (en 3a persona el LLM lo redactaba negativo y revelador). Se reconduce con calidez.
+      "Si es iPhone anterior al 13, otro Samsung u otro movil de gama alta, lo valoramos bien con mi socio antes, que la calidad de foto y video es clave."
     ],
     prohibitedClaims: [
       "Aprobar incorporacion con movil de mala calidad.",
@@ -57,7 +59,7 @@ const entries: KnowledgeEntryInput[] = [
     allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
     tags: ["device", "quality", "qualification", "iphone", "galaxy"],
     requiresHumanReview: false,
-    version: "candidate-requirements-device-quality-2026-06-09.2",
+    version: "candidate-requirements-device-quality-2026-06-22.1",
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-09"
