@@ -229,6 +229,24 @@ export class ConversationEngine {
   }
 
   /**
+   * ¿El inbound con ese externalMessageId YA recibio respuesta del agente? (P0-3). Senal deterministica: hay
+   * un mensaje role "agent" DESPUES del inbound en el historial (incluye PENDING_APPROVAL, que se guarda como
+   * mensaje del agente). Si el inbound es el ultimo (o solo le siguen mensajes de la candidata), el turno
+   * anterior no llego a responder -> un reintento de Meta debe REPROCESAR, no ignorar como duplicado.
+   *
+   * Ventana residual conocida (aceptada): si el turno GUARDO la respuesta pero murio ANTES de enviarla a IG
+   * (el envio va despues, en el webhook), esto la cuenta como "respondida" y el reintento se ignora. Es raro:
+   * lo lento (y lo que agota el timeout) es la generacion de OpenAI, ANTES de guardar; el envio es rapido y
+   * lleva su propio deadline. Cerrarla del todo exigiria un flag de entrega-a-IG confirmada (cambio mayor).
+   */
+  private async inboundWasAnswered(candidateId: string, externalMessageId: string): Promise<boolean> {
+    const history = await this.dependencies.repository.listMessages(candidateId, 50);
+    const idx = history.findIndex((message) => message.externalMessageId === externalMessageId);
+    if (idx === -1) return false;
+    return history.slice(idx + 1).some((message) => message.role === "agent");
+  }
+
+  /**
    * Reanuda hacia la llamada SOLO si AMBAS aprobaciones humanas estan: perfil apto (humanFitDecision
    * APPROVED) Y movil OK (deviceEligibility APPROVED o PENDING_UPGRADE; nunca PENDING_QUALITY_TEST ni
    * NOT_ELIGIBLE). Decision de Alex (22-jun): son DOS decisiones distintas y el bot no agenda hasta tener
@@ -793,20 +811,30 @@ export class ConversationEngine {
     // pausa. Esos mensajes YA estan guardados (llegaron en la pausa); aqui solo se RE-genera la respuesta.
     // Por eso se salta la dedup-por-mid y el re-guardado del inbound, y NO se bumpea la version de
     // cancelacion (el reproceso lo dispara una accion humana, no un mensaje nuevo: no debe cancelar nada).
-    if (!input.reprocessExisting && groupedMessage.externalMessageId) {
+    // reprocessExisting puede venir del llamante (feature C) o activarse aqui mismo (recuperacion P0-3).
+    let reprocessExisting = input.reprocessExisting ?? false;
+    if (!reprocessExisting && groupedMessage.externalMessageId) {
       const duplicateInbound = await this.dependencies.repository.findMessageByExternalId(
         candidate.id,
         groupedMessage.externalMessageId
       );
       if (duplicateInbound) {
-        return skippedResult(candidate, duplicateInbound.content, true, "Mensaje duplicado ignorado.");
+        // El inbound ya estaba guardado. Solo es un DUPLICADO a ignorar si YA SE RESPONDIO. Si se guardo pero
+        // el turno anterior MURIO antes de responder (timeout/SIGKILL de Vercel Hobby) y Meta reintenta el
+        // webhook, NO se ignora: se REPROCESA (sin re-guardar el inbound) para no perder a la candidata en
+        // silencio para siempre. La senal es deterministica (¿hay un mensaje del agente despues del inbound?).
+        const answered = await this.inboundWasAnswered(candidate.id, groupedMessage.externalMessageId);
+        if (answered) {
+          return skippedResult(candidate, duplicateInbound.content, true, "Mensaje duplicado ignorado (ya respondido).");
+        }
+        reprocessExisting = true;
       }
     }
 
     // La candidata puede escribir VARIOS mensajes seguidos: se guardan por separado (se ven como
     // varias burbujas) pero el turno se procesa sobre el contenido agrupado, asi el bot responde UNA
     // vez (no a cada fragmento). Si solo hay uno, es el caso normal de un mensaje.
-    if (!input.reprocessExisting) {
+    if (!reprocessExisting) {
       const candidateTurnMessages = input.messages.filter((message) => message.content.trim().length > 0);
       for (const message of candidateTurnMessages.length > 0 ? candidateTurnMessages : [{ content: groupedMessage.content }]) {
         await this.dependencies.repository.addMessage(candidateMessage(candidate.id, message.content, message.externalMessageId));
@@ -814,7 +842,7 @@ export class ConversationEngine {
     }
     const activeCandidate: Candidate = {
       ...candidate,
-      generationCancellationVersion: input.reprocessExisting
+      generationCancellationVersion: reprocessExisting
         ? candidate.generationCancellationVersion
         : candidate.generationCancellationVersion + 1,
       updatedAt: new Date()
