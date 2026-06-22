@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
+import { deliverProactiveMessage } from "@/server/proactiveDelivery";
 
 const AdvanceStageSchema = z.object({
   candidateId: z.string(),
@@ -35,12 +36,19 @@ export async function POST(request: Request) {
 
   const result = await dispatchAction(engine, parsed.data);
 
+  // Entregar a la candidata, por su canal (Instagram/WhatsApp), el mensaje del bot que la decision haya
+  // generado (p.ej. al aprobar el movil y completarse el par, "Buenas noticias... ¿que dia te viene?").
+  // El motor ya lo guardo; aqui SOLO se envia (antes las decisiones del CRM no salian a Instagram).
+  const proposedMessage = "proposedMessage" in result ? result.proposedMessage : null;
+  const delivery = proposedMessage ? await deliverProactiveMessage(result.candidate, proposedMessage) : null;
+
   const messages = await repository.listMessages(result.candidate.id);
   const transitions = await repository.listTransitions(result.candidate.id);
 
   return NextResponse.json({
     candidate: result.candidate,
-    proposedMessage: "proposedMessage" in result ? result.proposedMessage : null,
+    proposedMessage,
+    sentToCandidate: delivery,
     appliedTransitions: result.transitions,
     messages,
     transitions

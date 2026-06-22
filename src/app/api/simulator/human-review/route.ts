@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
+import { deliverProactiveMessage } from "@/server/proactiveDelivery";
 
 const HumanReviewSchema = z.object({
   candidateId: z.string(),
@@ -24,12 +25,16 @@ export async function POST(request: Request) {
   }
 
   const result = await engine.applyHumanDecision(parsed.data);
+  // Entregar el mensaje del bot (p.ej. "Buenas noticias... ¿que dia te viene?") a la candidata por su canal
+  // (Instagram/WhatsApp). El motor ya lo guardo; aqui SOLO se envia (antes no salia a Instagram).
+  const delivery = result.proposedMessage ? await deliverProactiveMessage(result.candidate, result.proposedMessage) : null;
   const messages = await repository.listMessages(result.candidate.id);
   const transitions = await repository.listTransitions(result.candidate.id);
 
   return NextResponse.json({
     candidate: result.candidate,
     proposedMessage: result.proposedMessage,
+    sentToCandidate: delivery,
     appliedTransitions: result.transitions,
     messages,
     transitions
