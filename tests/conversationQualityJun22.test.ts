@@ -146,4 +146,27 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
     });
     expect(rDudoso.candidate.currentState).toBe("QUALIFYING");
   });
+
+  it("P2: turno 'tengo 30 / os sirve? / cuanto pagais?' acusa la edad antes de responder y encadena la siguiente pregunta", async () => {
+    const { engine, repository } = setup();
+    // Sin edad previa: la da AHORA (extraccion del turno), junto a "os sirve?" y la pregunta de pago.
+    const c = await seedQualifying(repository, {
+      age: undefined,
+      isAdultConfirmed: false,
+      hasOnlyFans: undefined,
+      deviceEligibility: "UNKNOWN",
+      deviceModel: undefined
+    });
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "pues tengo 30" }, { content: "os sirve?" }, { content: "y cuanto pagais?" }]
+    });
+
+    // Acusa la edad recien dada (responde "os sirve?" = si) ANTES de la respuesta de negocio.
+    expect(r.response).toMatch(/con 30 perfecto/i);
+    // Responde el pago (sin cifra, vago) y encadena la siguiente pregunta de cualificacion (movil).
+    expect(r.response.toLowerCase()).toMatch(/reparto|porcentaje|salario/);
+    expect(r.response.toLowerCase()).toMatch(/movil|telefono/);
+  });
 });

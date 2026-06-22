@@ -203,10 +203,21 @@ function objectiveFor(
 }
 
 function acknowledgedFactsFor(input: BuildResponsePlanInput): string[] {
-  if (input.understanding.intent === "ASKS_ABOUT_PERCENTAGE") return ["La candidata pregunta por el reparto o porcentaje."];
-  if (input.understanding.intent === "ASKS_ABOUT_CONTRACT") return ["La candidata pregunta por condiciones contractuales."];
-  if (input.understanding.intent === "REQUESTS_CALL") return ["La candidata quiere una llamada."];
-  return [];
+  const acks: string[] = [];
+  // Si acaba de dar su edad y es adulta, reconocerlo BREVE y con calidez antes de lo demas (Alex 22-jun:
+  // responder a TODO lo que dijo, en orden; p.ej. "tengo 30 / os sirve? / cuanto pagais?" -> "genial, con 30
+  // perfecto" antes del reparto). Ortogonal al % (no menciona cifras), no afecta a la validacion factual.
+  const age = input.understanding.extractedData.age;
+  if (typeof age === "number" && age >= 18 && age <= 99) {
+    acks.push(
+      `La candidata acaba de decir su edad (${age}) y es valida: confirmaselo brevemente y con calidez antes de responder lo demas.`
+    );
+  }
+  if (input.understanding.intent === "ASKS_ABOUT_PERCENTAGE") acks.push("La candidata pregunta por el reparto o porcentaje.");
+  else if (input.understanding.intent === "ASKS_ABOUT_CONTRACT")
+    acks.push("La candidata pregunta por condiciones contractuales.");
+  else if (input.understanding.intent === "REQUESTS_CALL") acks.push("La candidata quiere una llamada.");
+  return acks;
 }
 
 /**

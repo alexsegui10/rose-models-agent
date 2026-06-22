@@ -1791,7 +1791,10 @@ function generateResponse(
   }
 
   if (responsePlan.answerFacts.length > 0 && isBusinessAnswerIntent(understanding, responsePlan)) {
-    return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
+    // Acusar la edad recien dada antes de la respuesta de negocio (responder a TODO, en orden; Alex 22-jun).
+    const ageAck = ageAckForTurn(understanding);
+    const body = businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
+    return ageAck ? `${ageAck}\n\n${body}` : body;
   }
 
   // Opener canonico de Alex en tres pasos (identidad + validacion/gate + marco), SIN preguntas:
@@ -2012,6 +2015,17 @@ export function acknowledgementFor(understanding: ModelConversationOutput, inbou
 // Cuenta signos de interrogacion (para detectar multi-pregunta: "cual es el proceso? y cuanto cuesta?").
 function countQuestionMarks(message: string): number {
   return (message.match(/\?/g) ?? []).length;
+}
+
+// Acuse breve de la EDAD recien dada (Alex 22-jun): si la candidata acaba de decir su edad y es adulta, el
+// bot lo confirma con calidez ANTES de la respuesta de negocio, en vez de saltar directo (y dejar sin
+// contestar su "os sirve?"). Asi responde a TODO lo que dijo, en orden. null si no dio edad valida este turno.
+function ageAckForTurn(understanding: ModelConversationOutput): string | null {
+  const age = understanding.extractedData.age;
+  if (typeof age === "number" && age >= 18 && age <= 99) {
+    return `Genial, con ${age} perfecto.`;
+  }
+  return null;
 }
 
 function businessResponseFromPlan(responsePlan: ResponsePlan, multiQuestion = false): string {
