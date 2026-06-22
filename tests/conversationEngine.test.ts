@@ -6,7 +6,7 @@ import {
   type ConversationUnderstandingProvider,
   type ModelConversationOutput
 } from "@/application/llmProvider";
-import { createCandidate, type Candidate } from "@/domain/candidate";
+import { createCandidate, normalizeCandidate, type Candidate } from "@/domain/candidate";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
 function createEngine() {
@@ -76,6 +76,40 @@ describe("ConversationEngine", () => {
     expect(result.draft.actualProvider).toBe("deterministic");
     expect(result.draft.usedFallback).toBe(false);
     expect(result.draft.fallbackReason).toBeNull();
+  });
+
+  it("ROMPE EL BUCLE del movil: modelo capturado pero no clasificable (UNKNOWN) -> PENDING, no repite el movil (bug 22-jun)", async () => {
+    // Caso de modo OpenAI: el LLM captura un deviceModel pero la elegibilidad no se puede clasificar
+    // (typo raro / marca no listada) y quedaba UNKNOWN -> la readiness pedia el movil EN BUCLE aunque la
+    // candidata ya hubiera contestado. Ahora un modelo presente con UNKNOWN pasa a PENDING_QUALITY_TEST.
+    const { engine, repository } = createEngineWithStub([
+      ModelConversationOutputSchema.parse({
+        intent: "OTHER",
+        confidence: 0.6,
+        suggestedStateTransition: null,
+        requiresHumanReview: false,
+        humanReviewReason: null,
+        response: "",
+        extractedData: { deviceModel: "un movil nuevo que saca buenas fotos", deviceEligibility: "UNKNOWN" }
+      })
+    ]);
+    await repository.saveCandidate(
+      normalizeCandidate({
+        ...createCandidate({ instagramUsername: "loop_movil", profileVisibility: "PUBLIC" }),
+        firstName: "Ana",
+        age: 30,
+        isAdultConfirmed: true,
+        currentState: "QUALIFYING"
+      })
+    );
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: "loop_movil",
+      messages: [{ content: "tengo un movil nuevo que saca buenas fotos" }]
+    });
+
+    expect(r.candidate.deviceEligibility).toBe("PENDING_QUALITY_TEST");
+    expect(r.response.toLowerCase()).not.toContain("que movil tienes");
   });
 
   it("exposes planned transitions in DRAFT_ONLY mode without persisting them", async () => {

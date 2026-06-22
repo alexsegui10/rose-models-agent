@@ -206,6 +206,14 @@ describe("commercial and device policy", () => {
     expect(deviceEligibilityForDescription("tengo un ipone")).toBe("PENDING_QUALITY_TEST");
   });
 
+  it("tolera la transposicion 'ipohne'/'ihpone' (h tras la o), bug grave 22-jun (el bot repetia el movil)", () => {
+    expect(deviceEligibilityForDescription("ipohne 13")).toBe("APPROVED");
+    expect(deviceEligibilityForDescription("Ipohne 13")).toBe("APPROVED");
+    expect(deviceEligibilityForDescription("ihpone 13")).toBe("APPROVED");
+    // Un iPhone viejo con el mismo typo sigue siendo NO ELEGIBLE (no se cuela por la tolerancia).
+    expect(deviceEligibilityForDescription("ipohne 8")).toBe("NOT_ELIGIBLE");
+  });
+
   it("does not misread common Spanish words as an iphone (sin falsos positivos)", () => {
     expect(deviceEligibilityForDescription("no me lo pienso")).toBe("UNKNOWN");
     expect(deviceEligibilityForDescription("eso me lo impone la agencia")).toBe("UNKNOWN");

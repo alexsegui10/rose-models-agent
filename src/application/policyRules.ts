@@ -42,11 +42,12 @@ export function createNegotiationLog(input: NegotiationLog): NegotiationLog {
   return input;
 }
 
-// "iphone" con los typos castellanos habituales: ipone (sin h), iphon (sin e), ifone/ifon (ph->f).
-// Sin esto, "ipone 13" no se reconocia como iPhone, deviceEligibility quedaba UNKNOWN y el slot del
-// movil se preguntaba en bucle (bug real del spot-check de Alex). El "i" inicial obligatorio evita
-// falsos positivos con palabras castellanas (impone, propone, pienso, telefono...).
-const IPHONE_TYPO = "i(?:ph|p|f)o?ne?";
+// "iphone" con los typos castellanos habituales: ipone (sin h), iphon (sin e), ifone/ifon (ph->f) y la
+// transposicion "ipohne"/"ihpone" (la h cae tras la o, o se cruza con la p). El "i" inicial obligatorio y el
+// grupo de consonantes evitan falsos positivos con palabras castellanas (impone, propone, pienso, telefono,
+// informe...). Sin esto, "Ipohne 13" dejaba deviceEligibility en UNKNOWN y el slot del movil se preguntaba EN
+// BUCLE aunque la candidata ya hubiera contestado (bug grave reproducido por Alex 22-jun).
+const IPHONE_TYPO = "i(?:ph|hp|p|f)o?h?ne?";
 
 export function deviceEligibilityForDescription(description: string): DeviceEligibility {
   const normalized = normalize(description);

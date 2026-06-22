@@ -22,6 +22,7 @@ import { buildConsistentCandidatePatch } from "./dataConsistency";
 import type { ProfilePrivacyProvider } from "./profilePrivacyProvider";
 import { applyHumanReviewDecision, humanDecisionToState, type HumanReviewDecision } from "./humanReview";
 import { extractDeterministicUnderstanding, guaranteedMoneyDemandPattern } from "./dataExtractor";
+import { deviceEligibilityForDescription } from "./policyRules";
 import type { ExampleRetriever } from "./exampleRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
 import { safeFactualFallback, validateFactualResponse, type FactualValidationResult } from "./factualValidator";
@@ -1594,6 +1595,23 @@ function applyExtractedData(
   if (extractedData.deviceType !== undefined) patch.deviceType = extractedData.deviceType;
   if (extractedData.deviceModel !== undefined) patch.deviceModel = extractedData.deviceModel;
   if (extractedData.deviceEligibility !== undefined) patch.deviceEligibility = extractedData.deviceEligibility;
+  // ROMPER EL BUCLE del movil (bug grave de Alex 22-jun): si la candidata YA dio un MODELO (deviceModel
+  // capturado) pero no se pudo CLASIFICAR (eligibility UNKNOWN: un typo raro o una marca no listada), NO se
+  // vuelve a preguntar el movil en bucle -> se marca PENDING_QUALITY_TEST (movil "conocido": sigue cualificando
+  // y Alex lo valora con su socio). Un movil RECONOCIDO como malo sigue siendo NOT_ELIGIBLE (esto solo toca el
+  // caso UNKNOWN). Invariante 1: no decide flujo ni auto-aprueba; solo evita el bucle y deja la decision a Alex.
+  const effectiveDeviceModel = patch.deviceModel ?? candidate.deviceModel;
+  const effectiveDeviceEligibility = patch.deviceEligibility ?? candidate.deviceEligibility;
+  if (
+    typeof effectiveDeviceModel === "string" &&
+    effectiveDeviceModel.trim().length > 0 &&
+    effectiveDeviceEligibility === "UNKNOWN"
+  ) {
+    // Primero se re-deriva desde el MODELO ya capturado (a veces mas limpio que el mensaje crudo: el LLM
+    // normaliza "Ipohne 13" -> "iPhone 13"); si aun asi no se clasifica, queda PENDING (Alex lo valora).
+    const reDerived = deviceEligibilityForDescription(effectiveDeviceModel);
+    patch.deviceEligibility = reDerived !== "UNKNOWN" ? reDerived : "PENDING_QUALITY_TEST";
+  }
   if (typeof extractedData.hasOnlyFans === "boolean") patch.hasOnlyFans = extractedData.hasOnlyFans;
   if (typeof extractedData.worksWithAnotherAgency === "boolean") {
     patch.worksWithAnotherAgency = extractedData.worksWithAnotherAgency;
