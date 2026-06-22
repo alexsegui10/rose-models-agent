@@ -455,20 +455,44 @@ export class ConversationEngine {
    * resultado. Asi `recordCallOutcome` solo LEE callAttempts para decidir el reintento diferido. Idempotente
    * respecto al estado: no cambia de estado, solo incrementa y persiste el contador.
    */
-  async noteCallAttempt(candidateId: string, conversationId?: string): Promise<{ candidate: Candidate }> {
+  async noteCallAttempt(
+    candidateId: string,
+    conversationId?: string
+  ): Promise<{ candidate: Candidate; transitions: StateTransition[] }> {
     const existing = await this.dependencies.repository.findCandidateById(candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
     }
+    // REINTENTO (fix P1-2): si la candidata estaba en CALL_NO_ANSWER y Alex vuelve a llamarla, se RE-ARMA a
+    // CALL_SCHEDULED. Sin esto, el resultado de ESTE intento se perdia: recordCallOutcome solo registra desde
+    // CALL_SCHEDULED/CALL_IN_PROGRESS, asi que un COMPLETED del reintento (ella ahora SI contesta) se
+    // descartaba en silencio. NO se resetea callAttempts (se sigue contando hacia el limite de 3).
+    const transitions: StateTransition[] = [];
+    let currentState = existing.currentState;
+    if (currentState === "CALL_NO_ANSWER" && canTransition("CALL_NO_ANSWER", "CALL_SCHEDULED")) {
+      transitions.push(
+        createTransition({
+          candidate: existing,
+          toState: "CALL_SCHEDULED",
+          trigger: "CALL_RETRY",
+          reason: "Reintento de llamada: se re-arma a agendada para poder registrar el resultado de este intento."
+        })
+      );
+      currentState = "CALL_SCHEDULED";
+    }
     const candidate: Candidate = {
       ...existing,
+      currentState,
       callAttempts: existing.callAttempts + 1,
       // Id de la conversacion de ElevenLabs (para reproducir la grabacion luego); conserva el previo si no llega uno nuevo.
       lastCallConversationId: conversationId ?? existing.lastCallConversationId,
       updatedAt: new Date()
     };
     await this.dependencies.repository.saveCandidate(candidate);
-    return { candidate };
+    for (const transition of transitions) {
+      await this.dependencies.repository.addTransition(transition);
+    }
+    return { candidate, transitions };
   }
 
   /**

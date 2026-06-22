@@ -46,6 +46,21 @@ describe("noteCallAttempt: contador de intentos (incrementa AL DISPARAR la llama
     const after = await engine.noteCallAttempt(seeded.id);
     expect(after.candidate.callAttempts).toBe(3);
   });
+
+  it("P1-2: reintento desde CALL_NO_ANSWER re-arma a CALL_SCHEDULED (sin resetear intentos) y el resultado SI se registra", async () => {
+    const { engine, repository } = createEngine();
+    // Primer intento ya fallido: en CALL_NO_ANSWER con 1 intento usado.
+    const seeded = await seed(repository, "CALL_NO_ANSWER", { callAttempts: 1 });
+
+    // Alex vuelve a llamar -> se re-arma a CALL_SCHEDULED y se cuenta el intento (no se resetea).
+    const after = await engine.noteCallAttempt(seeded.id);
+    expect(after.candidate.currentState).toBe("CALL_SCHEDULED");
+    expect(after.candidate.callAttempts).toBe(2);
+
+    // Esta vez SI contesta: el COMPLETED del reintento ya NO se pierde (antes se descartaba desde CALL_NO_ANSWER).
+    const outcome = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "COMPLETED" });
+    expect(outcome.candidate.currentState).toBe("CALL_COMPLETED");
+  });
 });
 
 describe("recordCallOutcome NO_ANSWER: reintento diferido", () => {
