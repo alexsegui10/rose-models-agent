@@ -27,8 +27,19 @@ export async function POST(request: Request) {
   const result = await engine.applyHumanDecision(parsed.data);
   // Entregar a la candidata, por su canal (Instagram/WhatsApp), lo que toque: si escribio DURANTE la pausa,
   // el bot RESPONDE a eso (reproceso); si no, el proactivo fijo de aprobado. El motor ya guardo el mensaje;
-  // aqui SOLO se envia (antes las decisiones del CRM no salian a Instagram).
-  const outcome = await deliverDecisionOutcome(engine, result);
+  // aqui SOLO se envia (antes las decisiones del CRM no salian a Instagram). La decision YA se persistio:
+  // un fallo al ENTREGAR no debe dar 500 ni dejar el CRM en error con la candidata ya avanzada.
+  let outcome: Awaited<ReturnType<typeof deliverDecisionOutcome>>;
+  let deliveryError = false;
+  try {
+    outcome = await deliverDecisionOutcome(engine, result);
+  } catch (error) {
+    console.warn("[human-review] fallo al entregar tras la decision", {
+      error: error instanceof Error ? error.name : "desconocido"
+    });
+    outcome = { candidate: result.candidate, proposedMessage: result.proposedMessage ?? null, sentToCandidate: null };
+    deliveryError = true;
+  }
   const messages = await repository.listMessages(outcome.candidate.id);
   const transitions = await repository.listTransitions(outcome.candidate.id);
 
@@ -36,6 +47,7 @@ export async function POST(request: Request) {
     candidate: outcome.candidate,
     proposedMessage: outcome.proposedMessage,
     sentToCandidate: outcome.sentToCandidate,
+    deliveryError,
     appliedTransitions: result.transitions,
     messages,
     transitions

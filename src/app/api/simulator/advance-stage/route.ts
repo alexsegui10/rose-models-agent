@@ -39,11 +39,22 @@ export async function POST(request: Request) {
   // Entregar a la candidata, por su canal (Instagram/WhatsApp), lo que la decision haya generado (p.ej. al
   // completar el par perfil+movil, "Buenas noticias... ¿que dia te viene?"). Si escribio DURANTE la pausa,
   // el bot RESPONDE a eso (reproceso) en vez del proactivo fijo. El motor ya guardo el mensaje; aqui se envia.
-  const outcome = await deliverDecisionOutcome(engine, {
-    candidate: result.candidate,
-    proposedMessage: result.proposedMessage ?? null,
-    reprocessTrailingInbound: result.reprocessTrailingInbound ?? null
-  });
+  // La decision YA se aplico y persistio; un fallo al ENTREGAR (reproceso/envio) no debe dar 500.
+  let outcome: Awaited<ReturnType<typeof deliverDecisionOutcome>>;
+  let deliveryError = false;
+  try {
+    outcome = await deliverDecisionOutcome(engine, {
+      candidate: result.candidate,
+      proposedMessage: result.proposedMessage ?? null,
+      reprocessTrailingInbound: result.reprocessTrailingInbound ?? null
+    });
+  } catch (error) {
+    console.warn("[advance-stage] fallo al entregar tras la decision", {
+      error: error instanceof Error ? error.name : "desconocido"
+    });
+    outcome = { candidate: result.candidate, proposedMessage: result.proposedMessage ?? null, sentToCandidate: null };
+    deliveryError = true;
+  }
 
   const messages = await repository.listMessages(outcome.candidate.id);
   const transitions = await repository.listTransitions(outcome.candidate.id);
@@ -52,6 +63,7 @@ export async function POST(request: Request) {
     candidate: outcome.candidate,
     proposedMessage: outcome.proposedMessage,
     sentToCandidate: outcome.sentToCandidate,
+    deliveryError,
     appliedTransitions: result.transitions,
     messages,
     transitions

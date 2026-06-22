@@ -52,6 +52,11 @@ En la carpeta del proyecto (`c:\Users\Alex\Desktop\proyecto1`):
    Esto crea las tablas (candidates, conversation_messages, etc.) en Neon. Debe terminar sin errores.
 3. Ya puedes quitar esa línea de `.env.local` (en Vercel usaremos la **pooled**).
 
+> ⚠️ **EN CADA REDEPLOY que incluya cambios de base de datos** (un `.sql` nuevo en `drizzle/`): ANTES de
+> redeplegar en Vercel, vuelve a hacer este PASO 3 (`npm run db:migrate` con la cadena **directa**, no la
+> pooled). Si subes código que espera una columna/tabla nueva SIN haber migrado Neon, el CRM y el bot se caen
+> (5xx). Regla simple: ¿hay un `.sql` nuevo? → migra primero, redeploy después.
+
 ---
 
 ## PASO 4 — Desplegar en Vercel
