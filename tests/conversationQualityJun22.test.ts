@@ -169,4 +169,24 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
     expect(r.response.toLowerCase()).toMatch(/reparto|porcentaje|salario/);
     expect(r.response.toLowerCase()).toMatch(/movil|telefono/);
   });
+
+  it("B-edad: '¿hay posibilidades con 21 años?' confirma que desde 18 vale (no lo ignora; Alex 22-jun)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedQualifying(repository, {
+      firstName: undefined,
+      age: undefined,
+      isAdultConfirmed: false,
+      hasOnlyFans: undefined,
+      deviceEligibility: "UNKNOWN",
+      deviceModel: undefined
+    });
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "hay posibilidades de trabajar teniendo 21 años?" }]
+    });
+
+    expect(r.response.toLowerCase()).toContain("21");
+    expect(r.response.toLowerCase()).toMatch(/sin problema|trabajamos/);
+  });
 });

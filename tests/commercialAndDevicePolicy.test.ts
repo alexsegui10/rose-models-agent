@@ -190,6 +190,14 @@ describe("commercial and device policy", () => {
     expect(deviceEligibilityForDescription("galaxy s24")).toBe("APPROVED");
   });
 
+  it("iPhone 11/12 Pro y Pro Max = APROBADO directo (buena camara; Alex 22-jun)", () => {
+    expect(deviceEligibilityForDescription("iphone 12 pro max")).toBe("APPROVED");
+    expect(deviceEligibilityForDescription("tengo un iphone 11 pro")).toBe("APPROVED");
+    expect(deviceEligibilityForDescription("iPhone 12 Pro")).toBe("APPROVED");
+    // El 11/12 NORMAL (sin Pro) sigue dudoso.
+    expect(deviceEligibilityForDescription("iphone 12")).toBe("PENDING_QUALITY_TEST");
+  });
+
   it("tolerates common iphone typos so the device slot is not re-asked (spot-check de Alex: 'ipone 13')", () => {
     // "ipone 13" daba UNKNOWN -> el slot del movil se preguntaba en bucle.
     expect(deviceEligibilityForDescription("ipone 13")).toBe("APPROVED");

@@ -1751,6 +1751,27 @@ function generateResponse(
       : "Perfecto, muchas gracias por explicarmelo.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
   }
 
+  // Pregunta de ELEGIBILIDAD por la edad ("¿hay posibilidades con 21 años?", "¿sirvo teniendo 23?"): desde
+  // 18 todas encajan (Alex 22-jun), asi que se CONFIRMA con calidez y se sigue el guion (questionToAsk), en
+  // vez de ignorarla y pedir el nombre. Solo si dio una edad ADULTA este turno y pregunta por ella; nunca
+  // pisa %/contrato/persona/uncovered, y una menor (<18) cae al cierre por edad (invariante 2 intacto).
+  const eligibilityAge = understanding.extractedData.age;
+  if (
+    typeof eligibilityAge === "number" &&
+    eligibilityAge >= 18 &&
+    /\?/.test(inboundMessage) &&
+    /\b(posibilidad|sirvo|sirve|valgo|vale|puedo|pueden|teniendo|aceptan|admiten|opcion|con \d{2}|\d{2}\s?anos?)\b/.test(
+      normalizeText(inboundMessage)
+    ) &&
+    understanding.intent !== "ASKS_ABOUT_PERCENTAGE" &&
+    understanding.intent !== "ASKS_ABOUT_CONTRACT" &&
+    understanding.intent !== "REQUESTS_HUMAN" &&
+    !understanding.requiresHumanReview
+  ) {
+    const tail = responsePlan.questionToAsk ? `\n\n${responsePlan.questionToAsk}` : "";
+    return `Si, con ${eligibilityAge} trabajamos sin problema.${tail}`;
+  }
+
   if (responsePlan.uncoveredQuestion) {
     return "Eso dejame que lo hable con mi socio y te digo.";
   }
