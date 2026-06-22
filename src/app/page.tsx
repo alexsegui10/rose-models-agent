@@ -397,6 +397,44 @@ export default function Home() {
     }
   }
 
+  // Borra UNA candidata concreta (incluidas las reales de Instagram) y TODO su historial, para repetir la
+  // prueba end-to-end desde cero. Irreversible -> pide confirmacion. Tras borrar, deselecciona para no
+  // apuntar a un id que ya no existe.
+  function deleteCandidate(candidate: Candidate) {
+    const label = candidate.firstName?.trim() || `@${candidate.instagramUsername}`;
+    openModal({
+      title: `¿Borrar a ${label}?`,
+      body: "Se borra su conversación, sus estados y TODO su historial. Es irreversible. Úsalo para volver a empezar la prueba desde cero.",
+      danger: true,
+      confirmLabel: "Borrar definitivamente",
+      onConfirm: () => void doDeleteCandidate(candidate)
+    });
+  }
+
+  async function doDeleteCandidate(candidate: Candidate) {
+    const label = candidate.firstName?.trim() || `@${candidate.instagramUsername}`;
+    try {
+      const response = await fetch(`/api/candidates/${candidate.id}`, { method: "DELETE" });
+      const data = (await response.json().catch(() => ({}))) as { deleted?: boolean; error?: string };
+      if (!response.ok) {
+        setCrmNotice(`No se pudo borrar la candidata (${response.status}). ${data.error ?? ""}`.trim());
+        return;
+      }
+      // Deseleccionar: si estaba abierta en la ficha o en Mensajes, limpiar para no apuntar a un id muerto.
+      if (drawerCandidate?.id === candidate.id) closeDrawer();
+      if (selectedCandidate?.id === candidate.id) {
+        setSelectedCandidate(null);
+        setMessages([]);
+        setTransitions([]);
+        setLastResult(null);
+      }
+      await refreshCandidates();
+      setCrmNotice(`Borrada ${label} y todo su historial. Puedes empezar de cero.`);
+    } catch (error) {
+      setCrmNotice(`No se pudo borrar la candidata: ${error instanceof Error ? error.message : "error de red"}.`);
+    }
+  }
+
   async function sendMessage() {
     setLoading(true);
     setSendError(null);
@@ -2437,6 +2475,16 @@ export default function Home() {
                     {drawerCandidate.manualControlActive || drawerCandidate.automationPaused ? "Reactivar bot" : "Pausar bot"}
                   </button>
                 ) : null}
+                {/* Borrar la candidata y su historial: disponible en CUALQUIER estado (incluidos REJECTED/
+                    CLOSED), que es justo cuando se quiere reciclar la prueba E2E desde cero. */}
+                <button
+                  type="button"
+                  className="btn-xs danger"
+                  title="Borra esta candidata y todo su historial para repetir la prueba desde cero"
+                  onClick={() => deleteCandidate(drawerCandidate)}
+                >
+                  🗑️ Borrar / empezar de cero
+                </button>
               </div>
               {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
                 <div className="drawer-reply">
