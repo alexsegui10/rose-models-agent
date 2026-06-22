@@ -744,11 +744,60 @@ export function extractDeterministicUnderstanding(
     return baseOutput("REQUESTS_HUMAN", extractedData, 0.82, true, "Enfado, sospecha, desconfianza o agresion.", internalNotes);
   }
 
-  if (extractedData.age) return baseOutput("PROVIDES_AGE", extractedData, 0.78, false, null, internalNotes);
-  if (/\b(si|sí|vale|me interesa|info|informacion)\b/.test(normalized))
-    return baseOutput("CONFIRMS_INTEREST", extractedData, 0.72, false, null, internalNotes);
+  // ULTIMO PASO antes del fall-through y DESPUES de todas las ramas de seguridad/negocio (inyeccion, IA/bot,
+  // edad dudosa, %/negociacion, contrato, llamada, DECLINES, persona, desconfianza): si la candidata hizo una
+  // pregunta PERSONAL/SOCIAL dirigida al bot ("y tu?", "quien eres?", "como estas?"), se marca como senal
+  // ortogonal para que el planner la responda PRIMERO y luego reconduzca. No cambia el intent ni el flujo
+  // (invariante 1) y nunca pisa la seguridad (esas ramas ya retornaron arriba). Bug "Ana / Y tu?" (Alex 22-jun).
+  const personalQuestion = detectPersonalQuestion(normalized);
 
-  return baseOutput(Object.keys(extractedData).length > 0 ? "OTHER" : "UNCLEAR", extractedData, 0.55, false, null, internalNotes);
+  if (extractedData.age) return baseOutput("PROVIDES_AGE", extractedData, 0.78, false, null, internalNotes, personalQuestion);
+  if (/\b(si|sí|vale|me interesa|info|informacion)\b/.test(normalized))
+    return baseOutput("CONFIRMS_INTEREST", extractedData, 0.72, false, null, internalNotes, personalQuestion);
+
+  return baseOutput(
+    Object.keys(extractedData).length > 0 ? "OTHER" : "UNCLEAR",
+    extractedData,
+    0.55,
+    false,
+    null,
+    internalNotes,
+    personalQuestion
+  );
+}
+
+// Detecta una pregunta PERSONAL/SOCIAL dirigida al bot. Solo se usa en el fall-through (cuando ningun patron
+// de negocio ni de seguridad consumio el turno), asi que nunca roba esos casos. Tres categorias:
+//  - IDENTITY: quien es / como se llama / de donde es el bot ("y tu?", "quien eres?", "de donde sos?").
+//  - RECIPROCAL_PERSONAL: le devuelve un dato personal intimo al bot (edad, estado civil, pareja, donde vive).
+//  - GREETING: cortesia/saludo ("como estas?", "que tal?").
+// Texto ya normalizado (minusculas, sin acentos). Guard: si trae terminos de negocio/trabajo, no es social.
+function detectPersonalQuestion(normalized: string): ModelConversationOutput["pendingPersonalQuestion"] {
+  if (
+    /\b(agencia|rose|contrato|porcentaje|reparto|servicio|trabaj|gana|pag[ao]|onlyfans|\bof\b|movil|cliente|publico|comprador|pais)\b/.test(
+      normalized
+    )
+  )
+    return null;
+
+  if (
+    /\b(tu|vos)\b[^.!?]{0,14}\b(cuantos anos|que edad|casad|novi|parej|vives|hijos)\b/.test(normalized) ||
+    /\b(cuantos anos|que edad)\b[^.!?]{0,14}\b(tu|vos)\b/.test(normalized)
+  )
+    return { kind: "RECIPROCAL_PERSONAL" };
+
+  if (
+    /\b(quien|kien)\s+(eres|sos|sois)\b/.test(normalized) ||
+    /\bcomo te llamas\b/.test(normalized) ||
+    /\bde donde\s+(eres|sos|sois)\b/.test(normalized) ||
+    /\by\s+(tu|vos)\b\s*\??\s*$/.test(normalized) ||
+    /^\s*(y\s+)?(tu|vos)\s*\??\s*$/.test(normalized)
+  )
+    return { kind: "IDENTITY" };
+
+  if (/\b(como estas|como andas|como te va|como va todo|que tal)\b/.test(normalized)) return { kind: "GREETING" };
+
+  return null;
 }
 
 function baseOutput(
@@ -757,7 +806,8 @@ function baseOutput(
   confidence: number,
   requiresHumanReview: boolean,
   humanReviewReason: string | null,
-  internalNotes: string[]
+  internalNotes: string[],
+  pendingPersonalQuestion: ModelConversationOutput["pendingPersonalQuestion"] = null
 ): ModelConversationOutput {
   return {
     intent,
@@ -770,6 +820,7 @@ function baseOutput(
     requestsHuman: intent === "REQUESTS_HUMAN",
     isNegotiation: humanReviewReason?.includes("negociacion") ?? false,
     requestedModelPercentage: extractedData.requestedModelPercentage ?? null,
+    pendingPersonalQuestion,
     suggestedStateTransition: null,
     requiresHumanReview,
     humanReviewReason,

@@ -1173,7 +1173,12 @@ export class ConversationEngine {
       responsePlan.questionToAsk !== null &&
       responsePlan.answerFacts.length === 0 &&
       !responsePlan.requiresHumanReview &&
-      !responsePlan.uncoveredQuestion;
+      !responsePlan.uncoveredQuestion &&
+      // Turno SOCIAL (la candidata pregunto algo personal/identidad): NO es canonico-vacio, hay algo que
+      // responder primero. En modo OpenAI dejamos que el LLM redacte la respuesta social con la voz de Alex
+      // (guion estricto: termina con mainQuestion); el fallback determinista de generateResponse cubre el mismo
+      // turno si OpenAI falla (mezcla pedida por Alex 22-jun: OpenAI natural + guion estricto).
+      responsePlan.pendingPersonalQuestion === null;
     // Turno de ESPERA (en revision humana o intervencion humana, sin nada que responder ni preguntar): el
     // mensaje de espera lo pone el codigo (variado, sin bucle), no OpenAI — que repetia "lo hablo con mi
     // socio" turno tras turno (fallo real del spot-check de Alex).
@@ -1184,6 +1189,11 @@ export class ConversationEngine {
       responsePlan.questionToAsk === null &&
       (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
         projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED");
+    // Cierre TERMINAL (p.ej. menor de edad -> CLOSED): el mensaje de cierre lo pone SIEMPRE el codigo, NUNCA
+    // OpenAI (invariante 2). Sin esto, un turno social de una menor ("tengo 16, y tu?") dejaria que el LLM
+    // redactara la respuesta social en vez del cierre legal. El estado ya es CLOSED; la respuesta tambien
+    // debe ser la determinista, no depender de que el LLM la respete.
+    const useDeterministicClosingTurn = !useCanonicalOpenerTemplate && projectedCandidate.currentState === "CLOSED";
     // Flujo de la CARA (sensible): SIEMPRE determinista. El codigo reconduce la 1a vez (y cierra solo si
     // insiste tras reconducir); nunca se deja a OpenAI, que llego a soltar la plantilla de RECHAZO ante la
     // PRIMERA duda de cara, perdiendo el lead (validacion con OpenAI 15-jun). generateResponse ya produce
@@ -1226,7 +1236,11 @@ export class ConversationEngine {
         ? deterministicDraftOutput(pauseMessage)
         : softDeferMessage !== null
           ? deterministicDraftOutput(softDeferMessage)
-          : useCanonicalOpenerTemplate || useDeterministicQuestionTurn || isAwaitingHoldingTurn || useDeterministicFaceTurn
+          : useCanonicalOpenerTemplate ||
+              useDeterministicQuestionTurn ||
+              isAwaitingHoldingTurn ||
+              useDeterministicFaceTurn ||
+              useDeterministicClosingTurn
             ? deterministicDraftOutput(deterministicResponse)
             : agencyExplanation !== null
               ? deterministicDraftOutput(agencyExplanation)
@@ -1856,6 +1870,17 @@ function generateResponse(
     return "Lo entiendo, es normal querer mirarlo con calma.\n\nPara no hacerte perder el tiempo, primero dime una cosa: que edad tienes?";
   }
 
+  // PREGUNTA PERSONAL/SOCIAL pendiente (decision de Alex 22-jun: responder SIEMPRE primero lo que pregunte la
+  // candidata y LUEGO reconducir al guion). Va DESPUES de las ramas de seguridad/edad/%/negocio: el cierre por
+  // edad<18 y la cara ya retornaron antes, y el plan puso pendingPersonalQuestion=null si hubo escalada o
+  // respuesta de negocio. Responde con la frase del plan (identidad APROBADA / cortesia fija, sin inventar
+  // datos sensibles) y, si queda slot de cualificacion, reconduce. Es el fallback determinista; en modo OpenAI
+  // el LLM redacta esto mismo con la voz de Alex (mezcla: OpenAI natural + guion estricto).
+  if (responsePlan.pendingPersonalQuestion) {
+    const social = responsePlan.pendingPersonalQuestion.answer;
+    return responsePlan.questionToAsk ? `${social}\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}` : social;
+  }
+
   // Cierre de agenda: el plan pide el telefono SOLO cuando la candidata ya propuso un dia/hora
   // concreto. Se confirma el momento ("quedamos") y se pide el numero, nunca un acuse vacio
   // (regresion taxonomia 3 iteracion 3: a la propuesta de hora se respondia re-cualificando).
@@ -2338,7 +2363,8 @@ function mergeDeterministicExtraction(
   inboundMessage: string,
   lastAgentMessage: string | null
 ): ModelConversationOutput {
-  const deterministic = extractDeterministicUnderstanding(inboundMessage, { lastAgentMessage }).extractedData;
+  const deterministicFull = extractDeterministicUnderstanding(inboundMessage, { lastAgentMessage });
+  const deterministic = deterministicFull.extractedData;
   const merged: ExtractedCandidateData = { ...understanding.extractedData };
   let changed = false;
   const fill = <K extends keyof ExtractedCandidateData>(key: K): void => {
@@ -2371,13 +2397,20 @@ function mergeDeterministicExtraction(
     changed = true;
   }
 
-  if (!changed) {
+  // La pregunta PERSONAL/SOCIAL la detecta SIEMPRE el determinista (regex), nunca el LLM: asi el modo OpenAI
+  // recibe la misma senal que el determinista y la IA no puede inyectar/decidir el flujo social (invariante 1).
+  const pendingPersonalQuestion = deterministicFull.pendingPersonalQuestion;
+  const personalQuestionChanged =
+    (pendingPersonalQuestion?.kind ?? null) !== (understanding.pendingPersonalQuestion?.kind ?? null);
+
+  if (!changed && !personalQuestionChanged) {
     return understanding;
   }
 
   return {
     ...understanding,
     extractedData: merged,
+    pendingPersonalQuestion,
     internalNotes: [...understanding.internalNotes, "Campos vacios completados con extraccion deterministica."]
   };
 }
@@ -3297,6 +3330,7 @@ function skippedResult(
     requestsHuman: false,
     isNegotiation: false,
     requestedModelPercentage: null,
+    pendingPersonalQuestion: null,
     suggestedStateTransition: null,
     requiresHumanReview: false,
     humanReviewReason: null,
@@ -3331,6 +3365,7 @@ function skippedResult(
     allowedActions: [],
     forbiddenActions: [],
     uncoveredQuestion: false,
+    pendingPersonalQuestion: null,
     knowledgeVersions: [],
     revenueSharePolicyVersion: null,
     hasApprovedNegotiationDecision: false

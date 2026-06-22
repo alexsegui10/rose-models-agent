@@ -1,8 +1,28 @@
 import { activeRevenueSharePolicy } from "@/content/business";
+import { agencyProfileEntries } from "@/content/business/agency-profile";
 import type { Candidate } from "@/domain/candidate";
 import { ResponsePlanSchema, type KnowledgeEntry, type ResponsePlan } from "@/domain/businessKnowledge";
 import { guaranteedMoneyDemandPattern } from "./dataExtractor";
 import type { ModelConversationOutput } from "./llmProvider";
+
+// Frases para responder PRIMERO a una pregunta personal/social de la candidata (decision de Alex 22-jun:
+// responder siempre lo que pregunte y luego reconducir). IDENTITY reutiliza el conocimiento YA aprobado por
+// Alex (agency-profile-rose-models), sin inventar nada. RECIPROCAL/GREETING son cortesia fija y segura: NUNCA
+// inventan datos personales sensibles del bot (edad, ubicacion, estado civil) — invariante 5.
+const IDENTITY_ANSWER =
+  agencyProfileEntries
+    .find((entry) => entry.id === "agency-profile-rose-models" && entry.status === "ACTIVE" && entry.approvedByAlex)
+    ?.approvedAnswerPoints.join(" ") ?? "Soy Alex, de Rose Models.";
+const RECIPROCAL_PERSONAL_ANSWER = "Jaja yo soy Alex, llevo la parte de la agencia.";
+const GREETING_ANSWER = "Muy bien, gracias!";
+
+function personalQuestionForPlan(input: BuildResponsePlanInput): ResponsePlan["pendingPersonalQuestion"] {
+  const pending = input.understanding.pendingPersonalQuestion;
+  if (!pending) return null;
+  if (pending.kind === "IDENTITY") return { kind: "IDENTITY", answer: IDENTITY_ANSWER };
+  if (pending.kind === "RECIPROCAL_PERSONAL") return { kind: "RECIPROCAL_PERSONAL", answer: RECIPROCAL_PERSONAL_ANSWER };
+  return { kind: "GREETING", answer: GREETING_ANSWER };
+}
 
 export interface BuildResponsePlanInput {
   candidate: Candidate;
@@ -147,6 +167,15 @@ export function buildResponsePlan(input: BuildResponsePlanInput): ResponsePlan {
     isCommercialEscalation(input);
   const uncoveredQuestion = isBusinessQuestionWithoutCoverage(input);
 
+  // La pregunta personal/social solo se inyecta si el turno NO escala ni tiene respuesta de NEGOCIO ni es de
+  // una MENOR: la seguridad (invariantes 2/3/4) y el conocimiento de negocio siempre ganan. Invariante 2: si la
+  // candidata es (o acaba de declararse) menor de 18, el turno cierra por edad y JAMAS se responde lo social.
+  const isMinor =
+    (typeof input.candidate.age === "number" && input.candidate.age < 18) ||
+    (typeof input.understanding.extractedData.age === "number" && input.understanding.extractedData.age < 18);
+  const pendingPersonalQuestion =
+    isMinor || requiresHumanReview || uncoveredQuestion || answerFacts.length > 0 ? null : personalQuestionForPlan(input);
+
   return ResponsePlanSchema.parse({
     objective: objectiveFor(input, requiresHumanReview, uncoveredQuestion, respondable.length > 0),
     acknowledgedFacts: acknowledgedFactsFor(input),
@@ -172,6 +201,7 @@ export function buildResponsePlan(input: BuildResponsePlanInput): ResponsePlan {
       "CLAIM_PROFILE_REVIEW_WITHOUT_CONFIRMATION"
     ],
     uncoveredQuestion,
+    pendingPersonalQuestion,
     knowledgeVersions: input.knowledgeEntries.map((entry) => entry.version),
     revenueSharePolicyVersion: activeRevenueSharePolicy.version,
     hasApprovedNegotiationDecision: input.hasApprovedNegotiationDecision ?? false

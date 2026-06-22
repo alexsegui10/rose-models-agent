@@ -53,6 +53,13 @@ export const ModelConversationOutputSchema = z.object({
   requestsHuman: z.boolean().default(false),
   isNegotiation: z.boolean().default(false),
   requestedModelPercentage: z.number().min(0).max(100).nullable().default(null),
+  // Senal ORTOGONAL (no es un intent): la candidata hizo una pregunta PERSONAL/SOCIAL dirigida al bot
+  // ("y tu?", "quien eres?", "como estas?") que no es de negocio ni de seguridad. Informa al planner para
+  // responderla primero y reconducir; NUNCA decide estado/flujo (invariante 1). Default null.
+  pendingPersonalQuestion: z
+    .object({ kind: z.enum(["IDENTITY", "RECIPROCAL_PERSONAL", "GREETING"]) })
+    .nullable()
+    .default(null),
   suggestedStateTransition: CandidateStateSchema.nullable(),
   requiresHumanReview: z.boolean(),
   humanReviewReason: z.string().nullable(),

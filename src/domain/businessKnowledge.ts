@@ -221,6 +221,13 @@ export const ResponsePlanSchema = z.object({
   allowedActions: z.array(AllowedActionSchema).default([]),
   forbiddenActions: z.array(ForbiddenActionSchema).default([]),
   uncoveredQuestion: z.boolean().default(false),
+  // Pregunta PERSONAL/SOCIAL pendiente dirigida al bot (no negocio, no seguridad): el bot la responde PRIMERO
+  // con `answer` (frase fija/aprobada) y luego reconduce a questionToAsk. Contrato compartido por el modo
+  // determinista y el de OpenAI, para que ambos den la misma respuesta. Default null (no afecta a planes existentes).
+  pendingPersonalQuestion: z
+    .object({ kind: z.enum(["IDENTITY", "RECIPROCAL_PERSONAL", "GREETING"]), answer: z.string() })
+    .nullable()
+    .default(null),
   knowledgeVersions: z.array(z.string()).default([]),
   revenueSharePolicyVersion: z.string().nullable(),
   hasApprovedNegotiationDecision: z.boolean().default(false)

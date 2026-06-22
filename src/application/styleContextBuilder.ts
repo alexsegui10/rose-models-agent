@@ -78,7 +78,10 @@ export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
         prohibitedClaims: input.responsePlan.prohibitedClaims,
         requiresHumanReview: input.responsePlan.requiresHumanReview,
         humanReviewReason: input.responsePlan.humanReviewReason,
-        uncoveredQuestion: input.responsePlan.uncoveredQuestion
+        uncoveredQuestion: input.responsePlan.uncoveredQuestion,
+        // pendingPersonalQuestion: la candidata pregunto algo PERSONAL/SOCIAL al bot (identidad/cortesia). Hay
+        // que RESPONDERLO PRIMERO usando 'answer' (frase aprobada/segura) y LUEGO encadenar mainQuestion.
+        pendingPersonalQuestion: input.responsePlan.pendingPersonalQuestion
       },
       null,
       2
