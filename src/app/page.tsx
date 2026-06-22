@@ -2452,9 +2452,26 @@ export default function Home() {
                 ) : drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
                   drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
                   <>
-                    {/* Decision 1: ¿encaja el perfil? (si ya esta aprobado, se muestra el sello) */}
+                    {/* Decision 1: ¿encaja el perfil? Si ya esta aprobado, normalmente se muestra el sello.
+                        EXCEPCION (anti dead-end): si el perfil esta aprobado Y el movil ya esta resuelto (no
+                        pendiente ni rechazado) pero la candidata SIGUE en revision (p.ej. iPhone <13 que paso
+                        por HIR: "Movil OK" no reanuda desde HIR por invariante 4), el avance a la llamada no se
+                        disparo. Se ofrece un boton EXPLICITO para que Alex reanude conscientemente (re-aprobar
+                        ES la salida humana designada de HIR; no debilita invariante 4). Sin esto, quedaba
+                        congelada con ambas aprobaciones hechas y ningun boton que la rescatara. */}
                     {drawerCandidate.humanFitDecision === "APPROVED" ? (
-                      <span className="crm2-ok-chip">✓ Perfil aprobado</span>
+                      drawerCandidate.deviceEligibility !== "PENDING_QUALITY_TEST" &&
+                      drawerCandidate.deviceEligibility !== "NOT_ELIGIBLE" ? (
+                        <button
+                          type="button"
+                          className="btn-xs accent"
+                          onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
+                        >
+                          ▶️ Reanudar (proponer llamada)
+                        </button>
+                      ) : (
+                        <span className="crm2-ok-chip">✓ Perfil aprobado</span>
+                      )
                     ) : (
                       <button
                         type="button"

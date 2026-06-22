@@ -101,4 +101,18 @@ describe("B: aprobacion de movil separada; el bot espera a AMBAS aprobaciones", 
     expect(r.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
     expect(r.proposedMessage).toBeNull();
   });
+
+  it("P1-1 (anti dead-end): re-APROBAR perfil desde HIR con perfil+movil ya aprobados -> avanza a la llamada", async () => {
+    const { engine, repository } = setup();
+    // Estado de dead-end alcanzable: tras "Movil OK" desde HIR (que fija el movil APPROVED pero NO reanuda),
+    // la candidata queda en HIR con perfil Y movil aprobados. El boton "Reanudar" del CRM re-ejecuta APPROVE,
+    // que SI es la salida designada de HIR y dispara resumeAfterApprovals (ambas OK) -> propone la llamada.
+    const c = await seedReview(repository, "APPROVED", {
+      currentState: "HUMAN_INTERVENTION_REQUIRED",
+      humanFitDecision: "APPROVED"
+    });
+    const r = await engine.applyHumanDecision({ candidateId: c.id, decision: "APPROVE" });
+    expect(r.candidate.currentState).toBe("COLLECTING_CALL_DETAILS");
+    expect(r.proposedMessage ?? "").toMatch(/llamada/i);
+  });
 });
