@@ -1510,6 +1510,26 @@ function generateResponse(
     return "Eso dejame que lo hable con mi socio y te digo.";
   }
 
+  // Acaba de dar un movil VALIDO este turno (responde su "te sirve?"): se confirma con calidez y se sigue el
+  // guion, en vez de soltar el conocimiento generico de moviles o un acuse que ignora su pregunta (peticion
+  // de Alex 22-jun). Va ANTES del path de conocimiento para que la confirmacion gane a la respuesta factual.
+  // SOLO si el conocimiento recuperado es del propio movil (o ninguno) y NO trae una pregunta que merezca
+  // respuesta propia (%, contrato, pide persona, revision humana): asi nunca se traga otra pregunta suya.
+  const onlyDeviceKnowledge =
+    responsePlan.knowledgeEntryIds.length === 0 ||
+    responsePlan.knowledgeEntryIds.every((id) => id === "candidate-requirements-device-quality");
+  if (
+    understanding.extractedData.deviceEligibility === "APPROVED" &&
+    responsePlan.questionToAsk &&
+    onlyDeviceKnowledge &&
+    !understanding.requiresHumanReview &&
+    understanding.intent !== "ASKS_ABOUT_PERCENTAGE" &&
+    understanding.intent !== "ASKS_ABOUT_CONTRACT" &&
+    understanding.intent !== "REQUESTS_HUMAN"
+  ) {
+    return `Genial, con ese movil perfecto.\n\n${responsePlan.questionToAsk}`;
+  }
+
   if (responsePlan.answerFacts.length > 0 && isBusinessAnswerIntent(understanding, responsePlan)) {
     return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
   }

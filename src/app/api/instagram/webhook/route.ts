@@ -27,7 +27,7 @@ export const maxDuration = 60;
 // mensajes). PRESUPUESTO total de pausa por turno: tope para convivir con el limite de 10s del plan
 // gratis (la comprension+redaccion de OpenAI ya consume parte). Ajustable por env si se cambia de plan.
 const BURST_DELAY_BUDGET_MS = Number(process.env.INSTAGRAM_BURST_DELAY_BUDGET_MS ?? 4500);
-const BURST_DELAY_PER_MESSAGE_MAX_MS = Number(process.env.INSTAGRAM_BURST_DELAY_MAX_MS ?? 2600);
+const BURST_DELAY_PER_MESSAGE_MAX_MS = Number(process.env.INSTAGRAM_BURST_DELAY_MAX_MS ?? 3200);
 // Techo de tiempo por turno: margen de seguridad bajo el limite de ~10s de Vercel Hobby. El presupuesto
 // de pausas se calcula como (este techo - tiempo ya gastado por OpenAI), para no provocar timeouts.
 const TURN_TIME_BUDGET_MS = Number(process.env.INSTAGRAM_TURN_BUDGET_MS ?? 8500);

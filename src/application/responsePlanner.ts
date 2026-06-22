@@ -71,7 +71,8 @@ const qualificationSlots: QualificationSlot[] = [
   {
     // Movil ANTES de OF/agencias (decision de Alex 19-jun): filtra pronto por calidad de camara.
     id: "device",
-    question: "Y que movil tienes? Es importante para la calidad de fotos y videos.",
+    // Dos mensajes (la pregunta + el porque), no un parrafo largo: mas natural (peticion de Alex 22-jun).
+    question: "Y que movil tienes?\n\nEs importante para la calidad de las fotos y los videos.",
     alreadyAskedPattern: /que movil tienes/,
     isMissing: (candidate) => candidate.deviceEligibility === "UNKNOWN"
   },
