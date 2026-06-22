@@ -89,4 +89,22 @@ describe("aviso para enviar la solicitud de seguimiento", () => {
     expect(followRequestNotificationFor({ instagramUsername: "x" }, [{ toState: "QUALIFYING" }])).toBeNull();
     expect(followRequestNotificationFor({ instagramUsername: "x" }, [])).toBeNull();
   });
+
+  it("el aviso afirma que el bot pidio aceptar SOLO si fue el opener privado (botAskedToAccept)", () => {
+    // Opener privado: el bot SI pidio aceptar.
+    const fromOpener = followRequestNotificationFor({ instagramUsername: "17841400000000007" }, [
+      { toState: "WAITING_PROFILE_ACCESS" }
+    ]);
+    expect(fromOpener?.botAskedToAccept).toBe(true);
+    expect(formatOperatorMessage(fromOpener!).toLowerCase()).toContain("el bot ya le ha pedido");
+
+    // Deteccion en segundo plano (saludo publico ya enviado): el bot NO pidio aceptar.
+    const fromBackground = formatOperatorMessage({
+      kind: "follow-request",
+      conversationId: "17841400000000008",
+      botAskedToAccept: false
+    });
+    expect(fromBackground.toLowerCase()).toContain("solicitud de seguimiento");
+    expect(fromBackground.toLowerCase()).not.toContain("el bot ya le ha pedido");
+  });
 });

@@ -15,9 +15,9 @@ import {
   isStopRequest
 } from "@/infrastructure/integrations/operatorNotifier";
 import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
-import { getSimulatorEngine } from "@/server/simulatorStore";
+import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { getQStashConfig } from "@/application/qstashConfig";
-import { scheduleInboundFlush } from "@/infrastructure/integrations/qstashClient";
+import { scheduleInboundFlush, schedulePrivacyDetection } from "@/infrastructure/integrations/qstashClient";
 
 // postgres.js necesita runtime Node (no Edge). maxDuration: en Hobby el techo real es 10s igualmente.
 export const runtime = "nodejs";
@@ -187,6 +187,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   for (const message of groupedInbound) {
     try {
+      // ¿Primer contacto? (la candidata no existia aun). Si lo es, tras enviar el saludo dispararemos la
+      // deteccion de privada/publica EN SEGUNDO PLANO (Apify es lento; no debe bloquear la entrega).
+      const wasNewContact = !(await getSimulatorRepository().findCandidateByInstagram(message.senderId));
       const result = await engine.handleIncomingTurn({
         // El IGSID es la clave de la conversación (Instagram no da el @username en el webhook).
         instagramUsername: message.senderId,
@@ -251,6 +254,19 @@ export async function POST(request: Request): Promise<NextResponse> {
         console.log("[ig-webhook] NO se envia respuesta", {
           motivo: `delivery=${result.deliveryStatus} blocked=${result.automationBlocked}`
         });
+      }
+
+      // Deteccion de privada/publica EN SEGUNDO PLANO: solo en el PRIMER contacto y si la visibilidad sigue
+      // sin saberse. Se publica en QStash para correr en una invocacion APARTE (Apify tarda) y avisar a Alex
+      // por WhatsApp si es privada. Fire-and-forget: jamas bloquea ni rompe el turno (el saludo ya salio).
+      if (wasNewContact && result.candidate.declaredProfileVisibility === "UNKNOWN") {
+        const detectUrl = `${new URL(request.url).origin}/api/instagram/detect-privacy`;
+        void schedulePrivacyDetection({
+          config: qstash,
+          detectUrl,
+          secret: process.env.CRON_SECRET ?? "",
+          senderId: message.senderId
+        }).catch(() => {});
       }
       // Aviso al operador SOLO cuando la candidata ENTRA este turno en revision humana (escalada), no en
       // cada turno mientras sigue ahi. El aviso nunca lanza (notify se traga sus errores). En una escalada

@@ -24,6 +24,9 @@ export interface OperatorNotification {
   profileUrl?: string;
   /** Detalle corto para errores; nunca stack traces ni secretos. */
   detail?: string;
+  /** En follow-request: ¿el bot YA le pidio a la candidata que acepte la solicitud (opener privado)? Si la
+   * privacidad se detecto DESPUES (en segundo plano, con el opener publico ya enviado), es false. */
+  botAskedToAccept?: boolean;
 }
 
 export interface OperatorNotifier {
@@ -84,7 +87,13 @@ export function followRequestNotificationFor(
 ): OperatorNotification | null {
   const entered = plannedTransitions.some((transition) => transition.toState === PROFILE_ACCESS_STATE);
   if (!entered) return null;
-  return { kind: "follow-request", conversationId: candidate.instagramUsername, state: PROFILE_ACCESS_STATE };
+  // Aqui la privacidad se detecto EN el opener -> el bot ya envio el opener privado pidiendo aceptar.
+  return {
+    kind: "follow-request",
+    conversationId: candidate.instagramUsername,
+    state: PROFILE_ACCESS_STATE,
+    botAskedToAccept: true
+  };
 }
 
 /** Mensaje corto y escaneable para el operador. Mínimo de datos (solo lo necesario para actuar). */
@@ -92,7 +101,10 @@ export function formatOperatorMessage(notification: OperatorNotification): strin
   if (notification.kind === "follow-request") {
     const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
     const profile = notification.profileUrl ? `\nPerfil: ${notification.profileUrl}` : "";
-    return `Rose Models 📩 Cuenta PRIVADA: envíale tú la solicitud de seguimiento desde la cuenta de la agencia.${who}${profile}\nEl bot ya le ha pedido que la acepte.`;
+    // Solo si el bot ya envio el opener privado pidiendo aceptar (detectada EN el opener). Si la privacidad
+    // se detecto despues en segundo plano (con el opener publico ya enviado), NO afirmamos que el bot pidio.
+    const askedLine = notification.botAskedToAccept ? "\nEl bot ya le ha pedido que la acepte." : "";
+    return `Rose Models 📩 Cuenta PRIVADA: envíale tú la solicitud de seguimiento desde la cuenta de la agencia.${who}${profile}${askedLine}`;
   }
   if (notification.kind === "error") {
     return `Rose Models ⚠️ Error procesando un mensaje en el webhook${notification.detail ? `: ${notification.detail}` : "."} Revisa los logs.`;

@@ -14,6 +14,7 @@ const MACHINE_PATHS = [
   "/api/call/end",
   "/api/instagram/webhook",
   "/api/instagram/flush",
+  "/api/instagram/detect-privacy",
   "/api/whatsapp/webhook"
 ];
 
