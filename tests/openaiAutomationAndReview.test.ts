@@ -469,7 +469,8 @@ describe("OpenAI adapter, automation and review", () => {
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,
       instagramUsername: "multi_turn",
-      message: "Tengo 23 anos, soy de Madrid, tengo experiencia, estoy disponible por las tardes y tengo iPhone 13"
+      message:
+        "Tengo 23 anos, soy de Madrid, tengo experiencia, nunca he tenido OnlyFans, estoy disponible por las tardes y tengo iPhone 13"
     });
 
     expect(second.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");

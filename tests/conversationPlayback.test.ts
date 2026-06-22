@@ -121,7 +121,8 @@ describe("IMPORTED_CONVERSATION_PLAYBACK", () => {
       { role: "alex", content: "Genial, cuentame un poco mas de ti" },
       {
         role: "candidate",
-        content: "Tengo experiencia creando contenido para Instagram, estoy disponible por las tardes y tengo iPhone 13."
+        content:
+          "Tengo experiencia creando contenido para Instagram, nunca he tenido OnlyFans, estoy disponible por las tardes y tengo iPhone 13."
       }
     ]);
 

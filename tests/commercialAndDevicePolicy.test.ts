@@ -219,7 +219,7 @@ describe("commercial and device policy", () => {
       instagramUsername: "future_iphone_excellent_case",
       profileVisibility: "PUBLIC",
       message:
-        "Soy Laura, tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, estoy disponible por las tardes y me comprare un iPhone pronto"
+        "Soy Laura, tengo 34 anos, soy de Argentina, tengo experiencia creando contenido, nunca he tenido OnlyFans, estoy disponible por las tardes y me comprare un iPhone pronto"
     });
     const readiness = evaluateQualificationReadiness(result.candidate);
 

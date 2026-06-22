@@ -148,7 +148,8 @@ describe("ConversationEngine", () => {
     const second = await engine.handleIncomingMessage({
       candidateId: first.candidate.id,
       instagramUsername: "lead_lista",
-      message: "Tengo experiencia creando contenido para Instagram, estoy disponible por las tardes y tengo iPhone 13."
+      message:
+        "Tengo experiencia creando contenido para Instagram, nunca he tenido OnlyFans, estoy disponible por las tardes y tengo iPhone 13."
     });
 
     expect(second.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");

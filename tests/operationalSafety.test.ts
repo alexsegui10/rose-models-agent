@@ -25,7 +25,8 @@ describe("operational safety", () => {
         { content: "Tengo 23", externalMessageId: "debounce-1" },
         { content: "Soy de Madrid", externalMessageId: "debounce-2" },
         {
-          content: "Tengo experiencia creando contenido, estoy disponible por las tardes y tengo iPhone 13",
+          content:
+            "Tengo experiencia creando contenido, nunca he tenido OnlyFans, estoy disponible por las tardes y tengo iPhone 13",
           externalMessageId: "debounce-3"
         }
       ]

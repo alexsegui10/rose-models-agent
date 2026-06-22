@@ -11,7 +11,10 @@ export function evaluateQualificationReadiness(candidate: Candidate): Qualificat
   // llamada y NO deben bloquear que llegue a tu revision (antes lo hacian y el bot proponia la llamada solo).
   if (!candidate.age || !candidate.isAdultConfirmed) missingRequiredFields.push("adultAgeConfirmed");
   if (!candidate.firstName && !candidate.displayName && !candidate.instagramUsername) missingRequiredFields.push("name");
-  if (!candidate.experienceDescription && candidate.hasOnlyFans === undefined) missingRequiredFields.push("experienceOrOnlyFans");
+  // OnlyFans es OBLIGATORIO y EXPLICITO (Alex 22-jun): no se va a revision sin saber si tiene OF. Antes
+  // bastaba experienceOrOnlyFans, y el LLM podia INFERIR experienceDescription -> el bot saltaba la pregunta
+  // de OF (y la de agencias) y derivaba al socio. Ahora hasOnlyFans debe estar respondido de verdad.
+  if (candidate.hasOnlyFans === undefined) missingRequiredFields.push("onlyFans");
   if (candidate.hasOnlyFans === true && candidate.worksWithAnotherAgency === undefined) missingRequiredFields.push("agencies");
   if (candidate.deviceEligibility === "UNKNOWN") missingRequiredFields.push("deviceKnown");
 

@@ -192,9 +192,11 @@ const rawGoldenTests: GoldenConversationTestInput[] = [
     title: "Varios datos en un mensaje (candidata argentina)",
     initialCandidate: { profileVisibility: "PUBLIC" },
     stateBefore: "NEW_LEAD",
-    messages: ["Tengo 27, soy de Buenos Aires, tengo experiencia en redes, estoy disponible por las tardes y tengo iPhone 15"],
+    messages: [
+      "Tengo 27, soy de Buenos Aires, tengo experiencia en redes, nunca tuve OnlyFans, estoy disponible por las tardes y tengo iPhone 15"
+    ],
     expectedTransition: "WAITING_HUMAN_REVIEW",
-    expectedExtractedFields: { age: 27, city: "Buenos Aires", country: "Argentina" },
+    expectedExtractedFields: { age: 27, city: "Buenos Aires", country: "Argentina", hasOnlyFans: false },
     responseMustIncludeAny: ["socio", "valorarlo"],
     responseMustNotInclude: ["que edad tienes"]
   },

@@ -2360,11 +2360,13 @@ function mergeDeterministicExtraction(
   fill("worksWithAnotherAgency");
   fill("currentMonthlyRevenue");
 
-  // Invariante 1 (la IA NO controla el flujo): hasOnlyFans decide si se pregunta o no por la experiencia.
-  // Un hasOnlyFans=FALSE inferido por el LLM SIN respaldo deterministico (la candidata no dijo que no tiene
-  // OF ni respondio que no a la pregunta de OF) se DESCARTA -> se le sigue preguntando por su experiencia.
-  // Bug 22-jun: ante "como funciona?" el LLM la daba por sin OF y el bot se saltaba la pregunta de OF.
-  if (merged.hasOnlyFans === false && deterministic.hasOnlyFans !== false) {
+  // Invariante 1 (la IA NO controla el flujo) + decision de Alex 22-jun (OF SIEMPRE explicito): hasOnlyFans
+  // solo vale si la candidata lo dijo de verdad (respaldo deterministico: respondio a la pregunta de OF, o
+  // menciono "onlyfans"/"of"). CUALQUIER valor (true o false) INFERIDO por el LLM sin ese respaldo se DESCARTA,
+  // asi el bot le sigue preguntando por OF en lugar de saltarselo (y la pregunta de agencias) y derivar al
+  // socio. Bugs reales: ante "como funciona?" la daba por sin OF; ante mensajes neutros la daba por con OF y
+  // saltaba a "lo hablo con mi socio" sin preguntar OF ni agencias.
+  if (typeof merged.hasOnlyFans === "boolean" && deterministic.hasOnlyFans === undefined) {
     merged.hasOnlyFans = undefined;
     changed = true;
   }

@@ -170,6 +170,30 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
     expect(r.response.toLowerCase()).toMatch(/movil|telefono/);
   });
 
+  it("OF OBLIGATORIO (bug cynthia 22-jun): con experiencia pero SIN responder OF, sigue preguntando OF y NO deriva al socio", async () => {
+    const { engine, repository } = setup();
+    // Como cynthia: nombre, edad y un movil aprobado, e incluso experiencia, pero OF AUN sin responder. Antes
+    // 'experienceOrOnlyFans' se daba por cumplido con la experiencia (que en modo OpenAI el LLM podia INFERIR)
+    // y el bot saltaba a "lo comento con mi socio" sin preguntar OF ni agencias. Ahora OF es explicito.
+    const c = await seedQualifying(repository, {
+      firstName: "Cynthia",
+      age: 40,
+      isAdultConfirmed: true,
+      experienceDescription: "tengo experiencia creando contenido",
+      hasOnlyFans: undefined,
+      deviceModel: "iphone 12 pro max",
+      deviceEligibility: "APPROVED"
+    });
+
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "ok perfecto" }]
+    });
+
+    expect(r.candidate.currentState).toBe("QUALIFYING");
+    expect(r.response.toLowerCase()).toMatch(/onlyfans|\bof\b/);
+  });
+
   it("B-edad: '¿hay posibilidades con 21 años?' confirma que desde 18 vale (no lo ignora; Alex 22-jun)", async () => {
     const { engine, repository } = setup();
     const c = await seedQualifying(repository, {
