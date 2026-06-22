@@ -92,7 +92,15 @@ type SimulatorStatus = {
 
 type SimulatorTab = "DASHBOARD" | "CHAT" | "CRM" | "LLAMADAS";
 
-type AdvanceAction = "PROFILE_FIT" | "PROFILE_NO_FIT" | "CONFIRM_CALL" | "PROFILE_OK" | "REJECT" | "FOLLOW_REQUEST_SENT";
+type AdvanceAction =
+  | "PROFILE_FIT"
+  | "PROFILE_NO_FIT"
+  | "CONFIRM_CALL"
+  | "PROFILE_OK"
+  | "REJECT"
+  | "FOLLOW_REQUEST_SENT"
+  | "DEVICE_APPROVE"
+  | "DEVICE_REJECT";
 
 // Modal reutilizable (sustituye window.prompt/confirm). onConfirm recibe el texto del input (o "").
 type ModalState = {
@@ -770,13 +778,17 @@ export default function Home() {
       CONFIRM_CALL: `Llamada confirmada para @${candidate.instagramUsername}.`,
       PROFILE_OK: `✓ Perfil de @${candidate.instagramUsername} marcado como revisado y OK.`,
       REJECT: `@${candidate.instagramUsername} rechazada: el bot deja de responderle.`,
-      FOLLOW_REQUEST_SENT: `Solicitud enviada a @${candidate.instagramUsername}: el bot deja de pedirla y pasa a revision de perfil.`
+      FOLLOW_REQUEST_SENT: `Solicitud enviada a @${candidate.instagramUsername}: el bot deja de pedirla y pasa a revision de perfil.`,
+      DEVICE_APPROVE: `📱 Móvil de @${candidate.instagramUsername} aprobado. Si el perfil también está OK, el bot agenda la llamada.`,
+      DEVICE_REJECT: `📱 Móvil de @${candidate.instagramUsername} marcado como no válido.`
     };
     // Si el motor no aplico nada (estado incompatible), no mentir con un aviso de exito. PROFILE_OK
     // (marcar el perfil como OK) es idempotente y SIEMPRE cuenta como aplicado (deja constancia + badge),
     // aunque ya estuviera marcado: no debe decir "sin cambios".
-    const appliedNothing =
-      !data.proposedMessage && data.candidate.currentState === candidate.currentState && action !== "PROFILE_OK";
+    // PROFILE_OK y las decisiones de MOVIL cambian datos (sello/elegibilidad) aunque no muevan el estado:
+    // no deben reportar "sin cambios".
+    const alwaysCounts = action === "PROFILE_OK" || action === "DEVICE_APPROVE" || action === "DEVICE_REJECT";
+    const appliedNothing = !data.proposedMessage && data.candidate.currentState === candidate.currentState && !alwaysCounts;
     if (appliedNothing) {
       setCrmNotice(
         `Sin cambios para @${candidate.instagramUsername}: esa acción no aplica en su estado actual (${stateLabel(candidate.currentState)}).`
@@ -2440,13 +2452,38 @@ export default function Home() {
                 ) : drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
                   drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
                   <>
-                    <button
-                      type="button"
-                      className="btn-xs accent"
-                      onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
-                    >
-                      👍 Aprobar
-                    </button>
+                    {/* Decision 1: ¿encaja el perfil? (si ya esta aprobado, se muestra el sello) */}
+                    {drawerCandidate.humanFitDecision === "APPROVED" ? (
+                      <span className="crm2-ok-chip">✓ Perfil aprobado</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-xs accent"
+                        onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
+                      >
+                        👍 Aprobar perfil
+                      </button>
+                    )}
+                    {/* Decision 2 SEPARADA: ¿el movil vale? Solo si esta pendiente de revision de calidad.
+                        El bot no agenda hasta que AMBAS (perfil + movil) esten aprobadas (Alex 22-jun). */}
+                    {drawerCandidate.deviceEligibility === "PENDING_QUALITY_TEST" ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn-xs accent"
+                          onClick={() => advanceStage(drawerCandidate, "DEVICE_APPROVE")}
+                        >
+                          📱 Móvil OK
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-xs danger"
+                          onClick={() => advanceStage(drawerCandidate, "DEVICE_REJECT")}
+                        >
+                          📱 Móvil no vale
+                        </button>
+                      </>
+                    ) : null}
                     <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
                       Rechazar
                     </button>

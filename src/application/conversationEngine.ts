@@ -156,27 +156,30 @@ export class ConversationEngine {
     }
 
     const transitions: StateTransition[] = [];
-    const decided = applyHumanReviewDecision({ candidate: existing, decision: input.decision, note: input.note });
-    transitions.push(decided.transition);
-    let candidate = decided.candidate;
-
+    let candidate: Candidate;
     let proposedMessage: string | null = null;
+
     if (input.decision === "APPROVE") {
-      proposedMessage =
-        "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada por WhatsApp para explicartelo todo. Que dia y a que hora te viene mejor?";
-      if (canTransition(candidate.currentState, "COLLECTING_CALL_DETAILS")) {
-        transitions.push(
-          createTransition({
-            candidate,
-            toState: "COLLECTING_CALL_DETAILS",
-            trigger: "HUMAN_REVIEW_APPROVE",
-            reason: "Aprobada por Alex: el bot propone la llamada."
-          })
-        );
-        candidate = { ...candidate, currentState: "COLLECTING_CALL_DETAILS" };
-      }
-      // Aprobada: el bot retoma el control para agendar la llamada.
-      candidate = { ...candidate, manualControlActive: false, automationPaused: false, updatedAt: new Date() };
+      // Perfil apto (sello), SIN transicionar todavia: el avance a la llamada y la reanudacion los decide
+      // resumeAfterApprovals, que exige perfil Y movil aprobados (Alex 22-jun). Asi "aprobar perfil" ya NO
+      // arrastra un movil sin revisar (iPhone 11): si el movil sigue pendiente, la candidata se queda en
+      // revision esperando la decision del movil.
+      candidate = {
+        ...existing,
+        humanFitDecision: "APPROVED",
+        humanProfileReviewStatus: "POTENTIAL_FIT",
+        humanReviewStatus: "APPROVED",
+        notes: input.note ? [...existing.notes, input.note] : existing.notes,
+        updatedAt: new Date()
+      };
+      const resumed = this.resumeAfterApprovals(candidate);
+      candidate = resumed.candidate;
+      transitions.push(...resumed.transitions);
+      proposedMessage = resumed.proposedMessage;
+    } else {
+      const decided = applyHumanReviewDecision({ candidate: existing, decision: input.decision, note: input.note });
+      transitions.push(decided.transition);
+      candidate = decided.candidate;
     }
 
     await this.dependencies.repository.saveCandidate(candidate);
@@ -188,6 +191,111 @@ export class ConversationEngine {
         agentMessage(candidate.id, proposedMessage, {
           provider: "deterministic",
           trigger: "HUMAN_REVIEW_APPROVE",
+          proactive: true
+        })
+      );
+    }
+
+    return { candidate, transitions, proposedMessage };
+  }
+
+  /**
+   * Reanuda hacia la llamada SOLO si AMBAS aprobaciones humanas estan: perfil apto (humanFitDecision
+   * APPROVED) Y movil OK (deviceEligibility APPROVED o PENDING_UPGRADE; nunca PENDING_QUALITY_TEST ni
+   * NOT_ELIGIBLE). Decision de Alex (22-jun): son DOS decisiones distintas y el bot no agenda hasta tener
+   * las dos. Lo llama tanto la aprobacion de perfil como la de movil; la que complete el par dispara el
+   * avance WAITING_HUMAN_REVIEW -> APPROVED -> COLLECTING_CALL_DETAILS + reanuda + propone la llamada. Si
+   * falta una, NO toca el estado (se queda en revision). Puro/deterministico (invariantes 1 y 4).
+   */
+  private resumeAfterApprovals(candidate: Candidate): {
+    candidate: Candidate;
+    transitions: StateTransition[];
+    proposedMessage: string | null;
+  } {
+    const profileOk = candidate.humanFitDecision === "APPROVED";
+    // Movil "OK para avanzar" = NO bloqueado: ni pendiente de revision de calidad (iPhone <13) ni rechazado.
+    // UNKNOWN/APPROVED/PENDING_UPGRADE pasan (preserva el comportamiento previo de las candidatas sin gate
+    // de movil; el unico caso nuevo que BLOQUEA es el PENDING_QUALITY_TEST sin revisar).
+    const deviceOk = candidate.deviceEligibility !== "PENDING_QUALITY_TEST" && candidate.deviceEligibility !== "NOT_ELIGIBLE";
+    if (!profileOk || !deviceOk) {
+      return { candidate, transitions: [], proposedMessage: null };
+    }
+    const transitions: StateTransition[] = [];
+    let resumed = candidate;
+    if (canTransition(resumed.currentState, "APPROVED")) {
+      transitions.push(
+        createTransition({
+          candidate: resumed,
+          toState: "APPROVED",
+          trigger: "HUMAN_REVIEW_APPROVE",
+          reason: "Perfil y movil aprobados por Alex."
+        })
+      );
+      resumed = { ...resumed, currentState: "APPROVED" };
+    }
+    if (canTransition(resumed.currentState, "COLLECTING_CALL_DETAILS")) {
+      transitions.push(
+        createTransition({
+          candidate: resumed,
+          toState: "COLLECTING_CALL_DETAILS",
+          trigger: "HUMAN_REVIEW_APPROVE",
+          reason: "Aprobada (perfil + movil): el bot propone la llamada."
+        })
+      );
+      resumed = { ...resumed, currentState: "COLLECTING_CALL_DETAILS" };
+    }
+    resumed = { ...resumed, manualControlActive: false, automationPaused: false, updatedAt: new Date() };
+    const proposedMessage =
+      "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada por WhatsApp para explicartelo todo. Que dia y a que hora te viene mejor?";
+    return { candidate: resumed, transitions, proposedMessage };
+  }
+
+  /**
+   * Decision humana SEPARADA sobre la CALIDAD del movil (iPhone <13, etc.), distinta de "encaja el perfil"
+   * (Alex 22-jun). Solo aplica si el movil esta PENDING_QUALITY_TEST (idempotente si no). approved -> el
+   * movil pasa a APPROVED; si ademas el perfil ya esta aprobado, se reanuda y se propone la llamada
+   * (resumeAfterApprovals). rejected -> NOT_ELIGIBLE (no reanuda; Alex puede rechazar o ella mejora el movil).
+   */
+  async applyDeviceQualityDecision(input: {
+    candidateId: string;
+    approved: boolean;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    if (existing.deviceEligibility !== "PENDING_QUALITY_TEST") {
+      return { candidate: existing, transitions: [], proposedMessage: null };
+    }
+
+    const transitions: StateTransition[] = [];
+    let candidate: Candidate = {
+      ...existing,
+      deviceEligibility: input.approved ? "APPROVED" : "NOT_ELIGIBLE",
+      notes: [...existing.notes, input.approved ? "Alex aprobo la calidad del movil." : "Alex rechazo la calidad del movil."],
+      updatedAt: new Date()
+    };
+    let proposedMessage: string | null = null;
+    // "Movil OK" reanuda hacia la llamada SOLO desde WAITING_HUMAN_REVIEW. Si la candidata esta en
+    // HUMAN_INTERVENTION_REQUIRED (incidente abierto: prompt-injection, negociacion, etc.), el "Movil OK"
+    // solo marca el movil y NO la saca de HIR: salir de HIR exige su decision designada ("Aprobar perfil"/
+    // resolver el incidente), no reanudar de refilon descartando el motivo del escalado (invariante 4).
+    if (input.approved && candidate.currentState === "WAITING_HUMAN_REVIEW") {
+      const resumed = this.resumeAfterApprovals(candidate);
+      candidate = resumed.candidate;
+      transitions.push(...resumed.transitions);
+      proposedMessage = resumed.proposedMessage;
+    }
+
+    await this.dependencies.repository.saveCandidate(candidate);
+    for (const transition of transitions) {
+      await this.dependencies.repository.addTransition(transition);
+    }
+    if (proposedMessage) {
+      await this.dependencies.repository.addMessage(
+        agentMessage(candidate.id, proposedMessage, {
+          provider: "deterministic",
+          trigger: "DEVICE_QUALITY_APPROVE",
           proactive: true
         })
       );

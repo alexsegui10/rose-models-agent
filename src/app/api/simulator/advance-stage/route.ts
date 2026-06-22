@@ -4,7 +4,16 @@ import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorSt
 
 const AdvanceStageSchema = z.object({
   candidateId: z.string(),
-  action: z.enum(["PROFILE_FIT", "PROFILE_NO_FIT", "CONFIRM_CALL", "PROFILE_OK", "REJECT", "FOLLOW_REQUEST_SENT"]),
+  action: z.enum([
+    "PROFILE_FIT",
+    "PROFILE_NO_FIT",
+    "CONFIRM_CALL",
+    "PROFILE_OK",
+    "REJECT",
+    "FOLLOW_REQUEST_SENT",
+    "DEVICE_APPROVE",
+    "DEVICE_REJECT"
+  ]),
   slot: z.string().optional(),
   note: z.string().optional()
 });
@@ -57,6 +66,9 @@ async function dispatchAction(
       return engine.markFollowRequestSent({ candidateId: data.candidateId });
     case "REJECT":
       return engine.rejectCandidate({ candidateId: data.candidateId, note: data.note });
+    case "DEVICE_APPROVE":
+    case "DEVICE_REJECT":
+      return engine.applyDeviceQualityDecision({ candidateId: data.candidateId, approved: data.action === "DEVICE_APPROVE" });
     case "PROFILE_FIT":
     case "PROFILE_NO_FIT":
     default:
