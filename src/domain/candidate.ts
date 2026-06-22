@@ -68,6 +68,8 @@ export const HumanReviewReasonSchema = z.enum([
   "COMMERCIAL_EXCEPTION",
   "CONTRACT_QUESTION",
   "DATA_CONTRADICTION",
+  // Movil que requiere revision MANUAL de calidad (iPhone <13, etc.): Alex aprueba/rechaza la calidad.
+  "DEVICE_QUALITY_REVIEW",
   "OTHER"
 ]);
 export type HumanReviewReason = z.infer<typeof HumanReviewReasonSchema>;

@@ -46,6 +46,7 @@ const REVIEW_REASON_LABELS: Record<HumanReviewReason, string> = {
   COMMERCIAL_EXCEPTION: "pide una excepción comercial",
   CONTRACT_QUESTION: "duda de contrato/legal",
   DATA_CONTRADICTION: "dato contradictorio",
+  DEVICE_QUALITY_REVIEW: "revisa la calidad del móvil y aprueba o no",
   OTHER: "revisión humana"
 };
 
@@ -61,15 +62,23 @@ const REVIEW_STATES: ReadonlySet<string> = new Set(["HUMAN_INTERVENTION_REQUIRED
  * sigue ahí, para no repetir el aviso). Devuelve la notificación o null.
  */
 export function escalationNotificationFor(
-  candidate: Pick<Candidate, "instagramUsername" | "currentState" | "humanReviewReason">,
+  candidate: Pick<Candidate, "instagramUsername" | "currentState" | "humanReviewReason"> & {
+    deviceModel?: Candidate["deviceModel"];
+  },
   plannedTransitions: Pick<StateTransition, "toState">[]
 ): OperatorNotification | null {
   const enteredReview = plannedTransitions.some((transition) => REVIEW_STATES.has(transition.toState));
   if (!enteredReview) return null;
+  // Para la revision de calidad del movil, el motivo incluye el modelo concreto ("revisa la calidad del
+  // movil (iphone 11) y aprueba o no") para que Alex sepa de un vistazo que tiene que mirar.
+  const reason =
+    candidate.humanReviewReason === "DEVICE_QUALITY_REVIEW"
+      ? `revisa la calidad del movil${candidate.deviceModel ? ` (${candidate.deviceModel})` : ""} y aprueba o no`
+      : reviewReasonLabel(candidate.humanReviewReason);
   return {
     kind: "escalation",
     conversationId: candidate.instagramUsername,
-    reason: reviewReasonLabel(candidate.humanReviewReason),
+    reason,
     state: candidate.currentState
   };
 }

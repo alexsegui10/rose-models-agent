@@ -114,6 +114,7 @@ const REVIEW_REASON_LABELS: Record<string, string> = {
   COMMERCIAL_EXCEPTION: "Pide excepción comercial",
   CONTRACT_QUESTION: "Duda de contrato",
   DATA_CONTRADICTION: "Dato contradictorio",
+  DEVICE_QUALITY_REVIEW: "Revisa la calidad del móvil",
   OTHER: "Revisión humana"
 };
 
@@ -2411,6 +2412,16 @@ export default function Home() {
             </div>
 
             <footer className="drawer-footer">
+              {/* Porque de la revision (que Alex sepa que mirar sin abrir el chat): especial para el movil. */}
+              {(drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
+                drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED") &&
+              drawerCandidate.humanReviewReason ? (
+                <p className="drawer-text">
+                  {drawerCandidate.humanReviewReason === "DEVICE_QUALITY_REVIEW"
+                    ? `📱 Tiene un ${drawerCandidate.deviceModel ?? "móvil"} — revisa la calidad y aprueba o no.`
+                    : `Motivo: ${REVIEW_REASON_LABELS[drawerCandidate.humanReviewReason] ?? drawerCandidate.humanReviewReason}`}
+                </p>
+              ) : null}
               <div className="drawer-actions">
                 {/* Encaja/Rechazar en CUALQUIER fase activa (asi Alex revisa perfiles cuando quiere). */}
                 {drawerCandidate.currentState === "PROFILE_READY_FOR_REVIEW" ? (

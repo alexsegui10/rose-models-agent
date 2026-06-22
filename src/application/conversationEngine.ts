@@ -887,7 +887,11 @@ export class ConversationEngine {
             ? (responsePlan.humanReviewReason ??
               contradictionReviewReason(criticalHumanReviewReason) ??
               projectedCandidate.humanReviewReason)
-            : projectedCandidate.humanReviewReason,
+            : // Al entrar en revision humana con un movil pendiente de calidad (iPhone <13, etc.) y sin otro
+              // motivo, se fija DEVICE_QUALITY_REVIEW para que Alex sepa el PORQUE (aviso WhatsApp + CRM).
+              nextState === "WAITING_HUMAN_REVIEW" && projectedCandidate.deviceEligibility === "PENDING_QUALITY_TEST"
+              ? (projectedCandidate.humanReviewReason ?? "DEVICE_QUALITY_REVIEW")
+              : projectedCandidate.humanReviewReason,
         updatedAt: new Date()
       };
     }
