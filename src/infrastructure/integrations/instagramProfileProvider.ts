@@ -50,7 +50,10 @@ async function queryProfile(
   fetchImpl: typeof fetch
 ): Promise<QueryResult> {
   const url = `${config.graphApiBaseUrl}/${encodeURIComponent(igsid)}?fields=${fields}&access_token=${encodeURIComponent(config.accessToken)}`;
-  const response = await fetchImpl(url, { method: "GET" });
+  // Timeout duro (como los otros providers): en el camino del webhook/QStash (Vercel Hobby ~10s) un Graph
+  // colgado mataría la lambda en la rama de escalada y se PERDERÍA el aviso de WhatsApp a Alex. El catch de
+  // fetchInstagramProfileResult degrada a profile:null y el aviso sigue saliendo.
+  const response = await fetchImpl(url, { method: "GET", signal: AbortSignal.timeout(2500) });
   if (!response.ok) {
     let errorMessage: string | undefined;
     try {

@@ -149,7 +149,9 @@ export class CallMeBotWhatsAppNotifier implements OperatorNotifier {
       `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(this.config.phone)}` +
       `&text=${encodeURIComponent(text)}&apikey=${encodeURIComponent(this.config.apiKey)}`;
     try {
-      const response = await this.fetchImpl(url, { method: "GET" });
+      // Timeout duro: el aviso va en el camino del webhook (Vercel Hobby ~10s); un CallMeBot colgado no debe
+      // matar la lambda. Si falla/expira, el catch lo degrada (el turno sigue; el aviso es best-effort).
+      const response = await this.fetchImpl(url, { method: "GET", signal: AbortSignal.timeout(3000) });
       if (!response.ok) {
         console.warn("[notify] CallMeBot rechazó el aviso", { status: response.status });
       }

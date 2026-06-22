@@ -6,19 +6,19 @@ Variables** (producción); nunca en el código.
 
 ## 1. Avisos por WhatsApp (CallMeBot) — casi hecho
 - En local ya está configurado y **probado** (te llegó el WhatsApp de prueba).
-- **En Vercel** añade y haz *redeploy*:
-  - `CALLMEBOT_PHONE=+34644742515`
-  - `CALLMEBOT_APIKEY=4045525`
+- **En Vercel** añade y haz *redeploy* (tus valores reales los tienes en `.env.local`):
+  - `CALLMEBOT_PHONE=<tu número con prefijo, p.ej. +34600111222>`
+  - `CALLMEBOT_APIKEY=<tu apikey de CallMeBot>`
 - Con esto, cuando el bot escale a ti (desconfianza, agresión, negociación, contrato…) o haya un error,
   te llega un WhatsApp con el motivo y el enlace a la cuenta de la candidata.
 
-## 2. Privada / Pública en el CRM (HikerAPI) — falta tu key
-1. Regístrate en **hikerapi.com** (100 consultas gratis, sin mínimo, ~0,60 $ por cada 1.000).
-2. Copia tu **access key**.
-3. Añádela en `.env.local` y en Vercel:
-   - `HIKERAPI_KEY=tu_access_key`
-4. **Avísame con la key** y hago la prueba real de punta a punta (confirmo que el badge sale bien).
-- Mientras no la pongas, el CRM funciona igual pero sin el badge privada/pública (no rompe nada).
+## 2. Privada / Pública en el CRM (Apify) — falta tu token
+1. Regístrate en **apify.com** (plan free: 5 $/mes de crédito, sin tarjeta ni mínimo).
+2. **Settings → Integrations → API token**, cópialo.
+3. Añádelo en `.env.local` y en Vercel:
+   - `APIFY_TOKEN=tu_api_token`
+4. **Avísame con el token** y hago la prueba real de punta a punta (confirmo que el badge sale bien).
+- Mientras no lo pongas, el CRM funciona igual pero sin el badge privada/pública (no rompe nada).
 
 ## 3. La solicitud de seguimiento → la mandas tú (manual)
 - Instagram **no** deja seguir/mandar solicitudes por código (automatizarlo banearía tu cuenta).
@@ -31,7 +31,7 @@ Variables** (producción); nunca en el código.
 
 ## 5. Política de privacidad — la rediactas tú
 - La actualizas tú a mano cuando expliques bien el tratamiento (incluido el proveedor de verificación de
-  perfil). Si HikerAPI te ofrece un **DPA** (acuerdo de tratamiento de datos), fírmalo y guárdalo.
+  perfil). Si Apify te ofrece un **DPA** (acuerdo de tratamiento de datos), fírmalo y guárdalo.
 
 ---
 
@@ -53,9 +53,9 @@ DATABASE_URL=...
 ALLOW_EPHEMERAL_FALLBACK=0
 # Modo: arranca aprobando tú cada respuesta (cero riesgo); pasa a AUTOMATIC tras los arreglos de AUTOMATIC
 AUTOMATION_MODE=HUMAN_APPROVAL
-# Avisos WhatsApp
-CALLMEBOT_PHONE=+34644742515
-CALLMEBOT_APIKEY=4045525
+# Avisos WhatsApp (valores reales SOLO en .env.local / Vercel)
+CALLMEBOT_PHONE=...
+CALLMEBOT_APIKEY=...
 # Privada/pública (Apify)
 APIFY_TOKEN=...
 ```

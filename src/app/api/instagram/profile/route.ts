@@ -19,7 +19,7 @@ const cache = new Map<string, { profile: InstagramProfile | null; isPrivate: boo
 /**
  * GET /api/instagram/profile?id=<IGSID> — enriquece el CRM con el perfil público de la candidata:
  * foto + @usuario + enlace + relación de follow (API oficial), y is_private vía proveedor de terceros
- * (HikerAPI, solo si HIKERAPI_KEY está configurada). Si algo no se puede resolver, devuelve los campos
+ * (Apify, solo si APIFY_TOKEN está configurado). Si algo no se puede resolver, devuelve los campos
  * que sí y null en el resto; el CRM hace fallback con elegancia.
  */
 export async function GET(request: Request): Promise<NextResponse> {
@@ -54,7 +54,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   const profile = await fetchInstagramProfile(id, getInstagramConfig());
-  // is_private SOLO si el perfil dio @usuario y HikerAPI esta configurado (si no, queda null/desconocido).
+  // is_private SOLO si el perfil dio @usuario y Apify esta configurado (si no, queda null/desconocido).
   const isPrivate = await fetchInstagramIsPrivate(profile?.username);
   cache.set(id, { profile, isPrivate, expiresAt: now + PROFILE_TTL_MS });
   return profileResponse(profile, isPrivate);
