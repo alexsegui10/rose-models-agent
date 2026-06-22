@@ -840,14 +840,18 @@ export class ConversationEngine {
         await this.dependencies.repository.addMessage(candidateMessage(candidate.id, message.content, message.externalMessageId));
       }
     }
-    const activeCandidate: Candidate = {
-      ...candidate,
-      generationCancellationVersion: reprocessExisting
-        ? candidate.generationCancellationVersion
-        : candidate.generationCancellationVersion + 1,
-      updatedAt: new Date()
-    };
-    await this.dependencies.repository.saveCandidate(activeCandidate);
+    // Version de cancelacion: para un turno NUEVO, el +1 se hace ATOMICO en el repo (P1-4) para que dos
+    // turnos concurrentes (webhook + reintento de Meta / flush) obtengan versiones DISTINTAS y el send-gate
+    // cancele al obsoleto (sin doble envio). En reproceso (C / recuperacion P0-3) NO se bumpea (lo dispara una
+    // accion humana o un turno ya muerto, no un mensaje nuevo) y el inbound ya esta guardado.
+    let activeCandidate: Candidate;
+    if (reprocessExisting) {
+      activeCandidate = { ...candidate, updatedAt: new Date() };
+      await this.dependencies.repository.saveCandidate(activeCandidate);
+    } else {
+      const bumpedVersion = await this.dependencies.repository.bumpGenerationVersion(candidate.id);
+      activeCandidate = { ...candidate, generationCancellationVersion: bumpedVersion, updatedAt: new Date() };
+    }
 
     // Bot silenciado (decision de Alex 15-jun): si la candidata ya esta RECHAZADA por Alex, la
     // conversacion esta CERRADA o la llamada ya esta AGENDADA (CALL_SCHEDULED), no se responde NI se
@@ -1262,12 +1266,19 @@ export class ConversationEngine {
 
     const latestCandidate = await this.latestCandidateBeforeSend(projectedCandidate);
     if (!canAutomationSend(latestCandidate, projectedCandidate.generationCancellationVersion)) {
-      const blockedCandidate = {
-        ...latestCandidate,
-        automationPaused: true,
-        updatedAt: new Date()
-      };
-      await this.dependencies.repository.saveCandidate(blockedCandidate);
+      // ¿Por que no se puede enviar? Dos motivos MUY distintos:
+      // - Control manual / pausa de Alex -> se MANTIENE la pausa (no enviar; comportamiento de siempre).
+      // - Solo VERSION obsoleta (otro turno mas nuevo —otro mensaje o un reintento de Meta— supervisa a esta
+      //   candidata mientras generabamos) -> se DESCARTA este turno SIN tocar el estado: el turno nuevo es el
+      //   que responde. NO se pausa (pausar dejaria muda a la candidata). Esto evita el DOBLE ENVIO en
+      //   concurrencia (P1-4) sin bloquear de mas. Antes del bump atomico esto no ocurria (misma version).
+      const manuallyHeld = latestCandidate.manualControlActive || latestCandidate.automationPaused;
+      const blockedCandidate = manuallyHeld
+        ? { ...latestCandidate, automationPaused: true, updatedAt: new Date() }
+        : latestCandidate;
+      if (manuallyHeld) {
+        await this.dependencies.repository.saveCandidate(blockedCandidate);
+      }
       return {
         candidate: blockedCandidate,
         response: "",

@@ -81,6 +81,22 @@ export class PostgresCandidateRepository implements CandidateRepository {
     return normalized;
   }
 
+  async bumpGenerationVersion(id: string): Promise<number> {
+    if (!isUuid(id)) {
+      throw new Error("Candidate not found.");
+    }
+    // UPDATE atomico en BD (no read-modify-write): dos turnos concurrentes obtienen versiones distintas.
+    const rows = await this.db
+      .update(candidates)
+      .set({ generationCancellationVersion: sql`${candidates.generationCancellationVersion} + 1` })
+      .where(eq(candidates.id, id))
+      .returning({ version: candidates.generationCancellationVersion });
+    if (rows.length === 0) {
+      throw new Error("Candidate not found.");
+    }
+    return rows[0].version;
+  }
+
   async deleteCandidate(id: string): Promise<void> {
     if (!isUuid(id)) {
       return;

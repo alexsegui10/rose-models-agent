@@ -62,7 +62,12 @@ describe("generationCancellationVersion (carrera de respuestas obsoletas)", () =
     expect(storedMessages.filter((message) => message.role === "candidate")).toHaveLength(1);
   });
 
-  it("deja el candidato persistido en pausa de automatizacion tras descartar la respuesta obsoleta", async () => {
+  it("descarta la respuesta obsoleta SIN pausar la automatizacion (el turno mas nuevo responde) [P1-4]", async () => {
+    // Cambio P1-4: con el bump ATOMICO de version, el version-stale es la senal NORMAL del turno PERDEDOR
+    // de una carrera de concurrencia; el GANADOR (turno mas nuevo) es quien responde. Pausar al perdedor
+    // dejaria muda a la candidata (el ganador tambien se bloquearia por la pausa). Por eso el turno obsoleto
+    // se descarta sin tocar el estado. (El bloqueo por CONTROL MANUAL si sigue pausando: ver
+    // concurrencyVersionJun22.test.ts.)
     const { engine, repository } = createEngine(async (candidate) => {
       await repository.saveCandidate({
         ...candidate,
@@ -79,10 +84,10 @@ describe("generationCancellationVersion (carrera de respuestas obsoletas)", () =
     });
 
     expect(result.automationBlocked).toBe(true);
-    expect(result.candidate.automationPaused).toBe(true);
+    expect(result.candidate.automationPaused).toBe(false);
 
     const stored = await repository.findCandidateById(result.candidate.id);
-    expect(stored?.automationPaused).toBe(true);
+    expect(stored?.automationPaused).toBe(false);
   });
 
   it("envia normalmente cuando NO hay carrera: la version de generacion del turno sigue siendo la actual", async () => {

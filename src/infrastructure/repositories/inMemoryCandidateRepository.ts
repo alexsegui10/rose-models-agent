@@ -59,6 +59,18 @@ export class InMemoryCandidateRepository implements CandidateRepository {
     return this.normalizeAndStore(candidate);
   }
 
+  async bumpGenerationVersion(id: string): Promise<number> {
+    // Atomico dentro del event loop: NO hay await entre el get y el set, asi dos turnos concurrentes
+    // (interleaved en puntos await ajenos) no leen el mismo valor y escriben el mismo +1.
+    const current = this.candidates.get(id);
+    if (!current) {
+      throw new Error("Candidate not found.");
+    }
+    const next = current.generationCancellationVersion + 1;
+    this.candidates.set(id, { ...current, generationCancellationVersion: next, updatedAt: new Date() });
+    return next;
+  }
+
   async deleteCandidate(id: string): Promise<void> {
     this.candidates.delete(id);
     this.negotiationDecisions.delete(id);

@@ -24,6 +24,14 @@ export interface CandidateRepository {
    */
   listCandidatesForOutreach(idleSinceMs: number): Promise<Candidate[]>;
   saveCandidate(candidate: Candidate): Promise<Candidate>;
+  /**
+   * Incrementa ATOMICAMENTE generationCancellationVersion y devuelve el nuevo valor. Atomico = dos turnos
+   * concurrentes (webhook + reintento de Meta / flush) obtienen versiones DISTINTAS, no la misma; asi el
+   * send-gate (canAutomationSend) deja pasar solo al turno mas nuevo y cancela el obsoleto, sin doble envio
+   * (P1-4). NO es un read-modify-write (eso se pisa en concurrencia): postgres usa UPDATE ... +1 RETURNING;
+   * in-memory lo hace sincrono (sin await entre leer y escribir). Lanza si la candidata no existe.
+   */
+  bumpGenerationVersion(id: string): Promise<number>;
   deleteCandidate(id: string): Promise<void>;
   listMessages(candidateId: string, limit?: number): Promise<ConversationMessage[]>;
   findMessageByExternalId(candidateId: string, externalMessageId: string): Promise<ConversationMessage | null>;
