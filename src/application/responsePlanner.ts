@@ -42,6 +42,12 @@ export interface BuildResponsePlanInput {
 /** Una misma pregunta de cualificacion nunca se repite mas de 2 veces (el Alex real tampoco lo hace). */
 const MAX_SAME_QUESTION_ASKS = 2;
 
+// Re-pregunta del MOVIL (Alex 23-jun): si tras pedir el movil la candidata responde vago y SIN nombrar el
+// aparato ("esta bien", "hago buenas fotos"), en vez de repetir identico se pide UNA vez el modelo exacto.
+// Si tampoco asi lo da, el extractor marca el movil PENDING_QUALITY_TEST (Alex lo valora) y el guion avanza.
+const DEVICE_MODEL_CLARIFICATION =
+  "Que modelo de movil tienes exactamente? Dime la marca y el modelo, por ejemplo iPhone 13 o Samsung S23.";
+
 // Cierre hacia la llamada (playbook 1.7): pitch -> la candidata propone dia/hora -> ENTONCES el
 // telefono. Pedir el numero nada mas oir "llamada" era el fallo nº1 de la iteracion 1.
 // La llamada de cierre se hace por WhatsApp (dato confirmado por Alex): se pide el numero de WhatsApp.
@@ -371,6 +377,18 @@ function nextSlotQuestion(
   for (const slot of qualificationSlots) {
     if (options.skipOptional && slot.optional) continue;
     if (!slot.isMissing(candidate)) continue;
+    // MOVIL: en vez de repetir la misma pregunta, la 2a vez se pide el MODELO EXACTO (Alex 23-jun). 1a vez:
+    // pregunta normal; 2a vez (ya preguntado el movil y sigue sin modelo): aclaracion; 3a: nada (el motor ya
+    // habra marcado PENDING tras la aclaracion, asi que normalmente el slot ya no esta missing aqui).
+    if (slot.id === "device") {
+      const askedDevice = recentAgentMessages.some((message) => /que movil tienes/.test(message));
+      const askedModel = recentAgentMessages.some((message) =>
+        /marca y (?:el )?modelo|modelo de movil tienes exactamente/.test(message)
+      );
+      if (!askedDevice) return slot.question;
+      if (!askedModel) return DEVICE_MODEL_CLARIFICATION;
+      continue;
+    }
     const capped = askWithCap(slot.question, slot.alreadyAskedPattern, recentAgentMessages);
     if (capped) return capped;
   }

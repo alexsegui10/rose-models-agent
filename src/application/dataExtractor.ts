@@ -346,6 +346,9 @@ const agentAskedOnlyFansPattern = /\b(tienes of|has tenido of|tienes onlyfans|ha
 const agentAskedAgenciesPattern = /\botras? agencias?\b/;
 const agentAskedDevicePattern =
   /\b(que movil tienes|que movil|con que movil|que telefono|que dispositivo|movil tienes|grabas con|con que grabas|tienes (?:un |buen )?(?:iphone|movil))\b/;
+// El agente pidio el MODELO EXACTO (aclaracion del slot de movil tras una respuesta vaga). Si la candidata
+// AUN no nombra el aparato, no se repite mas: se marca PENDING (Alex valora). Decision de Alex 23-jun.
+const agentAskedDeviceModelPattern = /\b(marca y (?:el )?modelo|modelo de movil tienes exactamente|modelo exacto)\b/;
 // Descriptor de mala calidad del movil (para resolver el dead-end cuando NO se nombra el aparato).
 const deviceQualityReplyPattern =
   /\b(viej[oa]|mal[oa]|malisim[oa]|mala calidad|roto|rota|gama baja|antigu[oa]|cascad[oa]|destrozad[oa]|fatal|para el arrastre|hecho polvo|una caca|de mierda|cutre|lent[oa]|no sirve|no graba bien)\b/;
@@ -492,6 +495,7 @@ export function extractDeterministicUnderstanding(
   const agentAskedOnlyFans = agentAskedOnlyFansPattern.test(lastAgent);
   const agentAskedAgencies = agentAskedAgenciesPattern.test(lastAgent);
   const agentAskedDevice = agentAskedDevicePattern.test(lastAgent);
+  const agentAskedDeviceModel = agentAskedDeviceModelPattern.test(lastAgent);
 
   const firstName = extractFirstName(normalized) ?? (agentAskedName ? bareNameFromReply(normalized) : undefined);
   if (firstName) extractedData.firstName = firstName;
@@ -533,6 +537,14 @@ export function extractDeterministicUnderstanding(
   if (!mentionsDevice && agentAskedDevice && deviceQualityReplyPattern.test(normalized)) {
     const fromText = deviceEligibilityForDescription(normalized);
     deviceEligibility = fromText !== "UNKNOWN" ? fromText : "PENDING_QUALITY_TEST";
+  }
+  // Tras pedir el MODELO EXACTO (aclaracion del slot de movil) la candidata SIGUE sin nombrar el aparato
+  // (un positivo vago: "esta bien", "hago buenas fotos"): no se repite mas -> PENDING_QUALITY_TEST (movil
+  // "conocido": sigue cualificando y Alex lo valora con su socio). Cierra el bucle del positivo vago (Alex 23-jun).
+  // SOLO si sigue UNKNOWN: si el bloque P1-8 ya lo clasifico como NOT_ELIGIBLE ("es viejo", "esta roto"), NO
+  // se suaviza a PENDING — un movil declarado malo sigue siendo NO apto (no pisar el gate de hardware).
+  if (!mentionsDevice && agentAskedDeviceModel && deviceEligibility === "UNKNOWN") {
+    deviceEligibility = "PENDING_QUALITY_TEST";
   }
   if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
 

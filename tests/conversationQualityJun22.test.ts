@@ -194,6 +194,58 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
     expect(r.response.toLowerCase()).toMatch(/onlyfans|\bof\b/);
   });
 
+  it("movil vago sin modelo: pide el modelo EXACTO una vez y luego PENDING (no repite identico; Alex 23-jun)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedQualifying(repository, {
+      hasOnlyFans: undefined,
+      deviceEligibility: "UNKNOWN",
+      deviceModel: undefined
+    });
+
+    // Turno 1: el bot pregunta el movil.
+    const r1 = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "vale, listo" }]
+    });
+    expect(r1.response.toLowerCase()).toContain("que movil tienes");
+
+    // Turno 2: responde vago SIN nombrar el aparato -> el bot pide el MODELO EXACTO (no repite identico).
+    const r2 = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "esta bien, hago buenas fotos" }]
+    });
+    expect(r2.response.toLowerCase()).toMatch(/marca y .*modelo|modelo .*exactamente/);
+
+    // Turno 3: sigue sin modelo -> PENDING_QUALITY_TEST y AVANZA (deja de preguntar el movil).
+    const r3 = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "es muy bueno de verdad" }]
+    });
+    expect(r3.candidate.deviceEligibility).toBe("PENDING_QUALITY_TEST");
+    expect(r3.response.toLowerCase()).not.toMatch(/que movil tienes|marca y .*modelo/);
+  });
+
+  it("movil declarado MALO tras pedir el modelo exacto sigue NOT_ELIGIBLE (no se suaviza a PENDING; revisor 23-jun)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedQualifying(repository, {
+      hasOnlyFans: undefined,
+      deviceEligibility: "UNKNOWN",
+      deviceModel: undefined
+    });
+    // Turno 1: el bot pregunta el movil. Turno 2 (vago): pide el modelo exacto.
+    await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: "vale, listo" }] });
+    await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "esta bien, hago buenas fotos" }]
+    });
+    // Turno 3: declara un movil MALO -> sigue NOT_ELIGIBLE (el gate de hardware manda; no se suaviza a PENDING).
+    const r3 = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "es viejo la verdad" }]
+    });
+    expect(r3.candidate.deviceEligibility).toBe("NOT_ELIGIBLE");
+  });
+
   it("B-edad: '¿hay posibilidades con 21 años?' confirma que desde 18 vale (no lo ignora; Alex 22-jun)", async () => {
     const { engine, repository } = setup();
     const c = await seedQualifying(repository, {

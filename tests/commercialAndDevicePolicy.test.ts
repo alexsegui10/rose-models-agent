@@ -262,7 +262,7 @@ describe("commercial and device policy", () => {
     expect(readiness.onboardingBlockers).toContain("CONTRACT_REQUIRED");
   });
 
-  it("does not pass to final review with unknown device", async () => {
+  it("movil nunca nombrado: pide el modelo EXACTO y, si no lo da, queda PENDING (Alex lo valora) sin bucle (Alex 23-jun)", async () => {
     const { engine } = createEngine();
     const turns = [
       "Soy Ana, tengo 24 anos y soy de Madrid",
@@ -285,11 +285,12 @@ describe("commercial and device policy", () => {
       responses.push(last.response.toLowerCase());
     }
 
-    // Da todos los datos MENOS el movil: con dispositivo desconocido NUNCA pasa a revision final, y el
-    // bot debe preguntar por el movil en algun momento del guion.
-    expect(last?.candidate.deviceEligibility).toBe("UNKNOWN");
-    expect(last?.candidate.currentState).not.toBe("WAITING_HUMAN_REVIEW");
-    expect(responses.some((response) => response.includes("movil"))).toBe(true);
+    // Da todos los datos MENOS el movil: el bot pregunta por el movil y, ante respuestas vagas, pide el
+    // MODELO EXACTO una vez. Si aun asi no lo nombra, el movil NO se queda en UNKNOWN (bucle/dead-end): pasa a
+    // PENDING_QUALITY_TEST -> el guion AVANZA y Alex lo valora con el motivo de calidad del movil (Alex 23-jun).
+    expect(responses.some((response) => response.includes("que movil tienes"))).toBe(true);
+    expect(responses.some((response) => /marca y .*modelo|modelo .*exactamente/.test(response))).toBe(true);
+    expect(last?.candidate.deviceEligibility).toBe("PENDING_QUALITY_TEST");
   });
 
   it("does not ask for device again once answered", async () => {
