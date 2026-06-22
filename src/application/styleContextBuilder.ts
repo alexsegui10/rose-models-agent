@@ -70,6 +70,9 @@ export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
     JSON.stringify(
       {
         objective: input.responsePlan.objective,
+        // acknowledgedFacts: lo que hay que RECONOCER de su mensaje antes de seguir (p.ej. "acaba de dar su
+        // edad (30) y es valida: confirmaselo"). Asi el redactor responde a TODO lo que dijo, en orden.
+        acknowledgedFacts: input.responsePlan.acknowledgedFacts,
         answerFacts: input.responsePlan.answerFacts,
         allowedClaims: input.responsePlan.allowedClaims,
         prohibitedClaims: input.responsePlan.prohibitedClaims,
