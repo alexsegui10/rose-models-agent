@@ -41,15 +41,16 @@ describe("deteccion de privada/publica en el opener", () => {
     expect(result.candidate.currentState).not.toBe("WAITING_PROFILE_ACCESS");
   });
 
-  it("DESCONOCIDA (null) -> opener NEUTRO: pide el nombre sin afirmar nada ni pedir solicitud", async () => {
+  it("DESCONOCIDA (null) -> opener PUBLICO por defecto (calido): pide el nombre, sin pedir solicitud", async () => {
+    // Cambio 22-jun: sin deteccion fiable, el default es el opener PUBLICO calido (no el neutro).
     const { engine } = engineWith(privacyProvider(null));
     const result = await engine.handleIncomingMessage({ instagramUsername: "17841400000000003", message: "holaaaa" });
     expect(result.response.toLowerCase()).toContain("como te llamas");
-    expect(result.response.toLowerCase()).not.toContain("hemos visto tu perfil");
+    expect(result.response.toLowerCase()).toContain("hemos visto tu perfil");
     expect(result.response.toLowerCase()).not.toContain("solicitud de seguimiento");
   });
 
-  it("si el detector falla, red de seguridad -> opener neutro (no rompe el turno)", async () => {
+  it("si el detector falla, red de seguridad -> opener PUBLICO por defecto (no rompe el turno)", async () => {
     const provider: ProfilePrivacyProvider = {
       async detectIsPrivate() {
         throw new Error("apify caido");

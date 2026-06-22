@@ -48,8 +48,18 @@ export class GraphApiInstagramMessagingProvider implements InstagramMessagingPro
         signal: AbortSignal.timeout(3500)
       });
       if (!response.ok) {
-        // Solo el status y un id de error si lo hay; nunca el token ni el cuerpo completo.
-        console.warn("[instagram] envío rechazado", { status: response.status });
+        // Status + el code/subcode/mensaje de Meta para poder diagnosticar (p.ej. fuera de ventana 24h,
+        // rate limit, permiso). El mensaje de error de Meta NO contiene el token ni datos sensibles; nunca
+        // se loguea el token ni el cuerpo de la peticion.
+        const errorBody = (await response.json().catch(() => null)) as {
+          error?: { code?: number; error_subcode?: number; message?: string };
+        } | null;
+        console.warn("[instagram] envío rechazado", {
+          status: response.status,
+          code: errorBody?.error?.code,
+          subcode: errorBody?.error?.error_subcode,
+          message: errorBody?.error?.message
+        });
         return false;
       }
       return true;

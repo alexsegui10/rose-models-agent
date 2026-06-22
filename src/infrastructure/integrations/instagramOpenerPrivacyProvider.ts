@@ -3,7 +3,11 @@ import { getInstagramConfig } from "@/application/instagramConfig";
 import { fetchInstagramProfile } from "./instagramProfileProvider";
 import { fetchInstagramIsPrivate } from "./instagramPrivacyProvider";
 
-const DEFAULT_TIMEOUT_MS = 4500;
+// 1500ms (antes 4500): la deteccion va en el CAMINO CRITICO del primer mensaje, antes de enviar la
+// rafaga del opener. Con el techo de ~10s de Vercel Hobby, un detector lento se comia el presupuesto y
+// solo llegaba 1 mensaje a Instagram (bug 22-jun). Con 1500ms, si no resuelve rapido se cae a PUBLICO
+// (default calido) y queda tiempo de sobra para entregar la rafaga entera. Ajustable por env.
+const DEFAULT_TIMEOUT_MS = 1500;
 
 /**
  * Detecta privada/pública para el OPENER. Como Meta no expone is_private, hay que: (1) resolver el

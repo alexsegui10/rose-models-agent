@@ -105,8 +105,8 @@ export class ConversationEngine {
   /**
    * Visibilidad del perfil para elegir el opener. Si el llamador ya la da, se respeta. Si no, SOLO en el
    * turno de apertura y cuando aun es desconocida, se consulta al detector (privada/publica). null/fallo
-   * -> queda como esta (UNKNOWN -> opener neutro). El detector lleva su propio limite de tiempo; aqui
-   * jamas se deja que un fallo de red rompa el turno (red de seguridad).
+   * -> queda como esta (UNKNOWN -> opener PUBLICO por defecto, calido). El detector lleva su propio limite
+   * de tiempo; aqui jamas se deja que un fallo de red rompa el turno (red de seguridad).
    */
   private async resolveOpenerVisibility(
     candidate: Candidate,
@@ -122,7 +122,7 @@ export class ConversationEngine {
       if (isPrivate === true) return "PRIVATE";
       if (isPrivate === false) return "PUBLIC";
     } catch {
-      // Red de seguridad: cualquier fallo deja la visibilidad desconocida (opener neutro).
+      // Red de seguridad: cualquier fallo deja la visibilidad desconocida (-> opener PUBLICO por defecto).
     }
     return provided;
   }
@@ -1697,22 +1697,18 @@ function canonicalOpener(candidate: Candidate): string {
   // publico o desconocido se entra directo al marco de cualificacion (coherente con decideNextState,
   // que solo manda a WAITING_PROFILE_ACCESS si la visibilidad es PRIVATE). Asi el opener siempre lleva
   // el marco "te hago unas preguntas rapidas y luego agendamos una llamada" (peticion de Alex 15-jun).
-  // PRIVADA: no podemos ver el perfil -> gate de acceso (pedir aceptar la solicitud), sin pedir el nombre
-  // todavia. Tras aceptar, el guion continua pidiendo el nombre (primer slot).
+  // PRIVADA: no podemos ver el perfil -> pedir aceptar la solicitud de seguimiento, calido y sin
+  // compromiso. No se pide el nombre todavia (primero acepta; al aceptar, el guion sigue por el nombre).
   if (candidate.declaredProfileVisibility === "PRIVATE") {
-    return `Hola, ${greeting} soy Alex de Rose Models.\n\nNos puedes aceptar la solicitud de seguimiento para ver si encajas en nuestra agencia y te explico como trabajamos, si no te importa.`;
+    return `Hola, ${greeting} soy Alex de Rose Models.\n\nTe escribo porque nos encajaria conocerte para la agencia. Nos puedes aceptar la solicitud de seguimiento? Asi vemos tu perfil con calma y, si encajamos, te explico como trabajamos, sin ningun compromiso.`;
   }
 
-  // PUBLICA: hemos podido ver el perfil, asi que lo decimos y entramos directos a pedir el NOMBRE
-  // (peticion de Alex: lo primero es el nombre). Asi, ademas, la respuesta de la candidata ("ana",
-  // "marta"...) llega con contexto de pregunta y se captura bien, en vez de perderse (fallo 15-jun).
-  if (candidate.declaredProfileVisibility === "PUBLIC") {
-    return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajas muy bien en nuestra agencia.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte todo mejor.\n\nPara empezar, como te llamas?`;
-  }
-
-  // DESCONOCIDA (no se pudo detectar privada/publica a tiempo): opener NEUTRO que NO afirma haber visto el
-  // perfil ni pide aceptar solicitud, pero pide el nombre igual. Es la red de seguridad de la deteccion.
-  return `Hola, ${greeting} soy Alex de Rose Models.\n\nSi te parece bien te hago unas preguntas rapidas y luego agendamos una llamada para explicarte como trabajamos.\n\nPara empezar, como te llamas?`;
+  // PUBLICA o DESCONOCIDA: opener calido por defecto (peticion de Alex 22-jun). Sin deteccion fiable de
+  // privacidad, el publico es el default: la mayoria de candidatas del anuncio son alcanzables y el flujo
+  // privado solo aplica si DE VERDAD detectamos cuenta privada. Identidad + halago + marco (preguntas
+  // rapidas -> llamada, sin compromiso) + nombre, en POCOS mensajes (la rafaga llega mas fiable con menos
+  // chunks). Coherente con decideNextState (solo PRIVATE va a WAITING_PROFILE_ACCESS; el resto a QUALIFYING).
+  return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajarias muy bien en la agencia. Te hago un par de preguntas rapidas mientras te explico como trabajamos, sin compromiso, y si encaja agendamos una llamada para contartelo con calma.\n\nPara empezar, como te llamas?`;
 }
 
 // La candidata comparte una dificultad/duda/experiencia personal (no un dato a secas): "me cuesta",

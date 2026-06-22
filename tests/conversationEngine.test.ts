@@ -365,8 +365,9 @@ describe("ConversationEngine first contact (opener canonico gate-first)", () => 
 
     expect(result.response).toContain("Alex de Rose Models");
     expect(result.response.toLowerCase()).not.toContain("solicitud de seguimiento");
-    // El marco que pidio Alex: "te hago unas preguntas rapidas y luego agendamos una llamada".
-    expect(result.response.toLowerCase()).toContain("unas preguntas");
+    // Visibilidad desconocida -> opener PUBLICO por defecto (calido, peticion de Alex 22-jun): NO pide
+    // solicitud y mantiene el marco (preguntas rapidas + llamada).
+    expect(result.response.toLowerCase()).toContain("preguntas rapidas");
     expect(result.response.toLowerCase()).toContain("llamada");
   });
 

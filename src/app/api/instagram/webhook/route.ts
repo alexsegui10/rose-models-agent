@@ -34,6 +34,8 @@ const TURN_TIME_BUDGET_MS = Number(process.env.INSTAGRAM_TURN_BUDGET_MS ?? 8500)
 // Tope DURO: pasado este tiempo desde el inicio del turno, no se envian mas chunks de la rafaga (margen
 // bajo el techo de ~10s de Vercel Hobby). Evita que la lambda muera a mitad de envio.
 const HARD_TURN_DEADLINE_MS = Number(process.env.INSTAGRAM_HARD_DEADLINE_MS ?? 9000);
+// Backoff antes de UN reintento de un chunk fallido (transitorio): que un fallo puntual no tire la rafaga.
+const BURST_RETRY_BACKOFF_MS = Number(process.env.INSTAGRAM_BURST_RETRY_BACKOFF_MS ?? 600);
 
 /** Pausa "humana" antes de un mensaje: base + tiempo de tecleo segun longitud, con tope por mensaje. */
 function naturalSendDelayMs(chunk: string): number {
@@ -212,21 +214,33 @@ export async function POST(request: Request): Promise<NextResponse> {
             });
             break;
           }
-          // Ritmo natural (peticion de Alex): unos segundos entre mensajes, NUNCA instantaneo. Se
-          // reparte un presupuesto total de pausa para no acercarse al limite de 10s de Vercel: si se
-          // agota, los ultimos mensajes salen seguidos en vez de tumbar la funcion.
-          if (delayBudgetMs > 0) {
+          // Ritmo natural (peticion de Alex): unos segundos entre mensajes. La pausa va SOLO entre mensajes,
+          // NO antes del primero (el 1er mensaje sale ya): asi se gana presupuesto y la rafaga entera entra
+          // bajo el techo de ~10s de Vercel. Se reparte un presupuesto total de pausa; si se agota, los
+          // ultimos salen seguidos en vez de tumbar la funcion.
+          if (i > 0 && delayBudgetMs > 0) {
             const wait = Math.min(naturalSendDelayMs(chunks[i]), delayBudgetMs);
             delayBudgetMs -= wait;
             await sleep(wait);
           }
-          // sendTextMessage devuelve false (no lanza) si la API rechaza o falla la red. Si un chunk se
-          // pierde, ABORTAMOS la rafaga: seguir enviaria los siguientes fuera de orden/contexto (la
-          // candidata veria la parte 3 sin la 2). Se deja traza honesta de entrega parcial.
-          const sent = await provider.sendTextMessage(message.senderId, chunks[i]);
+          // Envio con UN reintento corto: un fallo RAPIDO (rechazo de API/red, no entregado) NO debe tirar
+          // toda la rafaga (la candidata se quedaba solo con el 1er mensaje). Si tras el reintento sigue
+          // fallando, ABORTAMOS el resto (no enviar fuera de orden/contexto) con traza de entrega parcial.
+          const sendStart = Date.now();
+          let sent = await provider.sendTextMessage(message.senderId, chunks[i]);
+          // Solo se reintenta si el fallo fue RAPIDO (<3s): un TIMEOUT (~3.5s) pudo haberse entregado igual
+          // en Meta y reintentar duplicaria el mensaje. Y solo si queda margen REAL bajo el techo de ~10s,
+          // descontando el backoff + el timeout del propio reintento (si no, podria morir la lambda a mitad).
+          const failedFast = Date.now() - sendStart < 3000;
+          const retryDeadlineMs = HARD_TURN_DEADLINE_MS - BURST_RETRY_BACKOFF_MS - 3500;
+          if (!sent && failedFast && Date.now() - turnStartedAt < retryDeadlineMs) {
+            await sleep(BURST_RETRY_BACKOFF_MS);
+            sent = await provider.sendTextMessage(message.senderId, chunks[i]);
+            console.log("[ig-webhook] reintento de envio", { sent, parte: `${i + 1}/${chunks.length}` });
+          }
           console.log("[ig-webhook] envio a Instagram", { sent, parte: `${i + 1}/${chunks.length}` });
           if (!sent) {
-            console.warn("[ig-webhook] entrega PARCIAL: chunk fallido, se aborta el resto de la rafaga", {
+            console.warn("[ig-webhook] entrega PARCIAL: chunk fallido tras reintento, se aborta el resto", {
               enviados: i,
               total: chunks.length
             });
