@@ -35,4 +35,24 @@ describe("Escalado de contrato: solo terminos contractuales genuinos escalan", (
     });
     expect(entries.some((entry) => entry.requiresHumanReview)).toBe(true);
   });
+
+  it("preguntas de geografia recuperan la FAQ de paises (Alex 22-jun)", async () => {
+    const g1 = await retriever.retrieve({ candidate: qualifying(), intent: "OTHER", question: "trabajan fuera de argentina?" });
+    expect(g1.some((e) => e.id === "faq-target-countries")).toBe(true);
+    const g2 = await retriever.retrieve({
+      candidate: qualifying(),
+      intent: "OTHER",
+      question: "trabajais con chicas de colombia?"
+    });
+    expect(g2.some((e) => e.id === "faq-target-countries")).toBe(true);
+  });
+
+  it("dudas de privacidad geografica ('no quiero que en X me vean') recuperan la entrada geo-privacy", async () => {
+    const p = await retriever.retrieve({
+      candidate: qualifying(),
+      intent: "OTHER",
+      question: "no quiero que en argentina me vean, es posible?"
+    });
+    expect(p.some((e) => e.id === "geo-privacy-three-layers")).toBe(true);
+  });
 });

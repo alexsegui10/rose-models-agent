@@ -33,7 +33,12 @@ const entries: KnowledgeEntryInput[] = [
       "La agencia intenta vender el 100% a publico espanol porque tiene mayor poder adquisitivo.",
       "En OnlyFans puede bloquearse el acceso por pais (relevante para la privacidad de la candidata)."
     ],
-    approvedAnswerPoints: ["Intentamos vender el 100% a espanoles porque tienen mayor poder adquisitivo."],
+    approvedAnswerPoints: [
+      // Responde la pregunta de la candidata por SU geografia ("¿trabajan fuera de Argentina?"): trabajamos
+      // con chicas de cualquier pais hispano; lo espanol es el PUBLICO comprador, no de donde sea ella (Alex 22-jun).
+      "Trabajamos con chicas de varios paises, no solo de Espana, asi que por donde seas no hay problema.",
+      "Lo que hacemos es vender sobre todo a publico espanol porque tiene mayor poder adquisitivo."
+    ],
     prohibitedClaims: [
       "Decir 'solo trabajamos con espanolas': formulacion discriminatoria e incorrecta, el espanol es el trafico/comprador, no la candidata.",
       "Garantizar que el 100% del trafico sera siempre espanol.",
@@ -46,7 +51,7 @@ const entries: KnowledgeEntryInput[] = [
     allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["faq", "countries", "market"],
     requiresHumanReview: false,
-    version: "faq-target-countries-2026-06-12.1",
+    version: "faq-target-countries-2026-06-22.1",
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-12"

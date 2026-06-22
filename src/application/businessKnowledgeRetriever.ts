@@ -173,6 +173,20 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("launch", "timeline", "warmup");
   if (/\b(paises|que pais|vendeis|venden|mercado|compradores|poder adquisitivo)\b/.test(message))
     tags.push("countries", "market", "faq");
+  // Pregunta por la GEOGRAFIA de las candidatas ("¿trabajan fuera de Argentina?", "¿aceptan de Colombia?",
+  // "¿solo Espana?"): recupera la FAQ de paises para RESPONDER (las candidatas pueden ser de cualquier pais
+  // hispano; el publico comprador es el espanol). Antes se ignoraba y se pedia el siguiente dato (Alex 22-jun).
+  if (
+    /\bfuera de (aqui|mi pais|argentin|colombi|mexic|venezuel|chile|peru|espan)/.test(message) ||
+    /\btrabaj\w+\b[^.!?]{0,18}\b(argentin|colombi|mexic|venezol|chile|peru|latam|fuera|otro pais|otros paises|extranjer)/.test(
+      message
+    ) ||
+    /\b(aceptan|admiten|cogen|buscan)\b[^.!?]{0,18}\b(argentin|colombi|mexic|venezol|chile|peru|de otro pais|extranjer|fuera)/.test(
+      message
+    ) ||
+    /\bsolo (con )?espan/.test(message)
+  )
+    tags.push("countries", "market", "faq");
   // "Trabajais con trafico de Espana?" / "el trafico es espanol?" pregunta por el MERCADO objetivo,
   // no por el pitch operativo: debe recuperar la FAQ de paises (publico espanol, poder adquisitivo)
   // y no contestar con la entrada corporativa why-70 (r3 T18). Excluye el conflicto multi-agencia.
@@ -194,7 +208,12 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (
     /\b(bloquear|bloqueo|bloqueen|que no me vean|me reconozcan|me vea alguien|privacidad|anonimato|mi pais|conocidos)\b/.test(
       message
-    )
+    ) ||
+    // Tambien "no quiero que (en X) me vean", "que me vean en mi pais", "me vea aqui": misma duda de privacidad
+    // geografica (Alex 22-jun) que antes se ignoraba y se trataba como simple "mirarlo con calma".
+    /\bno quiero que\b[^.!?]{0,30}\bme\s+vea/.test(message) ||
+    /\bme\s+vean?\b[^.!?]{0,15}\b(en|aqui|mi pais|argentin|colombi|mexic|venezol|chile|peru)\b/.test(message) ||
+    /\b(en|aqui|mi pais)\b[^.!?]{0,15}\bme\s+vea/.test(message)
   )
     tags.push("geo-privacy", "privacy", "country-block", "objection");
   // Miedo a que la RECONOZCA gente concreta (familia, conocidos, pareja, jefe): es una duda de privacidad,
