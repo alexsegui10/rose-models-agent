@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
-import { deliverProactiveMessage } from "@/server/proactiveDelivery";
+import { deliverDecisionOutcome } from "@/server/resumeReprocess";
 
 const HumanReviewSchema = z.object({
   candidateId: z.string(),
@@ -25,16 +25,17 @@ export async function POST(request: Request) {
   }
 
   const result = await engine.applyHumanDecision(parsed.data);
-  // Entregar el mensaje del bot (p.ej. "Buenas noticias... ¿que dia te viene?") a la candidata por su canal
-  // (Instagram/WhatsApp). El motor ya lo guardo; aqui SOLO se envia (antes no salia a Instagram).
-  const delivery = result.proposedMessage ? await deliverProactiveMessage(result.candidate, result.proposedMessage) : null;
-  const messages = await repository.listMessages(result.candidate.id);
-  const transitions = await repository.listTransitions(result.candidate.id);
+  // Entregar a la candidata, por su canal (Instagram/WhatsApp), lo que toque: si escribio DURANTE la pausa,
+  // el bot RESPONDE a eso (reproceso); si no, el proactivo fijo de aprobado. El motor ya guardo el mensaje;
+  // aqui SOLO se envia (antes las decisiones del CRM no salian a Instagram).
+  const outcome = await deliverDecisionOutcome(engine, result);
+  const messages = await repository.listMessages(outcome.candidate.id);
+  const transitions = await repository.listTransitions(outcome.candidate.id);
 
   return NextResponse.json({
-    candidate: result.candidate,
-    proposedMessage: result.proposedMessage,
-    sentToCandidate: delivery,
+    candidate: outcome.candidate,
+    proposedMessage: outcome.proposedMessage,
+    sentToCandidate: outcome.sentToCandidate,
     appliedTransitions: result.transitions,
     messages,
     transitions

@@ -140,11 +140,12 @@ export class ConversationEngine {
    * proactiva (peticion de Alex #5) y reanuda la automatizacion. Una decision que no admite la
    * transicion desde el estado actual no se fuerza: se devuelve sin cambios (no revienta el grafo).
    */
-  async applyHumanDecision(input: {
-    candidateId: string;
-    decision: HumanReviewDecision;
-    note?: string;
-  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+  async applyHumanDecision(input: { candidateId: string; decision: HumanReviewDecision; note?: string }): Promise<{
+    candidate: Candidate;
+    transitions: StateTransition[];
+    proposedMessage: string | null;
+    reprocessTrailingInbound?: string[] | null;
+  }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
@@ -158,6 +159,7 @@ export class ConversationEngine {
     const transitions: StateTransition[] = [];
     let candidate: Candidate;
     let proposedMessage: string | null = null;
+    let reprocessTrailingInbound: string[] | null = null;
 
     if (input.decision === "APPROVE") {
       // Perfil apto (sello), SIN transicionar todavia: el avance a la llamada y la reanudacion los decide
@@ -176,6 +178,15 @@ export class ConversationEngine {
       candidate = resumed.candidate;
       transitions.push(...resumed.transitions);
       proposedMessage = resumed.proposedMessage;
+      // C: si la candidata escribio durante la pausa (su mensaje es el ultimo, sin contestar), al reanudar
+      // el bot RESPONDE a eso en vez del proactivo fijo. Solo si el resume transiciono de verdad
+      // (proposedMessage != null): doble-click / resume incompleto / HIR no reprocesan (invariantes 1 y 4).
+      if (proposedMessage) {
+        reprocessTrailingInbound = await this.trailingCandidateMessages(candidate.id);
+        if (reprocessTrailingInbound) {
+          proposedMessage = null; // salida unica: respuesta contextual (la da el llamante) O proactivo fijo
+        }
+      }
     } else {
       const decided = applyHumanReviewDecision({ candidate: existing, decision: input.decision, note: input.note });
       transitions.push(decided.transition);
@@ -196,7 +207,25 @@ export class ConversationEngine {
       );
     }
 
-    return { candidate, transitions, proposedMessage };
+    return { candidate, transitions, proposedMessage, reprocessTrailingInbound };
+  }
+
+  /**
+   * Bloque FINAL contiguo de mensajes de la candidata (role "candidate") sin contestar: lo que escribio
+   * durante la pausa, despues del ultimo mensaje del agente/Alex. null si el ultimo mensaje no es suyo (no
+   * escribio nada en la pausa). Cronologico ascendente. Lo usa la reanudacion (C) para responder a eso.
+   */
+  private async trailingCandidateMessages(candidateId: string): Promise<string[] | null> {
+    const history = await this.dependencies.repository.listMessages(candidateId, 20);
+    const trailing: string[] = [];
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      if (history[i].role === "candidate") {
+        trailing.unshift(history[i].content);
+      } else {
+        break;
+      }
+    }
+    return trailing.length > 0 ? trailing : null;
   }
 
   /**
@@ -256,10 +285,12 @@ export class ConversationEngine {
    * movil pasa a APPROVED; si ademas el perfil ya esta aprobado, se reanuda y se propone la llamada
    * (resumeAfterApprovals). rejected -> NOT_ELIGIBLE (no reanuda; Alex puede rechazar o ella mejora el movil).
    */
-  async applyDeviceQualityDecision(input: {
-    candidateId: string;
-    approved: boolean;
-  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+  async applyDeviceQualityDecision(input: { candidateId: string; approved: boolean }): Promise<{
+    candidate: Candidate;
+    transitions: StateTransition[];
+    proposedMessage: string | null;
+    reprocessTrailingInbound?: string[] | null;
+  }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
@@ -276,6 +307,7 @@ export class ConversationEngine {
       updatedAt: new Date()
     };
     let proposedMessage: string | null = null;
+    let reprocessTrailingInbound: string[] | null = null;
     // "Movil OK" reanuda hacia la llamada SOLO desde WAITING_HUMAN_REVIEW. Si la candidata esta en
     // HUMAN_INTERVENTION_REQUIRED (incidente abierto: prompt-injection, negociacion, etc.), el "Movil OK"
     // solo marca el movil y NO la saca de HIR: salir de HIR exige su decision designada ("Aprobar perfil"/
@@ -285,6 +317,13 @@ export class ConversationEngine {
       candidate = resumed.candidate;
       transitions.push(...resumed.transitions);
       proposedMessage = resumed.proposedMessage;
+      // C: igual que en applyHumanDecision, si escribio durante la pausa el bot responde a eso al reanudar.
+      if (proposedMessage) {
+        reprocessTrailingInbound = await this.trailingCandidateMessages(candidate.id);
+        if (reprocessTrailingInbound) {
+          proposedMessage = null;
+        }
+      }
     }
 
     await this.dependencies.repository.saveCandidate(candidate);
@@ -301,7 +340,7 @@ export class ConversationEngine {
       );
     }
 
-    return { candidate, transitions, proposedMessage };
+    return { candidate, transitions, proposedMessage, reprocessTrailingInbound };
   }
 
   /**
@@ -745,12 +784,16 @@ export class ConversationEngine {
   }
 
   async handleIncomingTurn(
-    input: CandidateLookupInput & { messages: IncomingTurnMessage[] }
+    input: CandidateLookupInput & { messages: IncomingTurnMessage[]; reprocessExisting?: boolean }
   ): Promise<HandleIncomingMessageResult> {
     const groupedMessage = groupMessagesForTurn(input.messages);
     const candidate = await this.loadOrCreateCandidate(input);
 
-    if (groupedMessage.externalMessageId) {
+    // reprocessExisting (feature C): el bot reanuda y RESPONDE a lo que la candidata escribio durante la
+    // pausa. Esos mensajes YA estan guardados (llegaron en la pausa); aqui solo se RE-genera la respuesta.
+    // Por eso se salta la dedup-por-mid y el re-guardado del inbound, y NO se bumpea la version de
+    // cancelacion (el reproceso lo dispara una accion humana, no un mensaje nuevo: no debe cancelar nada).
+    if (!input.reprocessExisting && groupedMessage.externalMessageId) {
       const duplicateInbound = await this.dependencies.repository.findMessageByExternalId(
         candidate.id,
         groupedMessage.externalMessageId
@@ -763,13 +806,17 @@ export class ConversationEngine {
     // La candidata puede escribir VARIOS mensajes seguidos: se guardan por separado (se ven como
     // varias burbujas) pero el turno se procesa sobre el contenido agrupado, asi el bot responde UNA
     // vez (no a cada fragmento). Si solo hay uno, es el caso normal de un mensaje.
-    const candidateTurnMessages = input.messages.filter((message) => message.content.trim().length > 0);
-    for (const message of candidateTurnMessages.length > 0 ? candidateTurnMessages : [{ content: groupedMessage.content }]) {
-      await this.dependencies.repository.addMessage(candidateMessage(candidate.id, message.content, message.externalMessageId));
+    if (!input.reprocessExisting) {
+      const candidateTurnMessages = input.messages.filter((message) => message.content.trim().length > 0);
+      for (const message of candidateTurnMessages.length > 0 ? candidateTurnMessages : [{ content: groupedMessage.content }]) {
+        await this.dependencies.repository.addMessage(candidateMessage(candidate.id, message.content, message.externalMessageId));
+      }
     }
     const activeCandidate: Candidate = {
       ...candidate,
-      generationCancellationVersion: candidate.generationCancellationVersion + 1,
+      generationCancellationVersion: input.reprocessExisting
+        ? candidate.generationCancellationVersion
+        : candidate.generationCancellationVersion + 1,
       updatedAt: new Date()
     };
     await this.dependencies.repository.saveCandidate(activeCandidate);

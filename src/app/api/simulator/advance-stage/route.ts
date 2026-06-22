@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
-import { deliverProactiveMessage } from "@/server/proactiveDelivery";
+import { deliverDecisionOutcome } from "@/server/resumeReprocess";
 
 const AdvanceStageSchema = z.object({
   candidateId: z.string(),
@@ -36,19 +36,22 @@ export async function POST(request: Request) {
 
   const result = await dispatchAction(engine, parsed.data);
 
-  // Entregar a la candidata, por su canal (Instagram/WhatsApp), el mensaje del bot que la decision haya
-  // generado (p.ej. al aprobar el movil y completarse el par, "Buenas noticias... ¿que dia te viene?").
-  // El motor ya lo guardo; aqui SOLO se envia (antes las decisiones del CRM no salian a Instagram).
-  const proposedMessage = "proposedMessage" in result ? result.proposedMessage : null;
-  const delivery = proposedMessage ? await deliverProactiveMessage(result.candidate, proposedMessage) : null;
+  // Entregar a la candidata, por su canal (Instagram/WhatsApp), lo que la decision haya generado (p.ej. al
+  // completar el par perfil+movil, "Buenas noticias... ¿que dia te viene?"). Si escribio DURANTE la pausa,
+  // el bot RESPONDE a eso (reproceso) en vez del proactivo fijo. El motor ya guardo el mensaje; aqui se envia.
+  const outcome = await deliverDecisionOutcome(engine, {
+    candidate: result.candidate,
+    proposedMessage: result.proposedMessage ?? null,
+    reprocessTrailingInbound: result.reprocessTrailingInbound ?? null
+  });
 
-  const messages = await repository.listMessages(result.candidate.id);
-  const transitions = await repository.listTransitions(result.candidate.id);
+  const messages = await repository.listMessages(outcome.candidate.id);
+  const transitions = await repository.listTransitions(outcome.candidate.id);
 
   return NextResponse.json({
-    candidate: result.candidate,
-    proposedMessage,
-    sentToCandidate: delivery,
+    candidate: outcome.candidate,
+    proposedMessage: outcome.proposedMessage,
+    sentToCandidate: outcome.sentToCandidate,
     appliedTransitions: result.transitions,
     messages,
     transitions
@@ -64,6 +67,7 @@ async function dispatchAction(
   candidate: Awaited<ReturnType<typeof engine.markProfileOk>>["candidate"];
   transitions: unknown[];
   proposedMessage?: string | null;
+  reprocessTrailingInbound?: string[] | null;
 }> {
   switch (data.action) {
     case "CONFIRM_CALL":
