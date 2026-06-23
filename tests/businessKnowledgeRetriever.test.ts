@@ -66,3 +66,45 @@ describe("LocalBusinessKnowledgeRetriever state gating in HUMAN_INTERVENTION_REQ
     expect(entries.map((entry) => entry.id)).toContain("geo-synthetic-unrestricted");
   });
 });
+
+// Bug grave de Alex (23-jun): "Holaaa / Me dais info" -> el bot reformulaba el opener (OpenAI) y ni pedia el
+// nombre. Causa: "me dais info" hacia MATCH con el regex de NEGOCIACION ("me dais"/"dame") -> tags
+// percentage/revenue-share/sensitive -> surfaceaba el 70/30 (ademas riesgo de invariante 3) -> al haber
+// answerFacts se desactivaba el opener canonico. Una peticion GENERICA de info no es negociacion del %.
+describe("Retriever: 'me dais/dame info' es peticion generica, NO negociacion del % (Alex 23-jun)", () => {
+  function newLead(): Candidate {
+    return createCandidate({ instagramUsername: "lead_info", profileVisibility: "PUBLIC" });
+  }
+
+  it("'me dais info' NO surfacea el reparto 70/30 (no es negociacion; invariante 3)", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const entries = await retriever.retrieve({
+      candidate: newLead(),
+      intent: "REQUESTS_INFORMATION",
+      question: "Holaaa me dais info"
+    });
+    const ids = entries.map((entry) => entry.id);
+    expect(ids.some((id) => id.startsWith("commercial-revenue-share") || id === "commercial-why-agency-70")).toBe(false);
+  });
+
+  it("'dame info / mas detalles' tampoco surfacea el reparto", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    for (const question of ["dame info porfa", "me podeis dar mas detalles?"]) {
+      const entries = await retriever.retrieve({ candidate: newLead(), intent: "REQUESTS_INFORMATION", question });
+      expect(entries.some((entry) => entry.tags.includes("revenue-share"))).toBe(false);
+    }
+  });
+
+  it("una negociacion REAL del % SIGUE surfaceando el reparto sensible (deteccion intacta, invariante 3)", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    for (const question of [
+      "me dais un 40%?",
+      "podemos negociar el reparto?",
+      "me hariais una excepcion con el porcentaje?",
+      "me dais mas info sobre el reparto?"
+    ]) {
+      const entries = await retriever.retrieve({ candidate: newLead(), intent: "ASKS_ABOUT_PERCENTAGE", question });
+      expect(entries.some((entry) => entry.tags.includes("revenue-share"))).toBe(true);
+    }
+  });
+});

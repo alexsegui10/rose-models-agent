@@ -106,7 +106,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(por que.*70|porque.*70|porcentaje.*alto|os quedais.*70)\b/.test(message)) tags.push("why-70", "percentage", "services");
   if (/\b(skrill|liquidacion|cada 14|14 dias|neto|comision de la plataforma)\b/.test(message))
     tags.push("settlement", "skrill", "payment", "revenue-share");
-  if (/\b(me dais|dame|negociar|negociamos|excepcion)\b/.test(message) || /\b\d{1,3}\s?%/.test(message))
+  // Negociacion del reparto -> % + sensitive + revision humana (invariante 3). OJO: "me dais"/"dame" eran un
+  // FALSO POSITIVO grave con "me dais info" / "dame info / detalles" (peticion GENERICA de info, el primer
+  // mensaje tipico): le pegaba el % + sensitive, surfaceaba el 70/30 (riesgo invariante 3) y, al haber
+  // answerFacts, desactivaba el opener canonico -> OpenAI lo reformulaba sin pedir el nombre (bug Alex 23-jun).
+  // "me dais"/"dame" solo cuentan como negociacion si NO es una peticion de info; "me dais un 40% / mas",
+  // "negociar", "excepcion" y cualquier cifra "\d%" siguen disparando negociacion (deteccion intacta).
+  // El guard de info NO aplica si la frase tambien menciona reparto/negociacion ("me dais mas info sobre el
+  // reparto / si me subis algo"): ahi sigue siendo negociacion, alineado con el planner (sin asimetria).
+  const giveMeIsInfoRequest =
+    /\b(me dais|dame)\b/.test(message) &&
+    /\b(info|informacion|detalle|detalles)\b/.test(message) &&
+    !/\b(reparto|porcentaje|comision|negociar|excepcion|sub[ei]\w*|mejor|me llevo|para mi)\b/.test(message);
+  if ((/\b(me dais|dame|negociar|negociamos|excepcion)\b/.test(message) && !giveMeIsInfoRequest) || /\b\d{1,3}\s?%/.test(message))
     tags.push("percentage", "revenue-share", "sensitive", "negotiation");
   if (/\b(que haceis|que hace la agencia|servicios|trafico|estrategia|monetizacion)\b/.test(message))
     tags.push("services", "agency", "strategy", "traffic", "monetization");
