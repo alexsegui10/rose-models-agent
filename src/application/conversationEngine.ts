@@ -803,7 +803,7 @@ export class ConversationEngine {
     }
 
     const {
-      candidate: scheduled,
+      candidate: scheduledRaw,
       transition,
       proposedMessage
     } = applyCallScheduled(candidate, {
@@ -813,6 +813,8 @@ export class ConversationEngine {
       reason: `Auto-agendada por el bot: ${parsed.labelEs}.`,
       proposedMessage: `Genial, te llamo por WhatsApp ${parsed.labelEs}. Cualquier cosa me dices, hablamos pronto!`
     });
+    // Ya agendada: se limpia la preferencia de hora persistida (ya no hace falta y honra el contrato del campo).
+    const scheduled: Candidate = { ...scheduledRaw, callTimePreference: undefined };
 
     await this.dependencies.repository.saveCandidate(scheduled);
     await this.dependencies.repository.addTransition(transition);
@@ -823,6 +825,71 @@ export class ConversationEngine {
     return skippedResult(scheduled, proposedMessage, false, `Llamada auto-agendada: ${parsed.labelEs}.`, {
       deliveryStatus: "SENT",
       plannedTransitions: [transition]
+    });
+  }
+
+  /**
+   * Cierre de llamada cuando la candidata APROBADA propuso una FRANJA VAGA (sin hora de reloj) y ya tenemos su
+   * telefono. Decision de Alex 23-jun: se pide la hora EXACTA una vez ("¿sobre que hora?") y, si insiste con
+   * una franja, se ACEPTA y se la llama en esa franja (-> READY_TO_SCHEDULE, lista para que Alex llame). Solo
+   * actua con franja vaga persistida (no hora de reloj: esa la agenda tryAutoScheduleCall; no asap: ese cierre
+   * lo da la rama de "lo antes posible"). Red anti-carrera: relee fresco y aborta si Alex tomo control manual.
+   */
+  private async resolveVagueCallWindow(
+    candidate: Candidate,
+    recentAgentMessages: string[]
+  ): Promise<HandleIncomingMessageResult | null> {
+    if (!candidate.phone || !candidate.phone.trim()) return null;
+    const windowText = (candidate.callTimePreference ?? "").trim();
+    if (windowText.length === 0) return null;
+    if (parseProposedCallTime(windowText, new Date()) !== null) return null;
+    const latest = await this.dependencies.repository.findCandidateById(candidate.id);
+    if (latest && (latest.manualControlActive || latest.automationPaused)) return null;
+
+    const askedExactHour = recentAgentMessages.some((message) =>
+      /sobre que hora|a que hora|que hora te viene|dime la hora/.test(normalizeText(message))
+    );
+    if (!askedExactHour) {
+      const ask = "Sobre que hora te viene bien? Asi te llamo puntual.";
+      await this.dependencies.repository.saveCandidate(candidate);
+      await this.dependencies.repository.addMessage(
+        agentMessage(candidate.id, ask, { provider: "deterministic", trigger: "CALL_TIME_CLARIFY", proactive: false })
+      );
+      return skippedResult(candidate, ask, false, "Franja de llamada vaga: se pide la hora exacta una vez.", {
+        deliveryStatus: "SENT"
+      });
+    }
+
+    // Ya se pidio la hora y sigue dando una franja: se acepta y se la llama en esa franja.
+    const confirm = `Perfecto, te escribo por WhatsApp para la llamada ${windowText}.`;
+    const transitions: StateTransition[] = [];
+    // La franja queda ACEPTADA: se limpia callTimePreference para no volver a re-confirmarla en bucle en cada
+    // mensaje posterior (sin esto, en READY_TO_SCHEDULE se reenviaba "Perfecto, te escribo..." una y otra vez).
+    let ready: Candidate = { ...candidate, callTimePreference: undefined };
+    if (candidate.currentState !== "READY_TO_SCHEDULE" && canTransition(candidate.currentState, "READY_TO_SCHEDULE")) {
+      const transition = createTransition({
+        candidate,
+        toState: "READY_TO_SCHEDULE",
+        trigger: "CALL_WINDOW_ACCEPTED",
+        reason: `Franja de llamada aceptada: ${windowText}.`
+      });
+      transitions.push(transition);
+      ready = {
+        ...ready,
+        currentState: "READY_TO_SCHEDULE",
+        manualControlActive: false,
+        automationPaused: false,
+        updatedAt: new Date()
+      };
+      await this.dependencies.repository.addTransition(transition);
+    }
+    await this.dependencies.repository.saveCandidate(ready);
+    await this.dependencies.repository.addMessage(
+      agentMessage(ready.id, confirm, { provider: "deterministic", trigger: "CALL_WINDOW_ACCEPTED", proactive: false })
+    );
+    return skippedResult(ready, confirm, false, `Franja de llamada aceptada: ${windowText}.`, {
+      deliveryStatus: "SENT",
+      plannedTransitions: transitions
     });
   }
 
@@ -1032,26 +1099,64 @@ export class ConversationEngine {
     // El parseo de la hora y la decision de agendar son del CODIGO, jamas del modelo (invariante 1); nunca
     // corre desde HIR/WAITING_HUMAN_REVIEW (invariante 4). La rama "sin OK -> WAITING_HUMAN_REVIEW" no se toca.
     const alreadyMinor = updatedCandidate.age !== undefined && updatedCandidate.age < 18;
-    const canAutoSchedule =
+    // Cierre de llamada de una candidata YA APROBADA (post-revision). Hereda TODAS las guardas del auto-agendado
+    // (control manual/pausa de Alex, contradicciones, menor, requiresHumanReview NUNCA avanzan -> invariantes
+    // 2 y 4). Nunca corre desde HIR/WAITING_HUMAN_REVIEW (no estan en estos dos estados).
+    const isApprovedCallClosing =
       (updatedCandidate.currentState === "COLLECTING_CALL_DETAILS" || updatedCandidate.currentState === "READY_TO_SCHEDULE") &&
       updatedCandidate.humanFitDecision === "APPROVED" &&
       !criticalHumanReviewReason &&
       !updatedCandidate.manualControlActive &&
       !updatedCandidate.automationPaused &&
       !understanding.requiresHumanReview &&
-      !alreadyMinor &&
-      // Sin WhatsApp NO se agenda (QA 21-jun): el bot de voz necesita un numero al que llamar; auto-agendar
-      // sin telefono confirmaba "te llamo por WhatsApp" con phone vacio -> llamada imposible. Si falta, no
-      // se agenda y el turno sigue: el planner pide el numero (PHONE_QUESTION) y se agenda cuando lo de.
+      !alreadyMinor;
+    const inboundProposesTime = proposesConcreteTime(normalizeText(groupedMessage.content));
+    const inboundIsAsap = asapCallPattern.test(normalizeText(groupedMessage.content));
+    const priorCallTimePreference = updatedCandidate.callTimePreference ?? "";
+    const inboundTimeText = groupedMessage.content.trim();
+    // Si el mensaje actual YA es una hora de reloj completa por si solo (p.ej. "el martes a las 5"), gana la mas
+    // fresca tal cual (cubre que cambie de dia). Si es PARCIAL ("a las 6"), se combina con la franja persistida
+    // ("manana por la tarde") para poder agendar; si no propone hora, se usa la persistida. Asi una hora dada en
+    // un turno y el telefono en otro SI se combinan (antes la hora se perdia y acababa en "lo antes posible").
+    const inboundParsesAlone = inboundProposesTime && parseProposedCallTime(inboundTimeText, new Date()) !== null;
+    const effectiveCallTimeText = inboundParsesAlone
+      ? inboundTimeText
+      : inboundProposesTime && priorCallTimePreference && priorCallTimePreference !== inboundTimeText
+        ? `${priorCallTimePreference} ${inboundTimeText}`.trim()
+        : inboundProposesTime
+          ? inboundTimeText
+          : priorCallTimePreference;
+    // Persistir la hora/franja propuesta (texto crudo) para no perderla entre turnos: la hora y el telefono
+    // pueden llegar por separado. No se persiste un "asap" (no es franja) ni lo negado (proposesConcreteTime
+    // ya lo excluye). Lo fija el CODIGO determinista (invariante 1).
+    if (isApprovedCallClosing && inboundProposesTime && !inboundIsAsap) {
+      updatedCandidate = { ...updatedCandidate, callTimePreference: groupedMessage.content.trim() };
+    }
+    // AUTO-AGENDADO determinista (decision de Alex 19-jun): con hora de RELOJ concreta -> CALL_SCHEDULED. Sin
+    // WhatsApp NO se agenda (el bot de voz necesita el numero). Usa la hora efectiva (actual + persistida).
+    const canAutoSchedule =
+      isApprovedCallClosing &&
       Boolean(updatedCandidate.phone && updatedCandidate.phone.trim()) &&
-      proposesConcreteTime(normalizeText(groupedMessage.content));
+      effectiveCallTimeText.length > 0;
     if (canAutoSchedule) {
-      const autoScheduled = await this.tryAutoScheduleCall(updatedCandidate, groupedMessage.content);
+      const autoScheduled = await this.tryAutoScheduleCall(updatedCandidate, effectiveCallTimeText);
       if (autoScheduled) {
         return autoScheduled;
       }
-      // parseProposedCallTime devolvio null (sin hora clara, negada o vaga): no se agenda; el turno sigue
-      // su curso normal y el planner pedira de nuevo el dia y la hora.
+      // parseProposedCallTime devolvio null (hora vaga/negada o solo franja): no se agenda con slot; sigue abajo.
+    }
+    // FRANJA VAGA ("manana por la tarde", "el lunes") de una aprobada con telefono: en vez de perderla o decir
+    // "lo antes posible", se pide la hora EXACTA una vez (decision de Alex 23-jun) y, si insiste con una franja,
+    // se acepta y se la llama en esa franja. El "asap" (ya/lo antes posible) NO entra aqui (lo cierra la rama de
+    // READY_TO_SCHEDULE "te llamamos lo antes posible").
+    if (isApprovedCallClosing && !inboundIsAsap) {
+      const vagueResolved = await this.resolveVagueCallWindow(
+        updatedCandidate,
+        plannerHistory.filter((message) => message.role === "agent").map((message) => message.content)
+      );
+      if (vagueResolved) {
+        return vagueResolved;
+      }
     }
 
     const knowledgeEntries = await this.businessKnowledgeRetriever.retrieve({
@@ -2466,6 +2571,10 @@ const negotiationSignalPattern =
   /\b(me dais|dame|negociar|negociamos|excepcion|mejorar|bajar|subir|mas para mi|garantizado|garantizados|fijo al mes|adelantado)\b|\b\d{1,3}\s?%/;
 const contractSignalPattern = /\b(contrato|legal|abogado|clausula|permanencia)\b/;
 const distrustSignalPattern = /\b(estafa|estafo|enfadada|enfado|me molesta|me suena raro|no me fio|desconfianza|denuncia)\b/;
+// "Lo antes posible / ya / ahora / en breve / dentro de X min": quiere la llamada YA, no una franja concreta.
+// Para estos NO se pide la hora exacta (no hay franja que afinar): se cierra con "te llamamos lo antes posible".
+const asapCallPattern =
+  /\b(ya|ahora|ahorita|lo antes posible|cuanto antes|en breve|enseguida|de inmediato|en cuanto puedas|cuando quieras|cuando puedas)\b|\bdentro de \d+\s*(?:min|minuto)/;
 // Desconfianza CLARA (sobre nosotros) o AGRESION: decision de Alex (16-jun) -> escalan SIEMPRE a el, en
 // cualquier modo (override determinista que NO depende de que OpenAI lo marque). Patron mas estrecho que
 // distrustSignalPattern a proposito: evita falsos positivos de entusiasmo ("esto es real!") o de

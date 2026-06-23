@@ -147,6 +147,11 @@ export const CandidateSchema = z.object({
   // Instante de inicio de la llamada agendada en ms UTC (lo calcula el agendado determinista a partir de
   // la hora que propone la candidata). Sirve para detectar choques entre llamadas (ventana de 30 min).
   scheduledCallStartMs: z.number().int().optional(),
+  // Hora/franja que la candidata propuso para la llamada cuando AUN no se ha agendado (texto crudo, p.ej.
+  // "manana por la tarde"). Persiste entre turnos (la hora y el telefono pueden llegar por separado) para no
+  // perderla y poder reflejarla al confirmar. La fija el CODIGO determinista, no el LLM (invariante 1). Se
+  // limpia al agendar/confirmar la llamada.
+  callTimePreference: z.string().optional(),
   // Veces que se ha DISPARADO la llamada saliente a esta candidata. Se incrementa al iniciar la llamada
   // (noteCallAttempt), no al recibir el resultado; gobierna el reintento diferido (max 3 intentos).
   callAttempts: z.number().int().nonnegative().default(0),
@@ -244,6 +249,7 @@ export interface CandidatePatch {
   goals?: string;
   scheduledCallSlot?: string;
   scheduledCallStartMs?: number;
+  callTimePreference?: string;
   callAttempts?: number;
   lastCall?: CallRecord;
   lastCallConversationId?: string;

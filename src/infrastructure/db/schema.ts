@@ -126,6 +126,9 @@ export const candidates = pgTable("candidates", {
   // Instante de inicio de la llamada agendada en ms UTC. bigint (mode number): cabe en Number con holgura
   // (ms hasta el ano ~275760) y el dominio lo trata como z.number().int().optional().
   scheduledCallStartMs: bigint("scheduled_call_start_ms", { mode: "number" }),
+  // Hora/franja propuesta por la candidata para la llamada cuando aun no se ha agendado (texto crudo).
+  // Persiste entre turnos para no perderla y reflejarla al confirmar; se limpia al agendar/confirmar.
+  callTimePreference: text("call_time_preference"),
   // Intentos de llamada disparados (incrementa noteCallAttempt al iniciar la llamada, no al recibir el
   // resultado): gobierna el reintento diferido.
   callAttempts: integer("call_attempts").notNull().default(0),

@@ -48,7 +48,7 @@ describe("Cierre de llamada post-aprobacion (Alex 23-jun)", () => {
     });
     const r = await engine.handleIncomingTurn({
       instagramUsername: c.instagramUsername,
-      messages: [{ content: "+34 644742515" }]
+      messages: [{ content: "+34 600000000" }]
     });
 
     expect(r.candidate.currentState).toBe("READY_TO_SCHEDULE");
@@ -87,5 +87,72 @@ describe("Cierre de llamada post-aprobacion (Alex 23-jun)", () => {
     // No esta aprobada: NO se confirma la llamada ni se avanza a agendado.
     expect(r.candidate.currentState).not.toBe("READY_TO_SCHEDULE");
     expect(r.response.toLowerCase()).not.toMatch(/te llamamos por whatsapp lo antes posible/);
+  });
+
+  async function seedApprovedCollecting(repository: InMemoryCandidateRepository) {
+    return repository.saveCandidate(
+      normalizeCandidate({
+        ...createCandidate({ instagramUsername: `cw_${Math.random()}`, profileVisibility: "PUBLIC" }),
+        firstName: "Alba",
+        age: 38,
+        isAdultConfirmed: true,
+        hasOnlyFans: false,
+        deviceType: "IPHONE",
+        deviceModel: "iphone 15",
+        deviceEligibility: "APPROVED",
+        humanFitDecision: "APPROVED",
+        humanReviewStatus: "APPROVED",
+        currentState: "COLLECTING_CALL_DETAILS" as CandidateState
+      })
+    );
+  }
+
+  it("hora exacta en un turno y el numero en otro: NO se pierde, se AGENDA (Alex 23-jun)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedApprovedCollecting(repository);
+    await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "manana a las 6 de la tarde" }]
+    });
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "+34 600000000" }]
+    });
+    expect(r.candidate.currentState).toBe("CALL_SCHEDULED");
+    expect(r.candidate.scheduledCallSlot).toBeTruthy();
+  });
+
+  it("franja vaga: pide la hora EXACTA una vez; si la da, agenda (Alex 23-jun)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedApprovedCollecting(repository);
+    await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: "manana por la tarde" }] });
+    const rAsk = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "+34 600000000" }]
+    });
+    expect(rAsk.response.toLowerCase()).toMatch(/sobre que hora|hora te viene/);
+    const rDone = await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: "a las 6" }] });
+    expect(rDone.candidate.currentState).toBe("CALL_SCHEDULED");
+  });
+
+  it("franja vaga: si tras pedir la hora SIGUE con una franja, se ACEPTA y se la llama en esa franja (Alex 23-jun)", async () => {
+    const { engine, repository } = setup();
+    const c = await seedApprovedCollecting(repository);
+    await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: "manana por la tarde" }] });
+    await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: "+34 600000000" }] });
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "por la tarde cuando sea" }]
+    });
+    expect(r.candidate.currentState).toBe("READY_TO_SCHEDULE");
+    expect(r.response.toLowerCase()).toMatch(/tarde/);
+    expect(r.response.toLowerCase()).not.toContain("mi socio");
+    // La franja queda ACEPTADA y se limpia: un mensaje posterior NO re-confirma la franja en bucle.
+    expect(r.candidate.callTimePreference).toBeUndefined();
+    const r2 = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "vale gracias" }]
+    });
+    expect(r2.response.toLowerCase()).not.toContain("por la tarde cuando sea");
   });
 });
