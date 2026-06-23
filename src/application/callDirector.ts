@@ -33,6 +33,7 @@ export type CallCandidateSignal =
   | "not-interested" // desinterés ("no me interesa") -> cierre cálido sin presionar
   | "wants-to-think" // quiere pensarlo/consultarlo ("me lo tengo que pensar") -> cierre cálido sin contrato
   | "unclear" // ruido / no se entiende -> pedir que lo repita (no asumir asentimiento)
+  | "underage" // declara ser menor de edad -> corte seguro inmediato (invariante 2 en la voz)
   | "wants-to-end"; // quiere terminar -> cerrar con contrato
 
 export type CallDirectiveType =
@@ -46,7 +47,8 @@ export type CallDirectiveType =
   | "ASK_REPEAT" // no se entendió: pedir que lo repita
   | "HANDOFF_TO_ALEX" // pasar la llamada a una persona
   | "CLOSE_WITH_CONTRACT" // cerrar: "ahora te paso el contrato"
-  | "CLOSE_SOFT"; // cierre cálido sin contrato (no le interesa): puerta abierta
+  | "CLOSE_SOFT" // cierre cálido sin contrato (no le interesa): puerta abierta
+  | "CLOSE_UNDERAGE"; // corte seguro: menor de edad, no se puede seguir (invariante 2)
 
 export type CallHandoffReason =
   | "asked-for-human"
@@ -70,7 +72,7 @@ export interface CallDirectorState {
   /** true tras cualquier cierre: es pegajoso (no reabre guion ni negociación). */
   closed: boolean;
   /** Qué cierre se dio, para repetirlo si la candidata sigue hablando tras cerrar. */
-  closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT";
+  closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT" | "CLOSE_UNDERAGE";
 }
 
 export interface CallDirective {
@@ -109,6 +111,13 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       directive: { type: "HANDOFF_TO_ALEX", handoffReason: state.handoffReason },
       nextState: state
     };
+  }
+
+  // SEGURIDAD (invariante 2 en la voz): si declara ser menor de edad, corte seguro INMEDIATO, antes que
+  // nada (incluso antes de la apertura): no se cualifica ni se vende contenido adulto a una menor. Es
+  // determinista (no pasa por el LLM) y pegajoso (no reabre el guion). Equivale a "Edad<18 -> CLOSED" del DM.
+  if (signal === "underage") {
+    return closeUnderage(state);
   }
 
   // Paso 0 obligatorio: apertura legal (IA + grabación). Siempre lo primero, pase lo que pase.
@@ -228,5 +237,14 @@ function closeSoft(state: CallDirectorState): CallTurnDecision {
   return {
     directive: { type: "CLOSE_SOFT" },
     nextState: { ...state, closed: true, closeDirective: "CLOSE_SOFT" }
+  };
+}
+
+// Corte seguro por minoría de edad (invariante 2 en la voz): cierre educado y definitivo, sin contrato ni
+// reapertura. Marca disclosureGiven para que un turno posterior no dispare la apertura legal tras el corte.
+function closeUnderage(state: CallDirectorState): CallTurnDecision {
+  return {
+    directive: { type: "CLOSE_UNDERAGE" },
+    nextState: { ...state, disclosureGiven: true, closed: true, closeDirective: "CLOSE_UNDERAGE" }
   };
 }

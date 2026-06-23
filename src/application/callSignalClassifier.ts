@@ -39,6 +39,12 @@ function normalize(text: string): string {
   return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 }
 
+// SEGURIDAD: la candidata declara ser MENOR de edad -> corte seguro (invariante 2 en la voz). Cubre
+// "soy menor", "no tengo 18", edades 14-17 en cifra o palabra ("tengo 16", "tengo dieciseis", "16 anos").
+// Excluye sustantivos que NO son edad ("16 seguidores/fotos/...") para no cortar a una adulta por error.
+const UNDERAGE =
+  /\b(soy|aun soy|todavia soy)\s+menor\b|\bmenor de edad\b|\b(no tengo|aun no tengo|todavia no tengo)\s+(los\s+)?(18|dieciocho)\b|\btengo\s+(1[0-7]|catorce|quince|dieciseis|diecisiete)\b(?!\s*(seguidor|foto|video|mensaj|euro|hij|gat|perr|ano luz))|\b(1[0-7]|catorce|quince|dieciseis|diecisiete)\s*an(os|itos)\b/;
+
 // Agresión / sospecha GRAVE (assertive): insultos o acusaciones directas -> handoff. Cubre tuteo
 // peninsular y 3a persona LATAM (son/están). NO incluye formas "preocupadas" ("¿no será estafa?": eso es
 // distrust), que se evalúa después.
@@ -55,16 +61,17 @@ const WANT_HUMAN_VERB =
 const REJECT_MACHINE =
   /(?:no quiero|prefiero no|no me gusta|deja de|dejate de) (?:hablar con |que me hable )?(?:un |una )?(?:bot|maquina|robot|grabacion|contestador|inteligencia)\b|no me hables tu|\bme regala (?:un|el) (?:numero|telefono)\b/;
 
-// Términos de reparto/dinero (para la queja del %). Cubre 2a y 3a persona.
+// Términos de reparto/dinero (para la queja del %). Cubre 2a y 3a persona. Incluye las cifras de la escalera
+// (70/65/60/35/40) para que "70 es mucho" / "solo un 30 para mi" cuenten como queja del reparto.
 const SHARE_TERMS =
-  /(\b30\b|treinta|comision|reparto|porcentaje|quedais|quedan|os queda|se queda|os llevais|se llevan|se lleva|os quedais|quedaros|quedarse|para la agencia|para vosotros|para ustedes|me queda(is)?|vuestra parte|su parte)/;
+  /(\b(30|35|40|60|65|70)\b|treinta|treinta y cinco|cuarenta|sesenta|sesenta y cinco|setenta|comision|reparto|porcentaje|quedais|quedan|os queda|se queda|os llevais|se llevan|se lleva|os quedais|quedaros|quedarse|para la agencia|para vosotros|para ustedes|me queda(is)?|vuestra parte|su parte)/;
 // Términos de queja completos (con el término de reparto, basta uno de cada).
 const COMPLAINT_TERMS =
   /(mucho|demasiad[oa]|car[oa]|carisim|abusiv|es un robo|un robo|injust|no es justo|muy poco|poco para mi|bajad|bajar|bajais|bajarlo|podeis bajar|reducir|menos|no me sale|no me compensa|no me convence|no me cuadra|no me parece justo|es un palo|un disparate|barbarid|excesiv|exager|un monton|monton)/;
 // Queja de SEGUIMIENTO en negociación: SOLO frases dirigidas al dinero (no términos sueltos como
 // "mucho"/"reducir" que podrían referirse al contenido/ritmo y regalarían un escalón sin queja real).
 const FOLLOWUP_SHARE_COMPLAINT =
-  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico)|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b/;
+  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico)|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)/;
 
 // Desconfianza LEVE (worried) -> tranquilizar y seguir. Incluye sospecha HIPOTÉTICA ("y si es una
 // estafa?"), que NO es agresión: por eso HOSTILE excluye las formas precedidas de "si".
@@ -119,6 +126,8 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   }
 
   // Orden de prioridad: lo más urgente/seguro primero.
+  // SEGURIDAD primero: si declara ser menor de edad, corte seguro (invariante 2), por encima de todo.
+  if (UNDERAGE.test(text)) return "underage";
   // Sospecha hipotética ("y si esto es una estafa?") -> tranquilizar, va ANTES de HOSTILE (ver arriba).
   if (HYPOTHETICAL_SUSPICION.test(text)) return "distrust";
   if (HOSTILE.test(text)) return "hostile-or-suspicious";

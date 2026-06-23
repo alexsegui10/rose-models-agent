@@ -84,6 +84,9 @@ const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
 // Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
 const CLOSE_SOFT_TEXT =
   "Te entiendo perfectamente, sin ningún problema. Lo dejamos aquí entonces; si en algún momento te animas, aquí nos tienes, ¿vale? Gracias por tu tiempo y un saludo.";
+// Corte seguro por minoría de edad (invariante 2): cierre educado y definitivo, sin valoraciones personales.
+const CLOSE_UNDERAGE_TEXT =
+  "Gracias por tu tiempo, pero solo trabajamos con personas mayores de edad, así que no podemos seguir adelante. Te deseo lo mejor, un saludo.";
 // Defensa del 70 una vez antes de bajar (el porqué del reparto; el modelo de la agencia ya documentado).
 // Defensa HONESTA del reparto (fix Alex jun-2026): la AGENCIA se queda el 70 PORQUE hace todo el
 // trabajo; ella se queda el 30. NUNCA decir "ese 70 es para ti" (era un bug que invertía el reparto).
@@ -110,6 +113,8 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: CLOSE_TEXT, fallbackText: CLOSE_TEXT };
     case "CLOSE_SOFT":
       return { directiveType: directive.type, deterministicText: CLOSE_SOFT_TEXT, fallbackText: CLOSE_SOFT_TEXT };
+    case "CLOSE_UNDERAGE":
+      return { directiveType: directive.type, deterministicText: CLOSE_UNDERAGE_TEXT, fallbackText: CLOSE_UNDERAGE_TEXT };
     case "DEFEND_SHARE":
       return { directiveType: directive.type, deterministicText: DEFEND_SHARE_TEXT, fallbackText: DEFEND_SHARE_TEXT };
     case "ASK_REPEAT":
