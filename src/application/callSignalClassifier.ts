@@ -115,7 +115,7 @@ const QUESTION =
 
 // Afirmaciones / asentimiento -> avanzar (con relleno inicial opcional).
 const FOLLOWS_ALONG =
-  /^\s*(ah+|ahh|pues|bueno)?\s*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|me parece (bien|genial|perfecto)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
+  /^\s*(ah+|ahh|pues|bueno)?\s*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|me parece (bien|genial|perfecto)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
 
 /** Clasifica lo dicho por la candidata en una señal para el director. */
 export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal {

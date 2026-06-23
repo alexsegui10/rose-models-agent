@@ -1,9 +1,22 @@
+import crypto from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/call/end/route";
 import { getSimulatorRepository } from "@/server/simulatorStore";
 import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 
 const SECRET = "test-webhook-secret";
+
+// Construye una request como el post-call webhook NATIVO de ElevenLabs: firma HMAC (t=,v0=) sobre "ts.body".
+function elevenLabsReq(body: unknown, secret: string, signature?: string) {
+  const raw = JSON.stringify(body);
+  const ts = "1700000000";
+  const sig = signature ?? `t=${ts},v0=${crypto.createHmac("sha256", secret).update(`${ts}.${raw}`, "utf8").digest("hex")}`;
+  return new Request("http://localhost/api/call/end", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "ElevenLabs-Signature": sig },
+    body: raw
+  });
+}
 
 function req(body: unknown, auth?: string) {
   return new Request("http://localhost/api/call/end", {
@@ -60,5 +73,39 @@ describe("webhook de fin de llamada", () => {
     process.env.CALL_WEBHOOK_SECRET = SECRET;
     const res = await POST(req({ candidateId: "no-existe", status: "completed" }, `Bearer ${SECRET}`));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("webhook de fin: payload NATIVO de ElevenLabs (firma HMAC + body anidado)", () => {
+  it("acepta firma HMAC + body anidado y resuelve el candidateId desde dynamic_variables", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      type: "post_call_transcription",
+      data: {
+        status: "done",
+        metadata: { call_duration_secs: 215 },
+        analysis: { transcript_summary: "La candidata acepto y se agendo." },
+        transcript: [
+          { role: "agent", message: "Hola, soy del equipo de Rose Models." },
+          { role: "user", message: "vale, me interesa" }
+        ],
+        conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } }
+      }
+    };
+    const res = await POST(elevenLabsReq(payload, SECRET));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.outcome).toBe("COMPLETED");
+    expect(json.candidate.currentState).toBe("CALL_COMPLETED");
+  });
+
+  it("firma HMAC invalida -> 401 (no registra nada)", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const payload = {
+      data: { status: "done", conversation_initiation_client_data: { dynamic_variables: { candidate_id: "x" } } }
+    };
+    const res = await POST(elevenLabsReq(payload, SECRET, "t=1700000000,v0=deadbeefdeadbeef"));
+    expect(res.status).toBe(401);
   });
 });

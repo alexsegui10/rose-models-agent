@@ -102,8 +102,10 @@ export function contextFromFlatVars(raw: Record<string, unknown>): CallContext |
     context.age !== undefined ||
     context.country !== undefined ||
     context.hasOnlyFans !== undefined ||
+    context.worksWithAnotherAgency !== undefined ||
     context.scheduledSlot !== undefined ||
     context.dmSummary !== undefined ||
+    context.interestLevel !== undefined ||
     concerns.length > 0;
   return hasAny ? context : undefined;
 }
