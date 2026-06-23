@@ -122,6 +122,31 @@ describe("Funnel E2E determinista: del primer 'hola' a la llamada agendada (red 
     expect(followed.candidate.id).toBe(opener.candidate.id);
   });
 
+  it("La hora confirmada a la candidata es la SUYA (Argentina), no la de España (Alex/CRM)", async () => {
+    const { engine } = createEngine();
+    const username = "e2e_tz";
+    const send = (content: string) =>
+      engine.handleIncomingTurn({ instagramUsername: username, profileVisibility: "PUBLIC", messages: [{ content }] });
+
+    await send("hola");
+    await send("soy lucia");
+    await send("tengo 25");
+    await send("tengo un iphone 14");
+    await send("si tengo onlyfans");
+    const qualified = await send("no trabajo con ninguna agencia");
+    await engine.applyHumanDecision({ candidateId: qualified.candidate.id, decision: "APPROVE" });
+
+    await send("mañana a las 6 de la tarde");
+    const scheduled = await send("mi numero es 612345678");
+
+    expect(scheduled.candidate.currentState).toBe("CALL_SCHEDULED");
+    // A la candidata se le confirma SU hora (18:00 Argentina), nunca la de Espana (23:00).
+    expect(scheduled.response).toContain("18:00");
+    expect(scheduled.response).not.toContain("23:00");
+    // El CRM (scheduledCallSlot) guarda la hora de Espana, que es cuando Alex llama.
+    expect(scheduled.candidate.scheduledCallSlot).toContain("23:00");
+  });
+
   it("Camino 4 — MENOR de edad -> CLOSED (invariante 2), sin pitch ni avance", async () => {
     const { engine } = createEngine();
     const username = "e2e_minor";

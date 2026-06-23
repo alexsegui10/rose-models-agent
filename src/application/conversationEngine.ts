@@ -35,7 +35,7 @@ import type {
 } from "./llmProvider";
 import { promptRegistry } from "./promptRegistry";
 import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
-import { conflictsWithBooked, parseProposedCallTime } from "./callScheduling";
+import { conflictsWithBooked, parseProposedCallTime, argentinaLabelFromMs } from "./callScheduling";
 import { buildResponsePlan, PHONE_QUESTION, proposesConcreteTime } from "./responsePlanner";
 import { safeFallbackResponse, validateAgentResponse } from "./responseValidator";
 import { buildStyleContext, immediateObjectiveFor, type BuiltStyleContext } from "./styleContextBuilder";
@@ -810,8 +810,9 @@ export class ConversationEngine {
       labelEs: parsed.labelEs,
       startMsUtc: parsed.startMsUtc,
       trigger: "AUTO_SCHEDULE_CALL",
-      reason: `Auto-agendada por el bot: ${parsed.labelEs}.`,
-      proposedMessage: `Genial, te llamo por WhatsApp ${parsed.labelEs}. Cualquier cosa me dices, hablamos pronto!`
+      reason: `Auto-agendada por el bot: ${parsed.labelEs} (Espana) / ${parsed.labelAr} (hora de la candidata).`,
+      // A la candidata se le confirma SU hora (Argentina); scheduledCallSlot (Espana) queda para el CRM de Alex.
+      proposedMessage: `Genial, te llamo por WhatsApp ${parsed.labelAr}. Cualquier cosa me dices, hablamos pronto!`
     });
     // Ya agendada: se limpia la preferencia de hora persistida (ya no hace falta y honra el contrato del campo).
     const scheduled: Candidate = { ...scheduledRaw, callTimePreference: undefined };
@@ -1904,8 +1905,14 @@ function generateResponse(
 
   // Llamada ya confirmada por Alex: el bot mantiene la cita, no reabre el guion ni cae al dead-end.
   if (candidate.currentState === "CALL_SCHEDULED") {
-    return candidate.scheduledCallSlot
-      ? `Todo listo, te llamo por WhatsApp ${candidate.scheduledCallSlot}. Si necesitas cambiar algo me dices.`
+    // A la candidata se le recuerda SU hora (Argentina), derivada del instante real; scheduledCallSlot
+    // (hora de Espana) es para el CRM de Alex. Si no hay instante (confirmacion manual con texto libre),
+    // se cae al slot tal cual.
+    const candidateFacingSlot = candidate.scheduledCallStartMs
+      ? argentinaLabelFromMs(candidate.scheduledCallStartMs)
+      : candidate.scheduledCallSlot;
+    return candidateFacingSlot
+      ? `Todo listo, te llamo por WhatsApp ${candidateFacingSlot}. Si necesitas cambiar algo me dices.`
       : "Todo listo con la llamada por WhatsApp. Si necesitas cambiar algo me dices.";
   }
 

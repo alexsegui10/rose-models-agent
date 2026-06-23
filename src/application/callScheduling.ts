@@ -164,7 +164,24 @@ function applyMeridiem(hour: number, meridiem: string | undefined, context: stri
  * si la hora está negada ("el viernes no...") o si es vago ("por las tardes"). NO usa OpenAI: la decisión
  * de agendar la toma el código, nunca el modelo (invariante 1).
  */
-export function parseProposedCallTime(message: string, now: Date): { startMsUtc: number; labelEs: string } | null {
+/**
+ * Label en hora de pared ARGENTINA (la de la candidata) para un instante UTC dado: "el lunes a las 18:00".
+ * Argentina es UTC-3 fijo, asi que basta restar 3h al instante UTC. Se usa para CONFIRMAR a la candidata SU
+ * hora (la que ella dio), mientras `labelEs` queda para Alex/CRM (cuando el llama). Sin esto el bot le decia
+ * la hora de Espana ("23:00" cuando ella pidio "las 6"), confundiendola (bug auditoria 23-jun).
+ */
+export function argentinaLabelFromMs(startMsUtc: number): string {
+  const argentina = new Date(startMsUtc + ARGENTINA_UTC_OFFSET_HOURS * 60 * 60_000);
+  const weekday = WEEKDAY_NAMES[argentina.getUTCDay()];
+  const hh = String(argentina.getUTCHours()).padStart(2, "0");
+  const mm = String(argentina.getUTCMinutes()).padStart(2, "0");
+  return `el ${weekday} a las ${hh}:${mm}`;
+}
+
+export function parseProposedCallTime(
+  message: string,
+  now: Date
+): { startMsUtc: number; labelEs: string; labelAr: string } | null {
   const normalized = normalizeForParse(message);
 
   // Propuesta negada ("el viernes no puedo", "ahora no, manana tampoco"): no se agenda nada.
@@ -191,7 +208,8 @@ export function parseProposedCallTime(message: string, now: Date): { startMsUtc:
   // instante, que puede cruzar medianoche respecto a Argentina (21:00 AR -> 02:00 ES del día siguiente).
   const weekday = spainWeekday(startMsUtc);
   const labelEs = `el ${weekday} a las ${spain.label}`;
-  return { startMsUtc, labelEs };
+  const labelAr = argentinaLabelFromMs(startMsUtc);
+  return { startMsUtc, labelEs, labelAr };
 }
 
 // Día de la semana (en español, sin acentos) en el huso de España para un instante UTC dado.

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { argentinaToSpainClock, conflictsWithBooked, CALL_DURATION_MINUTES } from "@/application/callScheduling";
+import {
+  argentinaToSpainClock,
+  conflictsWithBooked,
+  CALL_DURATION_MINUTES,
+  parseProposedCallTime,
+  argentinaLabelFromMs
+} from "@/application/callScheduling";
 
 describe("argentinaToSpainClock (hora Argentina -> España)", () => {
   it("en VERANO español (junio, CEST) suma 5 horas: 18:00 AR -> 23:00 ES", () => {
@@ -20,6 +26,25 @@ describe("argentinaToSpainClock (hora Argentina -> España)", () => {
   it("cruza la medianoche correctamente: 21:00 AR (junio) -> 02:00 ES", () => {
     const r = argentinaToSpainClock(21, 0, new Date(Date.UTC(2026, 5, 23)));
     expect(r.label).toBe("02:00");
+  });
+});
+
+describe("parseProposedCallTime: la candidata oye SU hora (Argentina), Alex ve la de España (23-jun)", () => {
+  // Bug detectado en la auditoria: la candidata pedia "6 de la tarde" y el bot le confirmaba "23:00" (hora
+  // de Espana). La cifra de Espana es para Alex (cuando llama); a la candidata se le confirma SU hora.
+  const now = new Date(Date.UTC(2026, 5, 23, 10, 0)); // 23-jun, 07:00 en Argentina
+
+  it("'mañana a las 6 de la tarde' -> labelEs en Espana (23:00) y labelAr en Argentina (18:00)", () => {
+    const r = parseProposedCallTime("mañana a las 6 de la tarde", now);
+    expect(r).not.toBeNull();
+    expect(r!.labelEs).toContain("23:00");
+    expect(r!.labelAr).toContain("18:00");
+    expect(r!.labelAr).not.toContain("23:00");
+  });
+
+  it("argentinaLabelFromMs reconstruye la hora Argentina desde el instante real (UTC)", () => {
+    const r = parseProposedCallTime("mañana a las 6 de la tarde", now)!;
+    expect(argentinaLabelFromMs(r.startMsUtc)).toBe(r.labelAr);
   });
 });
 
