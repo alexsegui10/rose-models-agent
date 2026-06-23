@@ -1704,6 +1704,15 @@ function decideNextState(
     }
   }
 
+  // Candidata YA APROBADA (post-revision) que da su telefono: pasa a READY_TO_SCHEDULE = "tenemos su numero,
+  // lista para que Alex la llame por WhatsApp". NO es CALL_SCHEDULED (eso requiere una hora de reloj concreta,
+  // lo decide tryAutoScheduleCall); aqui es el caso "lo antes posible / sin hora exacta". Solo POST-aprobacion
+  // (humanFitDecision APPROVED): invariante 4 intacto, no inventa ninguna salida de revision. Bug de Alex 23-jun
+  // (antes se quedaba en COLLECTING_CALL_DETAILS y el bot decia otra vez "lo hablo con mi socio").
+  if (candidate.currentState === "COLLECTING_CALL_DETAILS" && candidate.phone && candidate.humanFitDecision === "APPROVED") {
+    return "READY_TO_SCHEDULE";
+  }
+
   return null;
 }
 
@@ -1741,6 +1750,25 @@ function generateResponse(
     return candidate.scheduledCallSlot
       ? `Todo listo, te llamo por WhatsApp ${candidate.scheduledCallSlot}. Si necesitas cambiar algo me dices.`
       : "Todo listo con la llamada por WhatsApp. Si necesitas cambiar algo me dices.";
+  }
+
+  // Candidata YA APROBADA en el cierre de la llamada con su telefono ya dado: se CONFIRMA la llamada (Alex la
+  // llama por WhatsApp lo antes posible), NUNCA se vuelve a derivar al socio (eso ya se dijo en la revision) ni
+  // se le re-pregunta el dia/hora. Bug grave de Alex 23-jun. Solo post-aprobacion (humanFitDecision APPROVED) y
+  // sin pregunta/negocio/escalada pendiente: invariantes 1 y 4 intactos (no cambia estado, no sale de revision).
+  if (
+    candidate.humanFitDecision === "APPROVED" &&
+    (candidate.currentState === "COLLECTING_CALL_DETAILS" || candidate.currentState === "READY_TO_SCHEDULE") &&
+    candidate.phone &&
+    !responsePlan.questionToAsk &&
+    !responsePlan.uncoveredQuestion &&
+    responsePlan.answerFacts.length === 0 &&
+    !understanding.requiresHumanReview &&
+    understanding.intent !== "ASKS_ABOUT_PERCENTAGE" &&
+    understanding.intent !== "ASKS_ABOUT_CONTRACT" &&
+    understanding.intent !== "REQUESTS_HUMAN"
+  ) {
+    return "Genial, te llamamos por WhatsApp lo antes posible.";
   }
 
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
