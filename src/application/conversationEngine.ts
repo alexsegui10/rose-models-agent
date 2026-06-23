@@ -847,8 +847,12 @@ export class ConversationEngine {
     const latest = await this.dependencies.repository.findCandidateById(candidate.id);
     if (latest && (latest.manualControlActive || latest.automationPaused)) return null;
 
+    // Solo cuenta la insistencia DEDICADA en la hora (el mensaje que envia esta misma rama abajo), NO la
+    // propuesta inicial de la llamada ("¿que dia y a que hora te viene mejor?"): si contaramos esa, el bot
+    // aceptaria la franja vaga a la PRIMERA sin insistir (bug E2E 23-jun). La insistencia lleva la firma
+    // "asi te llamo puntual" / "sobre que hora te viene", que la propuesta inicial no tiene.
     const askedExactHour = recentAgentMessages.some((message) =>
-      /sobre que hora|a que hora|que hora te viene|dime la hora/.test(normalizeText(message))
+      /sobre que hora te viene|asi te llamo puntual/.test(normalizeText(message))
     );
     if (!askedExactHour) {
       const ask = "Sobre que hora te viene bien? Asi te llamo puntual.";
