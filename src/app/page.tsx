@@ -2437,6 +2437,17 @@ export default function Home() {
                     : `Motivo: ${REVIEW_REASON_LABELS[drawerCandidate.humanReviewReason] ?? drawerCandidate.humanReviewReason}`}
                 </p>
               ) : null}
+              {/* Aviso explicito del doble gate: con el perfil ya aprobado pero el movil pendiente de calidad,
+                  la llamada NO se agenda y la candidata queda "muda" en revision. Sin este aviso parecia que
+                  "no pasaba nada" al aprobar el perfil (caso movil generico, Alex 23-jun). */}
+              {drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" &&
+              drawerCandidate.humanFitDecision === "APPROVED" &&
+              drawerCandidate.deviceEligibility === "PENDING_QUALITY_TEST" ? (
+                <p className="drawer-text" style={{ color: "#b8860b", fontWeight: 600 }}>
+                  ⚠️ Perfil aprobado, pero la llamada NO se agenda hasta que apruebes la calidad del móvil aquí abajo (📱 Móvil
+                  OK).
+                </p>
+              ) : null}
               <div className="drawer-actions">
                 {/* Encaja/Rechazar en CUALQUIER fase activa (asi Alex revisa perfiles cuando quiere). */}
                 {drawerCandidate.currentState === "PROFILE_READY_FOR_REVIEW" ? (
