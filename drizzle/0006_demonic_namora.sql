@@ -1,0 +1,1 @@
+ALTER TABLE "candidates" ADD COLUMN "call_time_preference" text;

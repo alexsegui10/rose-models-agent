@@ -43,6 +43,13 @@
       "when": 1782072487479,
       "tag": "0005_gifted_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782202711898,
+      "tag": "0006_demonic_namora",
+      "breakpoints": true
     }
   ]
 }
