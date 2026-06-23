@@ -197,6 +197,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("countries", "market", "faq");
   }
   if (/\b(seleccion|requisitos para entrar|como entro|que buscais)\b/.test(message)) tags.push("selection", "process", "faq");
+  // Quien abre / como se abre la cuenta de OnlyFans ("¿la abro yo o vosotros?", "¿cómo abro la cuenta de OF?",
+  // "¿me la creáis/montáis?"): la abre la candidata (Alex 23-jun). Antes escalaba a Alex por falta de cobertura.
+  // Guard: una "cuenta de banco/bancaria" (sin OF) NO es esto -> no surfacea la respuesta de la cuenta de OF.
+  if (
+    !/\bcuenta (?:de |del )?banc/.test(message) &&
+    (/\b(abr(?:o|ir|is|imos|e|en)|crea|crear|creais|crean|monta|montar|montais|montan|quien abre|me la abr|me la cre|me la mont)\b[^.!?]{0,25}\b(cuenta|onlyfans|of)\b/.test(
+      message
+    ) ||
+      /\b(cuenta|onlyfans)\b[^.!?]{0,25}\b(la abro|la creo|me la abr|me la cre|me la mont|quien la abre|tengo que abrir|hay que abrir|la abro o)\b/.test(
+        message
+      ))
+  )
+    tags.push("of-account", "account-setup", "onboarding", "faq");
   // Hueco jun-2026: "que edad buscais?" -> franja objetivo (perfil maduro, ~30-50). Pregunta sobre la edad
   // del PUBLICO objetivo; no toca el corte de mayoria de edad (invariante 2 vive en candidate-requirements-adult).
   if (

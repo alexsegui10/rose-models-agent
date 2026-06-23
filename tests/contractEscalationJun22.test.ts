@@ -55,4 +55,35 @@ describe("Escalado de contrato: solo terminos contractuales genuinos escalan", (
     });
     expect(p.some((e) => e.id === "geo-privacy-three-layers")).toBe(true);
   });
+
+  it("'¿la cuenta de OF la abro yo o vosotros?' recupera faq-who-opens-of-account y NO escala (Alex 23-jun)", async () => {
+    const e = await retriever.retrieve({
+      candidate: qualifying(),
+      intent: "REQUESTS_INFORMATION",
+      question: "La cuenta la tengo que abrir yo o vosotros me la abris?"
+    });
+    expect(e.some((entry) => entry.id === "faq-who-opens-of-account")).toBe(true);
+    expect(e.some((entry) => entry.requiresHumanReview)).toBe(false);
+  });
+
+  it("variante '¿me la monta la agencia la cuenta?' tambien recupera la entrada (no re-escala)", async () => {
+    const e = await retriever.retrieve({
+      candidate: qualifying(),
+      intent: "OTHER",
+      question: "y me la monta la agencia la cuenta o como?"
+    });
+    expect(e.some((entry) => entry.id === "faq-who-opens-of-account")).toBe(true);
+  });
+
+  it("'¿abrir una cuenta de banco?' se trata como PAGO, no como abrir la cuenta de OF (no es el resultado principal)", async () => {
+    const e = await retriever.retrieve({
+      candidate: qualifying(),
+      intent: "OTHER",
+      question: "tengo que abrir una cuenta de banco para cobrar?"
+    });
+    // El guard no etiqueta of-account para una cuenta de BANCO; el resultado mas relevante es de pago, no la
+    // entrada de abrir la cuenta de OF (que, si aparece, es por solapamiento de palabras y queda por debajo).
+    expect(e[0]?.id).not.toBe("faq-who-opens-of-account");
+    expect(e.some((entry) => entry.tags.includes("payment") || entry.tags.includes("salary"))).toBe(true);
+  });
 });

@@ -55,6 +55,34 @@ const entries: KnowledgeEntryInput[] = [
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-20"
+  },
+  {
+    // Hueco confirmado por Alex (23-jun-2026): la cuenta de OnlyFans la abre la CANDIDATA, no la agencia, y es
+    // facil (crear la cuenta -> enlazar el banco -> verificarse). Antes "¿la abro yo o vosotros?" escalaba a Alex
+    // por falta de cobertura. Sin cifras ni promesas (invariante 3); nunca pedir credenciales (invariante 5).
+    id: "faq-who-opens-of-account",
+    category: "FAQ",
+    title: "Quien abre la cuenta de OnlyFans y como",
+    facts: [
+      "La cuenta de OnlyFans la abre la propia candidata, no la agencia.",
+      "Abrir la cuenta es sencillo: se crea siguiendo los pasos que indica OnlyFans, se enlaza una cuenta bancaria y se completa la verificacion de identidad."
+    ],
+    approvedAnswerPoints: [
+      "La cuenta de OnlyFans la abres tu, es muy facil.",
+      "Solo creas la cuenta con los pasos que te indican, enlazas tu cuenta de banco y te verificas."
+    ],
+    prohibitedClaims: [
+      "Decir que la agencia abre o gestiona el acceso a la cuenta de la candidata por ella.",
+      "Pedir las credenciales o la contrasena de la cuenta de la candidata.",
+      "Prometer ingresos o dar cifras de ganancias."
+    ],
+    allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["of-account", "account-setup", "onboarding", "faq"],
+    requiresHumanReview: false,
+    version: "faq-of-account-2026-06-23.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-06-23"
   }
 ];
 
