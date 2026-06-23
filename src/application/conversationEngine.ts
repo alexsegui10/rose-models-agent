@@ -1698,8 +1698,22 @@ function applyExtractedData(
   if (extractedData.city !== undefined) patch.city = extractedData.city;
   if (extractedData.phone !== undefined) patch.phone = extractedData.phone;
   if (extractedData.deviceType !== undefined) patch.deviceType = extractedData.deviceType;
-  if (extractedData.deviceModel !== undefined) patch.deviceModel = extractedData.deviceModel;
-  if (extractedData.deviceEligibility !== undefined) patch.deviceEligibility = extractedData.deviceEligibility;
+  // HECHOS PEGAJOSOS del movil (Alex 23-jun): un dato del movil YA contestado nunca se des-contesta por una
+  // re-inferencia del LLM (que a veces "olvida" el movil en un turno que no lo menciona y lo dejaba vacio ->
+  // el bot lo re-preguntaba, rompiendo la naturalidad). Solo un modelo NUEVO no vacio lo cambia; una elegibilidad
+  // ya conocida no baja a UNKNOWN. Invariante 1 (la IA no controla el flujo); un cambio REAL a un movil malo
+  // sigue dando NOT_ELIGIBLE porque trae respaldo deterministico.
+  if (extractedData.deviceModel !== undefined) {
+    const hasStoredModel = typeof candidate.deviceModel === "string" && candidate.deviceModel.trim().length > 0;
+    const incomingModelEmpty =
+      extractedData.deviceModel === null ||
+      (typeof extractedData.deviceModel === "string" && extractedData.deviceModel.trim().length === 0);
+    if (!(hasStoredModel && incomingModelEmpty)) patch.deviceModel = extractedData.deviceModel;
+  }
+  if (extractedData.deviceEligibility !== undefined) {
+    if (!(extractedData.deviceEligibility === "UNKNOWN" && candidate.deviceEligibility !== "UNKNOWN"))
+      patch.deviceEligibility = extractedData.deviceEligibility;
+  }
   // ROMPER EL BUCLE del movil (bug grave de Alex 22-jun): si la candidata YA dio un MODELO (deviceModel
   // capturado) pero no se pudo CLASIFICAR (eligibility UNKNOWN: un typo raro o una marca no listada), NO se
   // vuelve a preguntar el movil en bucle -> se marca PENDING_QUALITY_TEST (movil "conocido": sigue cualificando

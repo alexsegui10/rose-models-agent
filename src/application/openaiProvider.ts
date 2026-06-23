@@ -15,7 +15,7 @@ import {
   type ResponseDraftingProvider,
   type ResponseDraftOutput
 } from "./llmProvider";
-import { deviceEligibilityForDescription, deviceTypeForDescription } from "./policyRules";
+import { deviceEligibilityForDescription, deviceModelForDescription, deviceTypeForDescription } from "./policyRules";
 
 // ---------------------------------------------------------------------------
 // Esquema de cara a la API (OpenAI structured outputs en modo estricto).
@@ -270,14 +270,22 @@ export class OpenAIConversationUnderstandingProvider implements ConversationUnde
       // (regla de hardware de Alex) solo si el mensaje nombra un movil de verdad.
       const {
         deviceEligibility: _llmDeviceEligibility,
+        deviceModel: _llmDeviceModel,
         hasOnlyFans: _llmHasOnlyFans,
         worksWithAnotherAgency: _llmWorksWithAnotherAgency,
         ...baseData
       } = core.extractedData;
       const mentionsDevice = deviceTypeForDescription(input.inboundMessage) !== "UNKNOWN";
       const derivedDeviceEligibility = mentionsDevice ? deviceEligibilityForDescription(input.inboundMessage) : "UNKNOWN";
-      const extractedData =
-        derivedDeviceEligibility !== "UNKNOWN" ? { ...baseData, deviceEligibility: derivedDeviceEligibility } : baseData;
+      // El deviceModel TAMBIEN se re-deriva del MENSAJE (no del LLM, que a veces lo alucina o lo VACIA en un
+      // turno que no habla del movil -> pisaba/borraba un movil ya guardado y el bot lo re-preguntaba). Si el
+      // mensaje no nombra un movil, no se asigna: el motor conserva el guardado (hecho pegajoso). Alex 23-jun.
+      const derivedDeviceModel = deviceModelForDescription(input.inboundMessage);
+      const extractedData = {
+        ...baseData,
+        ...(derivedDeviceEligibility !== "UNKNOWN" ? { deviceEligibility: derivedDeviceEligibility } : {}),
+        ...(derivedDeviceModel ? { deviceModel: derivedDeviceModel } : {})
+      };
 
       return ModelConversationOutputSchema.parse({
         ...core,

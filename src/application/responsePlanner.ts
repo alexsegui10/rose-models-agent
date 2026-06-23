@@ -100,7 +100,12 @@ const qualificationSlots: QualificationSlot[] = [
     // Dos mensajes (la pregunta + el porque), no un parrafo largo: mas natural (peticion de Alex 22-jun).
     question: "Y que movil tienes?\n\nEs importante para la calidad de las fotos y los videos.",
     alreadyAskedPattern: /que movil tienes/,
-    isMissing: (candidate) => candidate.deviceEligibility === "UNKNOWN"
+    // Cinturon y tirantes (Alex 23-jun): si ya hay un MODELO de movil en el Candidate, el slot NO esta missing
+    // aunque la elegibilidad fuera UNKNOWN -> NUNCA se re-pregunta un movil ya contestado (el motor re-deriva la
+    // elegibilidad del modelo via loop-break). Una candidata nueva (sin modelo) si recibe la pregunta del movil.
+    isMissing: (candidate) =>
+      candidate.deviceEligibility === "UNKNOWN" &&
+      !(typeof candidate.deviceModel === "string" && candidate.deviceModel.trim().length > 0)
   },
   {
     id: "onlyfans-or-experience",
