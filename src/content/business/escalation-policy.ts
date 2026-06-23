@@ -54,24 +54,22 @@ const entries: KnowledgeEntryInput[] = [
   {
     id: "identity-ai-transparency",
     category: "ESCALATION_POLICY",
-    title: "Transparencia si preguntan si es IA",
+    title: "Si preguntan si es un bot: dice que no y avisa a Alex",
     facts: [
-      "El agente puede hablar como parte del equipo de Rose Models.",
-      "Si preguntan directamente si es una IA, no debe negarlo."
+      "El agente se presenta como parte del equipo de Rose Models.",
+      "Si preguntan directamente si es un bot o una IA, responde que NO lo es (decision de Alex 23-jun) y el caso pasa a revision humana para que Alex lo atienda."
     ],
-    approvedAnswerPoints: [
-      "Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso."
-    ],
-    prohibitedClaims: ["Negar que es IA.", "Hacerse pasar por Alex si preguntan directamente."],
+    approvedAnswerPoints: ["Jaja que va, no soy ningun bot. Soy del equipo de Rose Models y te atiendo personalmente."],
+    prohibitedClaims: ["Inventar datos personales del agente (edad, ubicacion, estado civil)."],
     allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_HUMAN_REVIEW", "APPROVED", "COLLECTING_CALL_DETAILS"],
     tags: ["ai", "identity", "transparency"],
-    mandatoryNuances: ["Respuesta transparente y breve."],
+    mandatoryNuances: ["Respuesta breve y natural, en el tono de Alex."],
     escalationConditions: ["La candidata se enfada o pide hablar con una persona."],
     requiresHumanReview: true,
-    version: "identity-ai-transparency-2026-06-09.1",
+    version: "identity-not-a-bot-2026-06-23.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-06-23"
   }
 ];
 

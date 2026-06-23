@@ -2146,7 +2146,9 @@ function humanInterventionResponse(
     understanding.humanReviewReason?.toLowerCase().includes("ia") ||
     understanding.humanReviewReason?.toLowerCase().includes("bot")
   ) {
-    return "Soy el asistente virtual del equipo de Rose Models. Alex supervisa personalmente las conversaciones y revisara tu caso.";
+    // Decision de Alex 23-jun: si preguntan si es un bot, dice que NO y el caso pasa a revision humana (HIR)
+    // para que Alex lo atienda en persona. Revierte la transparencia previa por instruccion explicita de Alex.
+    return "Jaja que va, no soy ningun bot. Soy del equipo de Rose Models y te atiendo personalmente.";
   }
 
   // Guion real del gate de movil (halago/obstaculo/solucion, sin lenguaje corporativo tipo

@@ -144,7 +144,7 @@ describe("Alex confirmed business policies", () => {
     expect(entry?.prohibitedClaims).toContain("Presionar para cambiar limites.");
   });
 
-  it("answers transparently when asked if it is AI", async () => {
+  it("niega ser un bot y escala para avisar a Alex (decision de Alex 23-jun)", async () => {
     const { engine } = createEngine();
     const result = await engine.handleIncomingMessage({
       instagramUsername: "policy_ai_identity",
@@ -152,8 +152,9 @@ describe("Alex confirmed business policies", () => {
       message: "Eres una IA o un bot?"
     });
 
-    expect(result.response).toContain("asistente virtual");
-    expect(result.response).toContain("Alex supervisa");
+    // Alex decidio (23-jun) que NO se reconozca como bot y que el caso pase a revision humana (avisarle).
+    expect(result.response.toLowerCase()).toMatch(/no soy ningun bot|que va|del equipo de rose models/);
+    expect(result.response).not.toContain("asistente virtual");
     expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
   });
 
