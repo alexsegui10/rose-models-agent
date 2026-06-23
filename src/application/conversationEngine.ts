@@ -1047,6 +1047,11 @@ export class ConversationEngine {
     // Red de seguridad: si no se sabe a tiempo, queda UNKNOWN -> opener neutro. Nunca rompe el turno.
     const openerVisibility = await this.resolveOpenerVisibility(activeCandidate, input.profileVisibility, isOpenerTurn);
     let updatedCandidate = applyExtractedData(activeCandidate, extractedPatch, openerVisibility);
+    // CANDADO DEFINITIVO (Alex 23-jun, "hiper estricto para siempre"): un dato HARD ya contestado NUNCA se
+    // pierde en un turno. Si la re-inferencia del LLM (o cualquier paso) deja un campo conocido en vacio/
+    // desconocido, se RESTAURA el valor que ya teniamos. Un CAMBIO real (de un valor conocido a otro conocido)
+    // NO se toca: solo se bloquea la PERDIDA. Asi el bot nunca re-pregunta un slot ya contestado (cualquier slot).
+    updatedCandidate = preserveKnownFacts(activeCandidate, updatedCandidate);
     // Aviso para Alex siempre que la candidata toque el dinero: si negocia (requiresHumanReview), es una
     // peticion de negociacion (escala); si solo PREGUNTA por el porcentaje, NO escala (sigue el flujo) pero
     // queda el aviso para que Alex lo sepa (decision de Alex: no derivar, pero avisar).
@@ -1678,6 +1683,39 @@ function deterministicDraftOutput(response: string): ResponseDraftOutput {
     outputTokens: null,
     estimatedCostUsd: null
   };
+}
+
+/**
+ * CANDADO DE HECHOS PEGAJOSOS (Alex 23-jun): garantiza que un dato HARD ya contestado en un turno anterior
+ * NUNCA se pierda en este turno por una re-inferencia del LLM que lo "olvide" (lo dejaba en vacio/UNKNOWN y el
+ * planner lo re-preguntaba, rompiendo la naturalidad - paso con el movil y con la edad). Compara el candidato
+ * AL CARGAR (previous) con el actualizado y RESTAURA cualquier campo HARD que haya pasado de CONOCIDO a
+ * desconocido/vacio. Un CAMBIO real (de un valor conocido a OTRO valor conocido) NO se toca: solo se bloquea la
+ * PERDIDA. Invariante 1 (el codigo, no el LLM, fija los datos); no auto-aprueba ni cambia el flujo, solo evita
+ * perder lo ya sabido. Mecanismo-independiente: da igual donde se pierda el dato, aqui se recupera.
+ */
+export function preserveKnownFacts(previous: Candidate, updated: Candidate): Candidate {
+  const nonEmpty = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+  const restored: Partial<Candidate> = {};
+
+  if (nonEmpty(previous.firstName) && !nonEmpty(updated.firstName)) restored.firstName = previous.firstName;
+  if (typeof previous.age === "number" && previous.age > 0 && !(typeof updated.age === "number" && updated.age > 0)) {
+    restored.age = previous.age;
+    restored.isAdultConfirmed = previous.isAdultConfirmed;
+  }
+  if (nonEmpty(previous.deviceModel) && !nonEmpty(updated.deviceModel)) restored.deviceModel = previous.deviceModel;
+  if (previous.deviceEligibility !== "UNKNOWN" && updated.deviceEligibility === "UNKNOWN")
+    restored.deviceEligibility = previous.deviceEligibility;
+  if (previous.deviceType !== "UNKNOWN" && updated.deviceType === "UNKNOWN") restored.deviceType = previous.deviceType;
+  if (typeof previous.hasOnlyFans === "boolean" && typeof updated.hasOnlyFans !== "boolean")
+    restored.hasOnlyFans = previous.hasOnlyFans;
+  if (typeof previous.worksWithAnotherAgency === "boolean" && typeof updated.worksWithAnotherAgency !== "boolean")
+    restored.worksWithAnotherAgency = previous.worksWithAnotherAgency;
+  if (nonEmpty(previous.phone) && !nonEmpty(updated.phone)) restored.phone = previous.phone;
+  if (nonEmpty(previous.country) && !nonEmpty(updated.country)) restored.country = previous.country;
+  if (nonEmpty(previous.city) && !nonEmpty(updated.city)) restored.city = previous.city;
+
+  return Object.keys(restored).length > 0 ? { ...updated, ...restored } : updated;
 }
 
 function applyExtractedData(
