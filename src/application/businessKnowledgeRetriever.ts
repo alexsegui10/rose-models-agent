@@ -166,7 +166,16 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("old-material", "new-content", "onlyfans", "instagram");
   }
   if (/\b(limites|no quiero hacer|contenido anal|desnudo|juguetes)\b/.test(message)) tags.push("boundaries", "limits", "content");
-  if (/\b(llamada|llamar|telefono|whatsapp)\b/.test(message)) tags.push("call", "schedule");
+  // "me puedes llamar anita" / "llamame X" / "me llaman X" = ponerle un APODO, NO la llamada de telefono. El
+  // verbo "llamar" usado para NOMBRAR surfaceaba el conocimiento de la llamada por WhatsApp y el bot proponia
+  // agendar a mitad de la cualificacion (bug Alex 24-jun). "llamada/telefono/whatsapp" y un "llamar" que NO sea
+  // para nombrar siguen contando como call/schedule.
+  const callIsNaming =
+    /\b(me\s+puedes\s+llamar|puedes\s+llamarme|me\s+podeis\s+llamar|ll[aá]mame|llamame|me\s+llaman|me\s+dicen|me\s+puedes\s+decir|me\s+digas)\b/.test(
+      message
+    );
+  if (/\b(llamada|telefono|whatsapp)\b/.test(message) || (/\bllamar\b/.test(message) && !callIsNaming))
+    tags.push("call", "schedule");
   if (/\b(grabar|grabacion|transcribir|transcripcion|retell)\b/.test(message))
     tags.push("retell", "recording", "transcript", "consent");
   if (/\b(contrato|legal|clausula|permanencia)\b/.test(message)) tags.push("contract", "legal", "human-review");

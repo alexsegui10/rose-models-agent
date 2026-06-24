@@ -95,6 +95,24 @@ describe("Retriever: 'me dais/dame info' es peticion generica, NO negociacion de
     }
   });
 
+  it("'me puedes llamar anita' (apodo) NO surfacea el conocimiento de la llamada (no propone agendar)", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const qualifying = { ...newLead(), currentState: "QUALIFYING" } as Candidate;
+    for (const naming of ["pero me puedes llamar anita", "llamame anita porfa", "me llaman lola"]) {
+      const entries = await retriever.retrieve({ candidate: qualifying, intent: "OTHER", question: naming });
+      expect(entries.some((e) => e.tags.includes("call") || e.tags.includes("schedule"))).toBe(false);
+    }
+  });
+
+  it("una pregunta REAL por la llamada SIGUE surfaceando el conocimiento de la llamada", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const qualifying = { ...newLead(), currentState: "QUALIFYING" } as Candidate;
+    for (const phone of ["la llamada es por whatsapp?", "cuando me vais a llamar?", "me llamais por telefono?"]) {
+      const entries = await retriever.retrieve({ candidate: qualifying, intent: "REQUESTS_INFORMATION", question: phone });
+      expect(entries.some((e) => e.tags.includes("call") || e.tags.includes("schedule"))).toBe(true);
+    }
+  });
+
   it("una negociacion REAL del % SIGUE surfaceando el reparto sensible (deteccion intacta, invariante 3)", async () => {
     const retriever = new LocalBusinessKnowledgeRetriever();
     for (const question of [
