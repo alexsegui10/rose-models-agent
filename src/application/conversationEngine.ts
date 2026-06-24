@@ -1350,23 +1350,17 @@ export class ConversationEngine {
       (projectedCandidate.currentState === "QUALIFYING" || projectedCandidate.currentState === "NEW_LEAD")
         ? softDeferResponse(groupedMessage.content, responsePlan.questionToAsk)
         : null;
-    // ANTI "hablar de mas" (Alex 24-jun): el borrador del LLM recibe el conocimiento y a veces RECITA el
-    // modelo de pago ("trabajamos a porcentaje, no salario fijo") aunque la candidata NO preguntara por dinero
-    // (lo arrastraban entradas de requisitos/FAQ). El plan ya filtra la CIFRA, pero el LLM veia las entradas
-    // CRUDAS. Si NO se ha preguntado por dinero, se quita el encuadre comercial de lo que ve el LLM (defensa en
-    // profundidad, alineada con invariante 3: el dinero nunca es proactivo). La rama determinista ya usa los
-    // answerFacts filtrados, asi que solo se sanea lo que va al borrador del LLM.
-    // "Pregunto por dinero" se decide por SUS PALABRAS, no por la suposicion del LLM: el intent/relevantTopics
-    // a veces clasifica "es demasiado?" (que es por la EDAD) como dinero -> apagaba el guardrail y colaba el
-    // reparto. El texto de ella es la verdad (y encaja con invariante 3: el % solo si ELLA pregunta la cifra).
-    const commercialMessage = normalizeText(groupedMessage.content);
-    const commercialAsked =
-      /\b(salario|sueldo|nomina|porcentaje|reparto|comision\w*|skrill|liquidaci\w*|dinero|euros?|paga\w*|cobr\w*|gano|gana|ganar\w*|ganaria|pagan)\b/.test(
-        commercialMessage
-      ) ||
-      /\b(os qued\w*|os llev\w*|me llev\w*|me qued\w*|me toca|mi parte|cuanto saco)\b/.test(commercialMessage) ||
-      /\b\d{1,3}\s?%|\b\d{1,2}\/\d{1,2}\b|\b(me dais|dame)\b/.test(commercialMessage);
-    const draftKnowledgeEntries = commercialAsked ? knowledgeEntries : knowledgeEntries.map(stripCommercialFraming);
+    // ANTI "hablar de mas" (Alex 24-jun): el borrador del LLM recibe el conocimiento CRUDO y a veces RECITA un
+    // tema que la candidata NO pidio (el modelo de pago, o el requisito de la CARA) porque comparte categoria
+    // con lo que SI pregunto y se surfacea por el boost. REGLA GENERAL (SUPPRESSED_TOPICS): los temas que el bot
+    // no debe sacar por su cuenta (dinero, cara, privacidad) se quitan de lo que ve el LLM si ELLA no los
+    // menciono. Se decide por SUS PALABRAS (el intent/relevantTopics del LLM es flaky). La rama determinista usa
+    // answerFacts ya filtrados; aqui solo se sanea lo que va al borrador del LLM.
+    const suppressedFramings = framingsToSuppress(groupedMessage.content);
+    const draftKnowledgeEntries =
+      suppressedFramings.length === 0
+        ? knowledgeEntries
+        : knowledgeEntries.map((entry) => stripSuppressedFraming(entry, suppressedFramings));
     let draft =
       pauseMessage !== null
         ? deterministicDraftOutput(pauseMessage)
@@ -1439,16 +1433,19 @@ export class ConversationEngine {
         draft = { ...draft, response, usedFallback: true, error: "coherence-self-check-answered-from-plan" };
       }
     }
-    // GUARDRAIL DE SALIDA anti "hablar de mas" de DINERO (Alex 24-jun): si NO se pregunto por dinero pero el
-    // borrador colo el modelo de pago (a veces el LLM lo anade por su cuenta, no solo desde los facts), se
-    // quitan ESAS burbujas (el bot habla en lineas separadas por \n) y se conserva el resto. Defensa FINAL,
-    // determinista; refuerza invariante 3 (el dinero nunca es proactivo). Solo cuando no se pregunto dinero.
-    if (!commercialAsked && COMMERCIAL_FRAMING_RX.test(response)) {
-      const kept = response.split(/\n+/).filter((line) => line.trim().length > 0 && !COMMERCIAL_FRAMING_RX.test(line));
+    // GUARDRAIL DE SALIDA anti "hablar de mas" (Alex 24-jun): si el borrador colo un tema que ella NO pidio
+    // (dinero, cara, privacidad — a veces el LLM lo anade por su cuenta, no solo desde los facts), se quitan ESAS
+    // burbujas (el bot habla en lineas separadas por \n) y se conserva el resto. Defensa FINAL determinista,
+    // re-validada factualmente; refuerza invariante 3 (el dinero nunca es proactivo) y la decision de Alex de no
+    // sacar la cara/privacidad por su cuenta. Misma lista (SUPPRESSED_TOPICS) que sanea lo que ve el LLM.
+    if (suppressedFramings.length > 0 && suppressedFramings.some((rx) => rx.test(response))) {
+      const kept = response
+        .split(/\n+/)
+        .filter((line) => line.trim().length > 0 && !suppressedFramings.some((rx) => rx.test(line)));
       const cleaned = kept.join("\n\n").trim();
       if (cleaned.length > 0 && cleaned !== response && validateFactualResponse(cleaned, responsePlan).valid) {
         response = cleaned;
-        draft = { ...draft, response, error: "stripped-unsolicited-money-framing" };
+        draft = { ...draft, response, error: "stripped-unsolicited-topic" };
       }
     }
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
@@ -2318,16 +2315,48 @@ const sharesPersonalConcernPattern =
   /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da\b[^.!?]{0,14}\b(miedo|verguenza|cosa|palo|apuro|reparo|inseguridad|corte|vertigo|pereza)|no se si|no estoy segura|no estaba segura|no me convence|no me termina de convencer|no me acaba de convencer|no se yo|no lo (?:veo|tengo) claro|tengo mis dudas|no estoy convencid\w*|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza|inseguridad|insegura|no me atrevo|nunca he hecho esto|nunca lo he hecho|estaf|me robaron|me timaron|mala experiencia|me enganaron|dejaron de contestar|desaparecieron)\b/;
 
 // Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.
-// Encuadre del MODELO de pago (cifra incluida). Si la candidata no pregunto por dinero, se quita de los
-// hechos que ve el LLM al redactar para que no lo suelte por la cara (Alex 24-jun). NO borra la entrada ni
-// toca prohibitedClaims/mandatoryNuances/tags: solo vacia los hechos comerciales de esa entrada.
-const COMMERCIAL_FRAMING_RX = /\b(salario|sueldo|porcentaje|reparto|comision|70\s?%|30\s?%|70\/30|liquidaci|skrill)\b/i;
-function stripCommercialFraming(entry: KnowledgeEntry): KnowledgeEntry {
-  return {
-    ...entry,
-    facts: entry.facts.filter((fact) => !COMMERCIAL_FRAMING_RX.test(fact)),
-    approvedAnswerPoints: entry.approvedAnswerPoints.filter((point) => !COMMERCIAL_FRAMING_RX.test(point))
-  };
+// REGLA GENERAL "no hablar de mas" (Alex 24-jun): temas que el bot NUNCA saca por su cuenta; SOLO si la
+// candidata los menciona. Decision de Alex: el DINERO (modelo/cifra), la CARA y la PRIVACIDAD solo se hablan si
+// ELLA pregunta. Generaliza el TIPO de bug "suelta un tema adyacente que no pidio" (paso con el dinero y con la
+// cara: ambos comparten categoria de conocimiento con lo que ella SI pregunto, asi que se surfaceaban y el LLM
+// los recitaba). Cada tema: (a) reconocer si ELLA lo pregunto POR SUS PALABRAS (no por la suposicion del LLM,
+// que es flaky) y (b) reconocer su encuadre para quitarlo de lo que ve el LLM y del borrador final. Anadir un
+// tema nuevo = una entrada aqui, sin tocar la logica. NO toca la rama determinista (usa answerFacts ya filtrados).
+interface SuppressedTopic {
+  name: string;
+  askedInMessage: (message: string) => boolean;
+  framing: RegExp;
+}
+const SUPPRESSED_TOPICS: SuppressedTopic[] = [
+  {
+    name: "money",
+    askedInMessage: (m) =>
+      /\b(salario|sueldo|nomina|porcentaje|reparto|comision\w*|skrill|liquidaci\w*|dinero|euros?|paga\w*|cobr\w*|gano|gana|ganar\w*|ganaria|pagan)\b/.test(
+        m
+      ) ||
+      /\b(os qued\w*|os llev\w*|me llev\w*|me qued\w*|me toca|mi parte|cuanto saco)\b/.test(m) ||
+      /\b\d{1,3}\s?%|\b\d{1,2}\/\d{1,2}\b|\b(me dais|dame)\b/.test(m),
+    framing: /\b(salario|sueldo|porcentaje|reparto|comision|70\s?%|30\s?%|70\/30|liquidaci|skrill)\b/i
+  },
+  {
+    name: "face",
+    askedInMessage: (m) =>
+      /\b(cara|rostro|mostrar\w*|ensenar\w*|aparecer|salir en|me vean|me reconoz\w*|reconozcan|reconozca|anonim\w*|privacidad|tapar\w*|ocultar\w*|disimul\w*|sin que se vea)\b/.test(
+        m
+      ),
+    framing: /\b(la cara|tu cara|el rostro|dar la cara|mostrar la cara|ensenar la cara|salir en (?:foto|video|camara))\b/i
+  }
+];
+// Encuadres de temas que la candidata NO ha mencionado en este mensaje: hay que quitarlos (defensa anti "hablar
+// de mas"). Se decide por el TEXTO de ella (invariante 1: lo decide el codigo, no el LLM).
+function framingsToSuppress(message: string): RegExp[] {
+  const normalized = normalizeText(message);
+  return SUPPRESSED_TOPICS.filter((topic) => !topic.askedInMessage(normalized)).map((topic) => topic.framing);
+}
+function stripSuppressedFraming(entry: KnowledgeEntry, framings: RegExp[]): KnowledgeEntry {
+  if (framings.length === 0) return entry;
+  const keep = (text: string) => !framings.some((rx) => rx.test(text));
+  return { ...entry, facts: entry.facts.filter(keep), approvedAnswerPoints: entry.approvedAnswerPoints.filter(keep) };
 }
 
 export function acknowledgementFor(understanding: ModelConversationOutput, inboundMessage = ""): string {
