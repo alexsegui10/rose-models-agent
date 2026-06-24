@@ -1361,7 +1361,7 @@ export class ConversationEngine {
     // reparto. El texto de ella es la verdad (y encaja con invariante 3: el % solo si ELLA pregunta la cifra).
     const commercialMessage = normalizeText(groupedMessage.content);
     const commercialAsked =
-      /\b(salario|sueldo|nomina|porcentaje|reparto|comision|skrill|liquidaci|dinero|euros?|paga\w*|cobr\w*|gano|gana|ganar\w*|ganaria|pagan)\b/.test(
+      /\b(salario|sueldo|nomina|porcentaje|reparto|comision\w*|skrill|liquidaci\w*|dinero|euros?|paga\w*|cobr\w*|gano|gana|ganar\w*|ganaria|pagan)\b/.test(
         commercialMessage
       ) ||
       /\b(os qued\w*|os llev\w*|me llev\w*|me qued\w*|me toca|mi parte|cuanto saco)\b/.test(commercialMessage) ||
