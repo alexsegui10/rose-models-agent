@@ -1350,6 +1350,23 @@ export class ConversationEngine {
       (projectedCandidate.currentState === "QUALIFYING" || projectedCandidate.currentState === "NEW_LEAD")
         ? softDeferResponse(groupedMessage.content, responsePlan.questionToAsk)
         : null;
+    // ANTI "hablar de mas" (Alex 24-jun): el borrador del LLM recibe el conocimiento y a veces RECITA el
+    // modelo de pago ("trabajamos a porcentaje, no salario fijo") aunque la candidata NO preguntara por dinero
+    // (lo arrastraban entradas de requisitos/FAQ). El plan ya filtra la CIFRA, pero el LLM veia las entradas
+    // CRUDAS. Si NO se ha preguntado por dinero, se quita el encuadre comercial de lo que ve el LLM (defensa en
+    // profundidad, alineada con invariante 3: el dinero nunca es proactivo). La rama determinista ya usa los
+    // answerFacts filtrados, asi que solo se sanea lo que va al borrador del LLM.
+    // "Pregunto por dinero" se decide por SUS PALABRAS, no por la suposicion del LLM: el intent/relevantTopics
+    // a veces clasifica "es demasiado?" (que es por la EDAD) como dinero -> apagaba el guardrail y colaba el
+    // reparto. El texto de ella es la verdad (y encaja con invariante 3: el % solo si ELLA pregunta la cifra).
+    const commercialMessage = normalizeText(groupedMessage.content);
+    const commercialAsked =
+      /\b(salario|sueldo|nomina|porcentaje|reparto|comision|skrill|liquidaci|dinero|euros?|paga\w*|cobr\w*|gano|gana|ganar\w*|ganaria|pagan)\b/.test(
+        commercialMessage
+      ) ||
+      /\b(os qued\w*|os llev\w*|me llev\w*|me qued\w*|me toca|mi parte|cuanto saco)\b/.test(commercialMessage) ||
+      /\b\d{1,3}\s?%|\b\d{1,2}\/\d{1,2}\b|\b(me dais|dame)\b/.test(commercialMessage);
+    const draftKnowledgeEntries = commercialAsked ? knowledgeEntries : knowledgeEntries.map(stripCommercialFraming);
     let draft =
       pauseMessage !== null
         ? deterministicDraftOutput(pauseMessage)
@@ -1367,7 +1384,7 @@ export class ConversationEngine {
                   deterministicResponse,
                   projectedCandidate,
                   recentMessages,
-                  knowledgeEntries,
+                  knowledgeEntries: draftKnowledgeEntries,
                   responsePlan,
                   retrievedExamples,
                   styleContext,
@@ -1420,6 +1437,18 @@ export class ConversationEngine {
         response = answeredFromPlan;
         factualValidation = validateFactualResponse(response, responsePlan);
         draft = { ...draft, response, usedFallback: true, error: "coherence-self-check-answered-from-plan" };
+      }
+    }
+    // GUARDRAIL DE SALIDA anti "hablar de mas" de DINERO (Alex 24-jun): si NO se pregunto por dinero pero el
+    // borrador colo el modelo de pago (a veces el LLM lo anade por su cuenta, no solo desde los facts), se
+    // quitan ESAS burbujas (el bot habla en lineas separadas por \n) y se conserva el resto. Defensa FINAL,
+    // determinista; refuerza invariante 3 (el dinero nunca es proactivo). Solo cuando no se pregunto dinero.
+    if (!commercialAsked && COMMERCIAL_FRAMING_RX.test(response)) {
+      const kept = response.split(/\n+/).filter((line) => line.trim().length > 0 && !COMMERCIAL_FRAMING_RX.test(line));
+      const cleaned = kept.join("\n\n").trim();
+      if (cleaned.length > 0 && cleaned !== response && validateFactualResponse(cleaned, responsePlan).valid) {
+        response = cleaned;
+        draft = { ...draft, response, error: "stripped-unsolicited-money-framing" };
       }
     }
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
@@ -2289,6 +2318,18 @@ const sharesPersonalConcernPattern =
   /\b(me (cuesta|cuestan|costaba|costaban|costo|costaria)|cuesta mucho|costaba mucho|dificil|complicad|lo deje|deje de|lo pare|pare porque|me da\b[^.!?]{0,14}\b(miedo|verguenza|cosa|palo|apuro|reparo|inseguridad|corte|vertigo|pereza)|no se si|no estoy segura|no estaba segura|no me convence|no me termina de convencer|no me acaba de convencer|no se yo|no lo (?:veo|tengo) claro|tengo mis dudas|no estoy convencid\w*|agobi|estres|estresa|me supera|abrumad|sola|me lia|no me aclaro|nervios|verguenza|inseguridad|insegura|no me atrevo|nunca he hecho esto|nunca lo he hecho|estaf|me robaron|me timaron|mala experiencia|me enganaron|dejaron de contestar|desaparecieron)\b/;
 
 // Acuses sin punto final: el "Okeyy." con punto era una marca de bot segun los jueces de estilo.
+// Encuadre del MODELO de pago (cifra incluida). Si la candidata no pregunto por dinero, se quita de los
+// hechos que ve el LLM al redactar para que no lo suelte por la cara (Alex 24-jun). NO borra la entrada ni
+// toca prohibitedClaims/mandatoryNuances/tags: solo vacia los hechos comerciales de esa entrada.
+const COMMERCIAL_FRAMING_RX = /\b(salario|sueldo|porcentaje|reparto|comision|70\s?%|30\s?%|70\/30|liquidaci|skrill)\b/i;
+function stripCommercialFraming(entry: KnowledgeEntry): KnowledgeEntry {
+  return {
+    ...entry,
+    facts: entry.facts.filter((fact) => !COMMERCIAL_FRAMING_RX.test(fact)),
+    approvedAnswerPoints: entry.approvedAnswerPoints.filter((point) => !COMMERCIAL_FRAMING_RX.test(point))
+  };
+}
+
 export function acknowledgementFor(understanding: ModelConversationOutput, inboundMessage = ""): string {
   // Equilibrio (peticion de Alex): reconocer lo que cuenta SIN dramatizar y SIN inventar nada. Frase
   // breve y fija; nunca afirma hechos ni politicas.
