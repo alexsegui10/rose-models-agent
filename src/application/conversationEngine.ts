@@ -1399,6 +1399,29 @@ export class ConversationEngine {
         error: "factual-validator-fallback"
       };
     }
+    // PASO 4 (self-check determinista de coherencia, Alex 24-jun): "pensar antes de contestar" barato y sin LLM.
+    // Si el plan PODIA responder (hay answerFacts) y NO es una escalada legitima, pero el borrador final quedo
+    // VACIO o DERIVO al socio sin necesidad, se reescribe DESDE EL PLAN para ATENDER de verdad lo que pregunto,
+    // en vez de dejarla colgada o derivar porque si. Solo actua ante esos dos fallos claros (no toca un turno de
+    // pregunta normal), asi que no degrada respuestas buenas. La cifra/escaladas siguen gateadas por el plan.
+    const planCanAnswer =
+      responsePlan.answerFacts.length > 0 && !responsePlan.requiresHumanReview && !responsePlan.uncoveredQuestion;
+    const responseDefersUnnecessarily =
+      /\blo (?:hablo|comento|consulto|miro|reviso|veo|confirmo) con mi socio\b|\bdejame que lo hable con mi socio\b|\bprefiero confirmarlo con mi socio\b|\bse lo (?:comento|digo|paso) a mi socio\b/i.test(
+        response
+      );
+    if (planCanAnswer && (response.trim().length === 0 || responseDefersUnnecessarily)) {
+      const answeredFromPlan = rewriteFromPlan(responsePlan, approvedNegotiationDecision);
+      if (
+        answeredFromPlan.trim().length > 0 &&
+        answeredFromPlan !== response &&
+        validateFactualResponse(answeredFromPlan, responsePlan).valid
+      ) {
+        response = answeredFromPlan;
+        factualValidation = validateFactualResponse(response, responsePlan);
+        draft = { ...draft, response, usedFallback: true, error: "coherence-self-check-answered-from-plan" };
+      }
+    }
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
     // Las variantes son estaticamente seguras (acuses o derivacion honesta al socio), por lo que
     // no invalidan la validacion factual ya realizada.
