@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CandidateStateSchema, DeviceEligibilitySchema, DeviceTypeSchema } from "@/domain/candidate";
+import { KnowledgeCategorySchema } from "@/domain/businessKnowledge";
 
 export const ConversationIntentSchema = z.enum([
   "REQUESTS_INFORMATION",
@@ -60,6 +61,12 @@ export const ModelConversationOutputSchema = z.object({
     .object({ kind: z.enum(["IDENTITY", "RECIPROCAL_PERSONAL", "GREETING"]) })
     .nullable()
     .default(null),
+  // Senal ORTOGONAL (Pieza 1, 24-jun): categorias de conocimiento que la IA considera RELEVANTES para este
+  // mensaje, de un enum CERRADO (lo desconocido se descarta). El retriever las usa para PRIORIZAR conocimiento
+  // de forma ADITIVA (suma score; NUNCA salta el gating de isUsableEntry ni decide negocio: invariante 1). Asi,
+  // si la candidata pregunta algo cuyo fraseo no pilla ningun regex, la IA igualmente surfacea la categoria. El
+  // % sigue gateado por el planner + factualValidator. Default []: en modo determinista/tests no aplica.
+  relevantTopics: z.array(KnowledgeCategorySchema).default([]),
   suggestedStateTransition: CandidateStateSchema.nullable(),
   requiresHumanReview: z.boolean(),
   humanReviewReason: z.string().nullable(),

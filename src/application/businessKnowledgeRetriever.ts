@@ -8,6 +8,14 @@ export interface BusinessKnowledgeRetrievalInput {
   intent: ConversationIntent;
   question: string;
   categories?: KnowledgeCategory[];
+  /**
+   * Categorias que la IA (understanding) marco RELEVANTES para este mensaje. Se usan SOLO para PRIORIZAR
+   * (suman score a las entradas de esa categoria), de forma ADITIVA: nunca filtran ni saltan `isUsableEntry`
+   * (gating de ACTIVE/aprobado/allowedStates/sensitive/DRAFT intacto). Asi una pregunta cuyo fraseo no pilla
+   * ningun regex igualmente surfacea su conocimiento. NO decide negocio (invariante 1): el % sigue gateado
+   * por el planner + factualValidator. Distinto de `categories`, que SI filtra.
+   */
+  relevantTopics?: KnowledgeCategory[];
   includeDrafts?: boolean;
   limit?: number;
   /**
@@ -73,6 +81,12 @@ function scoreEntry(entry: KnowledgeEntry, input: BusinessKnowledgeRetrievalInpu
   for (const tag of tags) {
     if (entry.tags.includes(tag)) score += 1.4;
   }
+
+  // Boost ADITIVO por la relevancia que marco la IA (Pieza 1): si la categoria de la entrada esta entre las
+  // relevantTopics del understanding, suma score suficiente para surfacearla aunque ningun regex de tags la
+  // haya pillado (cubre fraseos que las keywords no captan). NO salta isUsableEntry: sensitive/DRAFT/estados
+  // siguen filtrando antes; el % sigue gateado por el planner. Solo PRIORIZA conocimiento ya permitido.
+  if (input.relevantTopics?.includes(entry.category)) score += 1.5;
 
   for (const fact of [...entry.facts, ...entry.approvedAnswerPoints, entry.title]) {
     for (const word of normalize(fact).split(/\s+/)) {

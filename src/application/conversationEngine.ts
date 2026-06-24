@@ -1172,7 +1172,10 @@ export class ConversationEngine {
     const knowledgeEntries = await this.businessKnowledgeRetriever.retrieve({
       candidate: updatedCandidate,
       intent: understanding.intent,
-      question: groupedMessage.content
+      question: groupedMessage.content,
+      // Pieza 1: la IA prioriza que conocimiento es relevante (aditivo). En el turno del OPENER NO se pasa: el
+      // opener canonico exige answerFacts vacio (si se surfacea algo, lo redactaria OpenAI; bug "me dais info").
+      relevantTopics: isOpenerTurn ? undefined : understanding.relevantTopics
     });
     const approvedNegotiationDecision = await this.dependencies.repository.findApprovedNegotiationDecision(updatedCandidate.id);
     const responsePlan = buildResponsePlan({
@@ -3551,6 +3554,7 @@ function skippedResult(
     isNegotiation: false,
     requestedModelPercentage: null,
     pendingPersonalQuestion: null,
+    relevantTopics: [],
     suggestedStateTransition: null,
     requiresHumanReview: false,
     humanReviewReason: null,

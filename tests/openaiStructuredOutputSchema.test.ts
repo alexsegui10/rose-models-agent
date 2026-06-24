@@ -56,6 +56,7 @@ function apiUnderstanding(overrides: Partial<ApiConversationUnderstanding> = {})
     humanReviewReason: null,
     response: "",
     internalNotes: [],
+    relevantTopics: [],
     ...overrides
   };
 }

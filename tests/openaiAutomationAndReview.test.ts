@@ -55,7 +55,8 @@ function validUnderstanding(intent: ModelConversationOutput["intent"] = "CONFIRM
     requiresHumanReview: false,
     humanReviewReason: null,
     response: "",
-    internalNotes: []
+    internalNotes: [],
+    relevantTopics: []
   });
 }
 

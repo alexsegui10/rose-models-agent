@@ -833,6 +833,7 @@ function baseOutput(
     isNegotiation: humanReviewReason?.includes("negociacion") ?? false,
     requestedModelPercentage: extractedData.requestedModelPercentage ?? null,
     pendingPersonalQuestion,
+    relevantTopics: [],
     suggestedStateTransition: null,
     requiresHumanReview,
     humanReviewReason,

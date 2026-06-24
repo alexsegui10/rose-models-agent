@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { CandidateStateSchema, DeviceEligibilitySchema, DeviceTypeSchema } from "@/domain/candidate";
+import { KnowledgeCategorySchema } from "@/domain/businessKnowledge";
 import { promptRegistry } from "./promptRegistry";
 import {
   ConversationIntentSchema,
@@ -68,7 +69,8 @@ export const ApiConversationUnderstandingSchema = z.object({
   requiresHumanReview: z.boolean(),
   humanReviewReason: z.string().nullable(),
   response: z.string(),
-  internalNotes: z.array(z.string())
+  internalNotes: z.array(z.string()),
+  relevantTopics: z.array(KnowledgeCategorySchema)
 });
 
 export type ApiConversationUnderstanding = z.infer<typeof ApiConversationUnderstandingSchema>;
@@ -90,6 +92,7 @@ type UnderstandingCoreFields = Pick<
   | "humanReviewReason"
   | "response"
   | "internalNotes"
+  | "relevantTopics"
 >;
 
 export function mapApiUnderstandingToModelOutput(api: ApiConversationUnderstanding): UnderstandingCoreFields {
@@ -121,7 +124,8 @@ export function mapApiUnderstandingToModelOutput(api: ApiConversationUnderstandi
     requiresHumanReview: api.requiresHumanReview,
     humanReviewReason: api.humanReviewReason,
     response: api.response,
-    internalNotes
+    internalNotes,
+    relevantTopics: api.relevantTopics
   };
 }
 
@@ -428,6 +432,8 @@ export function buildUnderstandingInstructions(): string {
     "Rellena todos los campos del esquema y usa null cuando no haya dato real; no inventes valores ni pongas marcadores como ':' o '-' en campos sin dato (usa null).",
     "Si la candidata responde solo un numero a la pregunta de edad, es su edad.",
     "No decidas estados, transiciones ni acciones de negocio.",
+    // relevantTopics (Pieza 1): la IA marca QUE conocimiento aplica, aunque el fraseo no use palabras clave.
+    "relevantTopics: marca las categorias de conocimiento RELEVANTES para atender el mensaje actual, AUNQUE no use palabras clave obvias. Pistas: una duda de ENCAJE ('es demasiado?', 'sirvo para esto?', 'soy muy mayor?', '49 esta bien?') es CANDIDATE_REQUIREMENTS; preguntar la CIFRA del reparto o el sueldo es COMMERCIAL; 'de que va?/como trabajais?/que haceis?' es SERVICES; desconfianza/estafa es OBJECTION_HANDLING; dudas de la llamada/agenda es CALL_POLICY; contrato/permanencia es CONTRACT_POLICY. Si el mensaje NO necesita conocimiento (un saludo, o solo da su nombre/edad/movil sin preguntar nada), devuelve []. Esto SOLO prioriza que conocimiento se recupera; NUNCA decide negocio ni abre material restringido (eso lo gatea el codigo).",
     // Extraccion: SOLO datos nuevos del mensaje actual, en el campo correcto, sin re-emitir lo ya conocido.
     "extractedData: extrae SOLO datos NUEVOS que aparezcan en el mensaje actual y ponlos en el campo que les corresponde (un modelo de movil va en deviceModel, una descripcion de OnlyFans va en experienceDescription/contentAvailability, NUNCA en deviceModel). Para cualquier dato que el mensaje actual no aporte, devuelve null; no repitas ni re-deduzcas datos que ya estaban en knownData.",
     // dataContradictions: el verdadero foco de sobre-escalado. Solo cambios reales de un HECHO DURO ya dado.
