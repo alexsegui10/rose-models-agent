@@ -96,21 +96,26 @@ function normalizeEndPayload(raw: unknown): unknown {
   const data = obj.data;
   if (!data || typeof data !== "object") return raw; // ya es plano (proxy / pruebas)
 
-  const d = data as Record<string, any>;
-  const dynVars = (d.conversation_initiation_client_data?.dynamic_variables ??
-    d.metadata?.dynamic_variables ??
-    d.dynamic_variables ??
-    {}) as Record<string, unknown>;
-  const transcriptRaw = Array.isArray(d.transcript) ? d.transcript : undefined;
-  const transcript = transcriptRaw
-    ?.map((t: any) => ({ role: String(t?.role ?? "unknown"), content: String(t?.message ?? t?.content ?? "") }))
-    .filter((t: { content: string }) => t.content.length > 0);
+  const rec = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
+  const d = rec(data);
+  const cic = rec(d.conversation_initiation_client_data);
+  const metadata = rec(d.metadata);
+  const analysis = rec(d.analysis);
+  const dynVars = rec(cic.dynamic_variables ?? metadata.dynamic_variables ?? d.dynamic_variables);
+  const transcript = Array.isArray(d.transcript)
+    ? (d.transcript as unknown[])
+        .map((t) => {
+          const tr = rec(t);
+          return { role: String(tr.role ?? "unknown"), content: String(tr.message ?? tr.content ?? "") };
+        })
+        .filter((t) => t.content.length > 0)
+    : undefined;
 
   const normalized: Record<string, unknown> = {
     candidateId: obj.candidateId ?? dynVars.candidate_id ?? dynVars.candidateId,
     status: d.status ?? obj.status ?? "completed",
-    summary: d.analysis?.transcript_summary ?? d.summary ?? obj.summary,
-    durationSec: d.metadata?.call_duration_secs ?? d.call_duration_secs ?? obj.durationSec,
+    summary: analysis.transcript_summary ?? d.summary ?? obj.summary,
+    durationSec: metadata.call_duration_secs ?? d.call_duration_secs ?? obj.durationSec,
     transcript: transcript ?? obj.transcript
   };
   return normalized;
