@@ -239,6 +239,17 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("age", "target-profile", "selection", "faq");
+  // Dudas de ENCAJE que NO nombran "edad/mayor" pero suelen serlo: "es demasiado?" tras decir la edad,
+  // "sirvo/valgo para esto", "estoy a tiempo", "soy demasiada para vosotros", "demasiado/muy mayor/grande/vieja".
+  // Surfacea el perfil objetivo para RESPONDERLAS (decision de Alex: el bot contesta antes de avanzar) en vez de
+  // saltar al siguiente dato. Guardado para NO pisar "es mucho dinero?" (dinero, no encaje). Bridge determinista
+  // (Alex 24-jun) hasta que la relevancia la decida el LLM (Pieza 1).
+  if (
+    /\b(sirvo|valgo)\b[^.!?]{0,18}\b(para esto|para vosotros|para vos|a mi edad|aqui)\b|\bestoy a tiempo\b|\b(demasiad[oa]|much[oa]|muy)\s+(mayor|grande|vieja)\b|\b(soy|sere|seria)\s+(demasiad[oa]|much[oa])\b[^.!?]{0,14}\b(para|edad|mayor|vieja|esto|vosotros|vos)\b|\b[2-5]\d\b[^.!?]{0,15}\b(demasiad[oa]|much[oa])\b/.test(
+      message
+    )
+  )
+    tags.push("age", "target-profile", "selection", "faq");
   if (
     /\b(bloquear|bloqueo|bloqueen|que no me vean|me reconozcan|me vea alguien|privacidad|anonimato|mi pais|conocidos)\b/.test(
       message

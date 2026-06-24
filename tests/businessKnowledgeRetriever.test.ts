@@ -113,6 +113,31 @@ describe("Retriever: 'me dais/dame info' es peticion generica, NO negociacion de
     }
   });
 
+  it("dudas de ENCAJE por edad ('49 es demasiado?', 'sirvo para esto?') surfacean el perfil objetivo (no se ignoran)", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const qualifying = { ...newLead(), currentState: "QUALIFYING" } as Candidate;
+    for (const fit of [
+      "49 es demasiado?",
+      "sirvo para esto a mi edad?",
+      "soy demasiado mayor para esto?",
+      "no soy demasiada para vosotros?"
+    ]) {
+      const entries = await retriever.retrieve({ candidate: qualifying, intent: "OTHER", question: fit });
+      expect(entries.some((e) => e.id === "candidate-requirements-target-profile")).toBe(true);
+    }
+  });
+
+  it("una pregunta de DINERO ('es mucho dinero?') NO se confunde con duda de encaje por edad", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    const qualifying = { ...newLead(), currentState: "QUALIFYING" } as Candidate;
+    const entries = await retriever.retrieve({
+      candidate: qualifying,
+      intent: "REQUESTS_INFORMATION",
+      question: "es mucho dinero?"
+    });
+    expect(entries.some((e) => e.id === "candidate-requirements-target-profile")).toBe(false);
+  });
+
   it("una negociacion REAL del % SIGUE surfaceando el reparto sensible (deteccion intacta, invariante 3)", async () => {
     const retriever = new LocalBusinessKnowledgeRetriever();
     for (const question of [
