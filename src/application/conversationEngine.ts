@@ -2852,9 +2852,12 @@ function isPastAgencyComplaintNotAtUs(message: string): boolean {
     ) ||
     /\bno me (?:pagaban|pagaron|pagaba)\b/.test(m);
   if (!pastComplaint) return false;
-  // Desconfianza/agresion DIRIGIDA A NOSOTROS o duda de si ESTO es estafa -> NO se neutraliza (escala como siempre).
+  // Desconfianza/agresion DIRIGIDA A NOSOTROS o duda de si ESTO es estafa -> NO se neutraliza (escala como
+  // siempre). Lista AMPLIA y en direccion SEGURA (ante la duda, escalar): cubre verbos de desconfianza
+  // (desconfio, sospecho, no me creo, no me fio, no me inspirais/dais confianza, mala espina/vibra/pinta),
+  // que ESTO sea estafa/fraude, y agresion. Si aparece cualquiera junto a la queja pasada, se escala (revisor 26-jun).
   const atUs =
-    /\b(sois|sereis|seras|esto es|es una estafa|es estafa|sera (?:una )?estafa|me vais a estafar|me estais estafando|vais a estafarme|no me fio|mala espina|me suena raro|como se que (?:es real|sois reales|es verdad|no es estafa)|sois de fiar|me puedo fiar|sois fiables|os denunci|sois una basura|panda de|sinverguenza|ladron|que asco|mierda)\b/.test(
+    /\b(sois|sereis|seras|esto es|es una estafa|es estafa|sera (?:una )?estafa|fraude|me vais a estafar|me estais estafando|vais a estafarme|desconfi\w*|sospech\w*|recel\w*|no me creo|no me fio|no me dais|no me inspir\w*|no me da(?:n)? (?:buena |buena espina|confianza)|mala (?:espina|vibra|pinta|sensacion)|me da mala|me suena (?:raro|mal|a estafa|a timo)|como se que (?:es real|sois reales|es verdad|no es estafa)|sois de fiar|me puedo fiar|sois fiables|dudo de|os denunci|sois una basura|panda de|sinverguenza|ladron|que asco|mierda)\b/.test(
       m
     );
   return !atUs;
