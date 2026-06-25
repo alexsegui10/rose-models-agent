@@ -910,6 +910,10 @@ export class ConversationEngine {
     // cancelacion (el reproceso lo dispara una accion humana, no un mensaje nuevo: no debe cancelar nada).
     // reprocessExisting puede venir del llamante (feature C) o activarse aqui mismo (recuperacion P0-3).
     let reprocessExisting = input.reprocessExisting ?? false;
+    // ¿Este reproceso es una RECUPERACION de un inbound duplicado aun sin responder (P0-3)? (distinto de la
+    // reanudacion humana de feature C, que llega por input.reprocessExisting). Importa para la version: el
+    // de recuperacion SI bumpea (puede competir con el turno original vivo); el de feature C no.
+    let recoveredDeadTurn = false;
     if (!reprocessExisting && groupedMessage.externalMessageId) {
       const duplicateInbound = await this.dependencies.repository.findMessageByExternalId(
         candidate.id,
@@ -925,6 +929,7 @@ export class ConversationEngine {
           return skippedResult(candidate, duplicateInbound.content, true, "Mensaje duplicado ignorado (ya respondido).");
         }
         reprocessExisting = true;
+        recoveredDeadTurn = true;
       }
     }
 
@@ -942,10 +947,17 @@ export class ConversationEngine {
     // cancele al obsoleto (sin doble envio). En reproceso (C / recuperacion P0-3) NO se bumpea (lo dispara una
     // accion humana o un turno ya muerto, no un mensaje nuevo) y el inbound ya esta guardado.
     let activeCandidate: Candidate;
-    if (reprocessExisting) {
+    if (reprocessExisting && !recoveredDeadTurn) {
+      // Feature C (reanudacion humana): NO bumpea (no es un mensaje nuevo, no debe cancelar nada).
       activeCandidate = { ...candidate, updatedAt: new Date() };
       await this.dependencies.repository.saveCandidate(activeCandidate);
     } else {
+      // Turno NUEVO o RECUPERACION de un inbound duplicado aun sin responder (P0-3): bumpea SIEMPRE. Si el
+      // turno original sigue VIVO (carrera real: reintento de Meta mientras el 1o aun genera con OpenAI), las
+      // dos versiones quedan DISTINTAS y el send-gate (canAutomationSend) cancela a la obsoleta -> JAMAS doble
+      // respuesta (P1-4). Si el original murio de verdad, no hay competidor y este turno responde (recupera).
+      // Antes el reproceso de recuperacion NO bumpeaba: dos entregas casi simultaneas del mismo inbound
+      // pasaban el send-gate con la MISMA version y se duplicaba la respuesta (bug Alex 25-jun, "se duplica").
       const bumpedVersion = await this.dependencies.repository.bumpGenerationVersion(candidate.id);
       activeCandidate = { ...candidate, generationCancellationVersion: bumpedVersion, updatedAt: new Date() };
     }
