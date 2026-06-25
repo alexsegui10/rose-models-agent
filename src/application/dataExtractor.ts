@@ -358,6 +358,13 @@ const deviceQualityReplyPattern =
 // contable detras ("17 cuentas"): eso evita edades fantasma (invariante 2). Solo se usa si el agente
 // acaba de preguntar la edad, asi que el ruido final es seguro.
 const bareAgeMessagePattern = /^\s*(?:edad\s*:?\s*)?(\d{1,2})\s*(?:anos|años|anitos|añitos)?\s*[\p{P}\p{S}\s]*$/u;
+// Edad de CABECERA: el mensaje EMPIEZA por un numero de edad (1-2 cifras) aunque DESPUES siga texto, que es
+// lo que pasa cuando la candidata manda la edad y una coletilla en burbujas distintas ("48\nes suficiente?")
+// o juntas ("48 es suficiente?"). Solo se usa como BACKSTOP (cuando el agente acaba de preguntar la edad y
+// NADA mas la extrajo), por eso es seguro leer la cabecera. Reusa el lookahead de contables (invariante 2:
+// "48 cuentas"/"2 fotos" NO es edad), (?!\d) impide leer "4800" como 48 y (?![.,]\d) excluye decimales
+// ("1.80 metros" no es edad 1). Una cifra <18 se lee LITERAL y decideNextState cierra (invariante 2 intacto).
+const leadingAgeMessagePattern = new RegExp(`^\\s*(?:edad\\s*:?\\s*)?(\\d{1,2})(?!\\d)(?![.,]\\d)${ageCountNounLookahead}`, "iu");
 
 // Respuestas afirmativas/negativas peladas a una pregunta cerrada del agente. El "si" se admite
 // doblado o alargado ("sisi", "si si", "siii") sin confundir "siempre"/"siento" (que NO son un si):
@@ -619,6 +626,15 @@ export function extractDeterministicUnderstanding(
     if (extractedData.age === undefined) {
       const spelled = spelledAdultAge(normalized);
       if (spelled !== null) extractedData.age = spelled;
+    }
+    // BACKSTOP de edad (Alex 25-jun): el agente acaba de preguntar la edad y NADA anterior la extrajo
+    // (ni declaredMinorAge, ni "tengo N"/"N años", ni en letra), pero el mensaje EMPIEZA por un numero de
+    // edad aunque venga pegado a una coletilla ("48\nes suficiente?"). Esa cabecera ES la edad. Determinista
+    // y gateado por agentAskedAge: solo se aplica respondiendo a la pregunta de edad. Una cifra <18 cierra
+    // (la lee literal). Va dentro del else, asi que declaredMinorAge ya tuvo prioridad (invariante 2).
+    if (extractedData.age === undefined && agentAskedAge) {
+      const leadingAge = leadingAgeMessagePattern.exec(normalized);
+      if (leadingAge) extractedData.age = Number(leadingAge[1]);
     }
   }
 
