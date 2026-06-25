@@ -1385,6 +1385,11 @@ export class ConversationEngine {
     // menciono. Se decide por SUS PALABRAS (el intent/relevantTopics del LLM es flaky). La rama determinista usa
     // answerFacts ya filtrados; aqui solo se sanea lo que va al borrador del LLM.
     const suppressedFramings = framingsToSuppress(groupedMessage.content);
+    // Adulta YA confirmada: se suprime tambien la politica "solo mayores de edad" (irrelevante y confusa para
+    // ella). No aplica en CLOSED (el cierre de una menor va por otra rama y NO es isAdultConfirmed).
+    if (projectedCandidate.isAdultConfirmed && projectedCandidate.currentState !== "CLOSED") {
+      suppressedFramings.push(ADULTS_ONLY_FRAMING);
+    }
     const draftKnowledgeEntries =
       suppressedFramings.length === 0
         ? knowledgeEntries
@@ -2404,6 +2409,12 @@ interface SuppressedTopic {
   askedInMessage: (message: string) => boolean;
   framing: RegExp;
 }
+// Una candidata YA ADULTA confirmada NUNCA debe oir la politica "solo mayores de edad": la entrada
+// candidate-requirements-adult se surfacea al mencionar "menores"/"mayores"/"edad" y el LLM la recita, lo que
+// es un sinsentido para una de 45 que pregunta por preferencias de edad ("o buscais mas menores?"). Bug Alex
+// 26-jun. La frase del cierre de MENORES (otra rama, terminal, con isAdultConfirmed=false) NO se ve afectada.
+const ADULTS_ONLY_FRAMING = /\bmayores de edad\b|\bsolo podemos valorar perfiles de personas mayores\b/i;
+
 const SUPPRESSED_TOPICS: SuppressedTopic[] = [
   {
     name: "money",
