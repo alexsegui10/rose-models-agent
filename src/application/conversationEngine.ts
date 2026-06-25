@@ -1027,6 +1027,10 @@ export class ConversationEngine {
           : [...understanding.internalNotes, "Desconfianza/agresion: escala a Alex (decision 16-jun)."]
       };
     }
+    // Queja de una agencia PASADA (no hacia nosotros): el bot tranquiliza y SIGUE, no escala (decision Alex
+    // 26-jun). Va DESPUES del override de desconfianza (que reañade la escalada por "estafa") para revertir solo
+    // la queja pasada; la desconfianza/agresion hacia VOSOTROS y persona/inyeccion/%/contrato conservan su escalada.
+    understanding = resolvePastAgencyComplaint(understanding, groupedMessage.content);
     if (faceConcern) {
       understanding = applyFaceConcern(understanding, faceConcern, faceObjectionCountBefore);
     }
@@ -2833,6 +2837,52 @@ const asapCallPattern =
 // CLARA sobre nosotros (scam/identidad real) y la agresion escalan a Alex.
 const operatorEscalationPattern =
   /\b(estafa\w*|timador\w*|fraude|mala espina|como se que (?:es real|es verdad|sois reales|no es estafa)|sois de fiar|sois fiables|me puedo fiar|no sera (?:una )?estafa|sera (?:una )?estafa|que asco|sois una basura|panda de|os (?:voy a )?denunci\w*|os denuncio|ladron\w*|sinverguenza\w*|mierda)\b/;
+// Queja de una mala experiencia PASADA con OTRA agencia/persona (la estafaron, le pagaban poco): la candidata
+// NO os acusa a vosotros, cuenta por que se fue de su agencia anterior. Decision de Alex (26-jun): tranquilizar
+// y SEGUIR (no perder un buen lead quemado), NO escalar. Solo cuenta como queja pasada si NO hay desconfianza/
+// agresion DIRIGIDA A NOSOTROS (eso sigue escalando). Determinista (invariante 1).
+function isPastAgencyComplaintNotAtUs(message: string): boolean {
+  const m = normalizeText(message);
+  const pastComplaint =
+    /\bme (?:estafaron|estafo|estafaba|estafaban|timaron|timo|timaba|enganaron|engano|enganaban|usaron|jodieron|robaron)\b/.test(
+      m
+    ) ||
+    /\b(?:me (?:pagaban|pagaron|pagaba|trataban|trataron)|trataban|trataron)\b[^.!?]{0,20}\b(?:poco|mal|fatal|de pena|una miseria|tarde)\b/.test(
+      m
+    ) ||
+    /\bno me (?:pagaban|pagaron|pagaba)\b/.test(m);
+  if (!pastComplaint) return false;
+  // Desconfianza/agresion DIRIGIDA A NOSOTROS o duda de si ESTO es estafa -> NO se neutraliza (escala como siempre).
+  const atUs =
+    /\b(sois|sereis|seras|esto es|es una estafa|es estafa|sera (?:una )?estafa|me vais a estafar|me estais estafando|vais a estafarme|no me fio|mala espina|me suena raro|como se que (?:es real|sois reales|es verdad|no es estafa)|sois de fiar|me puedo fiar|sois fiables|os denunci|sois una basura|panda de|sinverguenza|ladron|que asco|mierda)\b/.test(
+      m
+    );
+  return !atUs;
+}
+
+// Baja la escalada por DESCONFIANZA mal disparada por una queja de agencia PASADA (decision Alex 26-jun): si es
+// una queja pasada (no hacia nosotros) y NO hay otra razon real de escalada (persona/inyeccion/IA/negociacion/%/
+// contrato), se limpia requiresHumanReview y el intent REQUESTS_HUMAN baja a OTHER -> el bot tranquiliza y sigue.
+// NUNCA toca menores (cierran por edad antes), ni %/contrato/inyeccion/persona (esos conservan su escalada).
+function resolvePastAgencyComplaint(understanding: ModelConversationOutput, message: string): ModelConversationOutput {
+  if (!understanding.requiresHumanReview && understanding.intent !== "REQUESTS_HUMAN") return understanding;
+  if (!isPastAgencyComplaintNotAtUs(message)) return understanding;
+  const m = normalizeText(message);
+  if (humanSignalPattern.test(m) || injectionSignalPattern.test(m) || aiSignalPattern.test(m)) return understanding;
+  if (negotiationSignalPattern.test(m) || contractSignalPattern.test(m) || /\b\d{1,3}\s?%|\b\d{1,2}\/\d{1,2}\b/.test(m))
+    return understanding;
+  return {
+    ...understanding,
+    requiresHumanReview: false,
+    humanReviewReason: null,
+    intent: understanding.intent === "REQUESTS_HUMAN" ? "OTHER" : understanding.intent,
+    internalNotes: [
+      ...understanding.internalNotes,
+      "Queja de agencia PASADA (no hacia nosotros): tranquilizar y seguir, sin escalar (decision Alex 26-jun)."
+    ]
+  };
+}
+
 const aiSignalPattern = /\b(eres ia|eres una ia|eres un bot|sois ia|hablo con una ia|hablo con un bot|inteligencia artificial)\b/;
 const humanSignalPattern = /\b(persona|alex|humano|hablar con alguien)\b/;
 const injectionSignalPattern = /\b(ignora|ignore|instrucciones|prompt|sistema|reglas internas)\b/;
