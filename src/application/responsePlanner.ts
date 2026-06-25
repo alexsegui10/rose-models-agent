@@ -47,6 +47,11 @@ const MAX_SAME_QUESTION_ASKS = 2;
 // Si tampoco asi lo da, el extractor marca el movil PENDING_QUALITY_TEST (Alex lo valora) y el guion avanza.
 const DEVICE_MODEL_CLARIFICATION =
   "Que modelo de movil tienes exactamente? Dime la marca y el modelo, por ejemplo iPhone 13 o Samsung S23.";
+// RE-pregunta SUAVE del movil (2a vez) cuando la candidata aun no ha dado ningun aparato (p.ej. se fue a otro
+// tema): se vuelve a pedir el movil con naturalidad, NO "marca y modelo exactamente" (que da por hecho que ya
+// dio un movil y suena raro tras ignorar la pregunta; bug Alex 25-jun). Contiene "que movil tienes" para contar
+// como pregunta del slot, pero NO casa el patron de aclaracion de modelo (no dispara el PENDING antes de tiempo).
+const DEVICE_REASK = "Y al final que movil tienes? aunque sea solo la marca, asi veo la calidad de camara.";
 
 // Cierre hacia la llamada (playbook 1.7): pitch -> la candidata propone dia/hora -> ENTONCES el
 // telefono. Pedir el numero nada mas oir "llamada" era el fallo nº1 de la iteracion 1.
@@ -277,6 +282,10 @@ function questionToAskFor(
   const intent = input.understanding.intent;
   const message = normalize(input.inboundMessage);
   const recentAgentMessages = (input.recentAgentMessages ?? []).map(normalize);
+  // ¿La candidata DIVIRTIO preguntando otra cosa este turno (p.ej. el pago) en vez de responder al slot? Lo
+  // usa la re-pregunta del movil: si divirtio y aun no dio aparato, se re-pregunta SUAVE, no "marca y modelo"
+  // exactamente (que da por hecho que ya dio uno; bug Alex 25-jun). Señal: intent de pregunta/peticion o "?".
+  const divertedWithQuestion = ANSWER_WITH_FACTS_INTENTS.has(intent) || /\?/.test(input.inboundMessage);
   const adultConfirmed = Boolean(candidate.age && candidate.isAdultConfirmed);
   const proposesTime = proposesConcreteTime(message);
   // El "Domingo 11 am?" suelto tras proponer el agente la llamada ES una confirmacion de llamada,
@@ -336,7 +345,7 @@ function questionToAskFor(
     // tardios opcionales (pais, disponibilidad) no bloquean el cierre y se cubren en la llamada
     // (regresion stall-loop iteracion 3, r14/r15). Si el guion esencial esta completo, que ella
     // proponga el dia y la hora (orden real: pitch -> dia/hora -> telefono).
-    const slotQuestion = nextSlotQuestion(candidate, recentAgentMessages, { skipOptional: true });
+    const slotQuestion = nextSlotQuestion(candidate, recentAgentMessages, { skipOptional: true, divertedWithQuestion });
     return slotQuestion ?? askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
   }
 
@@ -350,7 +359,7 @@ function questionToAskFor(
     if (scheduled) return scheduled;
   }
 
-  return nextSlotQuestion(candidate, recentAgentMessages);
+  return nextSlotQuestion(candidate, recentAgentMessages, { divertedWithQuestion });
 }
 
 /**
@@ -377,7 +386,7 @@ function essentialScriptDone(candidate: Candidate): boolean {
 function nextSlotQuestion(
   candidate: Candidate,
   recentAgentMessages: string[],
-  options: { skipOptional?: boolean } = {}
+  options: { skipOptional?: boolean; divertedWithQuestion?: boolean } = {}
 ): string | null {
   for (const slot of qualificationSlots) {
     if (options.skipOptional && slot.optional) continue;
@@ -386,11 +395,18 @@ function nextSlotQuestion(
     // pregunta normal; 2a vez (ya preguntado el movil y sigue sin modelo): aclaracion; 3a: nada (el motor ya
     // habra marcado PENDING tras la aclaracion, asi que normalmente el slot ya no esta missing aqui).
     if (slot.id === "device") {
-      const askedDevice = recentAgentMessages.some((message) => /que movil tienes/.test(message));
+      const deviceAsks = recentAgentMessages.filter((message) => /que movil tienes/.test(message)).length;
       const askedModel = recentAgentMessages.some((message) =>
         /marca y (?:el )?modelo|modelo de movil tienes exactamente/.test(message)
       );
-      if (!askedDevice) return slot.question;
+      // 1a vez: pregunta normal del movil. Tras preguntarlo y SIN aparato nombrado:
+      // - si en ESTE turno DIVIRTIO preguntando otra cosa (le estamos contestando hechos, p.ej. el pago):
+      //   re-pregunta SUAVE el movil, NO "marca y modelo exactamente" (que da por hecho que ya dio uno y suena
+      //   raro tras un "no contesto"; bug Alex 25-jun).
+      // - si no pregunto nada (vago/ack o dio un tipo sin modelo): se pide el modelo exacto UNA vez -> el motor
+      //   marca PENDING y el guion AVANZA (rompe el dead-end, Alex 23-jun). Tras pedir el modelo, no se repite.
+      if (deviceAsks === 0) return slot.question;
+      if (options.divertedWithQuestion) return DEVICE_REASK;
       if (!askedModel) return DEVICE_MODEL_CLARIFICATION;
       continue;
     }

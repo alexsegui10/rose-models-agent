@@ -154,6 +154,7 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
       age: undefined,
       isAdultConfirmed: false,
       hasOnlyFans: undefined,
+      deviceType: "UNKNOWN",
       deviceEligibility: "UNKNOWN",
       deviceModel: undefined
     });
@@ -198,6 +199,7 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
     const { engine, repository } = setup();
     const c = await seedQualifying(repository, {
       hasOnlyFans: undefined,
+      deviceType: "UNKNOWN",
       deviceEligibility: "UNKNOWN",
       deviceModel: undefined
     });
@@ -229,6 +231,7 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
     const { engine, repository } = setup();
     const c = await seedQualifying(repository, {
       hasOnlyFans: undefined,
+      deviceType: "UNKNOWN",
       deviceEligibility: "UNKNOWN",
       deviceModel: undefined
     });
@@ -253,6 +256,7 @@ describe("Calidad: pregunta de pago, timing de revision y movil dudoso", () => {
       age: undefined,
       isAdultConfirmed: false,
       hasOnlyFans: undefined,
+      deviceType: "UNKNOWN",
       deviceEligibility: "UNKNOWN",
       deviceModel: undefined
     });
