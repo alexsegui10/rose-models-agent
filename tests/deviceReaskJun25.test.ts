@@ -65,4 +65,18 @@ describe("Re-pregunta del movil suave cuando divierte preguntando (Alex 25-jun)"
     });
     expect(r.response.toLowerCase()).toMatch(/marca y (?:el )?modelo|modelo de movil tienes exactamente/);
   });
+
+  it("si DIVIERTE preguntando en cada turno sin dar movil, hay TOPE: acaba escalando (no re-pregunta en bucle)", async () => {
+    const { engine, repository } = mk();
+    const c = await seedAskedDevice(repository);
+    await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: "vale" }] });
+    const diversions = ["y cuanto me vais a pagar?", "y que hace la agencia?", "y como son los pagos?", "y cada cuanto pagais?"];
+    let escalated = false;
+    for (const d of diversions) {
+      const r = await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: d }] });
+      if (/marca y (?:el )?modelo|modelo de movil tienes exactamente/.test(r.response.toLowerCase())) escalated = true;
+      if (r.candidate.deviceEligibility !== "UNKNOWN") escalated = true; // o ya marco PENDING y avanzo
+    }
+    expect(escalated).toBe(true);
+  });
 });

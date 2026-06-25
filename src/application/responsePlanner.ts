@@ -406,7 +406,10 @@ function nextSlotQuestion(
       // - si no pregunto nada (vago/ack o dio un tipo sin modelo): se pide el modelo exacto UNA vez -> el motor
       //   marca PENDING y el guion AVANZA (rompe el dead-end, Alex 23-jun). Tras pedir el modelo, no se repite.
       if (deviceAsks === 0) return slot.question;
-      if (options.divertedWithQuestion) return DEVICE_REASK;
+      // Re-pregunta suave mientras divierta, pero con TOPE (deviceAsks < 3): si insiste en irse por las ramas
+      // sin dar nunca el movil, se escala igual al modelo -> PENDING -> el guion AVANZA (no se reabre el
+      // dead-end de Alex 23-jun ni se re-pregunta el movil en bucle infinito).
+      if (options.divertedWithQuestion && deviceAsks < 3) return DEVICE_REASK;
       if (!askedModel) return DEVICE_MODEL_CLARIFICATION;
       continue;
     }
