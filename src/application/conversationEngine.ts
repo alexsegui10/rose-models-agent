@@ -1979,10 +1979,12 @@ function generateResponse(
   // de privado -> pide aceptar la solicitud), pase lo que pase. Va ANTES de cualquier rama de CONTENIDO (negocio,
   // conocimiento, edad, "lo comento con mi socio"...) para que NUNCA dependa de lo que surfacee el buscador:
   // antes, si una palabra (incluido un typo como "dame infoo") surfaceaba el %, el opener lo reformulaba OpenAI
-  // y ni pedia el nombre (bug recurrente de Alex 25-jun). Solo cede ante una escalada REAL (requiresHumanReview:
-  // negociacion/inyeccion en el 1er mensaje, que se gestiona mas abajo). Una menor que diga su edad en el primer
-  // mensaje ya cerro arriba (invariante 2). Es la fuente UNICA del opener: deterministico, cero deriva del LLM.
-  if (isOpenerTurn && !responsePlan.requiresHumanReview) {
+  // y ni pedia el nombre (bug recurrente de Alex 25-jun). Es la fuente UNICA del opener: deterministico, cero
+  // deriva del LLM. CEDE ante una ESCALADA real: si el primer mensaje ya proyecto a HIR (inyeccion de prompt,
+  // pide hablar con una persona, negociacion...), NO se da el opener -> cae a la rama HIR de abajo (holding de
+  // revision), invariante 4 intacto. El estado proyectado es la senal fiable (decideNextState manda toda escalada
+  // a HIR); `requiresHumanReview` del plan no capta la inyeccion. Una menor cerro arriba (invariante 2).
+  if (isOpenerTurn && !responsePlan.requiresHumanReview && candidate.currentState !== "HUMAN_INTERVENTION_REQUIRED") {
     return canonicalOpener(candidate);
   }
 
