@@ -38,19 +38,37 @@ describe("Extraccion determinista de edad de cabecera (Alex 25-jun)", () => {
     expect(extractDeterministicUnderstanding("48 es suficiente?", noAsk).extractedData?.age).toBeUndefined();
   });
 
-  // BLOQUEANTE que cazo el revisor: una MENOR borde con el numero DELANTE del marcador de "aun no los cumple"
-  // ("18 casi los cumplo") NO puede leerse como adulta. declaredMinorAge solo capta el marcador antes del
-  // verbo, asi que el backstop debe mandar estos casos al limbo (undefined), NUNCA edad adulta (invariante 2).
-  it("una menor borde con el numero delante ('18 casi los cumplo') NO se lee como adulta -> limbo", () => {
+  // BLOQUEANTE (dos pasadas del revisor): una MENOR borde que aun NO cumple 18 (el numero DELANTE de la
+  // coletilla de futuro) NO puede leerse como adulta. Regla de FRONTERA (no lista negra, que siempre tiene
+  // fugas): el 18 solo se lee como adulta si NO hay coletilla con texto -> cualquier letra detras = limbo.
+  it("una menor borde de 18 con coletilla de futuro NO se lee como adulta -> limbo (invariante 2)", () => {
     for (const msg of [
       "18 casi los cumplo",
       "18 voy a cumplir",
       "18 pero todavia no",
       "18 en dos meses",
-      "18 los cumplo en mayo"
+      "18 los cumplo en mayo",
+      // fugas que la lista negra dejaba pasar (2a pasada del revisor):
+      "18 en julio",
+      "18 en un mes",
+      "18 dentro de poco",
+      "18 menos un mes",
+      "18 me faltan dias",
+      "18 me falta poco",
+      "18 los hago en agosto",
+      "18 el dia 5"
     ]) {
       expect(extractDeterministicUnderstanding(msg, askedAge).extractedData?.age).toBeUndefined();
     }
+  });
+
+  it("'18' sola (o con coletilla NO textual) SI es adulta; 19+ se leen pase lo que pase tras el numero", () => {
+    for (const msg of ["18", "18!", "18 :)", "edad: 18"]) {
+      expect(extractDeterministicUnderstanding(msg, askedAge).extractedData?.age).toBe(18);
+    }
+    // 19+ no se vuelve menor por ninguna coletilla -> la cura sigue (y "30 en julio" sigue siendo 30).
+    expect(extractDeterministicUnderstanding("30 en julio", askedAge).extractedData?.age).toBe(30);
+    expect(extractDeterministicUnderstanding("48\nes suficiente?", askedAge).extractedData?.age).toBe(48);
   });
 
   it("NO lee la 1a cifra de dos grupos numericos como edad (reparto/telefono/disponibilidad/rango)", () => {
