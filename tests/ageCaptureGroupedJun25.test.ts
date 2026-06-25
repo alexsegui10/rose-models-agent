@@ -37,6 +37,32 @@ describe("Extraccion determinista de edad de cabecera (Alex 25-jun)", () => {
     const noAsk = { lastAgentMessage: "hola, que tal estas?" };
     expect(extractDeterministicUnderstanding("48 es suficiente?", noAsk).extractedData?.age).toBeUndefined();
   });
+
+  // BLOQUEANTE que cazo el revisor: una MENOR borde con el numero DELANTE del marcador de "aun no los cumple"
+  // ("18 casi los cumplo") NO puede leerse como adulta. declaredMinorAge solo capta el marcador antes del
+  // verbo, asi que el backstop debe mandar estos casos al limbo (undefined), NUNCA edad adulta (invariante 2).
+  it("una menor borde con el numero delante ('18 casi los cumplo') NO se lee como adulta -> limbo", () => {
+    for (const msg of [
+      "18 casi los cumplo",
+      "18 voy a cumplir",
+      "18 pero todavia no",
+      "18 en dos meses",
+      "18 los cumplo en mayo"
+    ]) {
+      expect(extractDeterministicUnderstanding(msg, askedAge).extractedData?.age).toBeUndefined();
+    }
+  });
+
+  it("NO lee la 1a cifra de dos grupos numericos como edad (reparto/telefono/disponibilidad/rango)", () => {
+    for (const msg of ["70 30", "50 70 reparto", "18 30 horas libres", "11 2345 6789", "48 50", "48-50"]) {
+      expect(extractDeterministicUnderstanding(msg, askedAge).extractedData?.age).toBeUndefined();
+    }
+  });
+
+  it("NO lee una duracion de cabecera como edad ('8 anios trabajando', typo incluido)", () => {
+    expect(extractDeterministicUnderstanding("8 anios trabajando", askedAge).extractedData?.age).toBeUndefined();
+    expect(extractDeterministicUnderstanding("25 anos de experiencia", askedAge).extractedData?.age).toBeUndefined();
+  });
 });
 
 describe("Motor: '48' + 'es suficiente?' agrupado tras preguntar la edad", () => {

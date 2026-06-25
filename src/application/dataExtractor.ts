@@ -364,7 +364,21 @@ const bareAgeMessagePattern = /^\s*(?:edad\s*:?\s*)?(\d{1,2})\s*(?:anos|años|an
 // NADA mas la extrajo), por eso es seguro leer la cabecera. Reusa el lookahead de contables (invariante 2:
 // "48 cuentas"/"2 fotos" NO es edad), (?!\d) impide leer "4800" como 48 y (?![.,]\d) excluye decimales
 // ("1.80 metros" no es edad 1). Una cifra <18 se lee LITERAL y decideNextState cierra (invariante 2 intacto).
-const leadingAgeMessagePattern = new RegExp(`^\\s*(?:edad\\s*:?\\s*)?(\\d{1,2})(?!\\d)(?![.,]\\d)${ageCountNounLookahead}`, "iu");
+// (?!\s+\d) y (?!\s*[\/-]\s*\d) impiden leer la 1a cifra de DOS grupos numericos como edad: telefono con
+// espacios ("11 2345 6789"), cifras de reparto ("70 30"), disponibilidad ("18 30 horas"), rangos ("48 50").
+const leadingAgeMessagePattern = new RegExp(
+  `^\\s*(?:edad\\s*:?\\s*)?(\\d{1,2})(?!\\d)(?![.,]\\d)(?!\\s+\\d)(?!\\s*[\\/-]\\s*\\d)${ageCountNounLookahead}`,
+  "iu"
+);
+// Marcadores que hacen NO fiable leer la cabecera como edad ADULTA y la mandan al limbo seguro (re-pregunta,
+// nunca adulta confirmada -> invariante 2): (1) "aun NO los cumple" con el numero DELANTE del marcador, que
+// declaredMinorAge/notYetTurnsAge no captan ("18 casi", "18 los cumplo en mayo", "18 voy a cumplir", "18
+// todavia no"); (2) DURACION en cabecera, incluido el typo "anios" ("8 anios trabajando", "25 anos de
+// experiencia"). Una menor borde NUNCA pasa como adulta; en la duda, no se avanza.
+const headerAgeUntrustworthy = new RegExp(
+  `\\b(?:casi|todavia no|aun no|cumpl\\w+|${futureTimeMarker})\\b` +
+    `|^\\s*\\d{1,2}\\s+(?:anios|anos|años)\\s+(?:de\\b|como\\b|en\\b|trabajand|haciend|dedicad|currand|metid)`
+);
 
 // Respuestas afirmativas/negativas peladas a una pregunta cerrada del agente. El "si" se admite
 // doblado o alargado ("sisi", "si si", "siii") sin confundir "siempre"/"siento" (que NO son un si):
@@ -631,8 +645,10 @@ export function extractDeterministicUnderstanding(
     // (ni declaredMinorAge, ni "tengo N"/"N años", ni en letra), pero el mensaje EMPIEZA por un numero de
     // edad aunque venga pegado a una coletilla ("48\nes suficiente?"). Esa cabecera ES la edad. Determinista
     // y gateado por agentAskedAge: solo se aplica respondiendo a la pregunta de edad. Una cifra <18 cierra
-    // (la lee literal). Va dentro del else, asi que declaredMinorAge ya tuvo prioridad (invariante 2).
-    if (extractedData.age === undefined && agentAskedAge) {
+    // (la lee literal). Va dentro del else, asi que declaredMinorAge ya tuvo prioridad. NO se aplica si hay
+    // marcador de "aun no los cumple"/duracion (headerAgeUntrustworthy) -> limbo seguro, nunca adulta borde
+    // (invariante 2; revisor 25-jun cazo "18 casi los cumplo" leido como adulta).
+    if (extractedData.age === undefined && agentAskedAge && !headerAgeUntrustworthy.test(normalized)) {
       const leadingAge = leadingAgeMessagePattern.exec(normalized);
       if (leadingAge) extractedData.age = Number(leadingAge[1]);
     }
