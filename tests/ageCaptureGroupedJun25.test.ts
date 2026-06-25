@@ -63,12 +63,21 @@ describe("Extraccion determinista de edad de cabecera (Alex 25-jun)", () => {
   });
 
   it("'18' sola (o con coletilla NO textual) SI es adulta; 19+ se leen pase lo que pase tras el numero", () => {
-    for (const msg of ["18", "18!", "18 :)", "edad: 18"]) {
+    for (const msg of ["18", "18!", "18 :)", "edad: 18", "18 años"]) {
       expect(extractDeterministicUnderstanding(msg, askedAge).extractedData?.age).toBe(18);
     }
     // 19+ no se vuelve menor por ninguna coletilla -> la cura sigue (y "30 en julio" sigue siendo 30).
     expect(extractDeterministicUnderstanding("30 en julio", askedAge).extractedData?.age).toBe(30);
     expect(extractDeterministicUnderstanding("48\nes suficiente?", askedAge).extractedData?.age).toBe(48);
+    expect(extractDeterministicUnderstanding("48 🎂", askedAge).extractedData?.age).toBe(48);
+  });
+
+  // La frontera del 18 es Unicode (\p{L}\p{S}), no solo ASCII: una coletilla de futuro en OTRO alfabeto o un
+  // emoji de "pronto los cumplo" (🎂/⏳) tras el 18 tampoco lo lee como adulta (invariante 2, 3a pasada revisor).
+  it("el 18 con coletilla en otro alfabeto o emoji de futuro NO se lee como adulta -> limbo", () => {
+    for (const msg of ["18 قريبا", "18 πρπ", "18 пока", "18 🎂", "18 ⏳", "18 🥳"]) {
+      expect(extractDeterministicUnderstanding(msg, askedAge).extractedData?.age).toBeUndefined();
+    }
   });
 
   it("NO lee la 1a cifra de dos grupos numericos como edad (reparto/telefono/disponibilidad/rango)", () => {

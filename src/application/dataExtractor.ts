@@ -375,6 +375,15 @@ const leadingAgeMessagePattern = new RegExp(
 // el caso que llega aqui sin extraer). El caso "aun no los cumple" NO se enumera aqui (lista negra que
 // siempre tiene fugas): se cubre con la regla de FRONTERA del 18 en el backstop (ver abajo).
 const headerAgeIsDuration = /^\s*\d{1,2}\s+(?:anios|anos|años)\s+(?:de\b|como\b|en\b|trabajand|haciend|dedicad|currand|metid)/;
+// REGLA DE FRONTERA del 18 (invariante 2): el 18 es el UNICO valor donde menor/adulta se decide por la
+// coletilla que sigue al numero (un 19+ no se vuelve menor por nada; un 13-17 cierra igual). El 18 solo se
+// lee como adulta si tras el numero NO hay NADA que pueda significar "aun no los cumplo": ni una LETRA (Unicode
+// \p{L}, no solo a-z: cubre arabe/griego/cirilico) ni un SIMBOLO/emoji (\p{S}: 🎂/⏳/🥳 de "pronto los cumplo").
+// Solo se admite puntuacion/espacios trivial ("18", "18!", "18 :)"). Asi no hay lista negra que enumerar.
+function ageHeaderTrustworthy(value: number, tail: string): boolean {
+  if (value !== 18) return true;
+  return !/[\p{L}\p{S}]/u.test(tail);
+}
 
 // Respuestas afirmativas/negativas peladas a una pregunta cerrada del agente. El "si" se admite
 // doblado o alargado ("sisi", "si si", "siii") sin confundir "siempre"/"siento" (que NO son un si):
@@ -520,7 +529,12 @@ export function extractDeterministicUnderstanding(
   // Numero pelado de una o dos cifras como respuesta a "que edad tienes?": esa SI es la edad.
   // Un numero embebido en una frase ("tengo 2 cuentas") nunca se lee como edad (invariante 2).
   const bareAgeMatch = agentAskedAge ? bareAgeMessagePattern.exec(normalized) : null;
-  if (bareAgeMatch) extractedData.age = Number(bareAgeMatch[1]);
+  if (bareAgeMatch) {
+    const value = Number(bareAgeMatch[1]);
+    // Frontera del 18 tambien aqui: "18 🎂"/"18 ⏳" (pronto los cumplo) no es adulta confirmada (invariante 2).
+    const tail = normalized.replace(/^\s*(?:edad\s*:?\s*)?\d{1,2}\s*(?:anos|años|anitos|añitos)?/, "");
+    if (ageHeaderTrustworthy(value, tail)) extractedData.age = value;
+  }
 
   // Si/no pelado a la pregunta de OF o de agencias: consume ese slot concreto.
   if (extractedData.hasOnlyFans === undefined && agentAskedOnlyFans) {
@@ -652,8 +666,7 @@ export function extractDeterministicUnderstanding(
       const leadingAge = leadingAgeMessagePattern.exec(normalized);
       if (leadingAge) {
         const value = Number(leadingAge[1]);
-        const tailHasLetters = /[a-z]/i.test(normalized.slice(leadingAge[0].length));
-        if (value !== 18 || !tailHasLetters) extractedData.age = value;
+        if (ageHeaderTrustworthy(value, normalized.slice(leadingAge[0].length))) extractedData.age = value;
       }
     }
   }
