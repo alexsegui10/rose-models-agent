@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { ConversationEngine } from "@/application/conversationEngine";
-import { parseAnonymizedConversationJson, approvedImportedConversationsForExamples, importedConversationsForEvaluation } from "@/application/conversationImport";
+import {
+  parseAnonymizedConversationJson,
+  approvedImportedConversationsForExamples,
+  importedConversationsForEvaluation
+} from "@/application/conversationImport";
 import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
-import { addTurnFeedback, createEvaluationSession, InMemoryEvaluationRepository, runABEvaluation, summarizeSession } from "@/application/evaluationRunner";
+import {
+  addTurnFeedback,
+  createEvaluationSession,
+  InMemoryEvaluationRepository,
+  runABEvaluation,
+  summarizeSession
+} from "@/application/evaluationRunner";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
 describe("CONVERSATIONAL_QUALITY_EVALUATION", () => {
@@ -151,6 +161,11 @@ describe("CONVERSATIONAL_QUALITY_EVALUATION", () => {
 
   it("answers a non-literal covered services question from knowledge", async () => {
     const { engine } = createEngine();
+    await engine.handleIncomingMessage({
+      instagramUsername: "new_services_question",
+      profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
     const result = await engine.handleIncomingMessage({
       instagramUsername: "new_services_question",
       profileVisibility: "PUBLIC",

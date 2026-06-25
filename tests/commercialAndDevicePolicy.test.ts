@@ -36,7 +36,13 @@ describe("commercial and device policy", () => {
 
   it("answers if there is a salary", async () => {
     const { engine } = createEngine();
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "salary_question_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "salary_question_case",
       profileVisibility: "PUBLIC",
       message: "Hay salario fijo?"
@@ -49,7 +55,13 @@ describe("commercial and device policy", () => {
 
   it("answers exact percentage question with confirmed 70/30", async () => {
     const { engine } = createEngine();
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "percentage_confirmed_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "percentage_confirmed_case",
       profileVisibility: "PUBLIC",
       message: "Cual es el porcentaje exacto?"

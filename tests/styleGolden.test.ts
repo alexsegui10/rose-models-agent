@@ -19,6 +19,19 @@ describe("golden style tests", () => {
       const seeded = seedCandidate(golden.id, golden.initialCandidate, golden.stateBefore);
       await repository.saveCandidate(seeded);
 
+      // Cambio de comportamiento (Alex 25-jun): el PRIMER turno de un lead nuevo (NEW_LEAD, sin que
+      // el agente haya hablado todavia) devuelve SIEMPRE el opener canonico. Este golden manda un
+      // volcado de datos de negocio como primer mensaje y espera la respuesta de negocio, asi que
+      // primero consumimos el opener con un "hola" (misma candidata) y luego enviamos el mensaje real.
+      if (goldenNeedsOpenerPriming(golden.id)) {
+        await engine.handleIncomingMessage({
+          candidateId: seeded.id,
+          instagramUsername: seeded.instagramUsername,
+          profileVisibility: seeded.declaredProfileVisibility,
+          message: "Hola"
+        });
+      }
+
       let result = await engine.handleIncomingMessage({
         candidateId: seeded.id,
         instagramUsername: seeded.instagramUsername,
@@ -63,6 +76,13 @@ describe("golden style tests", () => {
     });
   }
 });
+
+// Goldens cuyo PRIMER mensaje es un mensaje de negocio (no un saludo) sobre una candidata fresca
+// en NEW_LEAD: necesitan consumir el opener canonico con un "hola" previo antes de evaluar la
+// respuesta de negocio. El resto de goldens NEW_LEAD ya cuentan con el opener en su guion.
+function goldenNeedsOpenerPriming(id: string): boolean {
+  return id === "golden-multiple-messages";
+}
 
 function seedCandidate(id: string, initialCandidate: Record<string, unknown>, stateBefore: Candidate["currentState"]): Candidate {
   const profileVisibility = profileVisibilityFrom(initialCandidate.profileVisibility);

@@ -30,9 +30,14 @@ function neverPromisesHidingTheFace(response: string): void {
 describe("Cara: reconducir primero, rechazar solo si insiste (peticion de Alex #2)", () => {
   it("la PRIMERA objecion de cara no cierra: reconduce con calidez", async () => {
     const { engine } = createEngine();
-    const result = await engine.handleIncomingMessage({
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "face_first",
       profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "face_first",
       message: "no quiero mostrar la cara"
     });
 
@@ -69,9 +74,14 @@ describe("Cara: reconducir primero, rechazar solo si insiste (peticion de Alex #
 
   it("una duda de privacidad ('que me vean en mi pais') reconduce, no cierra", async () => {
     const { engine } = createEngine();
-    const result = await engine.handleIncomingMessage({
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "face_privacy",
       profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "face_privacy",
       message: "y si no quiero que me vean en mi pais?"
     });
 

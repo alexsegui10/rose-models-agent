@@ -1268,11 +1268,14 @@ export class ConversationEngine {
       alreadyAwaitingPartner,
       alreadyToldDeviceIssue
     );
-    // El opener real de Alex es una plantilla pegada a mano: cuando no hay nada que responder,
-    // se envia la plantilla canonica tal cual (cero deriva del modelo, traza honesta: deterministico).
+    // El opener real de Alex es una plantilla pegada a mano y SIEMPRE va en el PRIMER turno del lead, pase lo
+    // que pase: cero deriva del modelo (traza honesta: deterministico). YA NO depende de answerFacts===0 (antes,
+    // si una palabra de su mensaje -incluido un typo como "dame infoo"- surfaceaba conocimiento, el opener se lo
+    // pasaba a OpenAI y salia reformulado / sin pedir el nombre / soltando el %; bug recurrente de Alex). Solo
+    // cede ante escalada real (revision humana / pregunta sin cobertura). generateResponse devuelve el opener
+    // canonico para isOpenerTurn (publico o privado), asi que aqui solo decidimos usar esa via determinista.
     const useCanonicalOpenerTemplate =
       isOpenerTurn &&
-      responsePlan.answerFacts.length === 0 &&
       !responsePlan.uncoveredQuestion &&
       !responsePlan.requiresHumanReview &&
       (projectedCandidate.currentState === "QUALIFYING" ||
@@ -1972,6 +1975,17 @@ function generateResponse(
       : "Todo listo con la llamada por WhatsApp. Si necesitas cambiar algo me dices.";
   }
 
+  // OPENER del PRIMER turno: SIEMPRE el opener canonico (canonicalOpener ya distingue publico -> pide el nombre,
+  // de privado -> pide aceptar la solicitud), pase lo que pase. Va ANTES de cualquier rama de CONTENIDO (negocio,
+  // conocimiento, edad, "lo comento con mi socio"...) para que NUNCA dependa de lo que surfacee el buscador:
+  // antes, si una palabra (incluido un typo como "dame infoo") surfaceaba el %, el opener lo reformulaba OpenAI
+  // y ni pedia el nombre (bug recurrente de Alex 25-jun). Solo cede ante una escalada REAL (requiresHumanReview:
+  // negociacion/inyeccion en el 1er mensaje, que se gestiona mas abajo). Una menor que diga su edad en el primer
+  // mensaje ya cerro arriba (invariante 2). Es la fuente UNICA del opener: deterministico, cero deriva del LLM.
+  if (isOpenerTurn && !responsePlan.requiresHumanReview) {
+    return canonicalOpener(candidate);
+  }
+
   // Candidata YA APROBADA en el cierre de la llamada con su telefono ya dado: se CONFIRMA la llamada (Alex la
   // llama por WhatsApp lo antes posible), NUNCA se vuelve a derivar al socio (eso ya se dijo en la revision) ni
   // se le re-pregunta el dia/hora. Bug grave de Alex 23-jun. Solo post-aprobacion (humanFitDecision APPROVED) y
@@ -2096,12 +2110,6 @@ function generateResponse(
     const ageAck = ageAckForTurn(understanding);
     const body = businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
     return ageAck ? `${ageAck}\n\n${body}` : body;
-  }
-
-  // Opener canonico de Alex en tres pasos (identidad + validacion/gate + marco), SIN preguntas:
-  // el Alex real nunca cualifica antes de que la candidata acepte el marco o la solicitud.
-  if (isOpenerTurn) {
-    return canonicalOpener(candidate);
   }
 
   // La llamada es el objetivo del funnel: con edad confirmada se avanza hacia ella en vez de

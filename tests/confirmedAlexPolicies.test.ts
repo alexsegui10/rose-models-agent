@@ -21,10 +21,20 @@ import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMem
 describe("Alex confirmed business policies", () => {
   it("discloses 70/30 only when the candidate asks for exact percentage", async () => {
     const { engine } = createEngine();
+    await engine.handleIncomingMessage({
+      instagramUsername: "policy_no_proactive_split",
+      profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
     const general = await engine.handleIncomingMessage({
       instagramUsername: "policy_no_proactive_split",
       profileVisibility: "PUBLIC",
       message: "Hola, quiero informacion. Tengo 32 anos y soy de Argentina."
+    });
+    await engine.handleIncomingMessage({
+      instagramUsername: "policy_exact_split",
+      profileVisibility: "PUBLIC",
+      message: "Hola"
     });
     const exact = await engine.handleIncomingMessage({
       instagramUsername: "policy_exact_split",
@@ -40,6 +50,11 @@ describe("Alex confirmed business policies", () => {
 
   it("explains briefly why Rose Models receives 70 percent", async () => {
     const { engine } = createEngine();
+    await engine.handleIncomingMessage({
+      instagramUsername: "policy_why_70",
+      profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
     const result = await engine.handleIncomingMessage({
       instagramUsername: "policy_why_70",
       profileVisibility: "PUBLIC",
@@ -96,10 +111,20 @@ describe("Alex confirmed business policies", () => {
 
   it("answers Instagram new content and OnlyFans old material only when asked", async () => {
     const { engine } = createEngine();
+    await engine.handleIncomingMessage({
+      instagramUsername: "policy_new_instagram",
+      profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
     const instagram = await engine.handleIncomingMessage({
       instagramUsername: "policy_new_instagram",
       profileVisibility: "PUBLIC",
       message: "El contenido para Instagram puede estar publicado antes?"
+    });
+    await engine.handleIncomingMessage({
+      instagramUsername: "policy_old_of",
+      profileVisibility: "PUBLIC",
+      message: "Hola"
     });
     const oldMaterial = await engine.handleIncomingMessage({
       instagramUsername: "policy_old_of",

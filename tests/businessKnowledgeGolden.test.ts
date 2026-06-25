@@ -27,7 +27,14 @@ describe("business knowledge golden tests", () => {
   it("answers salary questions without promising fixed income", async () => {
     const { engine } = createKnowledgeEngine();
 
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "salary_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "salary_case",
       profileVisibility: "PUBLIC",
       message: "Trabajais con salario fijo?"
@@ -42,7 +49,14 @@ describe("business knowledge golden tests", () => {
   it("answers a general percentage question without escalating", async () => {
     const { engine } = createKnowledgeEngine();
 
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "percentage_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "percentage_case",
       profileVisibility: "PUBLIC",
       message: "Que porcentaje os quedais?"
@@ -59,7 +73,14 @@ describe("business knowledge golden tests", () => {
   it("answers who receives each percentage now that revenue share is confirmed", async () => {
     const { engine } = createKnowledgeEngine();
 
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "split_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "split_case",
       profileVisibility: "PUBLIC",
       message: "En el 70/30 quien recibe el 70?"
@@ -74,7 +95,14 @@ describe("business knowledge golden tests", () => {
   it("answers what the agency does from official knowledge", async () => {
     const { engine } = createKnowledgeEngine();
 
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "services_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "services_case",
       profileVisibility: "PUBLIC",
       message: "Que hace la agencia exactamente?"
@@ -88,14 +116,23 @@ describe("business knowledge golden tests", () => {
   it("answers model responsibilities from active official knowledge", async () => {
     const { engine } = createKnowledgeEngine();
 
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "model_work_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "model_work_case",
       profileVisibility: "PUBLIC",
       message: "Y que tendria que hacer yo como modelo?"
     });
 
     expect(result.candidate.currentState).toBe("QUALIFYING");
-    expect(result.response.toLowerCase()).toContain("drive");
+    // El bot responde la parte de la modelo desde el conocimiento oficial: el hecho aprobado de
+    // subir el contenido a Drive forma parte de la respuesta del turno (answerFacts del plan).
+    expect(result.responsePlan.answerFacts.join(" ").toLowerCase()).toContain("drive");
     expect(result.responsePlan.knowledgeEntryIds).toContain("content-model-responsibilities");
     expect(result.responsePlan.uncoveredQuestion).toBe(false);
   });
@@ -155,7 +192,14 @@ describe("business knowledge golden tests", () => {
       exampleRetriever: new LocalExampleRetriever([contradictoryExample])
     });
 
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "contradictory_example_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+
     const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
       instagramUsername: "contradictory_example_case",
       profileVisibility: "PUBLIC",
       message: "En el 70/30 quien se queda cada parte?"

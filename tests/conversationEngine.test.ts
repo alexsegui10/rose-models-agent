@@ -146,7 +146,8 @@ describe("ConversationEngine", () => {
 
     const transitions = await repository.listTransitions(result.candidate.id);
     expect(result.candidate.currentState).toBe("WAITING_PROFILE_ACCESS");
-    expect(result.response).toContain("cuenta privada");
+    // El opener canonico PRIVADO (primer turno) pide aceptar la solicitud de seguimiento.
+    expect(result.response.toLowerCase()).toContain("solicitud de seguimiento");
     expect(transitions[0]?.toState).toBe("WAITING_PROFILE_ACCESS");
   });
 
@@ -246,9 +247,17 @@ describe("ConversationEngine", () => {
   it("answers '¿Cuanto pagan?' with the canonical no-figure money answer instead of deferring", async () => {
     const { engine } = createEngine();
 
-    const result = await engine.handleIncomingMessage({
+    // El primer turno de un lead fresco devuelve SIEMPRE el opener canonico. Consumimos el opener con
+    // un "hola" para pasar a QUALIFYING; la pregunta de negocio va en el segundo turno.
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "lead_cuanto_pagan",
       profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "lead_cuanto_pagan",
       message: "¿Cuanto pagan?"
     });
 
@@ -260,9 +269,17 @@ describe("ConversationEngine", () => {
   it("answers general percentage questions without pausing", async () => {
     const { engine } = createEngine();
 
-    const result = await engine.handleIncomingMessage({
+    // Consumimos el opener canonico con un "hola" (lead fresco -> QUALIFYING); la pregunta del reparto
+    // va en el segundo turno.
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "lead_porcentaje",
       profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "lead_porcentaje",
       message: "Me interesa, pero que porcentaje os quedais?"
     });
 

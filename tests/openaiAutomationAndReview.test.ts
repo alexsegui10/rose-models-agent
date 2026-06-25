@@ -341,9 +341,14 @@ describe("OpenAI adapter, automation and review", () => {
       }
     });
 
-    const result = await engine.handleIncomingMessage({
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "bad_percentage_draft",
       profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "bad_percentage_draft",
       message: "Que porcentaje seria?"
     });
 
@@ -360,9 +365,14 @@ describe("OpenAI adapter, automation and review", () => {
       }
     });
 
-    const result = await engine.handleIncomingMessage({
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "bad_service_draft",
       profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "bad_service_draft",
       message: "Que hace la agencia exactamente?"
     });
 
