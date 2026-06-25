@@ -48,4 +48,28 @@ describe("Duda de encaje por edad con edad adulta conocida (Alex 25-jun)", () =>
       expect(r.response.toLowerCase()).not.toMatch(/\bcara\b|rostro/);
     });
   }
+
+  it("una objecion de REPARTO con cifra ('es demasiado el 70%?') NO se desvia a respuesta de edad (invariante 3)", async () => {
+    const { engine, repository } = mk();
+    const seeded = await seedAdult(repository, "fit_pct_" + Math.random().toString().slice(2, 6));
+    const r = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: seeded.instagramUsername,
+      message: "es demasiado el 70%?"
+    });
+    // NO debe responder con la plantilla de encaje por edad (desviaria una pregunta de dinero a una de edad).
+    expect(r.response.toLowerCase()).not.toMatch(/buscamos sobre todo perfiles maduros/);
+  });
+
+  it("la duda de edad JUNTO al numero en el mismo turno ('48 es demasiado?') tambien confirma la edad", async () => {
+    const { engine } = mk();
+    const u = "fit_grp_" + Math.random().toString().slice(2, 6);
+    await engine.handleIncomingTurn({ instagramUsername: u, profileVisibility: "PUBLIC", messages: [{ content: "hola" }] });
+    await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: "ana" }] });
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: u,
+      messages: [{ content: "48" }, { content: "es demasiado?" }]
+    });
+    expect(r.response.toLowerCase()).toMatch(/48|encaj|maduro|sin problema|por la edad/);
+  });
 });

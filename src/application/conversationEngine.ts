@@ -2356,7 +2356,13 @@ function canonicalOpener(candidate: Candidate): string {
 // pregunta (Alex 25-jun). Excluye si menciona DINERO o CARA (esos van por su propia rama, no es duda de edad).
 function isAgeFitDoubt(message: string): boolean {
   const m = normalizeText(message);
+  // Excluye DINERO (palabras Y cifras/% de reparto: "es demasiado el 70%?" / "70 30 es demasiado?" son objeciones
+  // de reparto, no dudas de edad) y CARA/privacidad (van por su rama). Asi "es demasiado?" tras dar la edad SI es
+  // duda de edad, pero una objecion al reparto NO se desvia a una respuesta de edad (riesgo invariante 3, revisor).
   if (/\b(salario|sueldo|porcentaje|reparto|comision|dinero|euros?|cara|rostro|mostrar|ensenar|privacid)\b/.test(m)) {
+    return false;
+  }
+  if (/\d{1,3}\s*%|\b\d{1,3}\s*[\/\-]\s*\d{1,3}\b|\b\d{2}\s+\d{2}\b/.test(m)) {
     return false;
   }
   return (
