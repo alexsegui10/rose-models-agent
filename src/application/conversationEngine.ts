@@ -1323,6 +1323,19 @@ export class ConversationEngine {
     const useDeterministicFaceTurn =
       (faceConcern !== null || responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory")) &&
       !useCanonicalOpenerTemplate;
+    // DUDA DE ENCAJE por edad ("es demasiado?/sirvo?") con edad ADULTA ya conocida: se responde DETERMINISTA
+    // confirmando SU edad (rama de generateResponse), NUNCA via LLM, que la deriva a la cara/% o la ignora (bug
+    // recurrente de Alex 25-jun, "48 / es demasiado?" en turnos separados). Gana a useDeterministicFaceTurn
+    // (que se activaba porque la entrada de la CARA comparte categoria con la edad). No toca menor (cerro arriba).
+    const useDeterministicFitAnswer =
+      !useCanonicalOpenerTemplate &&
+      isAgeFitDoubt(groupedMessage.content) &&
+      typeof projectedCandidate.age === "number" &&
+      projectedCandidate.age >= 18 &&
+      projectedCandidate.isAdultConfirmed &&
+      !responsePlan.requiresHumanReview &&
+      understanding.intent !== "ASKS_ABOUT_CONTRACT" &&
+      understanding.intent !== "REQUESTS_HUMAN";
     // "Dejame pensarlo / me lo pienso / dame unos dias": NO se empuja otra pregunta; se reconoce con
     // calidez y se espera a que ella retome (decision de Alex 16-jun). No cambia de estado ni cierra:
     // cuando vuelva con contenido real, el guion continua. Solo en cualificacion activa y si no hay nada
@@ -1371,6 +1384,7 @@ export class ConversationEngine {
           ? deterministicDraftOutput(softDeferMessage)
           : useCanonicalOpenerTemplate ||
               useDeterministicQuestionTurn ||
+              useDeterministicFitAnswer ||
               isAwaitingHoldingTurn ||
               useDeterministicFaceTurn ||
               useDeterministicClosingTurn
@@ -1988,6 +2002,25 @@ function generateResponse(
     return canonicalOpener(candidate);
   }
 
+  // DUDA DE ENCAJE por la edad ("es demasiado?", "es suficiente?", "sirvo?", "encajo?", "soy muy mayor?")
+  // cuando YA conocemos una edad ADULTA (de este turno o de un turno ANTERIOR): se le CONFIRMA con SU edad y se
+  // sigue el guion, en vez de ignorarla o irse a la cara/% (bug recurrente de Alex: "48 / es demasiado?" en
+  // turnos separados, el LLM la deriva mal). ROBUSTO: usa candidate.age conocido, NO depende de que una palabra
+  // surfacee el conocimiento ni de que la IA acierte el tema. Una menor ya cerro arriba (invariante 2); no toca
+  // % / contrato / escalada (isAgeFitDoubt excluye dinero/cara y aqui se excluye contrato/persona/revision).
+  if (
+    isAgeFitDoubt(inboundMessage) &&
+    typeof candidate.age === "number" &&
+    candidate.age >= 18 &&
+    candidate.isAdultConfirmed &&
+    !understanding.requiresHumanReview &&
+    understanding.intent !== "ASKS_ABOUT_CONTRACT" &&
+    understanding.intent !== "REQUESTS_HUMAN"
+  ) {
+    const tail = responsePlan.questionToAsk ? `\n\n${responsePlan.questionToAsk}` : "";
+    return `Que va, con ${candidate.age} nos encaja. Buscamos sobre todo perfiles maduros, asi que por la edad sin problema.${tail}`;
+  }
+
   // Candidata YA APROBADA en el cierre de la llamada con su telefono ya dado: se CONFIRMA la llamada (Alex la
   // llama por WhatsApp lo antes posible), NUNCA se vuelve a derivar al socio (eso ya se dijo en la revision) ni
   // se le re-pregunta el dia/hora. Bug grave de Alex 23-jun. Solo post-aprobacion (humanFitDecision APPROVED) y
@@ -2316,6 +2349,22 @@ function canonicalOpener(candidate: Candidate): string {
   // rapidas -> llamada, sin compromiso) + nombre, en POCOS mensajes (la rafaga llega mas fiable con menos
   // chunks). Coherente con decideNextState (solo PRIVATE va a WAITING_PROFILE_ACCESS; el resto a QUALIFYING).
   return `Hola, ${greeting} soy Alex de Rose Models.\n\nHemos visto tu perfil y creemos que encajarias muy bien en la agencia. Te hago un par de preguntas rapidas mientras te explico como trabajamos, sin compromiso, y si encaja agendamos una llamada para contartelo con calma.\n\nPara empezar, como te llamas?`;
+}
+
+// Duda sobre SU encaje, casi siempre por la edad: "es demasiado?", "es suficiente?", "sirvo (para esto)?",
+// "encajo?", "soy muy mayor?", "estoy a tiempo?". Permite CONFIRMARLE su edad ya conocida en vez de ignorar la
+// pregunta (Alex 25-jun). Excluye si menciona DINERO o CARA (esos van por su propia rama, no es duda de edad).
+function isAgeFitDoubt(message: string): boolean {
+  const m = normalizeText(message);
+  if (/\b(salario|sueldo|porcentaje|reparto|comision|dinero|euros?|cara|rostro|mostrar|ensenar|privacid)\b/.test(m)) {
+    return false;
+  }
+  return (
+    /\?/.test(message) &&
+    /\b(demasiad\w*|suficiente|sirvo\b|sirve para|valgo\b|encaj\w*|muy mayor|mayor para|demasiado mayor|estoy a tiempo|mucho para (?:esto|vosotros|vos|vosotras))\b/.test(
+      m
+    )
+  );
 }
 
 // La candidata comparte una dificultad/duda/experiencia personal (no un dato a secas): "me cuesta",
