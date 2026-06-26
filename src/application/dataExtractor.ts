@@ -20,6 +20,12 @@ const phonePatterns: readonly RegExp[] = [
 // adulta que presume de seguidores ("no tengo 14 mil seguidores") se leia como edad 14 -> CLOSED.
 const ageCountNounLookahead =
   "(?!\\s+(?:cuentas?|seguidor[ae]s?|hij[oa]s?|perr[oa]s?|gat[oa]s?|fotos?|videos?|reels?|tatuajes?|publicacion(?:es)?|pedidos?|kilos?|pesos?|euros?|dolares?|mil(?:es)?|dias?|semanas?|meses|horas?|minutos?|a\\b))";
+// "tengo 15 plus iphone" / "tengo 13 pro" etc.: el numero es parte del MODELO de movil, NO la edad. Sin esto,
+// "tengo 15 plus iphone" leia edad 15 y CERRABA a una adulta como menor (trampa real del QA 26-jun, mensaje
+// literal de una candidata). Solo excluye "tengo/edad N" cuando va seguido de una palabra de movil; "tengo 15",
+// "tengo 15 anos" o "tengo 16" (edades reales de menor) NO se ven afectados -> la deteccion de menores intacta.
+const phoneModelLookahead =
+  "(?!\\s+(?:plus|pro|max|ultra|mini|se\\b|iphone|i\\s?phone|iphone|samsung|galaxy|xiaomi|redmi|pixel|moto|motorola|huawei|oppo|realme|honor|poco))";
 // La segunda rama solo acepta "anos"/"años" explicito: "a" suelta es la preposicion castellana ("de 9
 // a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
 // menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
@@ -30,7 +36,7 @@ const ageCountNounLookahead =
 // NO casa aqui -> declaredMinorAge lo trata como la menor que aun es (ver notYetTurnsAge). Restringida a
 // 13-99 para que "cumpli los 10 reels" no se lea como edad 10.
 const agePattern = new RegExp(
-  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}|(\\d{1,2})\\s*(?:anos|años|anitos|añitos)|(?:acab\\w+\\s+de\\s+cumplir|cumpli|cumplio|cumplido)\\s+(?:los\\s+)?(1[3-9]|[2-9]\\d)(?!\\d)${ageCountNounLookahead})`,
+  `\\b(?:(?:tengo|edad)\\s+(\\d{1,2})(?!\\d)${ageCountNounLookahead}${phoneModelLookahead}|(\\d{1,2})\\s*(?:anos|años|anitos|añitos)|(?:acab\\w+\\s+de\\s+cumplir|cumpli|cumplio|cumplido)\\s+(?:los\\s+)?(1[3-9]|[2-9]\\d)(?!\\d)${ageCountNounLookahead})`,
   "i"
 );
 // Version global del mismo patron para recorrer TODAS las coincidencias (matchAll) y elegir la
