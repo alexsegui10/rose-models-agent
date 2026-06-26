@@ -302,7 +302,9 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // y le llega un WhatsApp); el bot nunca inventa ni promete capturas. -> tag human-intervention.
   const proofRequest =
     /\b(capturas?|pantallazos?|panel de ganancias|backend|acceso real)\b/.test(message) ||
-    /\b(muestrame|muestrenme|ensename|ensenenme|quiero ver|puedo ver|me ensenas|me muestras)\b[^.!?]{0,40}\b(cuentas?|ganancias?|resultados?|modelos? que (?:llev|manej|gestion)|pruebas?)\b/.test(
+    // Verbos AMPLIADOS (QA 26-jun): no solo "muestrame/me muestras" sino "me pueden/podeis/podrian mostrar o
+    // ensenar cuentas/perfiles/resultados". Mensaje real que se escapaba: "me pueden mostrar cuentas que manejen?".
+    /\b(muestrame|muestrenme|ensename|ensenenme|mostrarme|ensenarme|quiero ver|puedo ver|me ensenas|me muestras|(?:me\s+)?(?:pueden|podeis|podrian|podrias|podria|podemos|podriais)\s+(?:mostrar|ensenar|ver|pasar))\b[^.!?]{0,40}\b(cuentas?|perfiles?|ganancias?|resultados?|modelos? que (?:llev|manej|gestion)|pruebas?)\b/.test(
       message
     );
   if (proofRequest) tags.push("proof-request", "human-intervention", "distrust");
