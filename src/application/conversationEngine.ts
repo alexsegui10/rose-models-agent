@@ -1491,6 +1491,17 @@ export class ConversationEngine {
         draft = { ...draft, response, error: "stripped-unsolicited-topic" };
       }
     }
+    // ANTI-ALUCINACION DE PLATAFORMA (QA 26-jun): la agencia SOLO gestiona OnlyFans. Si la candidata pregunta por
+    // OTRA plataforma (Fansly, ManyVids...) y el borrador la menciona, se reescribe a la verdad: el LLM llego a
+    // afirmar "Si, trabajamos tambien con Fansly" (inventado). Determinista: nunca inventa soporte de plataformas.
+    if (competitorPlatformPattern.test(groupedMessage.content) && competitorPlatformPattern.test(response)) {
+      const tail = responsePlan.questionToAsk ? `\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}` : "";
+      const corrected = `Nosotros trabajamos con OnlyFans, no con otras plataformas.${tail}`;
+      if (corrected !== response) {
+        response = corrected;
+        draft = { ...draft, response, usedFallback: true, error: "platform-hallucination-guard" };
+      }
+    }
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
     // Las variantes son estaticamente seguras (acuses o derivacion honesta al socio), por lo que
     // no invalidan la validacion factual ya realizada.
@@ -2435,6 +2446,11 @@ const faceMentionedPattern =
 function faceRaisedIn(message: string): boolean {
   return classifyFaceConcern(message) !== null || faceMentionedPattern.test(normalizeText(message));
 }
+
+// Plataformas COMPETIDORAS (la agencia solo gestiona OnlyFans). Si la candidata pregunta por una y el borrador
+// la menciona, se reescribe a la verdad (no inventar soporte de otras plataformas). Bug Alex 26-jun (Fansly).
+const competitorPlatformPattern =
+  /\b(fansly|many\s?vids|fanvue|fanhouse|fancentro|justforfans|just for fans|fanfix|fancy\b|chaturbate|patreon|mym\b)\b/i;
 
 const SUPPRESSED_TOPICS: SuppressedTopic[] = [
   {
