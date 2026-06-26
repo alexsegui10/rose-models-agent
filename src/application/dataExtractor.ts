@@ -25,7 +25,7 @@ const ageCountNounLookahead =
 // literal de una candidata). Solo excluye "tengo/edad N" cuando va seguido de una palabra de movil; "tengo 15",
 // "tengo 15 anos" o "tengo 16" (edades reales de menor) NO se ven afectados -> la deteccion de menores intacta.
 const phoneModelLookahead =
-  "(?!\\s+(?:plus|pro|max|ultra|mini|iphone|i\\s?phone|samsung|galaxy|xiaomi|redmi|pixel|moto|motorola|huawei|oppo|realme|honor))";
+  "(?!\\s+(?:plus|pro|max|ultra|mini|iphone|i\\s?phone|samsung|galaxy|xiaomi|redmi|pixel|moto|motorola|huawei|oppo|realme|honor|poco))";
 // La segunda rama solo acepta "anos"/"años" explicito: "a" suelta es la preposicion castellana ("de 9
 // a 14", "tengo 25 a alguien"), no la abreviatura de "años", y leerla como edad cerraba a adultas como
 // menores (de "hablamos de 9 a 14" salia age=9 -> CLOSED). El lookahead de la rama 1 sigue cubriendo "a".
