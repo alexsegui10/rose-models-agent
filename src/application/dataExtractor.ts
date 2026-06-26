@@ -701,12 +701,26 @@ export function extractDeterministicUnderstanding(
   if (/\b(no tengo onlyfans|sin onlyfans|no tengo of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
   if (/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\b(?:onlyfans|only|of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
 
-  if (/\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized))
+  // Positivo: ademas de "otra agencia/tengo agencia", el pasado/plural real ("trabaje con 4 agencias", "siempre
+  // trabaje con agencias", "he trabajado con agencias") -> el slot ya estaba respondido y NO debe re-preguntarse.
+  if (
+    /\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized) ||
+    /\b(?:he\s+)?trabaj(?:e|o|ado|aba|amos)\b[^.!?]{0,20}\bagencias?\b/.test(normalized)
+  )
     extractedData.worksWithAnotherAgency = true;
   // Negacion en cualquier formulacion ("no he trabajado con agencias", "nunca trabaje con agencias",
   // "no trabajo con ninguna agencia"): una negacion a <=30 chars de "agencia(s)" es un NO. Va despues
   // del positivo para corregir "no trabajo con otra agencia" (que el positivo marcaria true).
   if (/\b(?:no|nunca|jamas|ninguna)\b[^.!?]{0,30}\bagencias?\b/.test(normalized)) extractedData.worksWithAnotherAgency = false;
+  // Trabajo SOLA / sin agencia: tambien es respuesta al slot ("trabaje sola", "sin agencia", "por mi cuenta").
+  // Los terminos genericos (sola/independiente/freelance) solo cuentan si el agente PREGUNTO por agencias, para
+  // no marcar false por "soy autonoma"/"trabajo sola" dichos en otro contexto. Va al final para ganar al positivo.
+  if (
+    /\bsin (?:ninguna )?agencias?\b/.test(normalized) ||
+    (agentAskedAgencies &&
+      /\b(sola|por mi cuenta|por mi propia cuenta|de forma independiente|independiente|freelance|autonoma)\b/.test(normalized))
+  )
+    extractedData.worksWithAnotherAgency = false;
 
   const revenueMatch = normalized.match(/\b(?:ingreso|ingresos|facturo|gano)\s*(?:unos|sobre)?\s*(\d{3,6})\b/);
   if (revenueMatch) extractedData.currentMonthlyRevenue = Number(revenueMatch[1]);
