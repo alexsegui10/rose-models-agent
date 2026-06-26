@@ -61,3 +61,25 @@ describe("Aceptar mostrar la cara (un SI) no recibe el sermon (Alex 26-jun, QA s
     }
   });
 });
+
+// Panel adversarial (hunt 26-jun): la objecion "puedo trabajar SIN mostrar la cara?" se oia AL REVES: el
+// faceAcceptancePattern casaba "puedo...mostrar" y, como el patron de rechazo no cubria "sin mostrar la cara",
+// faceAccepted()=true -> el bot trataba una NEGATIVA como un SI y avanzaba. FIX: faceRefusalSignalPattern cubre
+// "sin (mostrar|ensenar) (la/mi) cara" y "sin que se (me) vea (la) cara". Arregla las dos mitades (deja de
+// devolver null Y deja de contarla como aceptacion). La 1a objecion SOLO reconduce, NUNCA cierra.
+describe("Objecion de cara 'sin mostrar la cara' reconduce y no cierra (panel hunt 26-jun)", () => {
+  it("'sin (mostrar/ensenar) la cara' / 'sin que se vea la cara' -> reconduce, sigue en QUALIFYING (no CLOSED)", async () => {
+    for (const msg of [
+      "puedo trabajar sin mostrar la cara?",
+      "se puede trabajar sin ensenar la cara?",
+      "quiero trabajar sin que se vea la cara",
+      "prefiero trabajar sin mostrar mi cara"
+    ]) {
+      const { engine, repository } = mk();
+      const c = await seedAdult(repository, "sinm_" + Math.random().toString().slice(2, 6));
+      const r = await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: msg }] });
+      expect(r.response.toLowerCase(), `reconduce "${msg}"`).toMatch(/imprescindible|muchas chicas|trafico|privacidad/);
+      expect(r.candidate.currentState, `no cierra "${msg}"`).not.toBe("CLOSED");
+    }
+  });
+});

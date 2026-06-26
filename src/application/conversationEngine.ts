@@ -3638,7 +3638,7 @@ const FACE_RECOGNITION_RECONDUCTION_CAP = 2;
 const faceTopicPattern = /\b(cara|rostro|anonim)\b/;
 // Senal de negarse / no querer, en cualquier formulacion ("no quiero", "sigo sin", "tampoco", "me niego"...).
 const faceRefusalSignalPattern =
-  /\b(no(?:\s+\w+){0,2}\s+quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar|tapar|taparme|taparla|difuminar|pixelar|me da (cosa|verguenza|palo|apuro|reparo|corte)|sin la cara|sin cara|no enseno|no ensenar|no mostrar)\b/;
+  /\b(no(?:\s+\w+){0,2}\s+quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar|tapar|taparme|taparla|difuminar|pixelar|me da (cosa|verguenza|palo|apuro|reparo|corte)|sin la cara|sin cara|sin (?:mostrar|ensenar)\s+(?:la\s+|mi\s+)?cara|sin que se (?:me\s+)?vea\s+(?:la\s+)?cara|no enseno|no ensenar|no mostrar)\b/;
 const facePartialPattern =
   /\b(solo (en )?(algun|alguna|algunas|algunos|parte|ciertas?|ratos?|a veces)|en algunas fotos|media cara|de espaldas|solo el cuerpo|parcial|sin que se vea del todo|a medias)\b/;
 // La candidata quiere mover/cancelar una llamada YA agendada (se evalua solo en CALL_SCHEDULED).
