@@ -35,8 +35,16 @@ export class LocalBusinessKnowledgeRetriever implements BusinessKnowledgeRetriev
 
   async retrieve(input: BusinessKnowledgeRetrievalInput): Promise<KnowledgeEntry[]> {
     const limit = input.limit ?? 5;
+    const message = normalize(input.question);
     const scored = this.entries
       .filter((entry) => isUsableEntry(entry, input))
+      // PASO 6 (relevancia por IA): si el understanding marco relevantTopics, la IA DECIDE que CONTENIDO es
+      // relevante y se descartan las entradas de categorias que NO marco -> mata el "habla de algo que no le
+      // preguntaron" por un regex de mas. NUNCA filtra seguridad/escalada (sensitive, negociacion, %, contrato,
+      // desconfianza, proof, payment-control: invariantes 3/4 siguen deterministas) ni entradas con solapamiento
+      // claro de palabras (suelo, por si la IA omite una categoria). Sin relevantTopics (modo determinista /
+      // fallback / la IA no opina) NO filtra: el regex manda como hasta ahora.
+      .filter((entry) => entryPassesAiRelevance(entry, input, message))
       .map((entry) => ({ entry, score: scoreEntry(entry, input) }))
       .filter((item) => item.score >= 1)
       .sort((a, b) => b.score - a.score);
@@ -53,6 +61,41 @@ export class LocalBusinessKnowledgeRetriever implements BusinessKnowledgeRetriev
 
     return selected;
   }
+}
+
+// Categorias de SEGURIDAD/SENSIBLE/ESCALADA: su surfaceo lo deciden el regex determinista + el gating del
+// planner/factualValidator (el % nunca sale salvo que pida la cifra; la negociacion/desconfianza/contrato
+// escalan a Alex), NUNCA la relevancia del LLM. Quedan EXENTAS del filtro de relevancia (invariantes 3/4 no
+// dependen del LLM). Solo se filtra el CONTENIDO (servicios, FAQ, requisitos, llamada, responsabilidades...).
+const AI_RELEVANCE_EXEMPT_CATEGORIES = new Set<KnowledgeCategory>([
+  "COMMERCIAL",
+  "CONTRACT_POLICY",
+  "ESCALATION_POLICY",
+  "OBJECTION_HANDLING"
+]);
+
+// Numero de palabras (>4 letras) propias de la entrada que aparecen en el mensaje: suelo de relevancia textual.
+function wordOverlapCount(entry: KnowledgeEntry, message: string): number {
+  const matched = new Set<string>();
+  for (const fact of [...entry.facts, ...entry.approvedAnswerPoints, entry.title]) {
+    for (const word of normalize(fact).split(/\s+/)) {
+      if (word.length > 4 && message.includes(word)) matched.add(word);
+    }
+  }
+  return matched.size;
+}
+
+// ¿La entrada pasa el filtro de relevancia del LLM (Paso 6)? Solo se aplica si hay relevantTopics (la IA opino).
+// Filtra SOLO categorias de contenido; las de seguridad/sensible/escalada son exentas (deterministas).
+function entryPassesAiRelevance(entry: KnowledgeEntry, input: BusinessKnowledgeRetrievalInput, message: string): boolean {
+  const topics = input.relevantTopics;
+  if (!topics || topics.length === 0) return true; // la IA no opina (determinista/fallback) -> regex manda
+  if (AI_RELEVANCE_EXEMPT_CATEGORIES.has(entry.category)) return true; // seguridad/sensible -> determinista
+  if (topics.includes(entry.category)) return true; // la IA marco esta categoria de contenido relevante
+  // Suelo textual: si la candidata uso >=2 palabras propias de la entrada, se mantiene aunque la IA no
+  // marcara la categoria (cubre que la IA omita un tema de contenido que ella claramente menciono).
+  if (wordOverlapCount(entry, message) >= 2) return true;
+  return false;
 }
 
 function isUsableEntry(entry: KnowledgeEntry, input: BusinessKnowledgeRetrievalInput): boolean {
