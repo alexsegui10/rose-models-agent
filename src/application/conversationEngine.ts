@@ -1336,8 +1336,13 @@ export class ConversationEngine {
     // insiste tras reconducir); nunca se deja a OpenAI, que llego a soltar la plantilla de RECHAZO ante la
     // PRIMERA duda de cara, perdiendo el lead (validacion con OpenAI 15-jun). generateResponse ya produce
     // la reconduccion o el cierre correctos segun faceObjectionCount.
+    // La rama de la CARA solo se usa si ella REALMENTE saco la cara: hay objecion de cara (faceConcern) o la
+    // MENCIONO en el mensaje. La entrada face-requirement-mandatory se surfacea por el boost de su categoria
+    // (CANDIDATE_REQUIREMENTS) aunque pregunte por el MOVIL -> sin esta guarda, "que movil hace falta" recitaba
+    // la cara (bug Alex 26-jun). No se sermonea la cara por su cuenta (regla SUPPRESSED_TOPICS).
+    const faceMentionedInTurn = faceMentionedPattern.test(normalizeText(groupedMessage.content));
     const useDeterministicFaceTurn =
-      (faceConcern !== null || responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory")) &&
+      (faceConcern !== null || (responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory") && faceMentionedInTurn)) &&
       !useCanonicalOpenerTemplate;
     // DUDA DE ENCAJE por edad ("es demasiado?/sirvo?") con edad ADULTA ya conocida: se responde DETERMINISTA
     // confirmando SU edad (rama de generateResponse), NUNCA via LLM, que la deriva a la cara/% o la ignora (bug
@@ -2092,7 +2097,7 @@ function generateResponse(
       responsePlan.answerFacts.length > 0 &&
       isBusinessAnswerIntent(understanding, responsePlan)
     ) {
-      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
+      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
     }
     // Coherencia (fallo real: el bot repetia "lo comento con mi socio" en bucle si la candidata seguia
     // escribiendo): la primera vez se explica; despues se reconoce de forma breve y variada, sin repetir.
@@ -2164,7 +2169,7 @@ function generateResponse(
   if (responsePlan.answerFacts.length > 0 && isBusinessAnswerIntent(understanding, responsePlan)) {
     // Acusar la edad recien dada antes de la respuesta de negocio (responder a TODO, en orden; Alex 22-jun).
     const ageAck = ageAckForTurn(understanding);
-    const body = businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2);
+    const body = businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
     return ageAck ? `${ageAck}\n\n${body}` : body;
   }
 
@@ -2419,6 +2424,18 @@ interface SuppressedTopic {
 // 26-jun. La frase del cierre de MENORES (otra rama, terminal, con isAdultConfirmed=false) NO se ve afectada.
 const ADULTS_ONLY_FRAMING = /\bmayores de edad\b|\bsolo podemos valorar perfiles de personas mayores\b/i;
 
+// ¿La candidata MENCIONO la cara/privacidad en este mensaje? Señal para NO recitar la politica de la cara si
+// ella no la saco (la entrada face-requirement-mandatory se surfacea por el boost de su categoria; sin esta
+// guarda, "que movil hace falta" disparaba el acuse de la cara -> bug Alex 26-jun). Tambien lo usa SUPPRESSED_TOPICS.
+const faceMentionedPattern =
+  /\b(cara|rostro|mostrar\w*|ensenar\w*|aparecer|salir en|me vean|me reconoz\w*|reconozcan|reconozca|anonim\w*|privacidad|tapar\w*|ocultar\w*|disimul\w*|sin que se vea)\b/;
+
+// ¿La candidata REALMENTE saco la cara este turno (objecion clasificada o mencion en el texto)? Solo entonces
+// se le habla de la cara; si no, la entrada de la cara (surfaceada por el boost de su categoria) NO se recita.
+function faceRaisedIn(message: string): boolean {
+  return classifyFaceConcern(message) !== null || faceMentionedPattern.test(normalizeText(message));
+}
+
 const SUPPRESSED_TOPICS: SuppressedTopic[] = [
   {
     name: "money",
@@ -2432,10 +2449,7 @@ const SUPPRESSED_TOPICS: SuppressedTopic[] = [
   },
   {
     name: "face",
-    askedInMessage: (m) =>
-      /\b(cara|rostro|mostrar\w*|ensenar\w*|aparecer|salir en|me vean|me reconoz\w*|reconozcan|reconozca|anonim\w*|privacidad|tapar\w*|ocultar\w*|disimul\w*|sin que se vea)\b/.test(
-        m
-      ),
+    askedInMessage: (m) => faceMentionedPattern.test(m),
     framing: /\b(la cara|tu cara|el rostro|dar la cara|mostrar la cara|ensenar la cara|salir en (?:foto|video|camara))\b/i
   }
 ];
@@ -2478,7 +2492,10 @@ function ageAckForTurn(understanding: ModelConversationOutput): string | null {
   return null;
 }
 
-function businessResponseFromPlan(responsePlan: ResponsePlan, multiQuestion = false): string {
+// faceRaised: ¿la candidata REALMENTE saco la cara/privacidad este turno? El acuse de la cara solo se da si si
+// (objecion o mencion). Por defecto false: la entrada face-requirement-mandatory se surfacea por el boost de su
+// categoria aunque pregunte por otra cosa (p.ej. el movil) y NO debe recitarse sin que ella la mencione (Alex 26-jun).
+function businessResponseFromPlan(responsePlan: ResponsePlan, multiQuestion = false, faceRaised = false): string {
   if (
     responsePlan.knowledgeEntryIds.includes("commercial-revenue-share-general") &&
     responsePlan.answerFacts.some((fact) => fact.includes("70%"))
@@ -2558,7 +2575,7 @@ function businessResponseFromPlan(responsePlan: ResponsePlan, multiQuestion = fa
   // aqui solo en la reconduccion (la 1a vez); si insiste, el cierre educado lo da generateResponse.
   // Solo hechos documentados (trafico, confianza) y se ofrece resolver la privacidad: NUNCA promete
   // ocultar/difuminar la cara ni anonimato (invariante de la cara + guard del validador factual).
-  if (responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory")) {
+  if (faceRaised && responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory")) {
     return withOptionalQuestion(
       "Te entiendo, a muchas chicas les pasa al principio.\n\nLa cara es imprescindible para la estrategia de trafico y da mucha mas confianza al cliente. Es nuestra forma de trabajar, pero si te preocupa la privacidad dimelo y te explico como la cuidamos.",
       responsePlan
