@@ -1340,7 +1340,10 @@ export class ConversationEngine {
     // MENCIONO en el mensaje. La entrada face-requirement-mandatory se surfacea por el boost de su categoria
     // (CANDIDATE_REQUIREMENTS) aunque pregunte por el MOVIL -> sin esta guarda, "que movil hace falta" recitaba
     // la cara (bug Alex 26-jun). No se sermonea la cara por su cuenta (regla SUPPRESSED_TOPICS).
-    const faceMentionedInTurn = faceMentionedPattern.test(normalizeText(groupedMessage.content));
+    // ...y SOLO si lo saco como objecion/pregunta, NO si ACEPTA mostrarla (faceAccepted): "decidi mostrar mi
+    // cara" es un SI, no merece el sermon "a muchas chicas les pasa al principio" (bug QA 26-jun).
+    const faceMentionedInTurn =
+      faceMentionedPattern.test(normalizeText(groupedMessage.content)) && !faceAccepted(groupedMessage.content);
     const useDeterministicFaceTurn =
       (faceConcern !== null || (responsePlan.knowledgeEntryIds.includes("face-requirement-mandatory") && faceMentionedInTurn)) &&
       !useCanonicalOpenerTemplate;
@@ -2440,11 +2443,22 @@ const ADULTS_ONLY_FRAMING = /\bmayores de edad\b|\bsolo podemos valorar perfiles
 // guarda, "que movil hace falta" disparaba el acuse de la cara -> bug Alex 26-jun). Tambien lo usa SUPPRESSED_TOPICS.
 const faceMentionedPattern =
   /\b(cara|rostro|mostrar\w*|ensenar\w*|aparecer|salir en|me vean|me reconoz\w*|reconozcan|reconozca|anonim\w*|privacidad|tapar\w*|ocultar\w*|disimul\w*|sin que se vea)\b/;
+// La candidata ACEPTA mostrar la cara (positivo): "decidi mostrar mi cara", "voy a mostrar la cara sin problema",
+// "si muestro la cara", "no me importa mostrarla". Es un SI, no una objecion -> NO se le suelta el sermon de la
+// cara (bug QA 26-jun: "decidi mostrar mi cara" recibia "a muchas chicas les pasa al principio..."). Si ademas
+// hay senal de rechazo en el mismo mensaje, NO cuenta como aceptacion (gana la objecion).
+const faceAcceptancePattern =
+  /\b(decidi|he decidido|voy a|quiero|me encanta|encantada|sin problema|no me importa|me da igual|no tengo (?:ningun )?problema|puedo|acepto|claro que si|por supuesto|sin drama)\b[^.!?]{0,20}\b(mostrar|ensenar|salir|aparec|dar la cara)\b|\bla cara sin problema\b|\bmuestro (?:la |mi )?cara\b|\bense?no (?:la |mi )?cara\b/;
+function faceAccepted(message: string): boolean {
+  const m = normalizeText(message);
+  return faceAcceptancePattern.test(m) && !faceRefusalSignalPattern.test(m);
+}
 
-// ¿La candidata REALMENTE saco la cara este turno (objecion clasificada o mencion en el texto)? Solo entonces
-// se le habla de la cara; si no, la entrada de la cara (surfaceada por el boost de su categoria) NO se recita.
+// ¿La candidata REALMENTE saco la cara este turno como OBJECION o PREGUNTA (no como aceptacion)? Solo entonces
+// se le habla de la cara; si no la menciona, o si la ACEPTA, la entrada de la cara NO se recita.
 function faceRaisedIn(message: string): boolean {
-  return classifyFaceConcern(message) !== null || faceMentionedPattern.test(normalizeText(message));
+  if (classifyFaceConcern(message) !== null) return true;
+  return faceMentionedPattern.test(normalizeText(message)) && !faceAccepted(message);
 }
 
 // Plataformas COMPETIDORAS (la agencia solo gestiona OnlyFans). Si la candidata pregunta por una y el borrador
@@ -2465,8 +2479,14 @@ const SUPPRESSED_TOPICS: SuppressedTopic[] = [
   },
   {
     name: "face",
-    askedInMessage: (m) => faceMentionedPattern.test(m),
-    framing: /\b(la cara|tu cara|el rostro|dar la cara|mostrar la cara|ensenar la cara|salir en (?:foto|video|camara))\b/i
+    // Cuenta como "saco la cara" solo si la menciono como objecion/pregunta, NO si la ACEPTA ("decidi mostrar
+    // mi cara"): una aceptacion no debe recibir el recitado de "la cara es imprescindible" (bug QA 26-jun).
+    askedInMessage: (m) => faceMentionedPattern.test(m) && !faceAccepted(m),
+    // El framing incluye los hechos de la cara que NO llevan la palabra "cara" ("imprescindible para...trafico",
+    // "confianza al cliente", "anonimato") para que tambien se quiten al suprimir; verificado que esas frases
+    // solo aparecen en la entrada face-requirement (colision cero con otras entradas).
+    framing:
+      /\b(la cara|tu cara|el rostro|dar la cara|mostrar la cara|ensenar la cara|salir en (?:foto|video|camara)|imprescindible para (?:generar el |la |nuestra |el )?(?:trafico|estrategia|monetizacion)|confianza al cliente|anonimat\w*|sin mostrar la cara|difuminar|recortar (?:la )?cara)\b/i
   }
 ];
 // Encuadres de temas que la candidata NO ha mencionado en este mensaje: hay que quitarlos (defensa anti "hablar
