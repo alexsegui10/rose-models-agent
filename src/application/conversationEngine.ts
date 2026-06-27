@@ -1494,10 +1494,14 @@ export class ConversationEngine {
         draft = { ...draft, response, error: "stripped-unsolicited-topic" };
       }
     }
-    // ANTI-ALUCINACION DE PLATAFORMA (QA 26-jun): la agencia SOLO gestiona OnlyFans. Si la candidata pregunta por
-    // OTRA plataforma (Fansly, ManyVids...) y el borrador la menciona, se reescribe a la verdad: el LLM llego a
-    // afirmar "Si, trabajamos tambien con Fansly" (inventado). Determinista: nunca inventa soporte de plataformas.
-    if (competitorPlatformPattern.test(groupedMessage.content) && competitorPlatformPattern.test(response)) {
+    // ANTI-ALUCINACION DE PLATAFORMA (QA 26-jun + panel prod 27-jun): la agencia SOLO gestiona OnlyFans. Si la
+    // candidata PREGUNTA por otra plataforma (Fansly, ManyVids...), la respuesta se reescribe a la verdad SALVO que
+    // ya aclare "solo OnlyFans / no otras plataformas". Antes solo saltaba si el borrador NOMBRABA la plataforma,
+    // pero en prod el LLM afirmaba sin nombrarla ("Tambien, si..." y se iba a Telegram/Twitter) -> se colaba.
+    // Ahora salta ante la pregunta aunque el bot no la nombre. (Determinista: nunca inventa soporte de plataformas.)
+    const platformAlreadyClarified =
+      /\b(?:solo|unicamente|solamente)\b[^.!?]{0,15}\bonly\s?fans\b|\bno\b[^.!?]{0,18}\botras?\s+plataformas?\b/i;
+    if (competitorPlatformPattern.test(groupedMessage.content) && !platformAlreadyClarified.test(response)) {
       const tail = responsePlan.questionToAsk ? `\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}` : "";
       const corrected = `Nosotros trabajamos con OnlyFans, no con otras plataformas.${tail}`;
       if (corrected !== response) {

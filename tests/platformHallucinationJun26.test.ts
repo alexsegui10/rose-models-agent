@@ -69,4 +69,28 @@ describe("El bot nunca afirma una plataforma que no sea OnlyFans (Alex 26-jun, Q
       expect(r.response.toLowerCase(), `"${msg}"`).not.toMatch(/fansly|manyvids|chaturbate/);
     }
   });
+
+  // Panel prod 27-jun: en produccion el LLM AFIRMABA sin nombrar la plataforma ("Tambien, si..." y se iba a
+  // Telegram/Twitter), asi que la guarda (que exigia que el borrador NOMBRARA la plataforma) no saltaba. Ahora
+  // salta ante la PREGUNTA por otra plataforma, salvo que la respuesta ya aclare "solo OnlyFans / no otras".
+  it("si afirma sin nombrar la plataforma ('Tambien, si...'), la respuesta se corrige a OnlyFans", async () => {
+    const { engine, repository } = engineWith(fakeDrafter("Tambien, si Nosotros movemos trafico por Telegram y Twitter tambien"));
+    const c = await seedAdult(repository, "plat_aff_" + Math.random().toString().slice(2, 6));
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "trabajan con fansly tambien?" }]
+    });
+    expect(r.response.toLowerCase()).toMatch(/onlyfans, no con otras plataformas/);
+    expect(r.response.toLowerCase()).not.toMatch(/tambien, si|telegram/);
+  });
+
+  it("una pregunta SIN plataforma competidora no se reescribe", async () => {
+    const { engine, repository } = engineWith(fakeDrafter("Se gana bien, depende mucho de tu constancia"));
+    const c = await seedAdult(repository, "plat_no_" + Math.random().toString().slice(2, 6));
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "cuanto se gana?" }]
+    });
+    expect(r.response.toLowerCase()).not.toMatch(/no con otras plataformas/);
+  });
 });
