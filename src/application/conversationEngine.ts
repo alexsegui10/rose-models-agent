@@ -1514,7 +1514,14 @@ export class ConversationEngine {
     // Ahora salta ante la pregunta aunque el bot no la nombre. (Determinista: nunca inventa soporte de plataformas.)
     const platformAlreadyClarified =
       /\b(?:solo|unicamente|solamente)\b[^.!?]{0,15}\bonly\s?fans\b|\bno\b[^.!?]{0,18}\botras?\s+plataformas?\b/i;
-    if (competitorPlatformPattern.test(groupedMessage.content) && !platformAlreadyClarified.test(response)) {
+    // OJO: NO pisar un cierre TERMINAL (p.ej. el cierre legal de una MENOR): si el turno cerro por edad, a la
+    // candidata hay que decirle que es por la EDAD, no "trabajamos con OnlyFans" (revisor 27-jun, defecto que ya
+    // tenia esta guarda antes del de genero). El estado CLOSED ya es correcto; aqui se protege el TEXTO.
+    if (
+      competitorPlatformPattern.test(groupedMessage.content) &&
+      !platformAlreadyClarified.test(response) &&
+      projectedCandidate.currentState !== "CLOSED"
+    ) {
       const tail = responsePlan.questionToAsk ? `\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}` : "";
       const corrected = `Nosotros trabajamos con OnlyFans, no con otras plataformas.${tail}`;
       if (corrected !== response) {
@@ -1524,8 +1531,13 @@ export class ConversationEngine {
     }
     // GENERO (Alex 27-jun): la agencia trabaja SOLO con chicas. Si preguntan por hombres / "solo chicas?" y la
     // respuesta no lo aclara ya, se reescribe a la verdad (en prod el LLM contestaba sobre PAISES). Determinista.
+    // Tampoco pisa un cierre TERMINAL (menor): el cierre legal de edad manda sobre la aclaracion de genero.
     const genderAlreadyClarified = /\bsolo\b[^.!?]{0,18}\bchicas\b|\bsolo (?:con )?(?:chicas|mujeres)\b/i;
-    if (genderEligibilityPattern.test(normalizeText(groupedMessage.content)) && !genderAlreadyClarified.test(response)) {
+    if (
+      genderEligibilityPattern.test(normalizeText(groupedMessage.content)) &&
+      !genderAlreadyClarified.test(response) &&
+      projectedCandidate.currentState !== "CLOSED"
+    ) {
       const tail = responsePlan.questionToAsk ? `\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}` : "";
       const corrected = `Ahora mismo solo trabajamos con chicas.${tail}`;
       if (corrected !== response) {

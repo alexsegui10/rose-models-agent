@@ -88,3 +88,42 @@ describe("Contenido explicito 'cosas fuertes' escala a Alex (Alex 27-jun)", () =
     expect(r.candidate.currentState).not.toBe("HUMAN_INTERVENTION_REQUIRED");
   });
 });
+
+// Revisor 27-jun: el cierre legal de una MENOR manda sobre las guardas de texto (genero/plataforma). Una menor
+// debe recibir el mensaje de EDAD, no "solo trabajamos con chicas" ni "trabajamos con OnlyFans". El estado
+// (CLOSED) ya era correcto; esto protege que el TEXTO entregado sea el cierre legal de edad.
+describe("El cierre de MENOR manda sobre las guardas de texto (revisor 27-jun)", () => {
+  async function seedNoAge(repository: InMemoryCandidateRepository, username: string) {
+    return repository.saveCandidate(
+      normalizeCandidate({
+        ...createCandidate({ instagramUsername: username, profileVisibility: "PUBLIC" }),
+        firstName: "Ana",
+        currentState: "QUALIFYING" as CandidateState
+      })
+    );
+  }
+
+  it("menor + pregunta de genero -> CLOSED con el cierre legal de EDAD (no 'solo chicas')", async () => {
+    const { engine, repository } = mk();
+    const c = await seedNoAge(repository, "minG_" + Math.random().toString().slice(2, 6));
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "tengo 17, aceptais hombres?" }]
+    });
+    expect(r.candidate.currentState).toBe("CLOSED");
+    expect(r.response.toLowerCase()).toMatch(/mayores de edad/);
+    expect(r.response.toLowerCase()).not.toMatch(/solo trabajamos con chicas/);
+  });
+
+  it("menor + pregunta de plataforma -> CLOSED con el cierre legal de EDAD (no 'OnlyFans')", async () => {
+    const { engine, repository } = mk();
+    const c = await seedNoAge(repository, "minP_" + Math.random().toString().slice(2, 6));
+    const r = await engine.handleIncomingTurn({
+      instagramUsername: c.instagramUsername,
+      messages: [{ content: "tengo 16, trabajais con fansly?" }]
+    });
+    expect(r.candidate.currentState).toBe("CLOSED");
+    expect(r.response.toLowerCase()).toMatch(/mayores de edad/);
+    expect(r.response.toLowerCase()).not.toMatch(/no con otras plataformas/);
+  });
+});
