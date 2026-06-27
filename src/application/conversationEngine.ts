@@ -190,6 +190,11 @@ export class ConversationEngine {
         if (trailing && trailing.some((message) => !isTrivialAck(message))) {
           reprocessTrailingInbound = trailing;
           proposedMessage = null; // salida unica: respuesta contextual (la da el llamante) O proactivo fijo
+        } else if (!trailing && (await this.lastMessageIsManualAlex(candidate.id))) {
+          // Alex escribio A MANO durante la pausa y la candidata aun NO ha respondido: NO soltar el proactivo
+          // "Buenas noticias..." a ciegas (pisaria/duplicaria lo que Alex acaba de decir). El turno lo conduce
+          // lo de Alex; el bot retomara cuando ella conteste. Req 3 (Alex 27-jun). No envia nada -> invariante 4 ok.
+          proposedMessage = null;
         }
       }
     } else {
@@ -231,6 +236,17 @@ export class ConversationEngine {
       }
     }
     return trailing.length > 0 ? trailing : null;
+  }
+
+  /**
+   * ¿El ULTIMO mensaje del hilo es uno que escribio ALEX A MANO (manual-reply: role "agent", author "ALEX")? Si
+   * lo es, al aprobar NO se suelta el proactivo fijo a ciegas: lo que dijo Alex conduce el turno (Req 3, Alex
+   * 27-jun). Distinto de un mensaje del BOT (author != "ALEX"), que SI deja salir el proactivo normal.
+   */
+  private async lastMessageIsManualAlex(candidateId: string): Promise<boolean> {
+    const history = await this.dependencies.repository.listMessages(candidateId, 5);
+    const last = history[history.length - 1];
+    return Boolean(last && last.role === "agent" && last.author === "ALEX");
   }
 
   /**
@@ -340,10 +356,14 @@ export class ConversationEngine {
       candidate = resumed.candidate;
       transitions.push(...resumed.transitions);
       proposedMessage = resumed.proposedMessage;
-      // C: igual que en applyHumanDecision, si escribio durante la pausa el bot responde a eso al reanudar.
+      // C: igual que en applyHumanDecision, si escribio durante la pausa el bot responde a eso al reanudar
+      // (con el atajo de acuses triviales y el "tu mensaje manda" de Alex 27-jun, mismo criterio).
       if (proposedMessage) {
-        reprocessTrailingInbound = await this.trailingCandidateMessages(candidate.id);
-        if (reprocessTrailingInbound) {
+        const trailing = await this.trailingCandidateMessages(candidate.id);
+        if (trailing && trailing.some((message) => !isTrivialAck(message))) {
+          reprocessTrailingInbound = trailing;
+          proposedMessage = null;
+        } else if (!trailing && (await this.lastMessageIsManualAlex(candidate.id))) {
           proposedMessage = null;
         }
       }

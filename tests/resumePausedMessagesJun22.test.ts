@@ -225,4 +225,45 @@ describe("C: al reanudar, el bot responde a lo escrito en la pausa", () => {
     expect(r.proposedMessage).toBeNull();
     expect(r.reprocessTrailingInbound).toEqual(["ok", "pero cuando me llamais?"]);
   });
+
+  // Req 3 (Alex 27-jun): si ALEX escribio a mano durante la pausa y la candidata NO respondio, al aprobar el
+  // bot NO suelta el proactivo "Buenas noticias..." a ciegas (pisaria lo que Alex acaba de decir). El estado SI
+  // avanza (aprobada), pero sin mensaje nuevo del bot: lo de Alex conduce y el bot retoma cuando ella conteste.
+  it("Alex escribio a mano y ella NO respondio -> al aprobar NO manda el proactivo a ciegas", async () => {
+    const { engine, repository } = setup();
+    const c = await seedReview(repository);
+    await repository.addMessage({
+      id: crypto.randomUUID(),
+      candidateId: c.id,
+      role: "agent",
+      author: "ALEX",
+      content: "Hola Lucia, soy Alex; te llamo manana a las 18h, te va bien?",
+      metadata: { manual: true },
+      createdAt: new Date()
+    });
+    const r = await engine.applyHumanDecision({ candidateId: c.id, decision: "APPROVE" });
+    expect(r.proposedMessage).toBeNull();
+    expect(r.reprocessTrailingInbound ?? null).toBeNull();
+    expect(r.candidate.currentState).toBe("COLLECTING_CALL_DETAILS");
+  });
+
+  // ...pero si DESPUES del mensaje de Alex la candidata SI responde, el bot reprocesa (con el contexto de Alex
+  // en el historial), no se queda mudo.
+  it("Alex escribe a mano y LUEGO ella responde -> el bot reprocesa su respuesta", async () => {
+    const { engine, repository } = setup();
+    const c = await seedReview(repository);
+    await repository.addMessage({
+      id: crypto.randomUUID(),
+      candidateId: c.id,
+      role: "agent",
+      author: "ALEX",
+      content: "Hola, soy Alex; te llamo manana a las 18h?",
+      metadata: { manual: true },
+      createdAt: new Date()
+    });
+    await candidateWritesWhilePaused(engine, c.instagramUsername, "uy mejor por la tarde mas tarde, a las 20h?");
+    const r = await engine.applyHumanDecision({ candidateId: c.id, decision: "APPROVE" });
+    expect(r.proposedMessage).toBeNull();
+    expect(r.reprocessTrailingInbound).toEqual(["uy mejor por la tarde mas tarde, a las 20h?"]);
+  });
 });
