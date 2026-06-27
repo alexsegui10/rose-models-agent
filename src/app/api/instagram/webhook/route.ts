@@ -7,6 +7,7 @@ import {
   verifyWebhookSignature
 } from "@/application/instagramWebhook";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
+import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import {
   escalationNotificationFor,
@@ -201,6 +202,17 @@ export async function POST(request: Request): Promise<NextResponse> {
         blocked: result.automationBlocked,
         responseLen: result.response.trim().length
       });
+      // AUTO-MARCADOR: si la candidata quedo con cita agendada, programa la llamada automatica a esa hora
+      // (best-effort; si QStash no esta o falla, no rompe el turno: Alex puede llamar a mano).
+      try {
+        await enqueueCallDispatchIfScheduled({
+          candidate: result.candidate,
+          origin: new URL(request.url).origin,
+          nowMs: Date.now()
+        });
+      } catch {
+        /* best-effort */
+      }
       if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
         const chunks = splitIntoMessageBurst(result.response);
         // Presupuesto de pausa = lo que queda del techo del turno tras descontar el tiempo ya gastado

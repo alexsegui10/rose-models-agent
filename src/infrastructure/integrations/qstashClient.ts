@@ -95,3 +95,52 @@ export async function schedulePrivacyDetection(args: {
     return false;
   }
 }
+
+/**
+ * AUTO-MARCADOR: programa con QStash que a la HORA AGENDADA (dentro de `delaySeconds`) se dispare la llamada
+ * saliente sola, llamando a nuestro endpoint /api/call/dispatch. Asi el bot llama solo, sin que Alex pulse el
+ * boton. Mismo patron de auth que el flush (reenvia el bearer CRON_SECRET). La Deduplication-Id por
+ * (candidata, hora) evita que re-programar el mismo slot (p. ej. si ella escribe otra vez) dispare DOS
+ * llamadas: QStash entrega una sola vez. Best-effort: devuelve false si no esta configurado o falla, no lanza.
+ */
+export async function scheduleCallDispatch(args: {
+  config: QStashConfig;
+  /** URL absoluta de nuestro endpoint de disparo (p. ej. https://dominio/api/call/dispatch). */
+  dispatchUrl: string;
+  /** Secreto bearer que QStash reenviara al endpoint para autenticarlo (reutilizamos CRON_SECRET). */
+  secret: string;
+  candidateId: string;
+  /** La hora agendada exacta (ms epoch); va en el body para que el endpoint detecte reagendados. */
+  scheduledForMs: number;
+  delaySeconds: number;
+  fetchImpl?: typeof fetch;
+}): Promise<boolean> {
+  const { config, dispatchUrl, secret, candidateId, scheduledForMs, delaySeconds } = args;
+  const fetchImpl = args.fetchImpl ?? fetch;
+  if (!config.token || !secret) return false;
+
+  const base = config.url.replace(/\/+$/, "");
+  const url = `${base}/v2/publish/${dispatchUrl}`;
+  try {
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json",
+        "Upstash-Delay": `${Math.max(1, Math.round(delaySeconds))}s`,
+        "Upstash-Forward-Authorization": `Bearer ${secret}`,
+        "Upstash-Deduplication-Id": `call-dispatch-${candidateId}-${scheduledForMs}`
+      },
+      body: JSON.stringify({ candidateId, scheduledForMs }),
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!response.ok) {
+      console.warn("[qstash] publish (call-dispatch) rechazado", { status: response.status });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn("[qstash] error al publicar (call-dispatch)", { error: error instanceof Error ? error.name : "unknown" });
+    return false;
+  }
+}

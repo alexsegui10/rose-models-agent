@@ -4,6 +4,7 @@ import type { ResponseDraftOutput } from "@/application/llmProvider";
 import { promptRegistry } from "@/application/promptRegistry";
 import { normalizeCandidate, ProfileVisibilitySchema } from "@/domain/candidate";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
+import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 
 const SendMessageSchema = z
   .object({
@@ -36,6 +37,13 @@ export async function POST(request: Request) {
       : [{ content: message as string, externalMessageId }];
   const result = await engine.handleIncomingTurn({ ...lookup, messages: turnMessages });
   const candidate = await repository.saveCandidate(normalizeCandidate(result.candidate));
+  // AUTO-MARCADOR: si este turno dejo la cita agendada, programa la llamada automatica a esa hora (best-effort:
+  // si QStash no esta o falla, no rompe el turno; Alex siempre puede pulsar el boton de llamar a mano).
+  try {
+    await enqueueCallDispatchIfScheduled({ candidate, origin: new URL(request.url).origin, nowMs: Date.now() });
+  } catch {
+    /* best-effort */
+  }
   const draft = result.draft ?? missingDraftTrace(result.response);
   const messages = await repository.listMessages(result.candidate.id);
   const transitions = await repository.listTransitions(result.candidate.id);

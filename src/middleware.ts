@@ -13,6 +13,7 @@ import type { NextRequest } from "next/server";
 const MACHINE_PATHS = [
   "/api/call/llm",
   "/api/call/end",
+  "/api/call/dispatch",
   "/api/instagram/webhook",
   "/api/instagram/flush",
   "/api/instagram/detect-privacy",
