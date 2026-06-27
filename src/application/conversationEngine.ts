@@ -2467,8 +2467,11 @@ function faceRaisedIn(message: string): boolean {
 
 // Plataformas COMPETIDORAS (la agencia solo gestiona OnlyFans). Si la candidata pregunta por una y el borrador
 // la menciona, se reescribe a la verdad (no inventar soporte de otras plataformas). Bug Alex 26-jun (Fansly).
+// OJO: NO incluir "fancy" (no es una plataforma; casa con el ingles inocente "ropa fancy" -> falso positivo
+// agravado al ampliar la guarda, revisor 27-jun). Las plataformas reales con "fan-" van completas (fanvue/fanfix/
+// fancentro/fanhouse), que no colisionan con palabras corrientes.
 const competitorPlatformPattern =
-  /\b(fansly|many\s?vids|fanvue|fanhouse|fancentro|justforfans|just for fans|fanfix|fancy\b|chaturbate|patreon|mym\b)\b/i;
+  /\b(fansly|many\s?vids|fanvue|fanhouse|fancentro|justforfans|just for fans|fanfix|chaturbate|patreon|mym\b)\b/i;
 
 const SUPPRESSED_TOPICS: SuppressedTopic[] = [
   {

@@ -93,4 +93,22 @@ describe("El bot nunca afirma una plataforma que no sea OnlyFans (Alex 26-jun, Q
     });
     expect(r.response.toLowerCase()).not.toMatch(/no con otras plataformas/);
   });
+
+  // Revisor 27-jun: "fancy" se quito del patron (no es plataforma; casaba con el ingles inocente "ropa fancy").
+  it("el ingles inocente 'fancy' NO dispara la guarda; las plataformas reales SI", async () => {
+    const benign = engineWith(fakeDrafter("Que guay! Y dime, que movil tienes?"));
+    const cb = await seedAdult(benign.repository, "plat_fancy_" + Math.random().toString().slice(2, 6));
+    const rb = await benign.engine.handleIncomingTurn({
+      instagramUsername: cb.instagramUsername,
+      messages: [{ content: "me gusta la ropa fancy, sirve?" }]
+    });
+    expect(rb.response.toLowerCase()).not.toMatch(/no con otras plataformas/);
+
+    for (const msg of ["y con fanvue trabajan?", "usais fancentro o fanfix?"]) {
+      const { engine, repository } = engineWith(fakeDrafter("Si claro tambien con esa, pagamos genial"));
+      const c = await seedAdult(repository, "plat_real_" + Math.random().toString().slice(2, 6));
+      const r = await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: msg }] });
+      expect(r.response.toLowerCase(), `"${msg}"`).toMatch(/onlyfans, no con otras plataformas/);
+    }
+  });
 });
