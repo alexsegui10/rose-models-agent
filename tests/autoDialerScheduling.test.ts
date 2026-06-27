@@ -14,7 +14,7 @@ const QSTASH_ENV = {
   QSTASH_TOKEN: "qs-token",
   QSTASH_URL: "https://qstash.test",
   CRON_SECRET: "cron-secret"
-} as NodeJS.ProcessEnv;
+} as unknown as NodeJS.ProcessEnv;
 
 describe("scheduleCallDispatch (publish a QStash)", () => {
   it("publica con delay, dedup por (candidata, hora) y bearer reenviado", async () => {
@@ -44,6 +44,7 @@ describe("scheduleCallDispatch (publish a QStash)", () => {
     expect(headers["Upstash-Delay"]).toBe("3600s");
     expect(headers["Upstash-Forward-Authorization"]).toBe("Bearer cron-secret");
     expect(headers["Upstash-Deduplication-Id"]).toBe("call-dispatch-cand-1-1900000000000");
+    expect(headers["Upstash-Retries"]).toBe("0"); // at-most-once: nunca doble-llamada por re-entrega
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
       candidateId: "cand-1",
       scheduledForMs: 1_900_000_000_000
@@ -139,7 +140,7 @@ describe("enqueueCallDispatchIfScheduled (cuando encolar)", () => {
         origin: "https://app",
         nowMs: now,
         fetchImpl,
-        env: { CRON_SECRET: "s" } as NodeJS.ProcessEnv
+        env: { CRON_SECRET: "s" } as unknown as NodeJS.ProcessEnv
       })
     ).toBe(false);
     expect(
@@ -148,7 +149,7 @@ describe("enqueueCallDispatchIfScheduled (cuando encolar)", () => {
         origin: "https://app",
         nowMs: now,
         fetchImpl,
-        env: { QSTASH_TOKEN: "t" } as NodeJS.ProcessEnv
+        env: { QSTASH_TOKEN: "t" } as unknown as NodeJS.ProcessEnv
       })
     ).toBe(false);
   });

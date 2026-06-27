@@ -14,7 +14,9 @@ const BodySchema = z.object({ candidateId: z.string().min(1), scheduledForMs: z.
  * AUTO-MARCADOR. QStash entrega esta peticion a la HORA AGENDADA (el delay se programa al cerrar la cita, ver
  * src/server/scheduleCallDispatch.ts). Dispara la llamada saliente SOLO si la cita sigue firme; nunca llama a
  * una candidata que ya no esta en CALL_SCHEDULED (cerrada/menor/reagendada a otra hora/ya atendida) ni supera
- * los 3 intentos. La dedup de QStash (por candidata+hora) + estas guardas evitan llamar dos veces.
+ * los 3 intentos. Contra la doble-llamada: la dedup de QStash (por candidata+hora) evita el doble-encolado y
+ * `Upstash-Retries: 0` (at-most-once) evita la re-entrega; las guardas cubren el resto (una vez que un intento
+ * incremente callAttempts o cambie el estado, un disparo posterior del mismo slot no vuelve a llamar).
  * Auth: bearer CRON_SECRET reenviado por QStash (igual patron que /api/instagram/flush). En MACHINE_PATHS.
  */
 export async function POST(request: Request): Promise<NextResponse> {

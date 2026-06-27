@@ -101,7 +101,9 @@ export async function schedulePrivacyDetection(args: {
  * saliente sola, llamando a nuestro endpoint /api/call/dispatch. Asi el bot llama solo, sin que Alex pulse el
  * boton. Mismo patron de auth que el flush (reenvia el bearer CRON_SECRET). La Deduplication-Id por
  * (candidata, hora) evita que re-programar el mismo slot (p. ej. si ella escribe otra vez) dispare DOS
- * llamadas: QStash entrega una sola vez. Best-effort: devuelve false si no esta configurado o falla, no lanza.
+ * llamadas. Ademas `Upstash-Retries: 0` -> entrega AT-MOST-ONCE: si la entrega fallara, QStash NO reintenta,
+ * asi NUNCA se llama dos veces a una persona por una re-entrega (mejor perder un disparo —el reintento por
+ * no-answer o el boton manual lo cubren— que llamar dos veces). Best-effort: devuelve false si falla, no lanza.
  */
 export async function scheduleCallDispatch(args: {
   config: QStashConfig;
@@ -129,7 +131,9 @@ export async function scheduleCallDispatch(args: {
         "Content-Type": "application/json",
         "Upstash-Delay": `${Math.max(1, Math.round(delaySeconds))}s`,
         "Upstash-Forward-Authorization": `Bearer ${secret}`,
-        "Upstash-Deduplication-Id": `call-dispatch-${candidateId}-${scheduledForMs}`
+        "Upstash-Deduplication-Id": `call-dispatch-${candidateId}-${scheduledForMs}`,
+        // AT-MOST-ONCE: no reintentar la entrega -> nunca doble-llamada a una persona por re-entrega de QStash.
+        "Upstash-Retries": "0"
       },
       body: JSON.stringify({ candidateId, scheduledForMs }),
       signal: AbortSignal.timeout(4000)
