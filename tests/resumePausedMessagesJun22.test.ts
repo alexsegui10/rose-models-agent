@@ -196,4 +196,33 @@ describe("C: al reanudar, el bot responde a lo escrito en la pausa", () => {
     // La respuesta propuesta SI se devuelve (Alex la ve y decide enviarla).
     expect((outcome.proposedMessage ?? "").trim().length).toBeGreaterThan(0);
   });
+
+  // Atajo (Alex 27-jun): si lo unico que escribio en la pausa son acuses triviales ("ok", "perfecto"...),
+  // al aprobar el bot va DIRECTO a proponer la llamada (proactivo fijo), sin reprocesar.
+  it("acuse trivial en la pausa ('ok') -> proactivo fijo, NO reprocesa", async () => {
+    const { engine, repository } = setup();
+    const c = await seedReview(repository);
+    await candidateWritesWhilePaused(engine, c.instagramUsername, "ok");
+    const r = await engine.applyHumanDecision({ candidateId: c.id, decision: "APPROVE" });
+    expect(r.reprocessTrailingInbound ?? null).toBeNull();
+    expect(r.proposedMessage ?? "").toContain(FIXED_PROACTIVE);
+  });
+
+  it("varios acuses triviales ('ok', 'perfecto 👍') -> proactivo fijo, NO reprocesa", async () => {
+    const { engine, repository } = setup();
+    const c = await seedReview(repository);
+    await candidateWritesWhilePaused(engine, c.instagramUsername, "ok", "perfecto", "👍");
+    const r = await engine.applyHumanDecision({ candidateId: c.id, decision: "APPROVE" });
+    expect(r.reprocessTrailingInbound ?? null).toBeNull();
+    expect(r.proposedMessage ?? "").toContain(FIXED_PROACTIVE);
+  });
+
+  it("acuse + pregunta con chicha ('ok', 'pero cuando me llamais?') -> reprocesa el bloque ENTERO", async () => {
+    const { engine, repository } = setup();
+    const c = await seedReview(repository);
+    await candidateWritesWhilePaused(engine, c.instagramUsername, "ok", "pero cuando me llamais?");
+    const r = await engine.applyHumanDecision({ candidateId: c.id, decision: "APPROVE" });
+    expect(r.proposedMessage).toBeNull();
+    expect(r.reprocessTrailingInbound).toEqual(["ok", "pero cuando me llamais?"]);
+  });
 });

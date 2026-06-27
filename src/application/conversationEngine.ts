@@ -183,8 +183,12 @@ export class ConversationEngine {
       // el bot RESPONDE a eso en vez del proactivo fijo. Solo si el resume transiciono de verdad
       // (proposedMessage != null): doble-click / resume incompleto / HIR no reprocesan (invariantes 1 y 4).
       if (proposedMessage) {
-        reprocessTrailingInbound = await this.trailingCandidateMessages(candidate.id);
-        if (reprocessTrailingInbound) {
+        const trailing = await this.trailingCandidateMessages(candidate.id);
+        // Atajo (Alex 27-jun): si TODO lo escrito en la pausa son acuses triviales ("ok", "perfecto"...), no hay
+        // nada que responder -> se queda el proactivo fijo (propone la llamada). Si hay ALGUN mensaje con chicha,
+        // se reprocesa el bloque ENTERO (no solo el no-trivial) para no perder contexto.
+        if (trailing && trailing.some((message) => !isTrivialAck(message))) {
+          reprocessTrailingInbound = trailing;
           proposedMessage = null; // salida unica: respuesta contextual (la da el llamante) O proactivo fijo
         }
       }
@@ -3821,6 +3825,22 @@ function normalizeText(value: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "");
+}
+
+// ¿El mensaje es solo una CONFIRMACION trivial ("ok", "vale", "perfecto", un emoji de pulgar...)? Sirve para el
+// atajo de Alex (27-jun): si lo unico que la candidata escribio durante la pausa son acuses asi, al aprobar el
+// bot NO necesita responderlos -> va directo a proponer la llamada. Anclado ^...$: "ok pero cuanto cobro?" NO es
+// trivial (tiene chicha) y se responde. Conservador: ante la duda, NO es trivial (se reprocesa, que es lo seguro).
+function isTrivialAck(message: string): boolean {
+  // Quita emojis, simbolos y puntuacion (deja solo letras/numeros y espacios) para ver si queda "texto" real.
+  const collapsed = normalizeText(message)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (collapsed.length === 0) return true; // solo emojis/espacios/puntuacion
+  return /^(ok+|okay+|okey+|vale+|va|dale|listo|perfecto|perfe|genial|guay|estupendo|fenomenal|bien|de acuerdo|deacuerdo|claro|si|sip|sii+|si claro|gracias+|muchas gracias|de nada|bueno)$/.test(
+    collapsed
+  );
 }
 
 function criticalRestrictionReason(
