@@ -76,9 +76,12 @@ const entries: KnowledgeEntryInput[] = [
     ],
     approvedAnswerPoints: [
       // Respuesta general canonica (analisis 2026-06-10): "Solemos trabajar a porcentaje", sin
-      // cifra y sin tecnicismos de liquidacion. La cifra exacta queda condicionada a la pregunta.
+      // cifra y sin tecnicismos de liquidacion. La cifra (segunda linea) la CONDICIONA el codigo
+      // (filterCommercialAnswerFacts solo la deja en el plan si preguntan la cifra exacta), por eso el
+      // texto ya no lleva el prefijo "Si preguntas por la cifra exacta:" que se filtraba literal al chat
+      // y sonaba a instruccion interna (panel prod 27-jun). El % NO cambia (70/30, decision de Alex).
       "Solemos trabajar a porcentaje, no con salario fijo.",
-      "Si preguntas por la cifra exacta: 70% para Rose Models y 30% para ti."
+      "El reparto es 70% para Rose Models y 30% para ti."
     ],
     prohibitedClaims: [
       "Mencionar el porcentaje de forma proactiva.",

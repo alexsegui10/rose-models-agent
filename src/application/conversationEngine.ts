@@ -1027,6 +1027,19 @@ export class ConversationEngine {
           : [...understanding.internalNotes, "Desconfianza/agresion: escala a Alex (decision 16-jun)."]
       };
     }
+    // Pregunta por contenido EXPLICITO / "cosas fuertes": el bot NO contesta hasta donde llega el contenido;
+    // ESCALA a Alex para que lo lleve el (decision 27-jun: "que me avise a mi"). Como el override de desconfianza;
+    // el cierre de menor sigue ganando (decideNextState cierra por edad ANTES de la rama HIR).
+    if (explicitContentQuestionPattern.test(normalizeText(groupedMessage.content))) {
+      understanding = {
+        ...understanding,
+        requiresHumanReview: true,
+        humanReviewReason: understanding.humanReviewReason ?? "Pregunta sobre contenido explicito/limites: lo lleva Alex.",
+        internalNotes: understanding.requiresHumanReview
+          ? understanding.internalNotes
+          : [...understanding.internalNotes, "Contenido explicito/'cosas fuertes': escala a Alex (decision 27-jun)."]
+      };
+    }
     // Queja de una agencia PASADA (no hacia nosotros): el bot tranquiliza y SIGUE, no escala (decision Alex
     // 26-jun). Va DESPUES del override de desconfianza (que reañade la escalada por "estafa") para revertir solo
     // la queja pasada; la desconfianza/agresion hacia VOSOTROS y persona/inyeccion/%/contrato conservan su escalada.
@@ -1507,6 +1520,17 @@ export class ConversationEngine {
       if (corrected !== response) {
         response = corrected;
         draft = { ...draft, response, usedFallback: true, error: "platform-hallucination-guard" };
+      }
+    }
+    // GENERO (Alex 27-jun): la agencia trabaja SOLO con chicas. Si preguntan por hombres / "solo chicas?" y la
+    // respuesta no lo aclara ya, se reescribe a la verdad (en prod el LLM contestaba sobre PAISES). Determinista.
+    const genderAlreadyClarified = /\bsolo\b[^.!?]{0,18}\bchicas\b|\bsolo (?:con )?(?:chicas|mujeres)\b/i;
+    if (genderEligibilityPattern.test(normalizeText(groupedMessage.content)) && !genderAlreadyClarified.test(response)) {
+      const tail = responsePlan.questionToAsk ? `\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}` : "";
+      const corrected = `Ahora mismo solo trabajamos con chicas.${tail}`;
+      if (corrected !== response) {
+        response = corrected;
+        draft = { ...draft, response, usedFallback: true, error: "gender-eligibility-guard" };
       }
     }
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
@@ -2472,6 +2496,17 @@ function faceRaisedIn(message: string): boolean {
 // fancentro/fanhouse), que no colisionan con palabras corrientes.
 const competitorPlatformPattern =
   /\b(fansly|many\s?vids|fanvue|fanhouse|fancentro|justforfans|just for fans|fanfix|chaturbate|patreon|mym\b)\b/i;
+
+// GENERO (Alex 27-jun): la agencia trabaja SOLO con chicas. Si preguntan por hombres / "solo chicas?" / alguien
+// se identifica como chico, el bot lo aclara de forma determinista ("solo trabajamos con chicas") en vez de dejar
+// que el LLM patine (en prod respondio sobre PAISES a "aceptais hombres?"). Acotado: exige marco de elegibilidad.
+const genderEligibilityPattern =
+  /\b(?:acept\w+|cog\w+|admit\w+|trabaj\w+|busc\w+|val\w+|entran?|sirve\w*|pueden?|hay)\b[^.!?]{0,18}\bhombres?\b|\bhombres?\b[^.!?]{0,15}\b(?:tambien|pueden|valen|sirven|entran|aceptan|trabaj\w+)\b|\b(?:y los|para los|solo)\s+hombres\b|\bsolo\b[^.!?]{0,10}\b(?:chicas|mujeres|tias)\b|\bsoy\b[^.!?]{0,8}\b(?:hombre|chico|tio|varon)\b/i;
+
+// CONTENIDO EXPLICITO / "cosas fuertes" (Alex 27-jun): el bot NO contesta hasta donde llega el contenido; ESCALA
+// a Alex para que lo lleve el personalmente ("que me avise a mi"). Acotado a terminos claramente explicitos.
+const explicitContentQuestionPattern =
+  /\b(cosas? (?:muy )?fuertes?|muy fuerte|hacer porno|es porno|porno\b|explicit\w+|desnud\w+|sin ropa|ense[nñ]arlo? todo|mostrarlo? todo|contenido sexual|cosas? sexuales?|penetraci\w+|guarrad\w+|muy guarro|tener sexo|hacer sexo)\b/i;
 
 const SUPPRESSED_TOPICS: SuppressedTopic[] = [
   {
