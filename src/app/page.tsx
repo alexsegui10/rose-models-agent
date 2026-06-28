@@ -187,6 +187,7 @@ export default function Home() {
   const [crmSearch, setCrmSearch] = useState("");
   const [testCallPhone, setTestCallPhone] = useState("");
   const [testCallBusy, setTestCallBusy] = useState(false);
+  const [testCallResult, setTestCallResult] = useState<string | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [transitions, setTransitions] = useState<StateTransition[]>([]);
@@ -828,11 +829,11 @@ export default function Home() {
   async function doTestCall() {
     const phone = testCallPhone.trim();
     if (phone.replace(/[^\d]/g, "").length < 8) {
-      setCrmNotice("⚠️ Escribe un número de WhatsApp válido con prefijo (ej. +34 6XX XXX XXX).");
+      setTestCallResult("⚠️ Escribe un número de WhatsApp válido con prefijo (ej. +34 6XX XXX XXX).");
       return;
     }
     setTestCallBusy(true);
-    setCrmNotice("📞 Lanzando llamada de prueba…");
+    setTestCallResult("📞 Lanzando llamada de prueba…");
     try {
       const response = await fetch("/api/call/test", {
         method: "POST",
@@ -841,14 +842,12 @@ export default function Home() {
       });
       const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (response.ok && data.ok) {
-        setCrmNotice(
-          "📞 Llamada de prueba lanzada: te llegará la solicitud de permiso por WhatsApp; acéptala y el bot te llama."
-        );
+        setTestCallResult("✅ Llamada lanzada: te llegará la solicitud de permiso por WhatsApp; acéptala y el bot te llama.");
       } else {
-        setCrmNotice(`No se pudo lanzar la llamada: ${data.error ?? "error desconocido"}`);
+        setTestCallResult(`❌ No se pudo: ${data.error ?? `error ${response.status}`}`);
       }
-    } catch {
-      setCrmNotice("No se pudo lanzar la llamada (error de red).");
+    } catch (error) {
+      setTestCallResult(`❌ Error de red: ${error instanceof Error ? error.message : "desconocido"}`);
     } finally {
       setTestCallBusy(false);
     }
@@ -1281,6 +1280,9 @@ export default function Home() {
                   >
                     {testCallBusy ? "Llamando…" : "Llamar de prueba"}
                   </button>
+                  {testCallResult ? (
+                    <span style={{ width: "100%", fontSize: "0.9rem", color: "var(--text)" }}>{testCallResult}</span>
+                  ) : null}
                 </div>
 
                 <div className="calls2-kpis">
