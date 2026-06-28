@@ -185,6 +185,8 @@ export default function Home() {
   const fetchedProfileIds = useRef<Set<string>>(new Set());
   const [crmNotice, setCrmNotice] = useState<string | null>(null);
   const [crmSearch, setCrmSearch] = useState("");
+  const [testCallPhone, setTestCallPhone] = useState("");
+  const [testCallBusy, setTestCallBusy] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [transitions, setTransitions] = useState<StateTransition[]>([]);
@@ -822,6 +824,36 @@ export default function Home() {
     await refreshCandidates();
   }
 
+  // LLAMADA DE PRUEBA: dispara una llamada al numero que Alex teclea (el suyo), sin simular toda la conversacion.
+  async function doTestCall() {
+    const phone = testCallPhone.trim();
+    if (phone.replace(/[^\d]/g, "").length < 8) {
+      setCrmNotice("⚠️ Escribe un número de WhatsApp válido con prefijo (ej. +34 6XX XXX XXX).");
+      return;
+    }
+    setTestCallBusy(true);
+    setCrmNotice("📞 Lanzando llamada de prueba…");
+    try {
+      const response = await fetch("/api/call/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone })
+      });
+      const data = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (response.ok && data.ok) {
+        setCrmNotice(
+          "📞 Llamada de prueba lanzada: te llegará la solicitud de permiso por WhatsApp; acéptala y el bot te llama."
+        );
+      } else {
+        setCrmNotice(`No se pudo lanzar la llamada: ${data.error ?? "error desconocido"}`);
+      }
+    } catch {
+      setCrmNotice("No se pudo lanzar la llamada (error de red).");
+    } finally {
+      setTestCallBusy(false);
+    }
+  }
+
   return (
     <div className="app-frame">
       <header className="top-bar">
@@ -1210,6 +1242,45 @@ export default function Home() {
                   <p className="calls2-subtitle">
                     El bot de voz llama a las candidatas aprobadas, negocia el reparto y te pasa las que lo necesitan.
                   </p>
+                </div>
+
+                {/* Llamada de PRUEBA: probar la voz llamando a tu propio numero, sin simular la conversacion. */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    margin: "0 0 1rem",
+                    padding: "0.6rem 0.8rem",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    background: "var(--surface, var(--bg))"
+                  }}
+                >
+                  <span className="muted">📞 Probar la voz llamando a tu número:</span>
+                  <input
+                    type="tel"
+                    placeholder="+34 6XX XXX XXX"
+                    value={testCallPhone}
+                    onChange={(event) => setTestCallPhone(event.target.value)}
+                    style={{
+                      padding: "0.4rem 0.6rem",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border)",
+                      background: "var(--bg)",
+                      color: "var(--text)",
+                      minWidth: "180px"
+                    }}
+                  />
+                  <button
+                    className="crm2-btn crm2-btn--teal"
+                    type="button"
+                    disabled={testCallBusy}
+                    onClick={() => void doTestCall()}
+                  >
+                    {testCallBusy ? "Llamando…" : "Llamar de prueba"}
+                  </button>
                 </div>
 
                 <div className="calls2-kpis">
