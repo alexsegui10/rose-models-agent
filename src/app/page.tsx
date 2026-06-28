@@ -2148,7 +2148,7 @@ export default function Home() {
                                             type="button"
                                             onClick={() => void applyHumanDecision(candidate, "APPROVE")}
                                           >
-                                            Aprobar
+                                            Encaja
                                           </button>
                                           <button
                                             className="crm2-btn crm2-btn--danger"
