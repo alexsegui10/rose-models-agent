@@ -27,8 +27,16 @@ export async function POST(request: Request) {
 
   const config = getElevenLabsOutboundConfig();
   if (!config.isConfigured) {
+    // Lista EXACTA de las variables que faltan en Vercel (solo nombres, nunca valores). Asi Alex sabe que poner.
+    const required: [string, string][] = [
+      ["ELEVENLABS_API_KEY", config.apiKey],
+      ["ELEVENLABS_AGENT_ID", config.agentId],
+      ["ELEVENLABS_WHATSAPP_PHONE_NUMBER_ID", config.whatsappPhoneNumberId],
+      ["ELEVENLABS_CALL_PERMISSION_TEMPLATE", config.permissionTemplateName]
+    ];
+    const missing = required.filter(([, value]) => !value?.trim()).map(([name]) => name);
     return NextResponse.json(
-      { ok: false, error: "ElevenLabs no esta configurado (faltan ELEVENLABS_* en Vercel)." },
+      { ok: false, error: `Faltan en Vercel: ${missing.join(", ")} (anadelas y haz Redeploy).` },
       { status: 503 }
     );
   }
