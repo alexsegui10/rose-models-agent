@@ -36,6 +36,20 @@ export async function POST(request: Request) {
 
   const result = await dispatchAction(engine, parsed.data);
 
+  // La accion NO se pudo aplicar por falta de datos (p.ej. confirmar llamada sin telefono/hora): no hay nada que
+  // entregar; se devuelve el motivo para que el CRM lo muestre a Alex (no un "hecho" falso). Estado intacto.
+  if (result.blockedReason) {
+    return NextResponse.json({
+      candidate: result.candidate,
+      proposedMessage: null,
+      sentToCandidate: null,
+      blockedReason: result.blockedReason,
+      appliedTransitions: [],
+      messages: await repository.listMessages(result.candidate.id),
+      transitions: await repository.listTransitions(result.candidate.id)
+    });
+  }
+
   // Entregar a la candidata, por su canal (Instagram/WhatsApp), lo que la decision haya generado (p.ej. al
   // completar el par perfil+movil, "Buenas noticias... ¿que dia te viene?"). Si escribio DURANTE la pausa,
   // el bot RESPONDE a eso (reproceso) en vez del proactivo fijo. El motor ya guardo el mensaje; aqui se envia.
@@ -80,6 +94,7 @@ async function dispatchAction(
   transitions: unknown[];
   proposedMessage?: string | null;
   reprocessTrailingInbound?: string[] | null;
+  blockedReason?: string;
 }> {
   switch (data.action) {
     case "CONFIRM_CALL":

@@ -761,7 +761,7 @@ export class ConversationEngine {
   async confirmScheduledCall(input: {
     candidateId: string;
     slot?: string;
-  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null; blockedReason?: string }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
@@ -774,6 +774,21 @@ export class ConversationEngine {
     }
 
     const slot = input.slot?.trim() ? input.slot.trim() : undefined;
+    // NO se puede agendar una llamada por WhatsApp sin el NUMERO de la candidata ni sin una HORA (la que ella
+    // propuso, o la que escribe Alex en el modal). Sin esto, "Confirmar llamada" agendaba A CIEGAS y mandaba
+    // "te confirmo la llamada" aunque ella no hubiera dado ni telefono ni hora (bug Alex 28-jun). El bot recoge
+    // esos datos en la conversacion; si faltan, NO se confirma y se avisa a Alex (no se toca el estado).
+    const phone = existing.phone?.trim();
+    const hasTime = Boolean(existing.scheduledCallStartMs || existing.scheduledCallSlot?.trim() || slot);
+    if (!phone || !hasTime) {
+      const missing = !phone && !hasTime ? "su numero de WhatsApp y una hora" : !phone ? "su numero de WhatsApp" : "una hora";
+      return {
+        candidate: existing,
+        transitions: [],
+        proposedMessage: null,
+        blockedReason: `No se puede agendar todavia: falta ${missing}. El bot se lo esta pidiendo a la candidata; cuando lo de, se agenda (o reenvia el dato y confirmas).`
+      };
+    }
     const { candidate, transition, proposedMessage } = applyCallScheduled(existing, {
       labelEs: slot,
       trigger: "HUMAN_CONFIRM_CALL",

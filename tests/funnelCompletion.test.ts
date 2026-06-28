@@ -102,14 +102,39 @@ describe("Cierre del funnel: confirmacion de llamada (-> CALL_SCHEDULED)", () =>
     expect(result.proposedMessage!.toLowerCase()).toMatch(/llam|hablamos/);
   });
 
-  it("confirmar sin hora concreta tambien cierra a CALL_SCHEDULED con un mensaje generico", async () => {
+  it("confirmar sin hora TIPEADA pero con telefono + franja guardada cierra a CALL_SCHEDULED (mensaje generico)", async () => {
     const { engine, repository } = createEngine();
-    const seeded = await seed(repository, "READY_TO_SCHEDULE");
+    // Un READY_TO_SCHEDULE real YA tiene telefono y una franja guardada (asi llego ahi); Alex confirma sin teclear hora.
+    const seeded = await seed(repository, "READY_TO_SCHEDULE", {
+      phone: "612345678",
+      scheduledCallSlot: "el martes por la tarde"
+    });
 
     const result = await engine.confirmScheduledCall({ candidateId: seeded.id });
 
     expect(result.candidate.currentState).toBe("CALL_SCHEDULED");
     expect(result.proposedMessage).not.toBeNull();
+    expect(result.blockedReason).toBeUndefined();
+  });
+
+  // Bug Alex 28-jun: "Confirmar llamada" agendaba A CIEGAS aunque la candidata no hubiera dado ni telefono ni
+  // hora (slot opcional). Ahora se BLOQUEA con un motivo y NO se agenda; el estado no cambia.
+  it("confirmar SIN telefono -> NO agenda, devuelve blockedReason (falta el numero)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "COLLECTING_CALL_DETAILS"); // sin phone
+    const result = await engine.confirmScheduledCall({ candidateId: seeded.id, slot: "el lunes a las 18h" });
+    expect(result.candidate.currentState).toBe("COLLECTING_CALL_DETAILS");
+    expect(result.proposedMessage).toBeNull();
+    expect(result.blockedReason).toMatch(/numero|whatsapp/i);
+  });
+
+  it("confirmar CON telefono pero SIN hora (ni tipeada ni de ella) -> NO agenda, blockedReason (falta hora)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "COLLECTING_CALL_DETAILS", { phone: "612345678" });
+    const result = await engine.confirmScheduledCall({ candidateId: seeded.id });
+    expect(result.candidate.currentState).toBe("COLLECTING_CALL_DETAILS");
+    expect(result.proposedMessage).toBeNull();
+    expect(result.blockedReason).toMatch(/hora/i);
   });
 
   it("confirmar desde un estado que no lo admite no rompe (no avanza)", async () => {

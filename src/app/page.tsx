@@ -771,7 +771,20 @@ export default function Home() {
       setCrmNotice("No se pudo aplicar la accion.");
       return;
     }
-    const data = (await response.json()) as { candidate: Candidate; proposedMessage: string | null };
+    const data = (await response.json()) as {
+      candidate: Candidate;
+      proposedMessage: string | null;
+      blockedReason?: string | null;
+    };
+    // La accion no se pudo aplicar por falta de datos (p.ej. confirmar llamada sin telefono/hora): mostrar el
+    // motivo real, NO un falso "Llamada confirmada". El estado no cambia.
+    if (data.blockedReason) {
+      setCrmNotice(`⚠️ ${data.blockedReason}`);
+      if (selectedCandidate?.id === candidate.id) setSelectedCandidate(data.candidate);
+      if (drawerCandidate?.id === candidate.id) setDrawerCandidate(data.candidate);
+      await refreshCandidates();
+      return;
+    }
     const labels: Record<typeof action, string> = {
       PROFILE_FIT: `Perfil de @${candidate.instagramUsername} verificado: sigue la cualificacion.`,
       PROFILE_NO_FIT: `@${candidate.instagramUsername} descartada en la revision de perfil.`,
