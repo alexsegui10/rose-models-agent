@@ -734,16 +734,45 @@ export class ConversationEngine {
    * de perfil (avanza a QUALIFYING y propone seguir). En cualquier otro estado solo deja constancia del
    * OK (humanProfileReviewStatus=POTENTIAL_FIT) sin tocar el funnel ni enviar mensaje.
    */
-  async markProfileOk(input: {
-    candidateId: string;
-  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; proposedMessage: string | null }> {
+  async markProfileOk(input: { candidateId: string }): Promise<{
+    candidate: Candidate;
+    transitions: StateTransition[];
+    proposedMessage: string | null;
+    reprocessTrailingInbound?: string[] | null;
+  }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
     }
+    // "Encaja" = el UNICO OK general de Alex (decision 27/28-jun: un solo OK; las dudas como el movil son
+    // decisiones APARTE). Vale en cualquier momento del funnel:
+    // - PROFILE_READY_FOR_REVIEW (perfil privado): verifica el perfil y sigue cualificando (como antes).
     if (existing.currentState === "PROFILE_READY_FOR_REVIEW") {
       return this.applyProfileReviewDecision({ candidateId: input.candidateId, fits: true });
     }
+    // - WAITING_HUMAN_REVIEW (ya termino y el bot freno con "lo comento con mi socio"): es la aprobacion FINAL,
+    //   identica a "Aprobar" -> reanuda, responde lo de la pausa y propone la llamada (reusa applyHumanDecision;
+    //   el movil dudoso sigue frenando via resumeAfterApprovals -> deviceOk).
+    if (existing.currentState === "WAITING_HUMAN_REVIEW") {
+      return this.applyHumanDecision({ candidateId: input.candidateId, decision: "APPROVE" });
+    }
+    // - QUALIFYING (PRE-OK: Alex aprueba ANTES de que ella acabe): se REGISTRA la aprobacion (humanFitDecision
+    //   APPROVED) sin tocar el estado; el bot sigue cualificando y, al terminar, decideNextState propone la
+    //   llamada en vez del "lo comento con mi socio" (salto multi-hop seguro, sin tocar el grafo). El movil
+    //   dudoso sigue frenando (decideNextState exige deviceOk para encadenar el avance).
+    if (existing.currentState === "QUALIFYING") {
+      const candidate: Candidate = {
+        ...existing,
+        humanFitDecision: "APPROVED",
+        humanProfileReviewStatus: "POTENTIAL_FIT",
+        humanReviewStatus: "APPROVED",
+        updatedAt: new Date()
+      };
+      await this.dependencies.repository.saveCandidate(candidate);
+      return { candidate, transitions: [], proposedMessage: null };
+    }
+    // - Resto de estados (NEW_LEAD, post-llamada, HIR, CLOSED...): solo deja constancia del OK de perfil sin
+    //   tocar el funnel ni reanudar (NO saca de HIR ni reabre cerradas: invariantes 4 y 2).
     const candidate: Candidate = {
       ...existing,
       humanProfileReviewStatus: "POTENTIAL_FIT",
@@ -1979,6 +2008,14 @@ function applyExtractedData(
   };
 }
 
+// Movil "OK para avanzar hacia la llamada" = NO bloqueado: ni pendiente de revision de calidad (iPhone <13) ni
+// rechazado. UNKNOWN/APPROVED/PENDING_UPGRADE pasan. El DUDOSO (PENDING_QUALITY_TEST) y el rechazado frenan, para
+// que el movil siga siendo una decision APARTE de Alex (decision 28-jun). Compartido por resumeAfterApprovals y
+// la rama de pre-OK de decideNextState (toma el Candidate completo, sin estrechar el tipo en el contexto).
+function deviceReadyToAdvance(candidate: Candidate): boolean {
+  return candidate.deviceEligibility !== "PENDING_QUALITY_TEST" && candidate.deviceEligibility !== "NOT_ELIGIBLE";
+}
+
 function decideNextState(
   candidate: Candidate,
   understanding: ModelConversationOutput,
@@ -2052,6 +2089,23 @@ function decideNextState(
     if (!hasAnswerablePendingQuestion) {
       return "WAITING_HUMAN_REVIEW";
     }
+  }
+
+  // PRE-OK (Alex 27/28-jun): si Alex ya dio el OK general ANTES de que ella acabe (humanFitDecision APPROVED), al
+  // entrar en revision NO se frena con "lo comento con mi socio": se encadena el avance hacia la llamada. El bucle
+  // de transiciones del turno hace WAITING_HUMAN_REVIEW -> APPROVED -> COLLECTING_CALL_DETAILS y el bot propone la
+  // llamada. Gateado por humanFitDecision=APPROVED (decision HUMANA de Alex, no del bot: invariante 4) Y por el
+  // movil OK (el movil DUDOSO sigue frenando aqui -> sigue siendo decision aparte de Alex, como pidio). Menor/HIR
+  // ya se evaluaron ANTES (arriba), asi que esto nunca pisa un cierre de edad ni una escalada.
+  if (
+    candidate.currentState === "WAITING_HUMAN_REVIEW" &&
+    candidate.humanFitDecision === "APPROVED" &&
+    deviceReadyToAdvance(candidate)
+  ) {
+    return "APPROVED";
+  }
+  if (candidate.currentState === "APPROVED") {
+    return "COLLECTING_CALL_DETAILS";
   }
 
   // Candidata YA APROBADA (post-revision) que da su telefono: pasa a READY_TO_SCHEDULE = "tenemos su numero,
