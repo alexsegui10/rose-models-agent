@@ -12,11 +12,9 @@ vi.mock("@/infrastructure/integrations/elevenLabsOutbound", () => ({
     isConfigured: h.isConfigured,
     apiKey: "k",
     agentId: "a",
-    whatsappPhoneNumberId: "p",
-    permissionTemplateName: "t",
-    permissionTemplateLang: "es"
+    agentPhoneNumberId: "p"
   }),
-  startOutboundWhatsAppCall: async (...args: unknown[]) => {
+  startOutboundSipCall: async (...args: unknown[]) => {
     h.startSpy(...args);
     return h.startResult;
   }

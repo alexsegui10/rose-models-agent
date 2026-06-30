@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getElevenLabsOutboundConfig,
-  startOutboundWhatsAppCall,
+  normalizeToE164,
+  startOutboundSipCall,
   type ElevenLabsOutboundConfig
 } from "@/infrastructure/integrations/elevenLabsOutbound";
 import { createCandidate, normalizeCandidate, type Candidate } from "@/domain/candidate";
@@ -11,7 +12,7 @@ function candidate(overrides: Partial<Candidate> = {}): Candidate {
     ...createCandidate({ instagramUsername: "17841400000000000", displayName: "Marina" }),
     firstName: "Marina",
     age: 27,
-    phone: "+34 600 11 22 33",
+    phone: "+54 9 11 1234 5678",
     conversationSummary: "Tiene OF, quiere crecer.",
     ...overrides
   });
@@ -21,15 +22,13 @@ const config: ElevenLabsOutboundConfig = {
   isConfigured: true,
   apiKey: "xi-key",
   agentId: "agent-123",
-  whatsappPhoneNumberId: "wa-phone-1",
-  permissionTemplateName: "call_permission",
-  permissionTemplateLang: "es"
+  agentPhoneNumberId: "phone-num-1"
 };
 
-describe("startOutboundWhatsAppCall", () => {
+describe("startOutboundSipCall", () => {
   it("no llama si no está configurado", async () => {
     const fetchMock = vi.fn();
-    const result = await startOutboundWhatsAppCall(
+    const result = await startOutboundSipCall(
       candidate(),
       { ...config, isConfigured: false },
       fetchMock as unknown as typeof fetch
@@ -40,41 +39,50 @@ describe("startOutboundWhatsAppCall", () => {
 
   it("no llama si la candidata no tiene teléfono", async () => {
     const fetchMock = vi.fn();
-    const result = await startOutboundWhatsAppCall(candidate({ phone: undefined }), config, fetchMock as unknown as typeof fetch);
+    const result = await startOutboundSipCall(candidate({ phone: undefined }), config, fetchMock as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("POSTea al endpoint correcto con los campos y el contexto del DM", async () => {
+  it("POSTea al endpoint SIP con agent_phone_number_id, to_number en E.164 y el contexto del DM", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ conversation_id: "conv-789" })
+      json: async () => ({ success: true, conversation_id: "conv-789" })
     } as Response);
-    const result = await startOutboundWhatsAppCall(candidate(), config, fetchMock as unknown as typeof fetch);
+    const result = await startOutboundSipCall(candidate(), config, fetchMock as unknown as typeof fetch);
 
     expect(result.ok).toBe(true);
     expect(result.conversationId).toBe("conv-789");
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe("https://api.elevenlabs.io/v1/convai/whatsapp/outbound-call");
+    expect(String(url)).toBe("https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call");
     expect((init as RequestInit).method).toBe("POST");
     const headers = (init as RequestInit).headers as Record<string, string>;
     expect(headers["xi-api-key"]).toBe("xi-key");
     const sent = JSON.parse(String((init as RequestInit).body));
     expect(sent.agent_id).toBe("agent-123");
-    expect(sent.whatsapp_phone_number_id).toBe("wa-phone-1");
-    expect(sent.whatsapp_user_id).toBe("34600112233"); // normalizado a dígitos
-    expect(sent.whatsapp_call_permission_request_template_name).toBe("call_permission");
+    expect(sent.agent_phone_number_id).toBe("phone-num-1");
+    expect(sent.to_number).toBe("+5491112345678"); // E.164 conservando el '+'
     expect(sent.conversation_initiation_client_data.dynamic_variables.candidate_name).toBe("Marina");
     expect(sent.conversation_initiation_client_data.dynamic_variables.candidate_id).toBeTruthy();
   });
 
-  it("devuelve el motivo si ElevenLabs rechaza", async () => {
+  it("trata success===false como fallo aunque el HTTP sea 200", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: false, message: "trunk rejected", conversation_id: null })
+    } as Response);
+    const result = await startOutboundSipCall(candidate(), config, fetchMock as unknown as typeof fetch);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain("trunk rejected");
+  });
+
+  it("devuelve el motivo si ElevenLabs rechaza (HTTP no ok)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 422,
-      json: async () => ({ detail: "plantilla no encontrada" })
+      json: async () => ({ detail: "numero invalido" })
     } as Response);
-    const result = await startOutboundWhatsAppCall(candidate(), config, fetchMock as unknown as typeof fetch);
+    const result = await startOutboundSipCall(candidate(), config, fetchMock as unknown as typeof fetch);
     expect(result.ok).toBe(false);
     expect(result.reason).toContain("422");
   });
@@ -84,10 +92,27 @@ describe("startOutboundWhatsAppCall", () => {
     const full = getElevenLabsOutboundConfig({
       ELEVENLABS_API_KEY: "k",
       ELEVENLABS_AGENT_ID: "a",
-      ELEVENLABS_WHATSAPP_PHONE_NUMBER_ID: "p",
-      ELEVENLABS_CALL_PERMISSION_TEMPLATE: "t"
+      ELEVENLABS_AGENT_PHONE_NUMBER_ID: "p"
     } as unknown as NodeJS.ProcessEnv);
     expect(full.isConfigured).toBe(true);
-    expect(full.permissionTemplateLang).toBe("es");
+    expect(full.agentPhoneNumberId).toBe("p");
+  });
+});
+
+describe("normalizeToE164 (el trunk SIP exige E.164 con '+')", () => {
+  it("conserva el '+' y el código de país que ya trae (no fuerza Argentina)", () => {
+    expect(normalizeToE164("+34 600 11 22 33")).toBe("+34600112233");
+  });
+  it("móvil argentino con '+' se limpia conservando el 9", () => {
+    expect(normalizeToE164("+54 9 11 1234 5678")).toBe("+5491112345678");
+  });
+  it("número local pelado (sin código país) asume Argentina (+54)", () => {
+    expect(normalizeToE164("11 2345-6789")).toBe("+541123456789");
+  });
+  it("prefijo internacional 00 equivale a '+'", () => {
+    expect(normalizeToE164("0054 11 2345 6789")).toBe("+541123456789");
+  });
+  it("número que ya empieza por 54 sin '+' no duplica el código de país", () => {
+    expect(normalizeToE164("54 9 11 1234 5678")).toBe("+5491112345678");
   });
 });

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createCandidate, normalizeCandidate } from "@/domain/candidate";
-import { getElevenLabsOutboundConfig, startOutboundWhatsAppCall } from "@/infrastructure/integrations/elevenLabsOutbound";
+import { getElevenLabsOutboundConfig, startOutboundSipCall } from "@/infrastructure/integrations/elevenLabsOutbound";
 
 export const runtime = "nodejs";
 
 /**
- * LLAMADA DE PRUEBA: dispara una llamada saliente por WhatsApp al numero que Alex teclea, SIN tener que simular
+ * LLAMADA DE PRUEBA: dispara una llamada saliente por teléfono (SIP/Zadarma) al numero que Alex teclea, SIN tener que simular
  * toda la conversacion ni crear una candidata real. Util para probar la voz una y otra vez. Usa una candidata
  * SINTETICA (no se guarda en el repositorio). Detras del Basic Auth del CRM (solo Alex; no esta en MACHINE_PATHS),
  * y exige las claves de ElevenLabs (si faltan -> 503, asi Alex sabe que tiene que configurarlas).
@@ -31,8 +31,7 @@ export async function POST(request: Request) {
     const required: [string, string][] = [
       ["ELEVENLABS_API_KEY", config.apiKey],
       ["ELEVENLABS_AGENT_ID", config.agentId],
-      ["ELEVENLABS_WHATSAPP_PHONE_NUMBER_ID", config.whatsappPhoneNumberId],
-      ["ELEVENLABS_CALL_PERMISSION_TEMPLATE", config.permissionTemplateName]
+      ["ELEVENLABS_AGENT_PHONE_NUMBER_ID", config.agentPhoneNumberId]
     ];
     const missing = required.filter(([, value]) => !value?.trim()).map(([name]) => name);
     return NextResponse.json(
@@ -48,7 +47,7 @@ export async function POST(request: Request) {
     phone: parsed.data.phone
   });
 
-  const result = await startOutboundWhatsAppCall(testCandidate, config);
+  const result = await startOutboundSipCall(testCandidate, config);
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.reason ?? "No se pudo iniciar la llamada." }, { status: 502 });
   }

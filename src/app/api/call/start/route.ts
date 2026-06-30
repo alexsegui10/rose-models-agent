@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
-import { getElevenLabsOutboundConfig, startOutboundWhatsAppCall } from "@/infrastructure/integrations/elevenLabsOutbound";
+import { getElevenLabsOutboundConfig, startOutboundSipCall } from "@/infrastructure/integrations/elevenLabsOutbound";
 
 export const runtime = "nodejs";
 
 /**
- * Dispara la llamada saliente por WhatsApp (ElevenLabs) a una candidata. Lo llama el CRM de Alex.
- * No envía nada hasta que ella aprueba la solicitud de permiso de WhatsApp (lo gestiona ElevenLabs).
+ * Dispara la llamada saliente por teléfono (SIP/Zadarma vía ElevenLabs) a una candidata. Lo llama el CRM
+ * de Alex. La llamada suena directamente (sin permiso previo), así que es una acción real con coste.
  */
 const BodySchema = z.object({ candidateId: z.string().min(1) });
 
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Candidata no encontrada." }, { status: 404 });
   }
 
-  const result = await startOutboundWhatsAppCall(candidate, config);
+  const result = await startOutboundSipCall(candidate, config);
   if (!result.ok) {
     return NextResponse.json({ error: result.reason ?? "No se pudo iniciar la llamada." }, { status: 502 });
   }

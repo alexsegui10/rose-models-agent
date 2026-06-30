@@ -476,7 +476,7 @@ export class ConversationEngine {
 
   /**
    * Marca que se ha DISPARADO un intento de llamada saliente. Lo llama `/api/call/start` ANTES de iniciar
-   * la llamada real (startOutboundWhatsAppCall): el contador se incrementa al DISPARAR, no al recibir el
+   * la llamada real (startOutboundSipCall): el contador se incrementa al DISPARAR, no al recibir el
    * resultado. Asi `recordCallOutcome` solo LEE callAttempts para decidir el reintento diferido. Idempotente
    * respecto al estado: no cambia de estado, solo incrementa y persiste el contador.
    */

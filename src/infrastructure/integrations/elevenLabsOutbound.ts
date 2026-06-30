@@ -2,32 +2,31 @@ import { buildCallContext, summarizeCallContext } from "@/application/callContex
 import type { Candidate } from "@/domain/candidate";
 
 /**
- * Disparador de la LLAMADA saliente por WhatsApp vía ElevenLabs Agents.
- * POST https://api.elevenlabs.io/v1/convai/whatsapp/outbound-call
+ * Disparador de la LLAMADA saliente por TELEFONO (SIP, vía Zadarma) usando ElevenLabs Agents.
+ * POST https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call
  *
- * ElevenLabs envía a la candidata una solicitud de permiso de llamada (plantilla de WhatsApp Manager) y,
- * en cuanto ella la aprueba, hace la llamada con nuestro agente (que delega en /api/call/llm). El contexto
- * del DM va en `conversation_initiation_client_data.dynamic_variables` (mejor esfuerzo; la llamada funciona
- * aunque el contexto sea parcial). No expone secretos: la API key viaja solo en la cabecera.
+ * ElevenLabs marca directamente al número de la candidata a través del número SIP importado (Zadarma) y
+ * conecta nuestro agente (que delega en /api/call/llm). A diferencia de WhatsApp NO hay permiso previo:
+ * la llamada suena al instante, así que el aviso legal + grabación (CALL_DISCLOSURE) debe ir activo en prod.
+ * El contexto del DM va en `conversation_initiation_client_data.dynamic_variables` (mejor esfuerzo; la
+ * llamada funciona aunque el contexto sea parcial). No expone secretos: la API key viaja solo en la
+ * cabecera y las credenciales SIP de Zadarma las guarda ElevenLabs (aquí el número se referencia solo por
+ * su agent_phone_number_id; nunca usuario/contraseña SIP en el repo — invariantes 5 y 7).
  */
 
 export interface ElevenLabsOutboundConfig {
   isConfigured: boolean;
   apiKey: string;
   agentId: string;
-  whatsappPhoneNumberId: string;
-  permissionTemplateName: string;
-  permissionTemplateLang: string;
+  agentPhoneNumberId: string;
 }
 
 export function getElevenLabsOutboundConfig(env: NodeJS.ProcessEnv = process.env): ElevenLabsOutboundConfig {
   const apiKey = env.ELEVENLABS_API_KEY?.trim() ?? "";
   const agentId = env.ELEVENLABS_AGENT_ID?.trim() ?? "";
-  const whatsappPhoneNumberId = env.ELEVENLABS_WHATSAPP_PHONE_NUMBER_ID?.trim() ?? "";
-  const permissionTemplateName = env.ELEVENLABS_CALL_PERMISSION_TEMPLATE?.trim() ?? "";
-  const permissionTemplateLang = env.ELEVENLABS_CALL_PERMISSION_TEMPLATE_LANG?.trim() || "es";
-  const isConfigured = Boolean(apiKey && agentId && whatsappPhoneNumberId && permissionTemplateName);
-  return { isConfigured, apiKey, agentId, whatsappPhoneNumberId, permissionTemplateName, permissionTemplateLang };
+  const agentPhoneNumberId = env.ELEVENLABS_AGENT_PHONE_NUMBER_ID?.trim() ?? "";
+  const isConfigured = Boolean(apiKey && agentId && agentPhoneNumberId);
+  return { isConfigured, apiKey, agentId, agentPhoneNumberId };
 }
 
 export interface OutboundCallResult {
@@ -53,12 +52,26 @@ function buildDynamicVariables(candidate: Candidate): Record<string, string | nu
   return vars;
 }
 
-/** Normaliza el número de WhatsApp a dígitos (formato internacional sin símbolos). */
-function normalizeWhatsappId(phone: string): string {
-  return phone.replace(/[^\d]/g, "");
+/**
+ * Normaliza el número a E.164 CON '+' para el trunk SIP (que lo exige; pelar el '+' haría que el trunk
+ * rechace la llamada). Reglas: si trae '+' o prefijo internacional (00) se respeta el país tal cual; si
+ * viene un número local "pelado" sin código de país, se asume Argentina (+54), porque las candidatas son
+ * de allí. El '9' de los móviles argentinos (+549...) y los formatos raros se confirman con la 1ª llamada real.
+ */
+export function normalizeToE164(phone: string): string {
+  const trimmed = phone.trim();
+  const hadPlus = trimmed.startsWith("+");
+  let digits = trimmed.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  if (!hadPlus && digits.startsWith("00")) {
+    digits = digits.slice(2); // 00 = prefijo internacional, equivale a '+'
+  } else if (!hadPlus && !digits.startsWith("54")) {
+    digits = `54${digits}`; // número local argentino sin código de país
+  }
+  return `+${digits}`;
 }
 
-export async function startOutboundWhatsAppCall(
+export async function startOutboundSipCall(
   candidate: Candidate,
   config: ElevenLabsOutboundConfig,
   fetchImpl: typeof fetch = fetch
@@ -68,22 +81,24 @@ export async function startOutboundWhatsAppCall(
   }
   const phone = candidate.phone?.trim();
   if (!phone) {
-    return { ok: false, reason: "La candidata no tiene número de WhatsApp guardado." };
+    return { ok: false, reason: "La candidata no tiene número de teléfono guardado." };
+  }
+  const toNumber = normalizeToE164(phone);
+  if (!toNumber) {
+    return { ok: false, reason: "El número de teléfono no es válido." };
   }
 
   const body = {
-    whatsapp_phone_number_id: config.whatsappPhoneNumberId,
-    whatsapp_user_id: normalizeWhatsappId(phone),
-    whatsapp_call_permission_request_template_name: config.permissionTemplateName,
-    whatsapp_call_permission_request_template_language_code: config.permissionTemplateLang,
     agent_id: config.agentId,
+    agent_phone_number_id: config.agentPhoneNumberId,
+    to_number: toNumber,
     conversation_initiation_client_data: {
       dynamic_variables: buildDynamicVariables(candidate)
     }
   };
 
   try {
-    const response = await fetchImpl("https://api.elevenlabs.io/v1/convai/whatsapp/outbound-call", {
+    const response = await fetchImpl("https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call", {
       method: "POST",
       headers: { "Content-Type": "application/json", "xi-api-key": config.apiKey },
       body: JSON.stringify(body)
@@ -99,7 +114,14 @@ export async function startOutboundWhatsAppCall(
       }
       return { ok: false, reason: `ElevenLabs respondió ${response.status}${detail ? `: ${detail}` : ""}` };
     }
-    const data = (await response.json()) as { conversation_id?: unknown };
+    // El endpoint SIP devuelve { success, conversation_id (puede ser null), sip_call_id }. success===false
+    // = la llamada NO arrancó aunque el HTTP sea 200 -> es un fallo (no contar intento ni dar por buena la
+    // grabación). El audio depende de un conversation_id no nulo.
+    const data = (await response.json()) as { success?: boolean; conversation_id?: unknown; message?: unknown };
+    if (data.success === false) {
+      const message = typeof data.message === "string" ? data.message : "";
+      return { ok: false, reason: `ElevenLabs no pudo iniciar la llamada${message ? `: ${message}` : ""}` };
+    }
     return { ok: true, conversationId: typeof data.conversation_id === "string" ? data.conversation_id : undefined };
   } catch (error) {
     return { ok: false, reason: `error de red (${error instanceof Error ? error.name : "desconocido"})` };

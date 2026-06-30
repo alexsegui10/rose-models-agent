@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { bearerMatches } from "@/server/bearerAuth";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
-import { getElevenLabsOutboundConfig, startOutboundWhatsAppCall } from "@/infrastructure/integrations/elevenLabsOutbound";
+import { getElevenLabsOutboundConfig, startOutboundSipCall } from "@/infrastructure/integrations/elevenLabsOutbound";
 
 export const runtime = "nodejs";
 
@@ -63,7 +63,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: false, skipped: "max-attempts" });
   }
 
-  const result = await startOutboundWhatsAppCall(candidate, config);
+  const result = await startOutboundSipCall(candidate, config);
   if (!result.ok) {
     // Fallo al ARRANCAR (puede ser transitorio): 502 para que QStash reintente segun su politica.
     return NextResponse.json({ ok: false, error: result.reason ?? "No se pudo iniciar la llamada." }, { status: 502 });

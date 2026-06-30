@@ -23,12 +23,11 @@ export async function GET() {
     llmMode: llmConfig.llmMode,
     writingModel: llmConfig.writingModel,
     voiceCall: {
-      // ¿Se puede lanzar la llamada saliente (boton "Llamar" + auto-marcador)? Necesita los 4 de abajo:
+      // ¿Se puede lanzar la llamada saliente (boton "Llamar" + auto-marcador)? Necesita los 3 de abajo:
       outboundReady: outbound.isConfigured,
       elevenLabsApiKey: has("ELEVENLABS_API_KEY"),
       elevenLabsAgentId: has("ELEVENLABS_AGENT_ID"),
-      whatsappPhoneNumberId: has("ELEVENLABS_WHATSAPP_PHONE_NUMBER_ID"),
-      callPermissionTemplate: has("ELEVENLABS_CALL_PERMISSION_TEMPLATE"),
+      agentPhoneNumberId: has("ELEVENLABS_AGENT_PHONE_NUMBER_ID"),
       // Cerebro en llamada (Custom LLM) + webhook de fin (resultado/grabacion):
       customLlmKey: has("CALL_LLM_API_KEY"),
       endWebhookSecret: has("CALL_WEBHOOK_SECRET"),
