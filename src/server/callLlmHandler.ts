@@ -135,7 +135,8 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
   const messages: CallChatMessage[] = parsed.data.messages
     .slice(-MAX_MESSAGES)
     .filter((m) => m.role === "system" || m.role === "user" || m.role === "assistant")
-    .map((m) => ({ role: m.role as CallChatMessage["role"], content: m.content ?? "" }));
+    // Trunca defensivamente cada mensaje (robustez ante input grande); el redactor no reenvia el crudo.
+    .map((m) => ({ role: m.role as CallChatMessage["role"], content: (m.content ?? "").slice(0, 4000) }));
 
   // ElevenLabs manda las variables dinámicas en elevenlabs_extra_body; otras plataformas en call_metadata.
   const meta = parsed.data.elevenlabs_extra_body ?? parsed.data.call_metadata;

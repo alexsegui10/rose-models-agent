@@ -25,7 +25,10 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     await repository.deleteCandidate(id);
     return NextResponse.json({ deleted: true, instagramUsername: existing?.instagramUsername ?? null });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido al borrar la candidata.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // No filtrar el mensaje crudo de la BD al cliente; se loguea solo en servidor.
+    console.error("[candidates/delete] error al borrar", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return NextResponse.json({ error: "No se pudo borrar la candidata." }, { status: 500 });
   }
 }
