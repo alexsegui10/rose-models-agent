@@ -973,10 +973,19 @@ export default function Home() {
             const funnelMax = Math.max(1, ...funnel.map((phase) => phase.count));
             const llamadasCount = funnel[4].count;
             const cerradasCount = funnel[5].count;
+            // "Llamadas hoy": usa la fecha REAL (scheduledCallStartMs) cuando existe; respaldo por texto para
+            // citas antiguas sin timestamp. Antes solo miraba el texto "hoy"/"ahora" y se dejaba fuera una
+            // cita de hoy escrita de otra forma.
+            const todayStartMs = new Date().setHours(0, 0, 0, 0);
+            const todayEndMs = todayStartMs + 86_400_000;
             const todayCalls = candidates.filter(
               (item) =>
                 item.currentState === "CALL_IN_PROGRESS" ||
-                (item.scheduledCallSlot ? /hoy|ahora/i.test(item.scheduledCallSlot) : false)
+                (typeof item.scheduledCallStartMs === "number"
+                  ? item.scheduledCallStartMs >= todayStartMs && item.scheduledCallStartMs < todayEndMs
+                  : item.scheduledCallSlot
+                    ? /hoy|ahora/i.test(item.scheduledCallSlot)
+                    : false)
             );
             const pct = (value: number): string => (total > 0 ? `${Math.round((value / total) * 100)}%` : "—");
             const recent = [...candidates].sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt)).slice(0, 6);
