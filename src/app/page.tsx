@@ -2269,7 +2269,7 @@ export default function Home() {
                                       >
                                         Responder
                                       </button>
-                                      {!closed ? (
+                                      {!closed && !awaitingProfileReview && !awaitingDecision ? (
                                         <button
                                           className="crm2-btn crm2-btn--ghost"
                                           type="button"
