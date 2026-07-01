@@ -56,12 +56,11 @@ export interface PlanCallUtteranceInput {
   context?: CallContext;
 }
 
-const DEFER_TEXT =
-  "Mira, ese punto prefiero confirmarlo con mi socio y te digo, que no quiero decirte nada que no sea exacto, ¿vale?";
+const DEFER_TEXT = "Mira, eso lo confirmo con mi socio y te lo digo ahora por WhatsApp, ¿vale?";
 const HANDOFF_TEXT =
   "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con mi socio; ahora mismo le digo que se ponga en contacto contigo, ¿vale?";
 const CLOSE_TEXT =
-  "Pues con esto te haces una idea. Te paso ahora el contrato para que lo leas con calma y cualquier duda que tengas me la dices, ¿vale?";
+  "Pues con esto te haces una idea de cómo trabajamos. Después de la llamada te paso el contrato, unas guías y el guion de OnlyFans, para que lo leas todo con calma; y cualquier duda que te surja, me la dices, ¿vale?";
 
 /**
  * Guion propio de la LLAMADA por etapa (lo que dice el bot, en la voz de Alex). Es texto pensado para
@@ -73,11 +72,11 @@ const CLOSE_TEXT =
 // proactivamente: solo se responden si la candidata pregunta (las cubre el conocimiento de forma reactiva).
 const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
   HOW_AGENCY_WORKS:
-    "Pues mira, te lo resumo fácil: tú solo te encargas de mandarnos el contenido y de todo lo demás nos ocupamos nosotros. El tráfico lo generamos con cuentas de Instagram españolas, y cuando ya tienen seguidores ponemos el link a tu OnlyFans y un equipo de chatters lo lleva las 24 horas. Tú no escribes con nadie. ¿Me sigues?",
+    "Pues mira, como veías por Instagram, es fácil: tú solo te encargas de mandarnos el contenido, del resto nos ocupamos nosotros. El tráfico lo generamos con cuentas de Instagram españolas y, cuando cogen seguidores, ponemos el link a tu OnlyFans. Un equipo de chatters lo lleva las 24 horas, tú no escribes con nadie. ¿Me sigues?",
   HER_RESPONSIBILITIES:
-    "Por tu parte es sencillo: creas el contenido, lo subes a una carpeta de Drive que compartimos, sigues unas referencias que te pasamos y nos dices siempre tus límites. Con responder en un día o dos, de sobra.",
+    "Por tu parte es sencillo: tú creas el contenido y lo subes a una carpeta de Drive que compartimos contigo. Y para que sepas qué tipo de contenido va bien, te pasamos por WhatsApp unos perfiles de referencia, tanto para Instagram como para OnlyFans. ¿Vale?",
   CONTENT_AND_FACE:
-    "Sobre el contenido: al principio son unos cinco días suaves, dos o tres fotos al día, y luego pasamos a vídeos cada semana.",
+    "Sobre el contenido: al principio son unos cinco días más suaves, dos o tres fotos al día, y luego vamos pasando a vídeos cada semana. Nosotros te vamos guiando, así que tranquila. ¿Todo bien?",
   BOUNDARIES:
     "Una última cosa que siempre pregunto: ¿hay algún tipo de contenido que no quieras hacer o algún límite que deba tener en cuenta? Lo respetamos sin problema."
 };
@@ -134,7 +133,7 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
         instruction: "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar, y retoma la conversación.",
         referenceInstagram: false,
         emptyFallback:
-          "Te entiendo, es normal tener dudas. Somos una agencia con gente real detrás y vamos paso a paso contigo, sin prisa. ¿Qué es lo que más te preocupa?"
+          "Te entiendo, es normal tener dudas. Vamos paso a paso y sin compromiso. Y lo importante: el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así que el dinero pasa primero por ti. ¿Qué es lo que más te preocupa?"
       });
     case "COVER_STAGE":
     default:
@@ -224,7 +223,7 @@ function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOf
   if (stageId === "MONEY") {
     // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"). FRESCA, sin referenciar el DM.
     if (shareOffer) {
-      return `Y el dinero, que es lo importante: el reparto es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para la agencia. Se liquida cada 14 días y cobras tú primero. ¿Qué te parece?`;
+      return `Y el dinero, que es lo importante: el reparto es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para la agencia. Y tranquila, que el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así siempre pasa primero por ti. Se liquida cada 14 días. ¿Qué te parece?`;
     }
     // Sin oferta autorizada NO inventamos ni referenciamos el DM (no deberia ocurrir: el director siempre la pasa).
     return points[0] ?? DEFER_TEXT;

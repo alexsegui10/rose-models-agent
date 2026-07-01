@@ -44,6 +44,9 @@ const entries: KnowledgeEntryInput[] = [
       "La modelo crea contenido nuevo.",
       "La modelo sube contenido a una carpeta compartida de Google Drive.",
       "La modelo sigue perfiles de referencia para Instagram y guiones para OnlyFans.",
+      "Los perfiles de referencia se pasan por WhatsApp.",
+      "La modelo crea ella misma su cuenta de OnlyFans; si tiene dudas, el equipo la guia.",
+      "El guion de OnlyFans se entrega despues de la llamada, junto al contrato y las guias.",
       "La modelo comunica sus limites.",
       "La modelo debe responder al equipo en un maximo habitual de 48 horas.",
       "Un retraso aislado no implica rechazo automatico.",
@@ -51,6 +54,9 @@ const entries: KnowledgeEntryInput[] = [
     ],
     approvedAnswerPoints: [
       "Tu parte seria crear contenido, subirlo a Drive, seguir referencias o guiones y decirnos tus limites.",
+      "Los perfiles de referencia te los pasamos por WhatsApp, tanto para Instagram como para OnlyFans.",
+      "La cuenta de OnlyFans la creas tu, es sencillo, y si tienes cualquier duda te vamos guiando.",
+      "El guion de OnlyFans te lo pasamos despues de la llamada, con el contrato y las guias.",
       // Sin SLA corporativo ("responder al equipo en unas 48 horas" era el mensaje mas fuera de voz
       // segun los jueces): misma politica, registro de Alex.
       "Lo unico es no tardar mucho en contestar, un dia o dos como mucho."
@@ -63,12 +69,12 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["No decir que la modelo solo envia contenido.", "Los detalles completos se explican mejor en llamada."],
     escalationConditions: ["Retrasos repetidos.", "Dudas sobre limites o condiciones especiales."],
     allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
-    tags: ["model-responsibilities", "content", "availability", "drive"],
+    tags: ["model-responsibilities", "content", "availability", "drive", "whatsapp", "onlyfans"],
     requiresHumanReview: false,
-    version: "content-model-responsibilities-2026-06-12.1",
+    version: "content-model-responsibilities-2026-07-01.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-12"
+    updatedAt: "2026-07-01"
   },
   {
     id: "content-production-volume",

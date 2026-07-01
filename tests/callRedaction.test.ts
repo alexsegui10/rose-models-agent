@@ -32,9 +32,9 @@ const offer = (modelShare: number, isFloor: boolean) => ({
 });
 
 describe("planificador de redacción de la llamada", () => {
-  it("apertura: determinista, declara IA, y fallback = mismo texto", () => {
+  it("apertura: determinista, saluda como Alex, y fallback = mismo texto", () => {
     const plan = planCallUtterance({ directive: { type: "GIVE_DISCLOSURE" }, candidateName: "Lucía" });
-    expect(plan.deterministicText?.toLowerCase()).toContain("automatizado");
+    expect(plan.deterministicText?.toLowerCase()).toContain("rose models");
     expect(plan.deterministicText).toContain("Lucía");
     expect(plan.fallbackText).toBe(plan.deterministicText);
   });
@@ -89,7 +89,7 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.draftingBrief?.prohibitedClaims).toContain("No prometemos ingresos concretos.");
     expect(plan.draftingBrief?.mandatoryNuances).toContain("El volumen de contenido es orientativo, no contractual.");
     // El fallback determinista es el guion propio de la llamada (la voz de Alex), conversacional.
-    expect(plan.fallbackText.toLowerCase()).toContain("te lo resumo");
+    expect(plan.fallbackText.toLowerCase()).toContain("nos ocupamos nosotros");
     expect(plan.fallbackText.trim().endsWith("?")).toBe(true);
   });
 

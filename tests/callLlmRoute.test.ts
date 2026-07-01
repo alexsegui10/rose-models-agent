@@ -34,7 +34,7 @@ describe("endpoint Custom LLM de la llamada", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.object).toBe("chat.completion");
-    expect(json.choices[0].message.content.toLowerCase()).toContain("automatizado");
+    expect(json.choices[0].message.content.toLowerCase()).toContain("rose models");
   });
 
   it("stream=true -> SSE en formato OpenAI con el texto y [DONE]", async () => {
@@ -42,7 +42,7 @@ describe("endpoint Custom LLM de la llamada", () => {
     const res = await POST(req({ messages: [{ role: "system", content: "x" }], stream: true }, `Bearer ${KEY}`));
     expect(res.headers.get("content-type")).toContain("text/event-stream");
     const text = await res.text();
-    expect(text.toLowerCase()).toContain("automatizado");
+    expect(text.toLowerCase()).toContain("alex");
     expect(text).toContain("chat.completion.chunk");
     expect(text).toContain("[DONE]");
   });

@@ -35,17 +35,17 @@ afterEach(() => {
 });
 
 describe("responder de turno de llamada (stateless por replay)", () => {
-  it("sin turnos de la candidata: abre con la locución legal (declara IA)", async () => {
+  it("sin turnos de la candidata: abre con la locución de apertura (saluda como Alex)", async () => {
     const res = await respondToCall({ messages: [sys] });
     expect(res.directiveType).toBe("GIVE_DISCLOSURE");
-    expect(res.content.toLowerCase()).toContain("automatizado");
+    expect(res.content.toLowerCase()).toContain("rose models");
   });
 
   it("con CALL_DISCLOSURE=off, la apertura legal se omite (modo prueba) y abre con la primera etapa", async () => {
     process.env.CALL_DISCLOSURE = "off";
     const res = await respondToCall({ messages: [sys] });
     expect(res.directiveType).toBe("COVER_STAGE");
-    expect(res.content.toLowerCase()).not.toContain("automatizado");
+    expect(res.content.toLowerCase()).not.toContain("grabo");
   });
 
   it("tras la apertura, un 'vale' avanza a la primera etapa", async () => {
@@ -121,10 +121,10 @@ describe("responder de turno de llamada (stateless por replay)", () => {
     expect(res.content.trim().length).toBeGreaterThan(0);
   });
 
-  it("si la candidata habla PRIMERO (el bot aún no habló), abre con la locución legal", async () => {
+  it("si la candidata habla PRIMERO (el bot aún no habló), abre con la locución de apertura", async () => {
     const res = await respondToCall({ messages: [sys, { role: "user", content: "hola buenas" }] });
     expect(res.directiveType).toBe("GIVE_DISCLOSURE");
-    expect(res.content.toLowerCase()).toContain("automatizado");
+    expect(res.content.toLowerCase()).toContain("rose models");
   });
 
   it("negociación reconstruida por replay: presenta 70 -> defiende -> baja a 65", async () => {
@@ -159,14 +159,14 @@ describe("responder de turno de llamada (stateless por replay)", () => {
       drafter
     });
     expect(res.content).not.toContain("90");
-    expect(res.content.toLowerCase()).toContain("te lo resumo"); // el guion determinista
+    expect(res.content.toLowerCase()).toContain("nos ocupamos nosotros"); // el guion determinista
   });
 
-  it("lo crítico (apertura legal) NUNCA pasa por el redactor", async () => {
+  it("lo crítico (apertura) NUNCA pasa por el redactor", async () => {
     const drafter = { draft: async () => "TEXTO INVENTADO POR EL LLM" };
     const res = await respondToCall({ messages: [sys], drafter });
     expect(res.directiveType).toBe("GIVE_DISCLOSURE");
-    expect(res.content.toLowerCase()).toContain("automatizado");
+    expect(res.content.toLowerCase()).toContain("rose models");
     expect(res.content).not.toContain("INVENTADO");
   });
 });

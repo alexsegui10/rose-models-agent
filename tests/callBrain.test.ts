@@ -51,10 +51,10 @@ describe("cerebro de la llamada (end-to-end por turnos)", () => {
     expect(moneyFallback).toContain("30");
   });
 
-  it("la apertura legal es siempre el primer enunciado y declara que es IA", () => {
+  it("la apertura es siempre el primer enunciado y saluda como Alex de Rose Models", () => {
     const result = runCallTurn({ state: initialCallDirectorState(), utterance: "hola buenas" });
     expect(result.directive.type).toBe("GIVE_DISCLOSURE");
-    expect(result.utterancePlan.deterministicText?.toLowerCase()).toContain("automatizado");
+    expect(result.utterancePlan.deterministicText?.toLowerCase()).toContain("rose models");
   });
 
   it("pregunta CUBIERTA (resolver encuentra conocimiento) -> responde con esos hechos", () => {
