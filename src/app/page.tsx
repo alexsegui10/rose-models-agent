@@ -1866,11 +1866,23 @@ export default function Home() {
       {activeTab === "CRM" ? (
         <section className="panel">
           <div className="crm2-head">
-            <h2>CRM de candidatas</h2>
-            <p>
-              Cada columna es una fase del embudo. Las que esperan tu decisión llevan el anillo{" "}
-              <strong style={{ color: "var(--warn)" }}>ámbar</strong> ⚠️ en el avatar.
-            </p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div>
+                <h2>CRM de candidatas</h2>
+                <p>
+                  Cada columna es una fase del embudo. Las que esperan tu decisión llevan el anillo{" "}
+                  <strong style={{ color: "var(--warn)" }}>ámbar</strong> ⚠️ en el avatar.
+                </p>
+              </div>
+              <button
+                className="crm2-btn crm2-btn--ghost"
+                type="button"
+                onClick={() => void seedDemo()}
+                title="Añade candidatas de ejemplo para ver el CRM lleno (idempotente; no toca las reales)"
+              >
+                Cargar demo
+              </button>
+            </div>
           </div>
           {crmNotice ? <p className="status-bar">{crmNotice}</p> : null}
           {candidates.length === 0 ? (
@@ -2445,6 +2457,10 @@ export default function Home() {
 
               {drawerTab === "llamada" ? (
                 <div className="drawer-call">
+                  <p className="drawer-text muted">
+                    Llamada con <strong>{drawerCandidate.firstName?.trim() || `@${drawerCandidate.instagramUsername}`}</strong>
+                    {drawerCandidate.firstName?.trim() ? ` · @${drawerCandidate.instagramUsername}` : ""}
+                  </p>
                   {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
                     <button
                       type="button"
@@ -2456,16 +2472,17 @@ export default function Home() {
                     </button>
                   ) : null}
                   {drawerCandidate.lastCallConversationId ? (
+                    <CallRecordingAudio
+                      key={drawerCandidate.lastCallConversationId}
+                      conversationId={drawerCandidate.lastCallConversationId}
+                    />
+                  ) : drawerCandidate.lastCall?.result === "COMPLETED" ? (
                     <div className="drawer-block">
                       <span className="drawer-field-label">Grabación de la llamada</span>
-                      <audio
-                        controls
-                        preload="none"
-                        className="drawer-audio"
-                        src={`/api/call/${encodeURIComponent(drawerCandidate.lastCallConversationId)}/audio`}
-                      >
-                        Tu navegador no puede reproducir el audio.
-                      </audio>
+                      <p className="drawer-text muted">
+                        🎧 La grabación de audio aparece aquí en las llamadas reales (con el guardado de audio activado en
+                        ElevenLabs).
+                      </p>
                     </div>
                   ) : null}
                   {drawerCandidate.lastCall ? (
@@ -2776,6 +2793,35 @@ function DraftTrace({ draft }: { draft: DraftSummary }) {
         <strong>{draft.estimatedCostUsd === null ? "-" : `$${draft.estimatedCostUsd.toFixed(6)}`}</strong>
       </div>
     </>
+  );
+}
+
+/**
+ * Reproductor de la GRABACIÓN de una llamada. Si el audio no está disponible (grabación no guardada en
+ * ElevenLabs, id de demostración o error de red) degrada a un aviso claro en vez de un reproductor roto.
+ * Se monta con key={conversationId}, así el estado de error se reinicia al cambiar de candidata.
+ */
+function CallRecordingAudio({ conversationId }: { conversationId: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="drawer-block">
+      <span className="drawer-field-label">Grabación de la llamada</span>
+      {failed ? (
+        <p className="drawer-text muted">
+          No se pudo cargar la grabación. Aparece cuando ElevenLabs la guardó (Audio Saving activado) y la llamada terminó.
+        </p>
+      ) : (
+        <audio
+          controls
+          preload="none"
+          className="drawer-audio"
+          src={`/api/call/${encodeURIComponent(conversationId)}/audio`}
+          onError={() => setFailed(true)}
+        >
+          Tu navegador no puede reproducir el audio.
+        </audio>
+      )}
+    </div>
   );
 }
 

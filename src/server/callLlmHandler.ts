@@ -140,8 +140,10 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
 
   // ElevenLabs manda las variables dinámicas en elevenlabs_extra_body; otras plataformas en call_metadata.
   const meta = parsed.data.elevenlabs_extra_body ?? parsed.data.call_metadata;
+  // Aviso de grabación: por defecto NO se anuncia (decisión de Alex jul-2026). La grabación sigue activa en
+  // ElevenLabs; solo se deja de mencionar. Reversible: CALL_RECORDED=1 (o meta.recorded=true) reactiva el aviso.
   const recordedEnv = process.env.CALL_RECORDED;
-  const recorded = meta?.recorded ?? (recordedEnv ? recordedEnv !== "0" : true);
+  const recorded = meta?.recorded ?? recordedEnv === "1";
   // El contexto puede venir ANIDADO (meta.context) o PLANO en snake_case (lo que envía nuestro disparador
   // outbound como dynamic_variables). Aceptamos ambos para que el bot SIEMPRE sepa con quién habla.
   const rawMeta = (meta ?? {}) as Record<string, unknown>;
