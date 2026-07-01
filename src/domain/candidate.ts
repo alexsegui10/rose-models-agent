@@ -327,6 +327,10 @@ export function normalizeCandidate(candidate: CandidateNormalizationInput): Cand
     commercialTier: candidate.commercialTier ?? "STANDARD",
     objections: candidate.objections ?? [],
     faceObjectionCount: candidate.faceObjectionCount ?? 0,
+    // Saneo defensivo: una fila con edad/ingresos fuera de rango (corrupta, import/migracion) NO debe
+    // reventar el parse y tumbar TODA la lista del CRM; se deja el campo vacio (desconocido).
+    age: sanitizePositiveInt(candidate.age),
+    currentMonthlyRevenue: sanitizeNonNegative(candidate.currentMonthlyRevenue),
     callAttempts: candidate.callAttempts ?? 0,
     notes: candidate.notes ?? [],
     conversationSummary: candidate.conversationSummary ?? "",
@@ -340,6 +344,19 @@ export function normalizeCandidate(candidate: CandidateNormalizationInput): Cand
     updatedAt,
     lastMessageAt
   });
+}
+
+/**
+ * Saneo defensivo de numericos al leer: una fila corrupta (edad 0/negativa, ingresos negativos) no debe
+ * tirar el parse de TODA la lista. Fuera de rango o no numerico -> undefined (campo desconocido). NO afecta
+ * al invariante 2: una edad real de menor (p.ej. 16) es un entero positivo valido y se CONSERVA.
+ */
+function sanitizePositiveInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
+function sanitizeNonNegative(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function normalizeDate(value: Date | string | undefined, fallback: Date): Date {
