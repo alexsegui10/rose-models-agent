@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import { getQStashConfig } from "@/application/qstashConfig";
+import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import {
   escalationNotificationFor,
@@ -80,6 +81,15 @@ export async function POST(request: Request): Promise<NextResponse> {
         if (!sent) break;
       }
     }
+
+    // Paridad con el webhook directo (jul-2026, hallazgo agenda-05): si esta rafaga dejo la cita agendada,
+    // ARMAR el auto-marcador tambien desde el flush (con el debounce ON este es el camino normal del turno;
+    // sin esto, las citas agendadas via debounce no sonaban solas). Best-effort (avisa a Alex si falla).
+    await enqueueCallDispatchIfScheduled({
+      candidate: result.candidate,
+      origin: new URL(request.url).origin,
+      nowMs: Date.now()
+    });
 
     // Paridad con el webhook directo: avisar a Alex por WhatsApp si la candidata ENTRO en revision humana
     // (escalada) o si su cuenta privada necesita que el envie la solicitud. Sin esto, con el debounce ON,

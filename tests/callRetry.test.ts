@@ -47,19 +47,32 @@ describe("noteCallAttempt: contador de intentos (incrementa AL DISPARAR la llama
     expect(after.candidate.callAttempts).toBe(3);
   });
 
-  it("P1-2: reintento desde CALL_NO_ANSWER re-arma a CALL_SCHEDULED (sin resetear intentos) y el resultado SI se registra", async () => {
+  it("P1-2: reintento desde CALL_NO_ANSWER se re-arma y el resultado SI se registra (sin resetear intentos)", async () => {
     const { engine, repository } = createEngine();
     // Primer intento ya fallido: en CALL_NO_ANSWER con 1 intento usado.
     const seeded = await seed(repository, "CALL_NO_ANSWER", { callAttempts: 1 });
 
-    // Alex vuelve a llamar -> se re-arma a CALL_SCHEDULED y se cuenta el intento (no se resetea).
+    // Alex vuelve a llamar -> re-arma (NO_ANSWER->SCHEDULED) y desde jul-2026 queda EN CURSO (anti doble-llamada).
     const after = await engine.noteCallAttempt(seeded.id);
-    expect(after.candidate.currentState).toBe("CALL_SCHEDULED");
+    expect(after.candidate.currentState).toBe("CALL_IN_PROGRESS");
     expect(after.candidate.callAttempts).toBe(2);
 
     // Esta vez SI contesta: el COMPLETED del reintento ya NO se pierde (antes se descartaba desde CALL_NO_ANSWER).
     const outcome = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "COMPLETED" });
     expect(outcome.candidate.currentState).toBe("CALL_COMPLETED");
+  });
+
+  // jul-2026 (hallazgo agenda-02): al disparar, la candidata queda CALL_IN_PROGRESS -> una SEGUNDA entrega
+  // del auto-marcador (o el boton manual tras el dispatch) ve un estado no-agendado y NO vuelve a marcar.
+  it("anti doble-llamada: tras disparar queda CALL_IN_PROGRESS (un segundo disparo del slot no llama)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED", { callAttempts: 0 });
+    const after = await engine.noteCallAttempt(seeded.id);
+    expect(after.candidate.currentState).toBe("CALL_IN_PROGRESS");
+    expect(after.candidate.callAttempts).toBe(1);
+    // El resultado se registra igual desde EN CURSO.
+    const outcome = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "NO_ANSWER" });
+    expect(outcome.candidate.currentState).toBe("CALL_NO_ANSWER");
   });
 });
 

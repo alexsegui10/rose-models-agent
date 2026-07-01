@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { deliverDecisionOutcome } from "@/server/resumeReprocess";
+import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 
 const AdvanceStageSchema = z.object({
   candidateId: z.string(),
@@ -69,6 +70,15 @@ export async function POST(request: Request) {
     outcome = { candidate: result.candidate, proposedMessage: result.proposedMessage ?? null, sentToCandidate: null };
     deliveryError = true;
   }
+
+  // AUTO-MARCADOR (jul-2026, hallazgo agenda-01): "Confirmar llamada" / decisiones que agendan (o cuyo
+  // reproceso agenda) deben ARMAR el disparo diferido, igual que el webhook de IG. Sin esto, la cita
+  // confirmada desde el CRM no sonaba sola. Best-effort (avisa a Alex si falla).
+  await enqueueCallDispatchIfScheduled({
+    candidate: outcome.candidate,
+    origin: new URL(request.url).origin,
+    nowMs: Date.now()
+  });
 
   const messages = await repository.listMessages(outcome.candidate.id);
   const transitions = await repository.listTransitions(outcome.candidate.id);

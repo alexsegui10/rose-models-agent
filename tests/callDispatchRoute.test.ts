@@ -117,4 +117,31 @@ describe("auto-marcador /api/call/dispatch", () => {
     expect((await res.json()).skipped).toBe("elevenlabs-not-configured");
     expect(h.startSpy).not.toHaveBeenCalled();
   });
+
+  // jul-2026 (hallazgos agenda-02/robustez-01): ANTI DOBLE-LLAMADA. El primer disparo deja a la candidata
+  // en CALL_IN_PROGRESS; una segunda entrega del MISMO slot (re-entrega, carrera con el boton manual) ve un
+  // estado no-agendado y NO vuelve a marcar.
+  it("doble entrega del mismo slot: la segunda NO llama (la primera dejo CALL_IN_PROGRESS)", async () => {
+    const c = await seed({ currentState: "CALL_SCHEDULED", scheduledCallStartMs: AT, callAttempts: 0 });
+    const first = await POST(req({ candidateId: c.id, scheduledForMs: AT }, `Bearer ${SECRET}`));
+    expect((await first.json()).ok).toBe(true);
+    const second = await POST(req({ candidateId: c.id, scheduledForMs: AT }, `Bearer ${SECRET}`));
+    const json = await second.json();
+    expect(json.ok).toBe(false);
+    expect(json.skipped).toBe("state-CALL_IN_PROGRESS");
+    expect(h.startSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // jul-2026 (hallazgo config-06): con Upstash-Retries:0 un 502 jamas se reintenta; el fallo de arranque
+  // responde 200 (ok:false) y avisa a Alex en vez de perder la llamada en silencio.
+  it("fallo al iniciar la llamada -> 200 ok:false (no 502 inutil) y no gasta intento", async () => {
+    h.startResult = { ok: false, reason: "SIP caido" };
+    const c = await seed({ currentState: "CALL_SCHEDULED", scheduledCallStartMs: AT, callAttempts: 0 });
+    const res = await POST(req({ candidateId: c.id, scheduledForMs: AT }, `Bearer ${SECRET}`));
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(false);
+    const reloaded = await getSimulatorRepository().findCandidateById(c.id);
+    expect(reloaded?.callAttempts).toBe(0);
+    expect(reloaded?.currentState).toBe("CALL_SCHEDULED");
+  });
 });

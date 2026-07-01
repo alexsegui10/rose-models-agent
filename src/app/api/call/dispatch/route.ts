@@ -3,6 +3,7 @@ import { z } from "zod";
 import { bearerMatches } from "@/server/bearerAuth";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { getElevenLabsOutboundConfig, startOutboundSipCall } from "@/infrastructure/integrations/elevenLabsOutbound";
+import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 
 export const runtime = "nodejs";
 
@@ -67,8 +68,25 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const result = await startOutboundSipCall(candidate, config);
   if (!result.ok) {
-    // Fallo al ARRANCAR (puede ser transitorio): 502 para que QStash reintente segun su politica.
-    return NextResponse.json({ ok: false, error: result.reason ?? "No se pudo iniciar la llamada." }, { status: 502 });
+    // Fallo al ARRANCAR. OJO (jul-2026, hallazgo config-06): el encolado va con Upstash-Retries:0
+    // (at-most-once, anti doble-llamada), asi que un 502 aqui NO provoca reintento — la llamada se
+    // perderia EN SILENCIO. En su lugar: aviso directo a Alex para que la haga a mano.
+    console.error("[call-dispatch] no se pudo iniciar la llamada agendada", {
+      candidateId,
+      reason: result.reason ?? "desconocido"
+    });
+    try {
+      await getOperatorNotifier().notify({
+        kind: "error",
+        conversationId: candidate.instagramUsername,
+        state: candidate.currentState,
+        reason: "La llamada agendada NO pudo salir: llámala tú desde el CRM (botón Llamar).",
+        detail: result.reason ?? "fallo al iniciar la llamada"
+      });
+    } catch {
+      /* el aviso nunca rompe el dispatch */
+    }
+    return NextResponse.json({ ok: false, error: result.reason ?? "No se pudo iniciar la llamada." });
   }
   // El contador se incrementa solo cuando la llamada arranco de verdad (igual que el boton manual).
   await getSimulatorEngine().noteCallAttempt(candidateId, result.conversationId ?? undefined);

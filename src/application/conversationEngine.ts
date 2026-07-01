@@ -507,6 +507,23 @@ export class ConversationEngine {
       );
       currentState = "CALL_SCHEDULED";
     }
+    // ANTI DOBLE-LLAMADA (jul-2026, hallazgo agenda-02): al ARRANCAR la llamada, la candidata pasa a
+    // CALL_IN_PROGRESS. Asi una segunda entrega del auto-marcador (o el boton manual con un dispatch ya
+    // disparado) ve un estado que NO es CALL_SCHEDULED/CALL_NO_ANSWER y NO vuelve a marcar. El webhook de
+    // fin registra el resultado desde CALL_IN_PROGRESS (transicion ya soportada). Ademas, en el CRM se ve
+    // "Llamada en curso" en vivo.
+    if (currentState === "CALL_SCHEDULED" && canTransition("CALL_SCHEDULED", "CALL_IN_PROGRESS")) {
+      transitions.push(
+        createTransition({
+          // El "desde" es el estado YA re-armado (CALL_SCHEDULED), no el original (podia ser CALL_NO_ANSWER).
+          candidate: { ...existing, currentState },
+          toState: "CALL_IN_PROGRESS",
+          trigger: "CALL_STARTED",
+          reason: "Llamada saliente disparada: en curso (bloquea un segundo disparo del mismo slot)."
+        })
+      );
+      currentState = "CALL_IN_PROGRESS";
+    }
     const candidate: Candidate = {
       ...existing,
       currentState,
