@@ -94,7 +94,17 @@ const WANTS_TO_THINK =
 // Desinterés -> cierre cálido sin presionar (NO se le manda contrato). Se evalúa antes que "quiere
 // terminar" para no empujar el contrato a quien no le interesa.
 const NOT_INTERESTED =
-  /(no me interesa|no me interesan|no gracias|no, gracias|no quiero seguir|no me convence nada|mejor lo dejamos|paso de esto|no es para mi|no me llama|no quiero hacerlo|prefiero dejarlo|no me apetece)/;
+  /(no me interesa|no me interesan|no gracias|no, gracias|no quiero seguir|no me convence nada|mejor lo dejamos|paso de esto|paso,? gracias|no es para mi|no me llama|no quiero hacerlo|prefiero dejarlo|no me apetece)/;
+
+// Quejas INEQUÍVOCAS del reparto que valen SIN contexto de dinero (no dependen de moneyContext ni de un
+// término "30/70"): "mitad y mitad", "50/50", "quiero más para mí", "en otra agencia me dan el 50".
+const DIRECT_SHARE_COMPLAINT =
+  /mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|(?:quiero|dame|me gustaria|deberia|prefiero)\s+(?:algo |un poco )?mas para mi|\bmas para mi\b|(?:otra agencia|la otra|otras agencias|otras)[^,.!?]{0,30}(?:me dan|me dejan|dan el|el \d{2}|mejor|mas)|me (?:dan|dejan|ofrecen) el \d{2}/;
+
+// Pregunta de INGRESOS ("¿cuánto se gana?", "¿cuánto voy a ganar?", "¿se gana bien?"): respuesta HONESTA
+// (depende de ti, SIN cifras ni promesas), no se defiere. Se evalúa antes que QUESTION.
+const ASKS_EARNINGS =
+  /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b/;
 
 // Quiere terminar / colgar -> cerrar con contrato.
 const WANTS_TO_END =
@@ -116,7 +126,10 @@ const ASKS_IDENTITY =
 
 // Saludo de apertura ("hola", "buenas", "hola qué tal"): la candidata devuelve el saludo -> asentir y
 // seguir; no tratarlo como ruido ni (por el "qué tal") como pregunta. Se evalúa ANTES que QUESTION.
-const GREETING = /^\s*(hola+|buenas|buenos dias|buenas tardes|hey|holi|que tal|como estas|como andas|como va)\b/;
+// OJO: anclado a FIN de cadena para que sea SOLO un saludo. Si tras el saludo viene algo sustantivo
+// ("buenas, ¿y el porcentaje?", "hola y cuánto se cobra"), NO es saludo -> lo coge QUESTION y se responde.
+const GREETING =
+  /^\s*(hola+|buenas|buenos dias|buenas tardes|hey|holi|que tal|como estas|como andas|como va)(\s+(hola+|buenas|que tal|como estas|todo bien|guap[oa]|ti[oa]))?[\s,!¡.?]*$/;
 
 // ¿Es una pregunta?
 const QUESTION =
@@ -142,6 +155,8 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (HOSTILE.test(text)) return "hostile-or-suspicious";
   if ((HUMAN_REF.test(text) && WANT_HUMAN_VERB.test(text)) || REJECT_MACHINE.test(text)) return "wants-human";
   if (SHARE_TERMS.test(text) && COMPLAINT_TERMS.test(text)) return "complains-about-share";
+  // Quejas inequívocas del reparto (mitad y mitad, más para mí, otra agencia me da X): valen sin moneyContext.
+  if (DIRECT_SHARE_COMPLAINT.test(text)) return "complains-about-share";
   // Queja de seguimiento durante la negociación (frase dirigida al dinero, sin repetir "reparto").
   if (input.moneyContext && FOLLOWUP_SHARE_COMPLAINT.test(text)) return "complains-about-share";
   if (DISTRUST.test(text)) return "distrust";
@@ -150,6 +165,7 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
   if (CONTINUATION.test(text)) return "follows-along";
+  if (ASKS_EARNINGS.test(text)) return "asks-earnings";
   if (ASKS_IDENTITY.test(text)) return "asks-identity";
   if (GREETING.test(text)) return "follows-along";
   if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";

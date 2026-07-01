@@ -63,6 +63,9 @@ const CLOSE_TEXT =
   "Pues con esto te haces una idea de cómo trabajamos. Después de la llamada te paso el contrato, unas guías y el guion de OnlyFans, para que lo leas todo con calma; y cualquier duda que te surja, me la dices, ¿vale?";
 const IDENTITY_TEXT =
   "Soy Alex, de Rose Models, la agencia; te escribí por Instagram hace nada. ¿Te sigo contando cómo trabajamos?";
+// Ingresos: respuesta HONESTA determinista, SIN cifras ni promesas (invariante: no prometer ingresos).
+const EARNINGS_TEXT =
+  "Con sinceridad, depende mucho de ti: de tu constancia y de la calidad del contenido. No te puedo prometer una cifra porque sería mentirte. ¿Te sigo contando cómo trabajamos?";
 
 /**
  * Guion propio de la LLAMADA por etapa (lo que dice el bot, en la voz de Alex). Es texto pensado para
@@ -114,6 +117,8 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: CLOSE_TEXT, fallbackText: CLOSE_TEXT };
     case "GIVE_IDENTITY":
       return { directiveType: directive.type, deterministicText: IDENTITY_TEXT, fallbackText: IDENTITY_TEXT };
+    case "GIVE_EARNINGS":
+      return { directiveType: directive.type, deterministicText: EARNINGS_TEXT, fallbackText: EARNINGS_TEXT };
     case "CLOSE_SOFT":
       return { directiveType: directive.type, deterministicText: CLOSE_SOFT_TEXT, fallbackText: CLOSE_SOFT_TEXT };
     case "CLOSE_UNDERAGE":

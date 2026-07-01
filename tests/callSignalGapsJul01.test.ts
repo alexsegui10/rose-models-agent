@@ -54,3 +54,36 @@ describe("director + redacción: identidad", () => {
     expect(plan.deterministicText).not.toContain("mi socio");
   });
 });
+
+describe("clasificador de llamada: más gaps de la batería (jul-2026)", () => {
+  it("quejas del reparto inequívocas cuentan SIN contexto de dinero", () => {
+    expect(classifyCallSignal({ utterance: "quiero más para mí" })).toBe("complains-about-share");
+    expect(classifyCallSignal({ utterance: "mitad y mitad" })).toBe("complains-about-share");
+    expect(classifyCallSignal({ utterance: "en otra agencia me dan el 50" })).toBe("complains-about-share");
+  });
+
+  it("preguntas de ingresos (cualquier fraseo) -> asks-earnings (no defiere)", () => {
+    expect(classifyCallSignal({ utterance: "¿cuánto se gana?" })).toBe("asks-earnings");
+    expect(classifyCallSignal({ utterance: "¿cuánto voy a ganar al mes?" })).toBe("asks-earnings");
+    expect(classifyCallSignal({ utterance: "¿se gana bien con esto?" })).toBe("asks-earnings");
+  });
+
+  it("'paso, gracias' -> desinterés (cierre cálido), no ruido", () => {
+    expect(classifyCallSignal({ utterance: "paso, gracias" })).toBe("not-interested");
+  });
+
+  it("saludo PURO es asentimiento, pero una PREGUNTA prefijada con saludo NO se traga (regresión)", () => {
+    expect(classifyCallSignal({ utterance: "hola qué tal" })).toBe("follows-along");
+    expect(classifyCallSignal({ utterance: "buenas" })).toBe("follows-along");
+    expect(classifyCallSignal({ utterance: "buenas, y el porcentaje cuál es" })).not.toBe("follows-along");
+    expect(classifyCallSignal({ utterance: "hola y cuánto se cobra" })).not.toBe("follows-along");
+    expect(classifyCallSignal({ utterance: "como va el tema del dinero" })).not.toBe("follows-along");
+  });
+
+  it("GIVE_EARNINGS: honesto y SIN cifras ni promesas (invariante ingresos)", () => {
+    const plan = planCallUtterance({ directive: { type: "GIVE_EARNINGS" } });
+    expect(plan.deterministicText).toBe(plan.fallbackText);
+    expect(plan.deterministicText?.toLowerCase()).toContain("depende");
+    expect(plan.deterministicText).not.toMatch(/\d/);
+  });
+});
