@@ -51,13 +51,37 @@ describe("redactor OpenAI de voz", () => {
     expect(await drafter.draft(request)).toBeNull();
   });
 
-  it("getCallDrafter: APAGADO por defecto; encendido necesita clave", () => {
+  // DECISIÓN DE ALEX (jul-2026): la redacción natural va ENCENDIDA por defecto cuando hay clave (el
+  // validador de voz + fallback determinista siguen vigilando). =off fuerza el guion fijo. Sin clave, nada.
+  it("getCallDrafter: encendido POR DEFECTO con clave; =off lo apaga; sin clave, undefined", () => {
     expect(getCallDrafter({} as unknown as NodeJS.ProcessEnv)).toBeUndefined();
     expect(getCallDrafter({ CALL_LLM_REDACTION: "on" } as unknown as NodeJS.ProcessEnv)).toBeUndefined();
-    const drafter = getCallDrafter({
-      CALL_LLM_REDACTION: "on",
-      OPENAI_API_KEY: "sk-test"
-    } as unknown as NodeJS.ProcessEnv);
-    expect(drafter).toBeDefined();
+    expect(getCallDrafter({ OPENAI_API_KEY: "sk-test" } as unknown as NodeJS.ProcessEnv)).toBeDefined();
+    expect(
+      getCallDrafter({ CALL_LLM_REDACTION: "off", OPENAI_API_KEY: "sk-test" } as unknown as NodeJS.ProcessEnv)
+    ).toBeUndefined();
+    expect(getCallDrafter({ CALL_LLM_REDACTION: "on", OPENAI_API_KEY: "sk-test" } as unknown as NodeJS.ProcessEnv)).toBeDefined();
+  });
+
+  it("el prompt conversacional: lo que ella acaba de decir + temas + hechos de la llamada", () => {
+    const p = buildDraftPrompt({
+      brief: {
+        ...brief,
+        candidateUtterance: "vale pero yo no quiero salir con la cara",
+        coveredTopics: ["Cómo trabaja la agencia"],
+        pendingTopics: ["Reparto y cobro", "Límites y consentimiento"],
+        callFacts: ["No quiere enseñar la cara."]
+      },
+      directiveType: "COVER_STAGE"
+    });
+    expect(p).toContain("ELLA ACABA DE DECIR");
+    expect(p).toContain("no quiero salir con la cara");
+    expect(p).toContain("Reacciona PRIMERO");
+    expect(p).toContain("TEMAS YA TRATADOS");
+    expect(p).toContain("Cómo trabaja la agencia");
+    expect(p).toContain("TEMAS QUE QUEDAN");
+    expect(p).toContain("NO los anuncies como lista");
+    expect(p).toContain("No quiere enseñar la cara.");
+    expect(p.toLowerCase()).toContain("no se lo vuelvas a preguntar");
   });
 });

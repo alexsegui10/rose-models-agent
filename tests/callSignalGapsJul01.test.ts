@@ -46,12 +46,15 @@ describe("director + redacción: identidad", () => {
     expect(decision.directive.type).toBe("GIVE_IDENTITY");
   });
 
-  it("GIVE_IDENTITY dice quién es (Alex de Rose Models) de forma determinista", () => {
-    const plan = planCallUtterance({ directive: { type: "GIVE_IDENTITY" } });
-    expect(plan.deterministicText).toBe(plan.fallbackText);
-    expect(plan.deterministicText?.toLowerCase()).toContain("soy alex");
-    expect(plan.deterministicText?.toLowerCase()).toContain("rose models");
-    expect(plan.deterministicText).not.toContain("mi socio");
+  // jul-2026: GIVE_IDENTITY pasa a brief natural (responde a CÓMO lo preguntó) con fallback determinista.
+  // Lo importante se conserva: dice quién es (Alex de Rose Models) y JAMÁS defiere a "mi socio".
+  it("GIVE_IDENTITY dice quién es (Alex de Rose Models) y nunca defiere a 'mi socio'", () => {
+    const plan = planCallUtterance({ directive: { type: "GIVE_IDENTITY" }, utterance: "¿quién eres?" });
+    expect(plan.fallbackText.toLowerCase()).toContain("soy alex");
+    expect(plan.fallbackText.toLowerCase()).toContain("rose models");
+    expect(plan.fallbackText).not.toContain("mi socio");
+    expect(plan.draftingBrief?.groundingFacts.join(" ")).toContain("Alex");
+    expect(plan.draftingBrief?.instruction.toLowerCase()).toContain("sin inventar");
   });
 });
 

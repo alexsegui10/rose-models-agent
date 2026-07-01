@@ -34,6 +34,17 @@ export interface CallDraftingBrief {
   referenceInstagram: boolean;
   /** Contexto de la candidata (nombre, dudas previas, resumen del DM) para personalizar la redacción. */
   context?: CallContext;
+  /**
+   * Lo ÚLTIMO que dijo la candidata (texto de STT): el redactor le responde PRIMERO a esto con
+   * naturalidad y luego cumple el objetivo del turno ("responde primero, luego reconduce").
+   */
+  candidateUtterance?: string;
+  /** Etiquetas de los temas de la agenda YA tratados (para no repetirlos; el orden lo decide el código). */
+  coveredTopics?: string[];
+  /** Etiquetas de los temas que QUEDAN (para hilar transiciones; NUNCA se anuncian como lista). */
+  pendingTopics?: string[];
+  /** Hechos que ELLA ya dijo en ESTA llamada (extraídos determinista): no re-preguntar, referenciar. */
+  callFacts?: string[];
 }
 
 export interface CallUtterancePlan {
@@ -54,6 +65,13 @@ export interface PlanCallUtteranceInput {
   knowledge?: KnowledgeEntry[];
   /** Contexto de la candidata (del DM). Se adjunta al brief y aporta el nombre si no se pasó aparte. */
   context?: CallContext;
+  /** Lo último que dijo la candidata (para que el redactor le responda primero y luego reconduzca). */
+  utterance?: string;
+  /** Temas de agenda ya tratados / pendientes (etiquetas), para el brief. El orden lo decide el director. */
+  coveredTopics?: string[];
+  pendingTopics?: string[];
+  /** Hechos que ella ya dijo en esta llamada (extractor determinista). */
+  callFacts?: string[];
 }
 
 const DEFER_TEXT = "Mira, eso lo confirmo con mi socio y te lo digo ahora por WhatsApp, ¿vale?";
@@ -66,6 +84,10 @@ const IDENTITY_TEXT =
 // Ingresos: respuesta HONESTA determinista, SIN cifras ni promesas (invariante: no prometer ingresos).
 const EARNINGS_TEXT =
   "Con sinceridad, depende mucho de ti: de tu constancia y de la calidad del contenido. No te puedo prometer una cifra porque sería mentirte. ¿Te sigo contando cómo trabajamos?";
+// Política de edad: requisito INNEGOCIABLE (solo 18+). Respuesta determinista, jamás se defiere ni se
+// suaviza (invariante 2: con la edad no se juega). El redactor NO la toca.
+const AGE_POLICY_TEXT =
+  "Pues mira, con eso somos súper estrictos: solo trabajamos con chicas mayores de dieciocho años, sin excepción. ¿Te sigo contando?";
 
 /**
  * Guion propio de la LLAMADA por etapa (lo que dice el bot, en la voz de Alex). Es texto pensado para
@@ -110,15 +132,52 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };
     }
     case "DEFER_TO_PARTNER":
-      return { directiveType: directive.type, deterministicText: DEFER_TEXT, fallbackText: DEFER_TEXT };
+      // Deferir con NATURALIDAD (jul-2026): el redactor adapta el "eso te lo confirmo" a LO QUE ella
+      // preguntó (una pregunta personal no se defiere a "mi socio", se sale del paso con simpatía). La
+      // DECISIÓN de deferir sigue siendo del código; sin redactor, el texto fijo de siempre (fallback).
+      return {
+        directiveType: directive.type,
+        draftingBrief: {
+          instruction:
+            "No tienes la respuesta segura a lo que acaba de decir. NO respondas su pregunta ni afirmes NINGÚN dato nuevo: si es una duda del negocio, dile con naturalidad que eso prefieres confirmarlo y se lo mandas por WhatsApp en cuanto colguéis; si es una pregunta personal o de charla, sal del paso con simpatía (sin inventar datos personales) y retoma la conversación con suavidad.",
+          groundingFacts: [],
+          prohibitedClaims: ["Cualquier dato, servicio o cifra de la agencia que no esté en los hechos aprobados"],
+          mandatoryNuances: [],
+          referenceInstagram: false,
+          context: input.context,
+          ...briefExtras(input)
+        },
+        fallbackText: DEFER_TEXT
+      };
     case "HANDOFF_TO_ALEX":
       return { directiveType: directive.type, deterministicText: HANDOFF_TEXT, fallbackText: HANDOFF_TEXT };
     case "CLOSE_WITH_CONTRACT":
       return { directiveType: directive.type, deterministicText: CLOSE_TEXT, fallbackText: CLOSE_TEXT };
     case "GIVE_IDENTITY":
-      return { directiveType: directive.type, deterministicText: IDENTITY_TEXT, fallbackText: IDENTITY_TEXT };
+      // Identidad con naturalidad (jul-2026): el redactor responde a CÓMO lo preguntó ella ("¿quién
+      // eres?", "¿cuántos años tienes?") sin inventar datos; los hechos son fijos. Fallback determinista.
+      return {
+        directiveType: directive.type,
+        draftingBrief: {
+          instruction:
+            "Se está preguntando quién eres. Respóndele directo y con simpatía a como lo haya preguntado, presentándote solo con los hechos de abajo, y retoma la conversación. Si pregunta algo personal que no está en los hechos (tu edad, dónde vives), sal del paso con humor ligero SIN inventarte datos.",
+          groundingFacts: [
+            "Eres Alex, de Rose Models, la agencia.",
+            "Le escribiste tú por Instagram hace poco y quedasteis en hablar por teléfono."
+          ],
+          prohibitedClaims: ["Datos personales inventados (edad, ciudad, historia personal)"],
+          mandatoryNuances: [],
+          referenceInstagram: true,
+          context: input.context,
+          ...briefExtras(input)
+        },
+        fallbackText: IDENTITY_TEXT
+      };
     case "GIVE_EARNINGS":
       return { directiveType: directive.type, deterministicText: EARNINGS_TEXT, fallbackText: EARNINGS_TEXT };
+    case "GIVE_AGE_POLICY":
+      // Requisito de edad: SIEMPRE determinista (invariante 2): ni redactor ni matices.
+      return { directiveType: directive.type, deterministicText: AGE_POLICY_TEXT, fallbackText: AGE_POLICY_TEXT };
     case "CLOSE_SOFT":
       return { directiveType: directive.type, deterministicText: CLOSE_SOFT_TEXT, fallbackText: CLOSE_SOFT_TEXT };
     case "CLOSE_UNDERAGE":
@@ -132,13 +191,13 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };
     }
     case "ANSWER_FROM_KNOWLEDGE":
-      return planFromKnowledge(directive.type, input.knowledge, input.context, {
+      return planFromKnowledge(directive.type, input, {
         instruction: "Responde a su pregunta de forma directa, breve y cercana, apoyándote solo en estos hechos.",
         referenceInstagram: false,
         emptyFallback: DEFER_TEXT
       });
     case "REASSURE":
-      return planFromKnowledge(directive.type, input.knowledge, input.context, {
+      return planFromKnowledge(directive.type, input, {
         instruction: "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar, y retoma la conversación.",
         referenceInstagram: false,
         emptyFallback:
@@ -148,6 +207,26 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
     default:
       return planCoverStage(input);
   }
+}
+
+/**
+ * Campos "conversacionales" del brief (jul-2026): lo último que dijo ella, los temas tratados/pendientes
+ * y los hechos que ya contó en la llamada. Dan al redactor lo que necesita para "responder primero y
+ * reconducir después" sin tocar el flujo (el orden y la decisión siguen siendo del director).
+ */
+function briefExtras(
+  input: PlanCallUtteranceInput
+): Pick<CallDraftingBrief, "candidateUtterance" | "coveredTopics" | "pendingTopics" | "callFacts"> {
+  // Saneo defensivo (R2 jul-2026): la cita entra a un PROMPT — se colapsan saltos de línea (que no
+  // "rompan" la estructura del prompt) y se acota a 200 chars (una frase de voz real; menos superficie
+  // de inyección). El validador + fallback siguen detrás de todo.
+  const utterance = input.utterance?.replace(/\s+/g, " ").trim().slice(0, 200);
+  return {
+    candidateUtterance: utterance && utterance.length > 0 ? utterance : undefined,
+    coveredTopics: input.coveredTopics?.length ? input.coveredTopics : undefined,
+    pendingTopics: input.pendingTopics?.length ? input.pendingTopics : undefined,
+    callFacts: input.callFacts?.length ? input.callFacts : undefined
+  };
 }
 
 function concedeShareText(offer?: CallRevenueShareOffer): string {
@@ -174,7 +253,8 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
     prohibitedClaims: gathered.prohibited,
     mandatoryNuances: gathered.nuances,
     referenceInstagram,
-    context: input.context
+    context: input.context,
+    ...briefExtras(input)
   };
 
   return {
@@ -186,18 +266,18 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
 
 function planFromKnowledge(
   directiveType: CallDirective["type"],
-  knowledge: KnowledgeEntry[] | undefined,
-  context: CallContext | undefined,
+  input: PlanCallUtteranceInput,
   opts: { instruction: string; referenceInstagram: boolean; emptyFallback: string }
 ): CallUtterancePlan {
-  const gathered = gatherKnowledge(knowledge);
+  const gathered = gatherKnowledge(input.knowledge);
   const brief: CallDraftingBrief = {
     instruction: opts.instruction,
     groundingFacts: gathered.points,
     prohibitedClaims: gathered.prohibited,
     mandatoryNuances: gathered.nuances,
     referenceInstagram: opts.referenceInstagram,
-    context
+    context: input.context,
+    ...briefExtras(input)
   };
   const fallbackText = gathered.points.length > 0 ? gathered.points.slice(0, 2).join(" ") : opts.emptyFallback;
   return { directiveType, draftingBrief: brief, fallbackText };

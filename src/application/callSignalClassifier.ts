@@ -40,10 +40,12 @@ function normalize(text: string): string {
 }
 
 // SEGURIDAD: la candidata declara ser MENOR de edad -> corte seguro (invariante 2 en la voz). Cubre
-// "soy menor", "no tengo 18", edades 14-17 en cifra o palabra ("tengo 16", "tengo dieciseis", "16 anos").
-// Excluye sustantivos que NO son edad ("16 seguidores/fotos/...") para no cortar a una adulta por error.
+// "soy menor", "no tengo 18", edades 14-17 en cifra o palabra ("tengo 16", "tengo dieciseis", "16 anos"),
+// y la minoría declarada EN FUTURO ("voy a tener 18 en marzo", "cuando cumpla los 18", "me falta un año
+// para los 18"): quien va a CUMPLIR 18 tiene 17 HOY (bloqueante B1 del revisor jul-2026 — antes caía en
+// la política de edad y el pitch seguía). Excluye sustantivos que NO son edad ("16 seguidores/fotos/...").
 const UNDERAGE =
-  /\b(soy|aun soy|todavia soy)\s+menor\b|\bmenor de edad\b|\b(no tengo|aun no tengo|todavia no tengo)\s+(los\s+)?(18|dieciocho)\b|\btengo\s+(1[0-7]|catorce|quince|dieciseis|diecisiete)\b(?!\s*(seguidor|foto|video|mensaj|euro|hij|gat|perr|ano luz))|\b(1[0-7]|catorce|quince|dieciseis|diecisiete)\s*an(os|itos)\b/;
+  /\b(soy|aun soy|todavia soy)\s+menor\b|\bmenor de edad\b|\b(no tengo|aun no tengo|todavia no tengo)\s+(los\s+)?(18|dieciocho)\b|\btengo\s+(1[0-7]|catorce|quince|dieciseis|diecisiete)\b(?!\s*(seguidor|foto|video|mensaj|euro|hij|gat|perr|ano luz))|\b(1[0-7]|catorce|quince|dieciseis|diecisiete)\s*an(os|itos)\b|\bvoy a (?:tener|cumplir)\s+(?:los\s+)?(?:18|dieciocho)\b(?!\s*(?:seguidor|foto|video|mensaj|euro))|\bcuando\s+(?:tenga|cumpla)\s+(?:los\s+)?(?:18|dieciocho)\b(?!\s*(?:seguidor|foto|video|mensaj|euro))|\bme falta[n]?\s+[^.?!]{0,25}\bpara\s+(?:tener|cumplir|los)\s+(?:los\s+)?(?:18|dieciocho)\b|\bcumplo\s+(?:los\s+)?(?:18|dieciocho)\b/;
 
 // Agresión / sospecha GRAVE (assertive): insultos o acusaciones directas -> handoff. Cubre tuteo
 // peninsular y 3a persona LATAM (son/están). NO incluye formas "preocupadas" ("¿no será estafa?": eso es
@@ -106,7 +108,7 @@ const DIRECT_SHARE_COMPLAINT =
 // Pregunta de INGRESOS ("¿cuánto se gana?", "¿cuánto voy a ganar?", "¿se gana bien?"): respuesta HONESTA
 // (depende de ti, SIN cifras ni promesas), no se defiere. Se evalúa antes que QUESTION.
 const ASKS_EARNINGS =
-  /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b/;
+  /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|cobro|cobraria|cobrare|voy a cobrar|me llevo|me llevaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b/;
 
 // Quiere terminar / colgar -> cerrar con contrato.
 const WANTS_TO_END =
@@ -122,9 +124,27 @@ const CONTINUATION =
   /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuentame\b/;
 
 // Pregunta de IDENTIDAD ("¿quién eres?", "¿de dónde llamas?", "¿de qué agencia?", "¿cómo te llamas?"): NO se
-// defiere; el bot dice quién es. Se evalúa ANTES que QUESTION (que también capturaría "quién").
+// defiere; el bot dice quién es. Incluye preguntas personales al bot ("¿cuántos años tienes?"): deferirlas a
+// "mi socio" no tiene sentido (bug jul-2026); se responden con identidad/simpatía. El lookahead (?!\s+que)
+// evita confundir "¿cuántos años tienes que tener?" (eso es política de edad). Se evalúa ANTES que QUESTION.
 const ASKS_IDENTITY =
-  /\bquien (eres|es|habla|sois|son|me llama|llama)\b|\bde donde (llamas|llamais|me llamas|es esto|sois|llaman)\b|\bde que (agencia|empresa|parte)\b|\bpara quien (trabajas|trabajais|es esto)\b|\bque agencia\b|\bcomo te llamas\b|\bde parte de quien\b/;
+  /\bquien (eres|es|habla|sois|son|me llama|llama)\b|\bde donde (llamas|llamais|me llamas|es esto|sois|llaman|eres)\b|\bde que (agencia|empresa|parte)\b|\bpara quien (trabajas|trabajais|es esto)\b|\bque agencia\b|\bcomo te llamas\b|\bde parte de quien\b|\bcuantos anos (?:tienes|tenes|tiene usted)\b(?!\s+que)|\bque edad (?:tienes|tenes|tiene usted)\b(?!\s+que)/;
+
+// Pregunta de POLÍTICA DE EDAD ("¿a partir de qué edad?", "¿hay edad mínima?", "¿qué edad hay que tener?"):
+// se responde DETERMINISTA (solo mayores de 18, requisito innegociable), NUNCA se defiere a "mi socio"
+// (bug jul-2026: deferir la edad quedaba absurdo). OJO: las declaraciones de minoría ("tengo 16") las caza
+// UNDERAGE antes (prioridad de seguridad); esto son PREGUNTAS sobre el requisito.
+const ASKS_AGE_POLICY =
+  /\bedad minima\b|\bminimo de edad\b|\blimite de edad\b|\ba partir de (?:que edad|cuantos anos)\b|\b(?:que edad|cuantos anos) (?:hay que|hace falta|se necesita|necesito|tengo que|tienes que|se debe|debo) tener\b|\btener (?:los )?(?:18|dieciocho)\b|\bhay que ser mayor de edad\b|\bcon (?:18|dieciocho) (?:anos? )?(?:ya )?(?:puedo|se puede|vale)\b/;
+
+// Declaración de edad ADULTA ("tengo 24", "24 años"): es información, no ruido -> asentir y seguir (el
+// redactor la reconoce con naturalidad y el extractor de hechos la recuerda). Las edades 14-17 las caza
+// UNDERAGE antes (seguridad). Excluye sustantivos que no son edad (igual que UNDERAGE).
+const STATES_ADULT_AGE =
+  /\btengo\s+(1[89]|[2-5]\d)\s*(anos|anitos)?\b(?!\s*(seguidor|foto|video|mensaj|euro|hij|gat|perr))|\b(1[89]|[2-5]\d)\s*an(os|itos)\b/;
+// Pregunta SUSTANTIVA (con palabra interrogativa real). Distingue "tengo 24, ¿pasa algo?" (coletilla
+// trivial -> es una declaración de edad, asentir) de "tengo 24, ¿cuánto cobraría?" (pregunta de verdad).
+const SUBSTANTIVE_QUESTION = /\b(que|como|cuando|cuanto|cuanta|cuantos|cual|cuales|donde|por que|porque|quien|para que)\b/;
 
 // Saludo de apertura ("hola", "buenas", "hola qué tal"): la candidata devuelve el saludo -> asentir y
 // seguir; no tratarlo como ruido ni (por el "qué tal") como pregunta. Se evalúa ANTES que QUESTION.
@@ -167,9 +187,16 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
   if (CONTINUATION.test(text)) return "follows-along";
+  // Política de edad ANTES que earnings/identity/question: "¿qué edad hay que tener?" contiene "que" (QUESTION).
+  if (ASKS_AGE_POLICY.test(text)) return "asks-age-policy";
   if (ASKS_EARNINGS.test(text)) return "asks-earnings";
   if (ASKS_IDENTITY.test(text)) return "asks-identity";
   if (GREETING.test(text)) return "follows-along";
+  // Edad adulta declarada ("tengo 24", "tengo 24, ¿pasa algo?"): información -> asentir y seguir. ANTES
+  // que QUESTION para que una coletilla trivial ("¿pasa algo?", "¿no?") no la convierta en "pregunta
+  // desconocida" y acabe en el absurdo "lo comento con mi socio" (bug jul-2026). Si además hay una
+  // pregunta SUSTANTIVA ("tengo 24, ¿cuánto cobraría?"), gana la pregunta. UNDERAGE (14-17) ya cortó antes.
+  if (STATES_ADULT_AGE.test(text) && !SUBSTANTIVE_QUESTION.test(text)) return "follows-along";
   if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
 

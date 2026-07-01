@@ -15,7 +15,7 @@
 
 import { businessKnowledgeEntries } from "@/content/business";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
-import { callAgendaStage } from "./callAgenda";
+import { CALL_AGENDA, callAgendaStage, type CallAgendaStageId } from "./callAgenda";
 import type { CallContext } from "./callContext";
 import { decideCallDirective, type CallCandidateSignal, type CallDirective, type CallDirectorState } from "./callDirector";
 import { classifyCallSignal } from "./callSignalClassifier";
@@ -45,6 +45,8 @@ export interface RunCallTurnInput {
   signal?: CallCandidateSignal;
   /** Contexto de la candidata (del DM): nombre, dudas previas, resumen. Personaliza la redacción. */
   context?: CallContext;
+  /** Hechos que ella YA dijo en esta llamada (extraídos determinista por el responder): no re-preguntar. */
+  callFacts?: string[];
 }
 
 /** Ejecuta un turno del cerebro de la llamada. */
@@ -66,9 +68,20 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
     candidateName: input.candidateName ?? input.context?.candidateName,
     recorded: input.recorded,
     knowledge,
-    context: input.context
+    context: input.context,
+    // Brief conversacional (jul-2026): lo que acaba de decir + dónde va la llamada + lo que ya contó.
+    // Solo INFORMA al redactor (naturalidad); el orden/flujo lo sigue decidiendo el director.
+    utterance: input.utterance,
+    coveredTopics: topicLabels(input.state.coveredStages),
+    pendingTopics: topicLabels(CALL_AGENDA.map((s) => s.id).filter((id) => !nextState.coveredStages.includes(id))),
+    callFacts: input.callFacts
   });
   return { signal, directive, utterancePlan, nextState };
+}
+
+/** Etiquetas en español de etapas de agenda (sin el cierre: no es un "tema" que anunciar). */
+function topicLabels(stages: readonly CallAgendaStageId[]): string[] {
+  return stages.filter((id) => id !== "CLOSE").map((id) => callAgendaStage(id).label);
 }
 
 function knowledgeForDirective(directive: CallDirective, coveringEntries: KnowledgeEntry[]): KnowledgeEntry[] | undefined {

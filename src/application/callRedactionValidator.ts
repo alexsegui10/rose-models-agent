@@ -18,6 +18,16 @@ export interface CallValidationResult {
   reason?: string;
 }
 
+export interface CallValidationOptions {
+  /**
+   * ¿Puede este turno mencionar cifras del reparto (las autorizadas)? SOLO el turno de dinero (COVER_STAGE
+   * de MONEY) debería; en el resto de turnos redactados (defer, identidad, otras etapas, respuestas) una
+   * cifra de reparto está FUERA DE SITIO aunque sea "correcta" (endurecimiento R1 jul-2026: el director no
+   * decidió comunicarla ahí). Por defecto true (compatibilidad con los textos deterministas ya validados).
+   */
+  allowAuthorizedShare?: boolean;
+}
+
 /** Porcentajes (en dígitos) que el bot PUEDE decir: la escalera autorizada y sus complementarios. */
 const AUTHORIZED_SHARE = new Set([70, 65, 60, 30, 35, 40]);
 /** Porcentajes en PALABRAS permitidos (mismos valores). */
@@ -54,12 +64,43 @@ function normalize(text: string): string {
   return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
-export function validateCallUtterance(text: string, _brief?: CallDraftingBrief): CallValidationResult {
+export function validateCallUtterance(
+  text: string,
+  _brief?: CallDraftingBrief,
+  options?: CallValidationOptions
+): CallValidationResult {
   const trimmed = (text ?? "").trim();
   if (trimmed.length === 0) return { valid: false, reason: "vacío" };
   if (trimmed.length > MAX_UTTERANCE_LENGTH) return { valid: false, reason: "demasiado largo para un turno de voz" };
 
   const norm = normalize(trimmed);
+
+  // INVERSIÓN del reparto (bug histórico "ese 70 es para ti", ahora también posible vía drafter): la parte
+  // GRANDE (70/65/60) jamás es para ELLA, y la pequeña (30/35/40) jamás para la agencia. Se rechaza aunque
+  // las cifras sean "autorizadas" (endurecimiento R1 jul-2026).
+  if (/\b(?:70|65|60|setenta|sesenta y cinco|sesenta)\s*(?:%|por\s?ciento)?\s*(?:es\s+)?para\s+(?:ti|vos)\b/.test(norm)) {
+    return { valid: false, reason: "reparto invertido (la parte grande no es para ella)" };
+  }
+  if (
+    /\b(?:30|35|40|treinta|treinta y cinco|cuarenta)\s*(?:%|por\s?ciento)?\s*(?:es\s+)?para\s+(?:nosotros|la agencia)\b/.test(
+      norm
+    )
+  ) {
+    return { valid: false, reason: "reparto invertido (la parte pequeña no es para la agencia)" };
+  }
+
+  // Cifras del reparto FUERA del turno de dinero: si este turno no debía hablar de cifras (defer,
+  // identidad, otras etapas), CUALQUIER porcentaje o reparto N/N invalida, aunque sea el autorizado.
+  if (options?.allowAuthorizedShare === false) {
+    if (/\b\d{1,4}\s*(?:%|por\s?ciento)/.test(norm) || /\b\d{1,3}\s*[/-]\s*\d{1,3}\b/.test(norm)) {
+      return { valid: false, reason: "porcentaje fuera del turno de dinero" };
+    }
+    for (const match of norm.matchAll(/([a-z]+(?:\s+y\s+cinco)?)\s+por\s?ciento/g)) {
+      if (NUMBER_WORDS.has(match[1].trim())) {
+        return { valid: false, reason: "porcentaje fuera del turno de dinero" };
+      }
+    }
+  }
 
   // Porcentajes en DÍGITOS ("80%", "1000 por ciento"): solo los autorizados (admite 1-4 dígitos para que
   // un número grande también se rechace).

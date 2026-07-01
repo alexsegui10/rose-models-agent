@@ -7,7 +7,7 @@
  *    porcentajes que se le den) y solo entrega los hechos aprobados.
  *  - Su salida la vuelve a filtrar `validateCallUtterance` en el responder (red de seguridad).
  *  - Ante timeout/fallo devuelve null → el responder usa el `fallbackText` determinista (invariante 6).
- *  - Solo se activa con CALL_LLM_REDACTION=on y OPENAI_API_KEY presente (por defecto, APAGADO).
+ *  - ACTIVO POR DEFECTO con OPENAI_API_KEY presente (decisión Alex jul-2026); CALL_LLM_REDACTION=off lo apaga.
  *
  * El SDK de OpenAI vive aislado aquí (adaptador); el resto del código usa la interfaz CallUtteranceDrafter.
  */
@@ -62,10 +62,28 @@ export function buildDraftPrompt(request: CallDraftRequest): string {
   const { brief, context } = request;
   const lines: string[] = [];
 
-  lines.push(
-    "Eres el asistente de Rose Models hablando por TELÉFONO en español de ESPAÑA, cercano y natural, como una persona real."
-  );
+  lines.push("Eres Alex, de Rose Models, hablando por TELÉFONO en español de ESPAÑA, cercano y natural, como una persona real.");
   lines.push(`OBJETIVO DE ESTE TURNO: ${brief.instruction}`);
+
+  // "Responde primero, luego reconduce" (jul-2026): la técnica nº1 de naturalidad. El redactor reacciona
+  // a LO QUE ella acaba de decir y después cumple el objetivo del turno que fijó el director.
+  if (brief.candidateUtterance) {
+    lines.push(
+      `ELLA ACABA DE DECIR: «${brief.candidateUtterance}». Reacciona PRIMERO a eso brevemente y con naturalidad (si aporta algo), y luego hila el objetivo del turno con suavidad. Nunca la ignores.`
+    );
+  }
+  if (brief.callFacts && brief.callFacts.length > 0) {
+    lines.push("LO QUE ELLA YA HA DICHO EN ESTA LLAMADA (no se lo vuelvas a preguntar; referéncialo si viene a cuento):");
+    for (const fact of brief.callFacts) lines.push(`- ${fact}`);
+  }
+  if (brief.coveredTopics && brief.coveredTopics.length > 0) {
+    lines.push(`TEMAS YA TRATADOS (no los repitas salvo que ella pregunte): ${brief.coveredTopics.join(", ")}.`);
+  }
+  if (brief.pendingTopics && brief.pendingTopics.length > 0) {
+    lines.push(
+      `TEMAS QUE QUEDAN (se cubren turno a turno, cada uno cuando el guion lo pida; NO los anuncies como lista): ${brief.pendingTopics.join(", ")}.`
+    );
+  }
 
   if (brief.groundingFacts.length > 0) {
     lines.push("APÓYATE SOLO EN ESTOS HECHOS (no inventes nada fuera de aquí):");
@@ -94,7 +112,8 @@ export function buildDraftPrompt(request: CallDraftRequest): string {
       "- NUNCA inventes datos, servicios ni cifras.",
       "- NUNCA prometas ingresos ni des cantidades de dinero.",
       "- NO menciones ningún porcentaje salvo los que aparezcan en los hechos de arriba.",
-      "- Castellano de España, muletillas naturales (vale, mira, pues), sin sonar a folleto.",
+      "- Castellano de España, muletillas naturales (mira, oye, pues nada), sin sonar a folleto.",
+      '- NO empieces la frase con "vale", "a ver", "ya" ni "pues" sueltos (a veces ya se antepone una muletilla automática).',
       "- Responde SOLO con lo que diría el bot, sin comillas ni acotaciones."
     ].join("\n")
   );
@@ -113,12 +132,14 @@ function describeContext(context: CallContext): string {
 }
 
 /**
- * Devuelve el redactor OpenAI SOLO si está activado (CALL_LLM_REDACTION=on) y hay clave. Si no, undefined
- * → el responder usa el guion determinista (comportamiento por defecto, seguro). El timeout se acota para
- * no hacer esperar en una llamada en vivo (si tarda, cae al fallback).
+ * Devuelve el redactor OpenAI. DECISIÓN DE ALEX (jul-2026): ACTIVO POR DEFECTO cuando hay clave — el bot
+ * redacta cada turno con naturalidad ("responde primero, luego reconduce"); el guion determinista queda de
+ * fallback y el validador de voz filtra TODA salida (invariantes intactos). CALL_LLM_REDACTION=off fuerza
+ * el guion fijo (modo seguro/pruebas). Sin clave, undefined → determinista (los tests van siempre así).
+ * El timeout se acota para no hacer esperar en una llamada en vivo (si tarda, cae al fallback).
  */
 export function getCallDrafter(env: NodeJS.ProcessEnv = process.env): CallUtteranceDrafter | undefined {
-  if (env.CALL_LLM_REDACTION !== "on") return undefined;
+  if (env.CALL_LLM_REDACTION === "off") return undefined;
   const config = getLlmRuntimeConfig(env);
   if (!config.openaiApiKey) return undefined;
   return new OpenAiCallDrafter({

@@ -6,10 +6,12 @@
  * clasificación es determinista y las señales que NO cambian estado —preguntas, desconfianza— no
  * afectan a la reproducción), así no necesita almacén entre invocaciones (ideal en serverless).
  *
- * Redacción: v1 DETERMINISTA (texto fijo o fallback del plan). Las preguntas CUBIERTAS por el conocimiento
- * aprobado se responden (decisión de Alex 17-jun); las NO cubiertas se defieren a Alex ("mi socio"). El
- * recuperador solo se consulta para el ÚLTIMO turno (el del directivo en vivo): el replay no lo necesita
- * porque asks-covered/asks-unknown no cambian el estado del director.
+ * Redacción: NATURAL por defecto (jul-2026) — si hay drafter (OPENAI_API_KEY), redacta los turnos con
+ * brief (validador de voz + fallback determinista SIEMPRE detrás); sin drafter, guion determinista puro.
+ * Las preguntas CUBIERTAS por el conocimiento aprobado se responden (decisión de Alex 17-jun); las NO
+ * cubiertas se defieren ("te lo confirmo por WhatsApp"). El recuperador solo se consulta para el ÚLTIMO
+ * turno (el del directivo en vivo): el replay no lo necesita porque asks-covered/asks-unknown no cambian
+ * el estado del director.
  */
 
 import { businessKnowledgeEntries } from "@/content/business";
@@ -18,7 +20,8 @@ import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 import { runCallTurn, type CallTurnResult } from "./callBrain";
 import type { CallContext } from "./callContext";
 import type { CallUtteranceDrafter } from "./callDrafter";
-import { decideCallDirective, initialCallDirectorState, type CallDirectorState } from "./callDirector";
+import { extractCallFacts } from "./callFactExtractor";
+import { decideCallDirective, initialCallDirectorState, type CallDirectiveType, type CallDirectorState } from "./callDirector";
 import { validateCallUtterance } from "./callRedactionValidator";
 import { classifyCallSignal } from "./callSignalClassifier";
 import { LocalBusinessKnowledgeRetriever, type BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
@@ -41,6 +44,13 @@ export interface RespondToCallInput {
   /** Redactor de voz (LLM) opcional. Si se inyecta, redacta las etapas explicativas (con validación +
    *  fallback); si no, se usa el guion determinista. Lo conecta el endpoint cuando hay clave/config. */
   drafter?: CallUtteranceDrafter;
+  /**
+   * "Buffer words" (jul-2026): se invoca JUSTO ANTES de llamar al redactor LLM (la única parte lenta)
+   * con una muletilla corta ("Vale... ") para que el endpoint la emita ya en streaming y el silencio
+   * previo a la respuesta se tape como lo taparía una persona. En los caminos deterministas no se llama
+   * (son instantáneos). El texto devuelto por respondToCall NO incluye la muletilla.
+   */
+  onDraftStart?: (bufferText: string) => void;
 }
 
 export interface CallResponderResult {
@@ -59,6 +69,17 @@ const callKnowledgeCandidate = normalizeCandidate({
 });
 
 const defaultRetriever = new LocalBusinessKnowledgeRetriever(businessKnowledgeEntries);
+
+// Muletilla por directiva para tapar la latencia del redactor (elegida para no chocar con los arranques
+// típicos del fallback de cada directiva). La elipsis + espacio final es el formato que la plataforma de
+// voz pronuncia con pausa natural sin distorsión.
+const DRAFT_BUFFER_WORDS: Partial<Record<CallDirectiveType, string>> = {
+  COVER_STAGE: "Vale... ",
+  ANSWER_FROM_KNOWLEDGE: "A ver... ",
+  REASSURE: "Ya... ",
+  DEFER_TO_PARTNER: "Pues... ",
+  GIVE_IDENTITY: "Eh... "
+};
 
 export async function respondToCall(input: RespondToCallInput): Promise<CallResponderResult> {
   const userUtterances = input.messages.filter((m) => m.role === "user").map((m) => m.content ?? "");
@@ -105,7 +126,10 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     context: input.context,
     // En el turno de apertura (el bot aún no habló) el bot INICIA: señal "none" (no "unclear" por vacío).
     signal: botHasSpoken ? undefined : "none",
-    resolveQuestion: () => coveringEntries
+    resolveQuestion: () => coveringEntries,
+    // Memoria de la llamada (jul-2026): lo que ELLA ya dijo en cualquier turno (extractor determinista),
+    // para que el redactor no re-pregunte y pueda referenciarlo. No decide nada (solo informa).
+    callFacts: extractCallFacts(userUtterances)
   });
 
   const plan = result.utterancePlan;
@@ -115,13 +139,19 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // Crítico/guion (apertura, cifra del reparto, handoff, cierre): NUNCA pasa por el LLM.
     content = plan.deterministicText;
   } else if (plan.draftingBrief && input.drafter) {
+    // Buffer words: avisar al endpoint ANTES de la única espera lenta (el LLM), para que la voz ya esté
+    // diciendo algo ("Vale... ") mientras se redacta. Sin drafter no hay espera y no se emite nada.
+    input.onDraftStart?.(DRAFT_BUFFER_WORDS[result.directive.type] ?? "Eh... ");
     // Redacción natural por LLM, SOLO si pasa el validador de voz; si no, fallback determinista (inv. 6).
     const draft = await input.drafter.draft({
       brief: plan.draftingBrief,
       context: input.context,
       directiveType: result.directive.type
     });
-    if (draft && validateCallUtterance(draft, plan.draftingBrief).valid) {
+    // Cifras del reparto SOLO en el turno de dinero (endurecimiento R1 jul-2026): en cualquier otro turno
+    // redactado, un porcentaje —aunque sea el autorizado— está fuera de sitio y tira el draft al fallback.
+    const allowShare = result.directive.type === "COVER_STAGE" && result.directive.stageId === "MONEY";
+    if (draft && validateCallUtterance(draft, plan.draftingBrief, { allowAuthorizedShare: allowShare }).valid) {
       content = draft;
       usedDrafter = true;
     } else {

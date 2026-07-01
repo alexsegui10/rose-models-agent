@@ -39,8 +39,18 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.fallbackText).toBe(plan.deterministicText);
   });
 
-  it("deferir / handoff / cierre son deterministas y dicen lo correcto", () => {
-    expect(planCallUtterance({ directive: { type: "DEFER_TO_PARTNER" } }).deterministicText).toContain("socio");
+  // jul-2026: DEFER pasa a redacción natural (brief + fallback determinista) para que el "eso te lo
+  // confirmo" se adapte a LO QUE preguntó (deferir "¿cuántos años tienes?" a "mi socio" quedaba absurdo).
+  // La DECISIÓN de deferir sigue siendo del director; sin redactor, habla el texto fijo de siempre.
+  it("deferir: brief natural (no responder, no inventar) con fallback determinista del socio", () => {
+    const plan = planCallUtterance({ directive: { type: "DEFER_TO_PARTNER" }, utterance: "¿y los impuestos?" });
+    expect(plan.deterministicText).toBeUndefined();
+    expect(plan.fallbackText).toContain("socio");
+    expect(plan.draftingBrief?.instruction.toLowerCase()).toContain("no respondas");
+    expect(plan.draftingBrief?.candidateUtterance).toBe("¿y los impuestos?");
+  });
+
+  it("handoff / cierre siguen siendo deterministas y dicen lo correcto", () => {
     expect(planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX" } }).deterministicText).toContain("mi socio");
     expect(planCallUtterance({ directive: { type: "CLOSE_WITH_CONTRACT" } }).deterministicText).toContain("contrato");
   });

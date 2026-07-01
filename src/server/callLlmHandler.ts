@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { respondToCall, type CallChatMessage } from "@/application/callTurnResponder";
+import { respondToCall, type CallChatMessage, type RespondToCallInput } from "@/application/callTurnResponder";
 import type { CallContext } from "@/application/callContext";
 import { getCallDrafter } from "@/application/openaiCallDrafter";
 import { bearerMatches } from "@/server/bearerAuth";
@@ -151,30 +151,54 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
   const context = nestedContext ?? contextFromFlatVars(rawMeta);
   const candidateName = meta?.candidateName ?? context?.candidateName ?? asMetaString(rawMeta.candidate_name);
 
-  // Redactor LLM: solo si CALL_LLM_REDACTION=on + clave (si no, undefined -> guion determinista).
+  // Redactor LLM: ACTIVO por defecto con clave (redacción natural); CALL_LLM_REDACTION=off -> guion fijo.
   const drafter = getCallDrafter();
-  const result = await respondToCall({ messages, candidateName, recorded, context, drafter });
+  const respondInput: RespondToCallInput = { messages, candidateName, recorded, context, drafter };
 
   const model = parsed.data.model ?? "rose-models-call-brain";
   const created = Math.floor(Date.now() / 1000);
   const id = `chatcmpl-call-${created}`;
 
   if (parsed.data.stream) {
-    return streamOpenAiResponse({ id, created, model, content: result.content });
+    return streamCallResponse({ id, created, model, respondInput });
   }
 
-  return NextResponse.json({
-    id,
-    object: "chat.completion",
-    created,
-    model,
-    choices: [{ index: 0, message: { role: "assistant", content: result.content }, finish_reason: "stop" }],
-    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
-  });
+  try {
+    const result = await respondToCall(respondInput);
+    return NextResponse.json({
+      id,
+      object: "chat.completion",
+      created,
+      model,
+      choices: [{ index: 0, message: { role: "assistant", content: result.content }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+    });
+  } catch (error) {
+    // La llamada está EN VIVO: nunca un 500 que deje al bot mudo. Frase segura y a seguir.
+    console.error("[call-llm] fallo del cerebro (no-stream)", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return NextResponse.json({
+      id,
+      object: "chat.completion",
+      created,
+      model,
+      choices: [{ index: 0, message: { role: "assistant", content: SAFE_RETRY_TEXT }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+    });
+  }
 }
 
-/** Respuesta en streaming SSE en formato OpenAI (chunk de role + chunk de contenido + cierre + [DONE]). */
-function streamOpenAiResponse(args: { id: string; created: number; model: string; content: string }): Response {
+// Frase segura si el cerebro falla a mitad de llamada: no inventa nada y devuelve el turno a la candidata.
+const SAFE_RETRY_TEXT = "Perdona, se me ha cortado un segundo la línea. ¿Me lo repites?";
+
+/**
+ * Respuesta en streaming SSE en formato OpenAI, con "BUFFER WORDS" (jul-2026): el cerebro corre DENTRO del
+ * stream y, justo antes de la única espera lenta (el redactor LLM), emite una muletilla corta ("Vale... ")
+ * para que la voz ya esté hablando mientras se redacta — mata el silencio que delata al bot. Los caminos
+ * deterministas no emiten muletilla (son instantáneos). CALL_BUFFER_WORDS=off la desactiva.
+ */
+function streamCallResponse(args: { id: string; created: number; model: string; respondInput: RespondToCallInput }): Response {
   const encoder = new TextEncoder();
   const chunk = (delta: object, finishReason: string | null) =>
     `data: ${JSON.stringify({
@@ -185,11 +209,26 @@ function streamOpenAiResponse(args: { id: string; created: number; model: string
       choices: [{ index: 0, delta, finish_reason: finishReason }]
     })}\n\n`;
 
+  const bufferWordsEnabled = process.env.CALL_BUFFER_WORDS !== "off";
+
   const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(encoder.encode(chunk({ role: "assistant" }, null)));
-      controller.enqueue(encoder.encode(chunk({ content: args.content }, null)));
-      controller.enqueue(encoder.encode(chunk({}, "stop")));
+    async start(controller) {
+      const send = (delta: object, finishReason: string | null) => controller.enqueue(encoder.encode(chunk(delta, finishReason)));
+      send({ role: "assistant" }, null);
+      try {
+        const result = await respondToCall({
+          ...args.respondInput,
+          onDraftStart: bufferWordsEnabled ? (bufferText) => send({ content: bufferText }, null) : undefined
+        });
+        send({ content: result.content }, null);
+      } catch (error) {
+        // Nunca dejar la llamada muda: frase segura (la cabecera 200 ya salió, no hay vuelta atrás).
+        console.error("[call-llm] fallo del cerebro (stream)", {
+          message: error instanceof Error ? error.message : String(error)
+        });
+        send({ content: SAFE_RETRY_TEXT }, null);
+      }
+      send({}, "stop");
       controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       controller.close();
     }

@@ -8,10 +8,19 @@ describe("validador de la redacción de voz", () => {
     expect(ok("Genial, te resumo cómo trabajamos: tú mandas el contenido y nosotros el resto.")).toBe(true);
   });
 
-  it("acepta los porcentajes autorizados (70/30, 65/35, 60/40)", () => {
-    expect(ok("Es un 70% para ti y un 30% para nosotros.")).toBe(true);
-    expect(ok("Podemos dejarlo en un 65 para ti y un 35 para nosotros.")).toBe(true);
+  // jul-2026 (R1): las frases legítimas van en la DIRECCIÓN REAL del reparto (la parte pequeña para
+  // ella). Las antiguas ("70% para ti") codificaban la INVERSIÓN que Alex arregló en junio; ahora esa
+  // inversión se RECHAZA aunque las cifras sean autorizadas (test más abajo).
+  it("acepta los porcentajes autorizados en la dirección correcta (30/35/40 para ella)", () => {
+    expect(ok("Es un 30% para ti y un 70% para nosotros.")).toBe(true);
+    expect(ok("Podemos dejarlo en un 35 para ti y un 65 para nosotros.")).toBe(true);
     expect(ok("Lo dejamos en 60/40.")).toBe(true);
+  });
+
+  it("RECHAZA la inversión del reparto aunque las cifras sean autorizadas (R1)", () => {
+    expect(ok("Es un 70% para ti y un 30% para nosotros.")).toBe(false);
+    expect(ok("Ese setenta por ciento es para ti.")).toBe(false);
+    expect(ok("Solo nos quedamos un 30% para la agencia.")).toBe(false);
   });
 
   it("RECHAZA un porcentaje NO autorizado (invariante 3)", () => {
@@ -43,8 +52,8 @@ describe("validador de la redacción de voz", () => {
     expect(ok("Lo dejamos a medias, fifty fifty.")).toBe(false);
   });
 
-  it("acepta los porcentajes autorizados en PALABRAS", () => {
-    expect(ok("Es un setenta por ciento para ti.")).toBe(true);
+  it("acepta los porcentajes autorizados en PALABRAS (dirección correcta)", () => {
+    expect(ok("Es un treinta por ciento para ti.")).toBe(true);
     expect(ok("Podemos dejarlo en un sesenta y cinco por ciento.")).toBe(true);
   });
 
