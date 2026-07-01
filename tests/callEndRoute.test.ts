@@ -69,10 +69,21 @@ describe("webhook de fin de llamada", () => {
     expect(json.candidate.currentState).toBe("CALL_NO_ANSWER");
   });
 
-  it("candidata inexistente -> 404", async () => {
+  // jul-2026 (voz-02): candidata desconocida o llamada de PRUEBA (sin candidate_id) -> 200 "skipped", NUNCA
+  // 4xx: ElevenLabs desactiva el webhook tras fallos repetidos y dejaríamos de registrar TODAS las llamadas.
+  it("candidata inexistente -> 200 skipped (no 404: protege el webhook)", async () => {
     process.env.CALL_WEBHOOK_SECRET = SECRET;
     const res = await POST(req({ candidateId: "no-existe", status: "completed" }, `Bearer ${SECRET}`));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    expect((await res.json()).skipped).toBe(true);
+  });
+
+  it("llamada de prueba (sin candidateId) -> 200 skipped", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const payload = { data: { status: "done", transcript: [{ role: "agent", message: "Hola" }] } };
+    const res = await POST(elevenLabsReq(payload, SECRET));
+    expect(res.status).toBe(200);
+    expect((await res.json()).skipped).toBe(true);
   });
 
   it("buzon de voz: status completada pero la candidata no dijo nada -> NO_ANSWER (reintento, no contrato)", async () => {

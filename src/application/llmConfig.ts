@@ -28,10 +28,11 @@ export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRu
     openaiApiKey,
     understandingModel: env.OPENAI_UNDERSTANDING_MODEL?.trim() || defaultUnderstandingModel,
     writingModel: env.OPENAI_WRITING_MODEL?.trim() || defaultWritingModel,
-    // Default 8s (no 12s): en Vercel Hobby el techo real por funcion es ~10s. Con 1 reintento, 12s+12s
-    // mataba la lambda a mitad de turno. 8s deja margen para la rafaga/persistencia. Override por env.
-    timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 8000),
-    maxRetries: positiveNumber(env.OPENAI_MAX_RETRIES, 1)
+    // Default 4s / 0 reintentos (jul-2026): en Vercel Hobby el techo real por funcion es ~10s y un turno
+    // hace DOS llamadas a OpenAI (comprension + redaccion); 8s+reintento reventaba el techo y mataba la
+    // lambda ANTES de que el fallback determinista pudiera actuar. Override por env si algun dia hay mas techo.
+    timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 4000),
+    maxRetries: nonNegativeNumber(env.OPENAI_MAX_RETRIES, 0)
   };
 }
 
@@ -39,4 +40,12 @@ function positiveNumber(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+// Para valores donde el 0 es VALIDO (p. ej. "0 reintentos"): positiveNumber trataba "0" como invalido y
+// caia al fallback, con lo que OPENAI_MAX_RETRIES=0 en Vercel no surtia efecto (bug jul-2026).
+function nonNegativeNumber(value: string | undefined, fallback: number): number {
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }

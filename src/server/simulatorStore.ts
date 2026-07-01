@@ -308,6 +308,15 @@ function ensureSimulatorRepositories(): SimulatorRepositories {
 
   if (requestedMode === "postgres") {
     if (!process.env.DATABASE_URL) {
+      // FAIL-LOUD en despliegue real (jul-2026): en Vercel el fallback a JSON escribe en /tmp EFÍMERO por
+      // lambda -> los datos de candidatas REALES se perderían EN SILENCIO. Mejor romper visible que perder
+      // leads sin enterarse. En local se mantiene el fallback cómodo a json.
+      if (process.env.VERCEL) {
+        throw new Error(
+          "PERSISTENCE=postgres pero falta DATABASE_URL en el despliegue: me niego a arrancar con snapshot " +
+            "efímero (perdería candidatas reales en silencio). Añade DATABASE_URL en Vercel y redespliega."
+        );
+      }
       console.warn(
         "[simulatorStore] PERSISTENCE=postgres pero DATABASE_URL no está definida en .env.local; " +
           'fallback determinista al modo "json" (snapshot en data/simulator-snapshot.json).'
@@ -319,6 +328,12 @@ function ensureSimulatorRepositories(): SimulatorRepositories {
         repositories = buildPostgresRepositories();
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
+        if (process.env.VERCEL) {
+          throw new Error(
+            `PERSISTENCE=postgres pero no se pudo crear el cliente de PostgreSQL (${detail}): me niego a ` +
+              "degradar a snapshot efímero en producción (perdería candidatas reales en silencio)."
+          );
+        }
         console.warn(
           `[simulatorStore] PERSISTENCE=postgres pero no se pudo crear el cliente de PostgreSQL (${detail}); ` +
             'fallback determinista al modo "json".'

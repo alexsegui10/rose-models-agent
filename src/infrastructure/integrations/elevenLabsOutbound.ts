@@ -107,7 +107,10 @@ export async function startOutboundSipCall(
     const response = await fetchImpl("https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call", {
       method: "POST",
       headers: { "Content-Type": "application/json", "xi-api-key": config.apiKey },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      // Timeout defensivo (jul-2026): sin él, un cuelgue de la API mataba la lambda entera (techo ~10s de
+      // Vercel) SIN registrar el intento -> el tope de 3 llamadas dejaba de ser fiable. 6.5s deja margen.
+      signal: AbortSignal.timeout(6500)
     });
     if (!response.ok) {
       let detail = "";

@@ -17,7 +17,9 @@ const MACHINE_PATHS = [
   "/api/instagram/webhook",
   "/api/instagram/flush",
   "/api/instagram/detect-privacy",
-  "/api/whatsapp/webhook"
+  "/api/whatsapp/webhook",
+  // Cron de re-enganche (Vercel Cron manda bearer CRON_SECRET; el Basic Auth lo dejaba muerto con 401).
+  "/api/cron/outreach"
 ];
 
 /**

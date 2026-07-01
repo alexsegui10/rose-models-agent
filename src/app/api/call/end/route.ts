@@ -26,7 +26,10 @@ export const runtime = "nodejs";
 
 const EndCallSchema = z
   .object({
-    candidateId: z.string().min(1),
+    // Opcional a propósito: las llamadas de PRUEBA (/api/call/test) no llevan candidata y el webhook debe
+    // responder 200 (skipped), no un 4xx — ElevenLabs DESACTIVA el webhook tras fallos repetidos y eso
+    // rompería el registro de TODAS las llamadas reales (hallazgo voz-02, jul-2026).
+    candidateId: z.string().optional(),
     status: z.string().min(1),
     summary: z.string().optional(),
     durationSec: z.number().int().nonnegative().optional(),
@@ -168,11 +171,21 @@ export async function POST(request: Request) {
   }
   const payload: EndPayload = parsed.data;
 
+  // Llamada de PRUEBA (sin candidata) o candidata desconocida: 200 "skipped" a propósito. Un 4xx repetido
+  // haría que ElevenLabs desactivara el webhook y dejaríamos de registrar TODAS las llamadas reales.
+  if (!payload.candidateId) {
+    console.warn("[call-end] webhook sin candidate_id (llamada de prueba): se ignora sin error");
+    return NextResponse.json({ skipped: true, reason: "sin candidateId (llamada de prueba)" });
+  }
+
   const engine = getSimulatorEngine();
   const repository = getSimulatorRepository();
   const existing = await repository.findCandidateById(payload.candidateId);
   if (!existing) {
-    return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
+    console.warn("[call-end] webhook para candidata desconocida: se ignora sin error", {
+      candidateId: payload.candidateId
+    });
+    return NextResponse.json({ skipped: true, reason: "candidata desconocida" });
   }
 
   // Buzon de voz: si el status dice completada pero la candidata no dijo nada (solo hablo el bot), se trata
