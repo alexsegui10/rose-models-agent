@@ -12,8 +12,10 @@ export async function POST() {
     const count = await seedDemoCandidates(repository);
     return NextResponse.json({ seeded: count });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido al sembrar la demo.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[seed-demo] error al sembrar la demo", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return NextResponse.json({ error: "No se pudo cargar la demo." }, { status: 500 });
   }
 }
 
@@ -24,7 +26,9 @@ export async function DELETE() {
     const removed = await clearDemoCandidates(repository);
     return NextResponse.json({ removed });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido al quitar la demo.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[seed-demo] error al quitar la demo", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return NextResponse.json({ error: "No se pudo quitar la demo." }, { status: 500 });
   }
 }

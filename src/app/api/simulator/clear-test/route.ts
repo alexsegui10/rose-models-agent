@@ -12,7 +12,9 @@ export async function POST() {
     const removed = await clearNonRealCandidates(repository);
     return NextResponse.json({ removed });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Error desconocido al limpiar las pruebas.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[clear-test] error al limpiar las pruebas", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return NextResponse.json({ error: "No se pudieron limpiar las pruebas." }, { status: 500 });
   }
 }
