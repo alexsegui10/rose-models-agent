@@ -22,7 +22,13 @@ const SendMessageSchema = z
   });
 
 export async function POST(request: Request) {
-  const parsed = SendMessageSchema.safeParse(await request.json());
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+  const parsed = SendMessageSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

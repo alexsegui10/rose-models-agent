@@ -175,12 +175,14 @@ export async function POST(request: Request): Promise<NextResponse> {
         }
         console.log("[ig-webhook] mensaje EN ESPERA (debounce)", { delaySec: Math.round(qstash.debounceMs / 1000) });
       } catch (error) {
-        console.error("[ig-webhook] error al bufferizar (debounce)", {
-          message: error instanceof Error ? error.message : String(error)
+        // Cualquier fallo al bufferizar -> 503 para que Meta reintente (bufferInboundForDebounce es
+        // idempotente por mid, el reintento no duplica). Antes, un error NO transitorio caia al 200 de
+        // abajo y el mensaje de la candidata se perdia en silencio sin respuesta.
+        console.error("[ig-webhook] error al bufferizar (debounce) -> 503 para reintento", {
+          message: error instanceof Error ? error.message : String(error),
+          transient: isLikelyTransientError(error)
         });
-        if (isLikelyTransientError(error)) {
-          return new NextResponse("Transient processing error, please retry", { status: 503 });
-        }
+        return new NextResponse("Processing error, please retry", { status: 503 });
       }
     }
     return NextResponse.json({ ok: true, debounced: groupedInbound.length });

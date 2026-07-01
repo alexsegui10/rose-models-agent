@@ -253,6 +253,18 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [livePolling, activeTab, drawerCandidate, loading]);
 
+  // Mantiene la ficha abierta SINCRONIZADA con los datos frescos del tablero (estado, botones, motivo, %).
+  // Sin esto, el auto-refresco actualizaba los mensajes pero NO el estado/botones de la ficha: podias ver
+  // datos viejos y pulsar una accion que ya no aplica. Solo lectura; compara updatedAt para no re-renderizar
+  // en cada refresco si no cambio nada.
+  useEffect(() => {
+    if (!drawerCandidate) return;
+    const fresh = candidates.find((candidate) => candidate.id === drawerCandidate.id);
+    if (fresh && String(fresh.updatedAt) !== String(drawerCandidate.updatedAt)) {
+      setDrawerCandidate(fresh);
+    }
+  }, [candidates, drawerCandidate]);
+
   // Resuelve foto/@usuario/enlace de las candidatas reales (IGSID) una sola vez cada una. El ref evita
   // refetch y bucles de dependencia; el fallo es silencioso (la tarjeta cae al avatar de inicial).
   useEffect(() => {
