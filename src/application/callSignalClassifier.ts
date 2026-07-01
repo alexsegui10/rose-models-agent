@@ -98,8 +98,10 @@ const NOT_INTERESTED =
 
 // Quejas INEQUÍVOCAS del reparto que valen SIN contexto de dinero (no dependen de moneyContext ni de un
 // término "30/70"): "mitad y mitad", "50/50", "quiero más para mí", "en otra agencia me dan el 50".
+// Solo lo INEQUÍVOCO va sin contexto de dinero. "más para mí" se quitó de aquí (pillaba "más para mí GUSTO"
+// y regalaba un escalón); ahora "más para mí" solo cuenta como queja dentro de FOLLOWUP (exige moneyContext).
 const DIRECT_SHARE_COMPLAINT =
-  /mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|(?:quiero|dame|me gustaria|deberia|prefiero)\s+(?:algo |un poco )?mas para mi|\bmas para mi\b|(?:otra agencia|la otra|otras agencias|otras)[^,.!?]{0,30}(?:me dan|me dejan|dan el|el \d{2}|mejor|mas)|me (?:dan|dejan|ofrecen) el \d{2}/;
+  /mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|(?:otra agencia|la otra|otras agencias)[^,.!?]{0,30}(?:me dan|me dejan|dan el|el \d{2}|mejor|mas)|me (?:dan|dejan|ofrecen) el \d{2}/;
 
 // Pregunta de INGRESOS ("¿cuánto se gana?", "¿cuánto voy a ganar?", "¿se gana bien?"): respuesta HONESTA
 // (depende de ti, SIN cifras ni promesas), no se defiere. Se evalúa antes que QUESTION.
@@ -129,7 +131,7 @@ const ASKS_IDENTITY =
 // OJO: anclado a FIN de cadena para que sea SOLO un saludo. Si tras el saludo viene algo sustantivo
 // ("buenas, ¿y el porcentaje?", "hola y cuánto se cobra"), NO es saludo -> lo coge QUESTION y se responde.
 const GREETING =
-  /^\s*(hola+|buenas|buenos dias|buenas tardes|hey|holi|que tal|como estas|como andas|como va)(\s+(hola+|buenas|que tal|como estas|todo bien|guap[oa]|ti[oa]))?[\s,!¡.?]*$/;
+  /^\s*(?:(?:hola+|muy buenas|buenas tardes|buenas noches|buenos dias|buenas|holi|hey|que tal todo|que tal|como estas|como andas|como va|todo bien|estas|guap[oa]|ti[oa]|wey)[\s,!¡.?]*)+$/;
 
 // ¿Es una pregunta?
 const QUESTION =

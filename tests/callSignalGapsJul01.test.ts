@@ -57,9 +57,13 @@ describe("director + redacción: identidad", () => {
 
 describe("clasificador de llamada: más gaps de la batería (jul-2026)", () => {
   it("quejas del reparto inequívocas cuentan SIN contexto de dinero", () => {
-    expect(classifyCallSignal({ utterance: "quiero más para mí" })).toBe("complains-about-share");
     expect(classifyCallSignal({ utterance: "mitad y mitad" })).toBe("complains-about-share");
     expect(classifyCallSignal({ utterance: "en otra agencia me dan el 50" })).toBe("complains-about-share");
+  });
+
+  it("'quiero más para mí' cuenta como queja SOLO en contexto de dinero (evita falsos positivos)", () => {
+    expect(classifyCallSignal({ utterance: "quiero más para mí", moneyContext: true })).toBe("complains-about-share");
+    expect(classifyCallSignal({ utterance: "me gusta más para mí gusto el contenido suave" })).not.toBe("complains-about-share");
   });
 
   it("preguntas de ingresos (cualquier fraseo) -> asks-earnings (no defiere)", () => {
@@ -75,6 +79,8 @@ describe("clasificador de llamada: más gaps de la batería (jul-2026)", () => {
   it("saludo PURO es asentimiento, pero una PREGUNTA prefijada con saludo NO se traga (regresión)", () => {
     expect(classifyCallSignal({ utterance: "hola qué tal" })).toBe("follows-along");
     expect(classifyCallSignal({ utterance: "buenas" })).toBe("follows-along");
+    expect(classifyCallSignal({ utterance: "hola buenas tardes" })).toBe("follows-along");
+    expect(classifyCallSignal({ utterance: "hola qué tal todo" })).toBe("follows-along");
     expect(classifyCallSignal({ utterance: "buenas, y el porcentaje cuál es" })).not.toBe("follows-along");
     expect(classifyCallSignal({ utterance: "hola y cuánto se cobra" })).not.toBe("follows-along");
     expect(classifyCallSignal({ utterance: "como va el tema del dinero" })).not.toBe("follows-along");
