@@ -26,6 +26,7 @@ export type CallCandidateSignal =
   | "follows-along" // asiente / ok / sigue: avanzar agenda
   | "asks-covered" // pregunta algo que el conocimiento cubre
   | "asks-unknown" // pregunta fuera de cobertura -> deferir a Alex ("mi socio")
+  | "asks-identity" // pregunta quién es / de qué agencia -> el bot dice quién es (no defiere)
   | "complains-about-share" // se queja del reparto -> negociar a la baja (lo decide el código)
   | "distrust" // desconfianza leve ("¿cómo sé que es real?") -> tranquilizar y seguir
   | "wants-human" // pide hablar con una persona -> handoff
@@ -40,6 +41,7 @@ export type CallDirectiveType =
   | "GIVE_DISCLOSURE" // paso 0 legal (IA + grabación)
   | "COVER_STAGE" // cubrir proactivamente una etapa de la agenda
   | "ANSWER_FROM_KNOWLEDGE" // responder una pregunta cubierta
+  | "GIVE_IDENTITY" // decir quién es (soy Alex de Rose Models) ante "¿quién eres?"
   | "DEFER_TO_PARTNER" // "ese punto se lo comento a mi socio y te digo"
   | "DEFEND_SHARE" // defender el valor del 70 una vez antes de bajar
   | "CONCEDE_SHARE" // bajar un escalón del reparto (con la nueva oferta)
@@ -166,6 +168,8 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       return { directive: { type: "DEFER_TO_PARTNER" }, nextState: s };
     case "asks-covered":
       return { directive: { type: "ANSWER_FROM_KNOWLEDGE" }, nextState: s };
+    case "asks-identity":
+      return { directive: { type: "GIVE_IDENTITY" }, nextState: s };
     case "distrust":
       return { directive: { type: "REASSURE" }, nextState: s };
     case "wants-to-end":

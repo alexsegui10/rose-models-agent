@@ -67,11 +67,11 @@ const SHARE_TERMS =
   /(\b(30|35|40|60|65|70)\b|treinta|treinta y cinco|cuarenta|sesenta|sesenta y cinco|setenta|comision|reparto|porcentaje|quedais|quedan|os queda|se queda|os llevais|se llevan|se lleva|os quedais|quedaros|quedarse|para la agencia|para vosotros|para ustedes|me queda(is)?|vuestra parte|su parte)/;
 // Términos de queja completos (con el término de reparto, basta uno de cada).
 const COMPLAINT_TERMS =
-  /(mucho|demasiad[oa]|car[oa]|carisim|abusiv|es un robo|un robo|injust|no es justo|muy poco|poco para mi|bajad|bajar|bajais|bajarlo|podeis bajar|reducir|menos|no me sale|no me compensa|no me convence|no me cuadra|no me parece justo|es un palo|un disparate|barbarid|excesiv|exager|un monton|monton)/;
+  /(mucho|demasiad[oa]|car[oa]|carisim|abusiv|es un robo|un robo|injust|no es justo|muy poco|poco para mi|\bpoc[oa]\b|poquit|bajad|bajar|bajais|bajarlo|podeis bajar|reducir|menos|no me sale|no me compensa|no me convence|no me cuadra|no me parece justo|es un palo|un disparate|barbarid|excesiv|exager|un monton|monton)/;
 // Queja de SEGUIMIENTO en negociación: SOLO frases dirigidas al dinero (no términos sueltos como
 // "mucho"/"reducir" que podrían referirse al contenido/ritmo y regalarían un escalón sin queja real).
 const FOLLOWUP_SHARE_COMPLAINT =
-  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico)|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)/;
+  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:muy )?(?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico|poc[oa]|poquit[oa])|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)/;
 
 // Desconfianza LEVE (worried) -> tranquilizar y seguir. Incluye sospecha HIPOTÉTICA ("y si es una
 // estafa?"), que NO es agresión: por eso HOSTILE excluye las formas precedidas de "si".
@@ -107,7 +107,16 @@ const CONFORMITY =
 // Muletillas de "continúa" ("¿y?", "¿y qué más?", "sigue", "cuenta", "y luego"): NO son preguntas a
 // deferir, son "dale, avanza". Se evalúan ANTES que QUESTION para que no se interpreten como duda.
 const CONTINUATION =
-  /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuenta(me)?\b/;
+  /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuentame\b/;
+
+// Pregunta de IDENTIDAD ("¿quién eres?", "¿de dónde llamas?", "¿de qué agencia?", "¿cómo te llamas?"): NO se
+// defiere; el bot dice quién es. Se evalúa ANTES que QUESTION (que también capturaría "quién").
+const ASKS_IDENTITY =
+  /\bquien (eres|es|habla|sois|son|me llama|llama)\b|\bde donde (llamas|llamais|me llamas|es esto|sois|llaman)\b|\bde que (agencia|empresa|parte)\b|\bpara quien (trabajas|trabajais|es esto)\b|\bque agencia\b|\bcomo te llamas\b|\bde parte de quien\b/;
+
+// Saludo de apertura ("hola", "buenas", "hola qué tal"): la candidata devuelve el saludo -> asentir y
+// seguir; no tratarlo como ruido ni (por el "qué tal") como pregunta. Se evalúa ANTES que QUESTION.
+const GREETING = /^\s*(hola+|buenas|buenos dias|buenas tardes|hey|holi|que tal|como estas|como andas|como va)\b/;
 
 // ¿Es una pregunta?
 const QUESTION =
@@ -141,6 +150,8 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
   if (CONTINUATION.test(text)) return "follows-along";
+  if (ASKS_IDENTITY.test(text)) return "asks-identity";
+  if (GREETING.test(text)) return "follows-along";
   if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
 
