@@ -20,6 +20,19 @@ const MACHINE_PATHS = [
   "/api/whatsapp/webhook"
 ];
 
+/**
+ * Comparacion de contrasena en TIEMPO CONSTANTE (el middleware corre en Edge, sin node:crypto). Evita el
+ * canal lateral de timing del '==='. Longitudes distintas -> false, recorriendo igual la longitud maxima.
+ */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  let mismatch = a.length === b.length ? 0 : 1;
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    mismatch |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return mismatch === 0;
+}
+
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
   // Endpoints de MÁQUINA (webhook de Meta, ElevenLabs, cron): tienen su propia auth bearer y NUNCA pasan por
@@ -44,7 +57,7 @@ export function middleware(request: NextRequest): NextResponse {
     try {
       const decoded = atob(header.slice(6)); // "usuario:contraseña"
       const provided = decoded.slice(decoded.indexOf(":") + 1);
-      if (provided === password) {
+      if (timingSafeStringEqual(provided, password)) {
         return NextResponse.next();
       }
     } catch {

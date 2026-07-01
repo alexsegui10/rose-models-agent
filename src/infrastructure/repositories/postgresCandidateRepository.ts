@@ -77,7 +77,10 @@ export class PostgresCandidateRepository implements CandidateRepository {
     // escribir para que lo persistido y lo devuelto coincidan.
     const normalized = normalizeCandidate(candidate);
     const row = candidateToRow(normalized);
-    await this.db.insert(candidates).values(row).onConflictDoUpdate({ target: candidates.id, set: row });
+    // created_at solo se fija al INSERTAR; se excluye del UPDATE para no pisar la fecha de alta original
+    // si un caller futuro guardara sin arrastrar la fecha correcta.
+    const { createdAt: _createdAt, ...updateSet } = row;
+    await this.db.insert(candidates).values(row).onConflictDoUpdate({ target: candidates.id, set: updateSet });
     return normalized;
   }
 
