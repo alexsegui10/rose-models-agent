@@ -177,8 +177,12 @@ export async function POST(request: Request) {
         origin: new URL(request.url).origin,
         nowMs: Date.now()
       });
-    } catch {
-      /* best-effort */
+    } catch (error) {
+      // Best-effort: si QStash falla, la candidata queda reprogramada pero sin auto-marcador encolado
+      // (Alex puede llamar a mano). Se loguea para observabilidad (sin secretos).
+      console.warn("[call-end] no se pudo re-encolar el reintento", {
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 
