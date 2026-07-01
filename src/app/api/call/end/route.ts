@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { bearerMatches } from "@/server/bearerAuth";
+import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 
 /**
  * Webhook de FIN de llamada: lo invoca la plataforma de voz cuando la llamada termina. Ruta fina
@@ -165,6 +166,21 @@ export async function POST(request: Request) {
     negotiatedModelShare: payload.negotiatedModelShare,
     transcript: payload.transcript
   });
+
+  // Reintento automatico: si no contesto y quedan intentos, recordCallOutcome reprogramo la hora (+30 min);
+  // aqui re-encolamos el auto-marcador (QStash) para esa hora. Best-effort: si QStash falla NO rompe el
+  // webhook (Alex puede llamar a mano); la dedup por candidata+hora evita el doble-encolado.
+  if (result.shouldRetryCall) {
+    try {
+      await enqueueCallDispatchIfScheduled({
+        candidate: result.candidate,
+        origin: new URL(request.url).origin,
+        nowMs: Date.now()
+      });
+    } catch {
+      /* best-effort */
+    }
+  }
 
   return NextResponse.json({
     candidate: result.candidate,

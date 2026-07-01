@@ -22,7 +22,9 @@ export async function enqueueCallDispatchIfScheduled(args: {
 }): Promise<boolean> {
   const { candidate, origin, nowMs, fetchImpl } = args;
   const env = args.env ?? process.env;
-  if (candidate.currentState !== "CALL_SCHEDULED") return false;
+  // CALL_SCHEDULED = cita normal. CALL_NO_ANSWER = reintento diferido (recordCallOutcome reprograma la hora;
+  // el dispatch lo re-lanza y noteCallAttempt re-arma a CALL_SCHEDULED al disparar).
+  if (candidate.currentState !== "CALL_SCHEDULED" && candidate.currentState !== "CALL_NO_ANSWER") return false;
   const at = candidate.scheduledCallStartMs;
   if (typeof at !== "number" || at <= nowMs) return false;
 

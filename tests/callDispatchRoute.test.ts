@@ -78,6 +78,14 @@ describe("auto-marcador /api/call/dispatch", () => {
     expect(h.startSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("reintento diferido: CALL_NO_ANSWER + hora coincide + intentos<3 -> tambien dispara", async () => {
+    const c = await seed({ currentState: "CALL_NO_ANSWER", scheduledCallStartMs: AT, callAttempts: 1 });
+    const res = await POST(req({ candidateId: c.id, scheduledForMs: AT }, `Bearer ${SECRET}`));
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+    expect(h.startSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("ya NO esta en CALL_SCHEDULED (atendida/cerrada) -> NO llama", async () => {
     const c = await seed({ currentState: "CALL_COMPLETED", scheduledCallStartMs: AT });
     const res = await POST(req({ candidateId: c.id, scheduledForMs: AT }, `Bearer ${SECRET}`));

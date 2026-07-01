@@ -89,6 +89,8 @@ export interface ConversationEngineDependencies {
 
 // Máximo de intentos de llamada antes de pasar a seguimiento humano (decisión de Alex: 3 intentos).
 const MAX_CALL_ATTEMPTS = 3;
+// Reintento automatico tras no contestar: se reprograma la llamada 30 min despues (decision de Alex).
+const CALL_RETRY_DELAY_MS = 30 * 60 * 1000;
 
 export class ConversationEngine {
   private readonly exampleRetriever: ExampleRetriever;
@@ -629,7 +631,15 @@ export class ConversationEngine {
     durationSec?: number;
     negotiatedModelShare?: number;
     transcript?: Array<{ role: string; content: string }>;
-  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; shouldRetryCall?: boolean; attemptsUsed?: number }> {
+    /** Para testear el reintento diferido; por defecto Date.now(). */
+    nowMs?: number;
+  }): Promise<{
+    candidate: Candidate;
+    transitions: StateTransition[];
+    shouldRetryCall?: boolean;
+    attemptsUsed?: number;
+    retryScheduledForMs?: number;
+  }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
       throw new Error("Candidate not found.");
@@ -662,10 +672,17 @@ export class ConversationEngine {
       endedAt: new Date().toISOString()
     };
 
-    // Reintento DIFERIDO: solo en NO_ANSWER se LEE el contador (no se incrementa). Hasta 3 intentos; al
-    // agotarlos, nota de seguimiento humano para que Alex lo retome a mano.
+    // Reintento DIFERIDO: solo en NO_ANSWER se LEE el contador (no se incrementa; eso es de noteCallAttempt).
+    // Si quedan intentos (<3), se REPROGRAMA la hora +30 min re-armando scheduledCallStartMs; el estado sigue
+    // CALL_NO_ANSWER y el webhook re-encola el auto-marcador (dispatch), que al disparar re-arma a
+    // CALL_SCHEDULED via noteCallAttempt. Al agotar los 3, nota de seguimiento humano para que Alex lo retome.
     const attemptsUsed = input.outcome === "NO_ANSWER" ? existing.callAttempts : undefined;
     const shouldRetryCall = input.outcome === "NO_ANSWER" ? existing.callAttempts < MAX_CALL_ATTEMPTS : undefined;
+    const nowMs = input.nowMs ?? Date.now();
+    const retryScheduledForMs = shouldRetryCall ? nowMs + CALL_RETRY_DELAY_MS : undefined;
+    const retryNote = retryScheduledForMs
+      ? [`CALL_RETRY_SCHEDULED: reintento ${existing.callAttempts + 1} de ${MAX_CALL_ATTEMPTS} programado (no contesto).`]
+      : [];
     const followUpNote =
       input.outcome === "NO_ANSWER" && !shouldRetryCall
         ? [`CALL_FOLLOWUP_REQUIRED: no contesto tras ${existing.callAttempts} intentos; lo retoma Alex a mano.`]
@@ -674,14 +691,16 @@ export class ConversationEngine {
     const candidate: Candidate = {
       ...existing,
       currentState: toState,
-      notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`, ...followUpNote],
+      // Reintento: reprograma la hora +30 min (si quedan intentos); si no, respeta la que hubiera.
+      scheduledCallStartMs: retryScheduledForMs ?? existing.scheduledCallStartMs,
+      notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`, ...retryNote, ...followUpNote],
       lastCall,
       updatedAt: new Date()
     };
 
     await this.dependencies.repository.saveCandidate(candidate);
     await this.dependencies.repository.addTransition(transition);
-    return { candidate, transitions: [transition], shouldRetryCall, attemptsUsed };
+    return { candidate, transitions: [transition], shouldRetryCall, attemptsUsed, retryScheduledForMs };
   }
 
   /**

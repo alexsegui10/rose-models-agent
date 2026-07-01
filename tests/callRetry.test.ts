@@ -73,6 +73,27 @@ describe("recordCallOutcome NO_ANSWER: reintento diferido", () => {
     expect(result.attemptsUsed).toBe(1);
   });
 
+  it("reintento: reprograma scheduledCallStartMs +30min y lo devuelve (re-arma el auto-marcador)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED", { callAttempts: 1 });
+    const nowMs = 1_900_000_000_000;
+    const result = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "NO_ANSWER", nowMs });
+    expect(result.shouldRetryCall).toBe(true);
+    expect(result.retryScheduledForMs).toBe(nowMs + 30 * 60 * 1000);
+    expect(result.candidate.scheduledCallStartMs).toBe(nowMs + 30 * 60 * 1000);
+    expect(result.candidate.currentState).toBe("CALL_NO_ANSWER");
+    expect(result.candidate.notes.some((note) => note.toLowerCase().includes("reintento"))).toBe(true);
+  });
+
+  it("sin reintento (3 intentos): no reprograma la hora ni devuelve retryScheduledForMs", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED", { callAttempts: 3, scheduledCallStartMs: 111 });
+    const result = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "NO_ANSWER", nowMs: 1_900_000_000_000 });
+    expect(result.shouldRetryCall).toBe(false);
+    expect(result.retryScheduledForMs).toBeUndefined();
+    expect(result.candidate.scheduledCallStartMs).toBe(111);
+  });
+
   it("con 3 intentos usados -> shouldRetryCall false y deja nota de seguimiento humano", async () => {
     const { engine, repository } = createEngine();
     const seeded = await seed(repository, "CALL_SCHEDULED", { callAttempts: 3 });

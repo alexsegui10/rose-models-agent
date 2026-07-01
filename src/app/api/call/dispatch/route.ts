@@ -53,7 +53,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   // GUARDAS: solo se llama si la cita sigue firme para ESTA hora. Cualquier otra cosa -> no-op (200, sin reintento).
-  if (candidate.currentState !== "CALL_SCHEDULED") {
+  // Reintento diferido: el auto-marcador tambien re-lanza desde CALL_NO_ANSWER (recordCallOutcome reprograma
+  // la hora); noteCallAttempt re-arma a CALL_SCHEDULED al disparar. Cualquier otro estado -> no-op.
+  if (candidate.currentState !== "CALL_SCHEDULED" && candidate.currentState !== "CALL_NO_ANSWER") {
     return NextResponse.json({ ok: false, skipped: `state-${candidate.currentState}` });
   }
   if (candidate.scheduledCallStartMs !== scheduledForMs) {
