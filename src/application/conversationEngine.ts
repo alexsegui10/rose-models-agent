@@ -36,6 +36,7 @@ import type {
 import { promptRegistry } from "./promptRegistry";
 import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
 import { conflictsWithBooked, parseProposedCallTime, argentinaLabelFromMs } from "./callScheduling";
+import type { CallTranscriptFacts } from "./callTranscriptAnalysis";
 import { buildResponsePlan, PHONE_QUESTION, proposesConcreteTime } from "./responsePlanner";
 import { safeFallbackResponse, validateAgentResponse } from "./responseValidator";
 import { buildStyleContext, immediateObjectiveFor, type BuiltStyleContext } from "./styleContextBuilder";
@@ -650,6 +651,9 @@ export class ConversationEngine {
     transcript?: Array<{ role: string; content: string }>;
     /** ID de conversación de ElevenLabs (del webhook de fin) para poder escuchar la grabación en el CRM. */
     conversationId?: string;
+    /** Hechos deterministas reconstruidos del transcript (menor/handoff/% — los calcula la ruta con
+     *  analyzeCallTranscript). El CÓDIGO decide aquí el estado con ellos (invariantes 1/2/4). */
+    transcriptFacts?: CallTranscriptFacts;
     /** Para testear el reintento diferido; por defecto Date.now(). */
     nowMs?: number;
   }): Promise<{
@@ -666,46 +670,91 @@ export class ConversationEngine {
     if (existing.currentState !== "CALL_SCHEDULED" && existing.currentState !== "CALL_IN_PROGRESS") {
       return { candidate: existing, transitions: [] };
     }
-    const toState = input.outcome === "COMPLETED" ? "CALL_COMPLETED" : "CALL_NO_ANSWER";
+    // IDEMPOTENCIA por conversación (jul-2026, hallazgo voz-05): si ya registramos el resultado de ESTA
+    // misma conversación (webhook duplicado/tardío de un intento anterior durante un reintento), se ignora.
+    // Sin esto, un NO_ANSWER rezagado podía pisar el intento en curso y re-armar reintentos fantasma.
+    if (input.conversationId && existing.lastCall && existing.lastCallConversationId === input.conversationId) {
+      return { candidate: existing, transitions: [] };
+    }
+
+    const facts = input.transcriptFacts;
+    // SEGURIDAD (invariante 2 en el cierre): si declaró ser MENOR durante la llamada, la candidata queda
+    // CERRADA — jamás "completada → enviar contrato". Antes que cualquier otro resultado.
+    // HANDOFF (invariante 4): si la llamada terminó transferida (pidió persona / agresión / rechazó el
+    // suelo del 60 / audio roto), va a REVISIÓN HUMANA: Alex decide, no se le manda contrato en automático.
+    const toState = facts?.underage
+      ? "CLOSED"
+      : input.outcome === "COMPLETED" && facts?.handedOff
+        ? "HUMAN_INTERVENTION_REQUIRED"
+        : input.outcome === "COMPLETED"
+          ? "CALL_COMPLETED"
+          : "CALL_NO_ANSWER";
     if (!canTransition(existing.currentState, toState)) {
       return { candidate: existing, transitions: [] };
     }
 
     const summary = input.summary?.trim();
+    const handoffReasonText: Record<string, string> = {
+      "asked-for-human": "pidió hablar con una persona",
+      "suspicion-or-aggression": "sospecha/agresión durante la llamada",
+      "share-rejected-at-floor": "rechazó el reparto en el suelo autorizado (60)",
+      "audio-unintelligible": "no se entendía el audio"
+    };
     const transition = createTransition({
       candidate: existing,
       toState,
-      trigger: input.outcome === "COMPLETED" ? "CALL_COMPLETED_WEBHOOK" : "CALL_NO_ANSWER_WEBHOOK",
+      trigger:
+        toState === "CLOSED"
+          ? "CALL_UNDERAGE_WEBHOOK"
+          : toState === "HUMAN_INTERVENTION_REQUIRED"
+            ? "CALL_HANDOFF_WEBHOOK"
+            : input.outcome === "COMPLETED"
+              ? "CALL_COMPLETED_WEBHOOK"
+              : "CALL_NO_ANSWER_WEBHOOK",
       reason:
-        input.outcome === "COMPLETED"
-          ? "La llamada termino; Alex retoma el siguiente paso (enviar el contrato)."
-          : "La candidata no contesto la llamada; pendiente de reagendar o seguimiento de Alex."
+        toState === "CLOSED"
+          ? "SEGURIDAD: declaró ser menor de edad DURANTE la llamada; cerrada (invariante 2)."
+          : toState === "HUMAN_INTERVENTION_REQUIRED"
+            ? `La llamada terminó en handoff (${handoffReasonText[facts?.handoffReason ?? ""] ?? "transferida a Alex"}): lo decide Alex.`
+            : input.outcome === "COMPLETED"
+              ? "La llamada termino; Alex retoma el siguiente paso (enviar el contrato)."
+              : "La candidata no contesto la llamada; pendiente de reagendar o seguimiento de Alex."
     });
     // Registro descriptivo de la llamada (no decide negocio): lo muestra la ficha y la pestana Llamadas.
+    // El % negociado sale del webhook si vino; si no, del replay determinista del transcript.
     const lastCall: CallRecord = {
       result: input.outcome,
       durationSec: input.durationSec,
-      negotiatedModelShare: input.negotiatedModelShare,
+      negotiatedModelShare: input.negotiatedModelShare ?? facts?.negotiatedModelShare,
       summary: summary ?? "",
       transcript: input.transcript ?? [],
       endedAt: new Date().toISOString()
     };
 
-    // Reintento DIFERIDO: solo en NO_ANSWER se LEE el contador (no se incrementa; eso es de noteCallAttempt).
+    // Reintento DIFERIDO: solo si el estado RESULTANTE es CALL_NO_ANSWER (jul-2026: un NO_ANSWER de una
+    // MENOR cierra y JAMÁS se re-llama). Se LEE el contador (no se incrementa; eso es de noteCallAttempt).
     // Si quedan intentos (<3), se REPROGRAMA la hora +30 min re-armando scheduledCallStartMs; el estado sigue
     // CALL_NO_ANSWER y el webhook re-encola el auto-marcador (dispatch), que al disparar re-arma a
     // CALL_SCHEDULED via noteCallAttempt. Al agotar los 3, nota de seguimiento humano para que Alex lo retome.
-    const attemptsUsed = input.outcome === "NO_ANSWER" ? existing.callAttempts : undefined;
-    const shouldRetryCall = input.outcome === "NO_ANSWER" ? existing.callAttempts < MAX_CALL_ATTEMPTS : undefined;
+    const attemptsUsed = toState === "CALL_NO_ANSWER" ? existing.callAttempts : undefined;
+    const shouldRetryCall = toState === "CALL_NO_ANSWER" ? existing.callAttempts < MAX_CALL_ATTEMPTS : undefined;
     const nowMs = input.nowMs ?? Date.now();
     const retryScheduledForMs = shouldRetryCall ? nowMs + CALL_RETRY_DELAY_MS : undefined;
     const retryNote = retryScheduledForMs
       ? [`CALL_RETRY_SCHEDULED: reintento ${existing.callAttempts + 1} de ${MAX_CALL_ATTEMPTS} programado (no contesto).`]
       : [];
     const followUpNote =
-      input.outcome === "NO_ANSWER" && !shouldRetryCall
+      toState === "CALL_NO_ANSWER" && !shouldRetryCall
         ? [`CALL_FOLLOWUP_REQUIRED: no contesto tras ${existing.callAttempts} intentos; lo retoma Alex a mano.`]
         : [];
+    const safetyNote =
+      toState === "CLOSED"
+        ? ["SEGURIDAD: declaró ser MENOR durante la llamada → cerrada (invariante 2). No contactar."]
+        : toState === "HUMAN_INTERVENTION_REQUIRED"
+          ? [
+              `CALL_HANDOFF: la llamada terminó transferida (${handoffReasonText[facts?.handoffReason ?? ""] ?? "a Alex"}). Decide tú el siguiente paso.`
+            ]
+          : [];
 
     const candidate: Candidate = {
       ...existing,
@@ -715,7 +764,13 @@ export class ConversationEngine {
       // Grabación en el CRM: el conversation_id fiable llega en el webhook de FIN (en la salida SIP puede ser
       // null al iniciar). Se guarda aquí para que la ficha pueda reproducir el audio de la llamada.
       lastCallConversationId: input.conversationId ?? existing.lastCallConversationId,
-      notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`, ...retryNote, ...followUpNote],
+      notes: [
+        ...existing.notes,
+        `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`,
+        ...safetyNote,
+        ...retryNote,
+        ...followUpNote
+      ],
       lastCall,
       updatedAt: new Date()
     };

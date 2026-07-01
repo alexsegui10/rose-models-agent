@@ -1,9 +1,11 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { analyzeCallTranscript } from "@/application/callTranscriptAnalysis";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { bearerMatches } from "@/server/bearerAuth";
 import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
+import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 
 /**
  * Webhook de FIN de llamada: lo invoca la plataforma de voz cuando la llamada termina. Ruta fina
@@ -89,8 +91,12 @@ function safeHexEqual(a: string, b: string): boolean {
   return crypto.timingSafeEqual(ba, bb);
 }
 
+// Tolerancia de FRESCURA del timestamp firmado (anti-replay, jul-2026 voz-08): 30 min cubre reintentos
+// legítimos del webhook sin dejar la ventana de replay ilimitada que había antes.
+const SIGNATURE_MAX_AGE_SECONDS = 30 * 60;
+
 /** Verifica la firma HMAC del webhook de ElevenLabs ("t=<ts>,v0=<hmac>"). Tolera el hex pelado por si acaso. */
-function elevenLabsSignatureValid(header: string, rawBody: string, secret: string): boolean {
+function elevenLabsSignatureValid(header: string, rawBody: string, secret: string, nowMs = Date.now()): boolean {
   const parts = Object.fromEntries(
     header
       .split(",")
@@ -101,9 +107,14 @@ function elevenLabsSignatureValid(header: string, rawBody: string, secret: strin
   const ts = parts.t;
   const sig = parts.v0 ?? parts.v1;
   if (ts && sig) {
+    // Frescura: un timestamp firmado hace más de 30 min (o del futuro lejano) se rechaza (anti-replay).
+    const tsSeconds = Number(ts);
+    if (!Number.isFinite(tsSeconds) || Math.abs(nowMs / 1000 - tsSeconds) > SIGNATURE_MAX_AGE_SECONDS) {
+      return false;
+    }
     return safeHexEqual(hmacHex(secret, `${ts}.${rawBody}`), sig);
   }
-  // Header sin formato t=/v0=: probar el hex del body pelado.
+  // Header sin formato t=/v0=: probar el hex del body pelado (proxy propio; sin ts no hay chequeo de frescura).
   return safeHexEqual(hmacHex(secret, rawBody), header.trim());
 }
 
@@ -194,6 +205,10 @@ export async function POST(request: Request) {
   if (outcome === "COMPLETED" && looksLikeVoicemail(payload.transcript)) {
     outcome = "NO_ANSWER";
   }
+  // Hechos DETERMINISTAS del transcript (jul-2026, hallazgos voz-01/voz-03): menor declarada EN la llamada
+  // -> CERRADA (invariante 2); handoff (pide persona/agresión/rechazó el suelo) -> revisión humana; % al que
+  // quedó la negociación -> ficha. Los decide el CÓDIGO con el mismo replay del cerebro en vivo.
+  const transcriptFacts = analyzeCallTranscript(payload.transcript);
   const result = await engine.recordCallOutcome({
     candidateId: payload.candidateId,
     outcome,
@@ -201,8 +216,31 @@ export async function POST(request: Request) {
     durationSec: payload.durationSec,
     negotiatedModelShare: payload.negotiatedModelShare,
     conversationId: payload.conversationId,
-    transcript: payload.transcript
+    transcript: payload.transcript,
+    transcriptFacts
   });
+
+  // Aviso a Alex (best-effort, nunca rompe el webhook): la llamada terminó necesitando SU decisión. Solo si
+  // la transición OCURRIÓ en este webhook (transitions no vacío): un no-op sobre una ya cerrada no avisa.
+  if (
+    result.transitions.length > 0 &&
+    (result.candidate.currentState === "HUMAN_INTERVENTION_REQUIRED" || result.candidate.currentState === "CLOSED")
+  ) {
+    const reason =
+      result.candidate.currentState === "CLOSED"
+        ? "SEGURIDAD: declaró ser MENOR durante la llamada; quedó cerrada."
+        : "La llamada terminó transferida a ti (pidió persona / agresión / rechazó el suelo del reparto): revisa la ficha.";
+    try {
+      await getOperatorNotifier().notify({
+        kind: "escalation",
+        conversationId: result.candidate.instagramUsername,
+        state: result.candidate.currentState,
+        reason
+      });
+    } catch {
+      /* best-effort */
+    }
+  }
 
   // Reintento automatico: si no contesto y quedan intentos, recordCallOutcome reprogramo la hora (+30 min);
   // aqui re-encolamos el auto-marcador (QStash) para esa hora. Best-effort: si QStash falla NO rompe el

@@ -7,9 +7,10 @@ import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 const SECRET = "test-webhook-secret";
 
 // Construye una request como el post-call webhook NATIVO de ElevenLabs: firma HMAC (t=,v0=) sobre "ts.body".
-function elevenLabsReq(body: unknown, secret: string, signature?: string) {
+// El ts es FRESCO (ahora hay chequeo anti-replay de 30 min); tsOverride permite probar timestamps caducos.
+function elevenLabsReq(body: unknown, secret: string, signature?: string, tsOverride?: string) {
   const raw = JSON.stringify(body);
-  const ts = "1700000000";
+  const ts = tsOverride ?? String(Math.floor(Date.now() / 1000));
   const sig = signature ?? `t=${ts},v0=${crypto.createHmac("sha256", secret).update(`${ts}.${raw}`, "utf8").digest("hex")}`;
   return new Request("http://localhost/api/call/end", {
     method: "POST",
@@ -176,5 +177,80 @@ describe("webhook de fin: payload NATIVO de ElevenLabs (firma HMAC + body anidad
     };
     const res = await POST(elevenLabsReq(payload, SECRET, "t=1700000000,v0=deadbeefdeadbeef"));
     expect(res.status).toBe(401);
+  });
+
+  it("anti-replay (voz-08): firma VALIDA pero con timestamp caducado (>30 min) -> 401", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      data: { status: "done", conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } } }
+    };
+    const staleTs = String(Math.floor(Date.now() / 1000) - 3600);
+    const res = await POST(elevenLabsReq(payload, SECRET, undefined, staleTs));
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("webhook de fin: hechos del transcript deciden el estado (voz-01/voz-03/voz-05)", () => {
+  it("INVARIANTE 2: menor declarada DURANTE la llamada -> CLOSED (no 'completada -> contrato') y sin reintento", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      data: {
+        status: "done",
+        transcript: [
+          { role: "agent", message: "Hola, soy Alex, de Rose Models." },
+          { role: "user", message: "es que tengo 17 años" },
+          { role: "agent", message: "solo trabajamos con mayores de edad..." }
+        ],
+        conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } }
+      }
+    };
+    const res = await POST(elevenLabsReq(payload, SECRET));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.candidate.currentState).toBe("CLOSED");
+    expect(JSON.stringify(json.candidate.notes)).toContain("MENOR");
+  });
+
+  it("handoff en la llamada (pide persona) -> HUMAN_INTERVENTION_REQUIRED, no contrato", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      data: {
+        status: "done",
+        transcript: [
+          { role: "agent", message: "Hola, soy Alex." },
+          { role: "user", message: "prefiero hablar con una persona de verdad" },
+          { role: "agent", message: "te paso con mi socio..." }
+        ],
+        conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } }
+      }
+    };
+    const res = await POST(elevenLabsReq(payload, SECRET));
+    const json = await res.json();
+    expect(json.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+  });
+
+  it("idempotencia por conversación (voz-05): el mismo conversation_id no se registra dos veces", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      data: {
+        status: "done",
+        conversation_id: "conv_dup_1",
+        transcript: [
+          { role: "agent", message: "Hola." },
+          { role: "user", message: "hola, sí, cuéntame" }
+        ],
+        conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } }
+      }
+    };
+    const first = await POST(elevenLabsReq(payload, SECRET));
+    expect((await first.json()).candidate.currentState).toBe("CALL_COMPLETED");
+    // Duplicado exacto (re-entrega): no debe aplicar transiciones nuevas.
+    const second = await POST(elevenLabsReq(payload, SECRET));
+    const json = await second.json();
+    expect(json.appliedTransitions).toHaveLength(0);
   });
 });
