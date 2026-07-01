@@ -74,6 +74,45 @@ describe("webhook de fin de llamada", () => {
     const res = await POST(req({ candidateId: "no-existe", status: "completed" }, `Bearer ${SECRET}`));
     expect(res.status).toBe(404);
   });
+
+  it("buzon de voz: status completada pero la candidata no dijo nada -> NO_ANSWER (reintento, no contrato)", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      data: {
+        status: "done",
+        transcript: [
+          { role: "agent", message: "Hola, soy Alex de Rose Models. Te aviso que grabo la llamada." },
+          { role: "agent", message: "Pues mira, como veias por Instagram, es facil..." }
+        ],
+        conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } }
+      }
+    };
+    const res = await POST(elevenLabsReq(payload, SECRET));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.outcome).toBe("NO_ANSWER");
+    expect(json.candidate.currentState).toBe("CALL_NO_ANSWER");
+  });
+
+  it("llamada real: status completada CON turnos de la candidata -> COMPLETED (no la trata como buzon)", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      data: {
+        status: "done",
+        transcript: [
+          { role: "agent", message: "Hola, soy Alex de Rose Models." },
+          { role: "user", message: "hola, si, cuentame" }
+        ],
+        conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } }
+      }
+    };
+    const res = await POST(elevenLabsReq(payload, SECRET));
+    const json = await res.json();
+    expect(json.outcome).toBe("COMPLETED");
+    expect(json.candidate.currentState).toBe("CALL_COMPLETED");
+  });
 });
 
 describe("webhook de fin: payload NATIVO de ElevenLabs (firma HMAC + body anidado)", () => {

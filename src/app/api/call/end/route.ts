@@ -58,6 +58,21 @@ function outcomeFromStatus(status: string): "COMPLETED" | "NO_ANSWER" {
   return NO_ANSWER_STATUSES.has(status.trim().toLowerCase()) ? "NO_ANSWER" : "COMPLETED";
 }
 
+/**
+ * Red de seguridad anti-buzon: si HAY transcripcion (el bot hablo) pero la candidata no dijo NADA, es casi
+ * seguro un contestador/buzon. Complementa la deteccion de buzon NATIVA de ElevenLabs (system tool
+ * "voicemail detection", que Alex activa en el agente). Sin transcripcion NO asumimos nada (se confia en el
+ * status), para no marcar como buzon una llamada real cuyo transcript no llego.
+ */
+function looksLikeVoicemail(transcript?: Array<{ role: string; content: string }>): boolean {
+  if (!transcript || transcript.length === 0) return false;
+  const candidateSpoke = transcript.some((turn) => {
+    const role = turn.role.trim().toLowerCase();
+    return (role === "user" || role === "candidate" || role === "human") && turn.content.trim().length > 0;
+  });
+  return !candidateSpoke;
+}
+
 function hmacHex(secret: string, payload: string): string {
   return crypto.createHmac("sha256", secret).update(payload, "utf8").digest("hex");
 }
@@ -157,7 +172,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Candidate not found." }, { status: 404 });
   }
 
-  const outcome = outcomeFromStatus(payload.status);
+  // Buzon de voz: si el status dice completada pero la candidata no dijo nada (solo hablo el bot), se trata
+  // como NO_ANSWER -> reintento, y NO se marca como hecha ni se le manda el contrato a un contestador.
+  let outcome = outcomeFromStatus(payload.status);
+  if (outcome === "COMPLETED" && looksLikeVoicemail(payload.transcript)) {
+    outcome = "NO_ANSWER";
+  }
   const result = await engine.recordCallOutcome({
     candidateId: payload.candidateId,
     outcome,
