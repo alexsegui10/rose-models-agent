@@ -631,6 +631,8 @@ export class ConversationEngine {
     durationSec?: number;
     negotiatedModelShare?: number;
     transcript?: Array<{ role: string; content: string }>;
+    /** ID de conversación de ElevenLabs (del webhook de fin) para poder escuchar la grabación en el CRM. */
+    conversationId?: string;
     /** Para testear el reintento diferido; por defecto Date.now(). */
     nowMs?: number;
   }): Promise<{
@@ -693,6 +695,9 @@ export class ConversationEngine {
       currentState: toState,
       // Reintento: reprograma la hora +30 min (si quedan intentos); si no, respeta la que hubiera.
       scheduledCallStartMs: retryScheduledForMs ?? existing.scheduledCallStartMs,
+      // Grabación en el CRM: el conversation_id fiable llega en el webhook de FIN (en la salida SIP puede ser
+      // null al iniciar). Se guarda aquí para que la ficha pueda reproducir el audio de la llamada.
+      lastCallConversationId: input.conversationId ?? existing.lastCallConversationId,
       notes: [...existing.notes, `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`, ...retryNote, ...followUpNote],
       lastCall,
       updatedAt: new Date()

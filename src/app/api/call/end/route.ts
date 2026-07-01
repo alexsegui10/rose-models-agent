@@ -31,6 +31,7 @@ const EndCallSchema = z
     summary: z.string().optional(),
     durationSec: z.number().int().nonnegative().optional(),
     negotiatedModelShare: z.number().int().min(0).max(100).optional(),
+    conversationId: z.string().optional(),
     transcript: z.array(z.object({ role: z.string(), content: z.string() })).optional()
   })
   .passthrough();
@@ -132,6 +133,8 @@ function normalizeEndPayload(raw: unknown): unknown {
     status: d.status ?? obj.status ?? "completed",
     summary: analysis.transcript_summary ?? d.summary ?? obj.summary,
     durationSec: metadata.call_duration_secs ?? d.call_duration_secs ?? obj.durationSec,
+    // conversation_id para poder escuchar la grabación en el CRM (llega fiable en el webhook de fin).
+    conversationId: d.conversation_id ?? obj.conversationId ?? metadata.conversation_id ?? cic.conversation_id,
     transcript: transcript ?? obj.transcript
   };
   return normalized;
@@ -184,6 +187,7 @@ export async function POST(request: Request) {
     summary: payload.summary,
     durationSec: payload.durationSec,
     negotiatedModelShare: payload.negotiatedModelShare,
+    conversationId: payload.conversationId,
     transcript: payload.transcript
   });
 

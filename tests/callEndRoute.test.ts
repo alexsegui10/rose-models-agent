@@ -139,6 +139,25 @@ describe("webhook de fin: payload NATIVO de ElevenLabs (firma HMAC + body anidad
     expect(json.candidate.currentState).toBe("CALL_COMPLETED");
   });
 
+  it("guarda el conversation_id del webhook -> la ficha puede reproducir la grabación en el CRM", async () => {
+    process.env.CALL_WEBHOOK_SECRET = SECRET;
+    const seeded = await seedScheduled();
+    const payload = {
+      data: {
+        status: "done",
+        conversation_id: "conv_abc123",
+        transcript: [
+          { role: "agent", message: "Hola, soy Alex." },
+          { role: "user", message: "vale" }
+        ],
+        conversation_initiation_client_data: { dynamic_variables: { candidate_id: seeded.id } }
+      }
+    };
+    const res = await POST(elevenLabsReq(payload, SECRET));
+    expect(res.status).toBe(200);
+    expect((await res.json()).candidate.lastCallConversationId).toBe("conv_abc123");
+  });
+
   it("firma HMAC invalida -> 401 (no registra nada)", async () => {
     process.env.CALL_WEBHOOK_SECRET = SECRET;
     const payload = {
