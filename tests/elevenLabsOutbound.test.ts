@@ -100,19 +100,22 @@ describe("startOutboundSipCall", () => {
 });
 
 describe("normalizeToE164 (el trunk SIP exige E.164 con '+')", () => {
-  it("conserva el '+' y el código de país que ya trae (no fuerza Argentina)", () => {
+  it("conserva el '+' y el código de país que ya trae; NO mete el 9 a España", () => {
     expect(normalizeToE164("+34 600 11 22 33")).toBe("+34600112233");
   });
-  it("móvil argentino con '+' se limpia conservando el 9", () => {
+  it("móvil argentino con '+' y 9 se conserva igual (no duplica el 9)", () => {
     expect(normalizeToE164("+54 9 11 1234 5678")).toBe("+5491112345678");
   });
-  it("número local pelado (sin código país) asume Argentina (+54)", () => {
-    expect(normalizeToE164("11 2345-6789")).toBe("+541123456789");
+  it("móvil argentino SIN el 9 -> se le inserta el 9 (asumimos móvil)", () => {
+    expect(normalizeToE164("+54 11 5352 8311")).toBe("+5491153528311");
   });
-  it("prefijo internacional 00 equivale a '+'", () => {
-    expect(normalizeToE164("0054 11 2345 6789")).toBe("+541123456789");
+  it("número local pelado (sin código país) -> Argentina móvil (+549)", () => {
+    expect(normalizeToE164("11 2345-6789")).toBe("+5491123456789");
   });
-  it("número que ya empieza por 54 sin '+' no duplica el código de país", () => {
+  it("prefijo internacional 00 -> móvil argentino (+549)", () => {
+    expect(normalizeToE164("0054 11 2345 6789")).toBe("+5491123456789");
+  });
+  it("número que ya empieza por 54 con 9 no duplica nada", () => {
     expect(normalizeToE164("54 9 11 1234 5678")).toBe("+5491112345678");
   });
 });

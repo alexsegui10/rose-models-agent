@@ -54,9 +54,10 @@ function buildDynamicVariables(candidate: Candidate): Record<string, string | nu
 
 /**
  * Normaliza el número a E.164 CON '+' para el trunk SIP (que lo exige; pelar el '+' haría que el trunk
- * rechace la llamada). Reglas: si trae '+' o prefijo internacional (00) se respeta el país tal cual; si
- * viene un número local "pelado" sin código de país, se asume Argentina (+54), porque las candidatas son
- * de allí. El '9' de los móviles argentinos (+549...) y los formatos raros se confirman con la 1ª llamada real.
+ * rechace la llamada). Reglas: si trae '+' o prefijo internacional (00) se respeta el código de país tal
+ * cual; si viene un número local "pelado" sin código, se asume Argentina (+54), porque las candidatas son
+ * de allí. Para MÓVILES argentinos se inserta el '9' tras el 54 (+549...), asumiendo móvil (decisión de
+ * Alex: es lo normal en captación). Solo afecta a +54; otros países (p.ej. +34 España) no se tocan.
  */
 export function normalizeToE164(phone: string): string {
   const trimmed = phone.trim();
@@ -67,6 +68,11 @@ export function normalizeToE164(phone: string): string {
     digits = digits.slice(2); // 00 = prefijo internacional, equivale a '+'
   } else if (!hadPlus && !digits.startsWith("54")) {
     digits = `54${digits}`; // número local argentino sin código de país
+  }
+  // Argentina: los móviles exigen el '9' tras el 54 (+549...). Se inserta si falta (asumimos móvil; un fijo
+  // quedaría mal, asumido a cambio de que los móviles —el caso normal— conecten). No toca otros países.
+  if (digits.startsWith("54") && !digits.startsWith("549")) {
+    digits = `549${digits.slice(2)}`;
   }
   return `+${digits}`;
 }
