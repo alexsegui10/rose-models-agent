@@ -318,7 +318,7 @@ export class ConversationEngine {
     }
     resumed = { ...resumed, manualControlActive: false, automationPaused: false, updatedAt: new Date() };
     const proposedMessage =
-      "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada por WhatsApp para explicartelo todo. Que dia y a que hora te viene mejor?";
+      "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada rapida para explicartelo todo. Que dia y a que hora te viene mejor?";
     return { candidate: resumed, transitions, proposedMessage };
   }
 
@@ -924,8 +924,8 @@ export class ConversationEngine {
       trigger: "HUMAN_CONFIRM_CALL",
       reason: slot ? `Alex confirmo la llamada: ${slot}.` : "Alex confirmo la llamada.",
       proposedMessage: slot
-        ? `Genial, te confirmo la llamada por WhatsApp ${slot}. Cualquier cosa me dices, hablamos pronto!`
-        : "Genial, te confirmo la llamada por WhatsApp. En breve hablamos, cualquier cosa me dices!"
+        ? `Genial, te confirmo la llamada ${slot}. Cualquier cosa me dices, hablamos pronto!`
+        : "Genial, te confirmo la llamada. En breve hablamos, cualquier cosa me dices!"
     });
 
     await this.dependencies.repository.saveCandidate(candidate);
@@ -984,7 +984,7 @@ export class ConversationEngine {
       trigger: "AUTO_SCHEDULE_CALL",
       reason: `Auto-agendada por el bot: ${parsed.labelEs} (Espana) / ${parsed.labelAr} (hora de la candidata).`,
       // A la candidata se le confirma SU hora (Argentina); scheduledCallSlot (Espana) queda para el CRM de Alex.
-      proposedMessage: `Genial, te llamo por WhatsApp ${parsed.labelAr}. Cualquier cosa me dices, hablamos pronto!`
+      proposedMessage: `Genial, te llamo ${parsed.labelAr}. Cualquier cosa me dices, hablamos pronto!`
     });
     // Ya agendada: se limpia la preferencia de hora persistida (ya no hace falta y honra el contrato del campo).
     const scheduled: Candidate = { ...scheduledRaw, callTimePreference: undefined };
@@ -1038,7 +1038,7 @@ export class ConversationEngine {
     }
 
     // Ya se pidio la hora y sigue dando una franja: se acepta y se la llama en esa franja.
-    const confirm = `Perfecto, te escribo por WhatsApp para la llamada ${windowText}.`;
+    const confirm = `Perfecto, te llamo ${windowText}.`;
     const transitions: StateTransition[] = [];
     // La franja queda ACEPTADA: se limpia callTimePreference para no volver a re-confirmarla en bucle en cada
     // mensaje posterior (sin esto, en READY_TO_SCHEDULE se reenviaba "Perfecto, te escribo..." una y otra vez).
@@ -2302,8 +2302,8 @@ function generateResponse(
       ? argentinaLabelFromMs(candidate.scheduledCallStartMs)
       : candidate.scheduledCallSlot;
     return candidateFacingSlot
-      ? `Todo listo, te llamo por WhatsApp ${candidateFacingSlot}. Si necesitas cambiar algo me dices.`
-      : "Todo listo con la llamada por WhatsApp. Si necesitas cambiar algo me dices.";
+      ? `Todo listo, te llamo ${candidateFacingSlot}. Si necesitas cambiar algo me dices.`
+      : "Todo listo con la llamada. Si necesitas cambiar algo me dices.";
   }
 
   // OPENER del PRIMER turno: SIEMPRE el opener canonico (canonicalOpener ya distingue publico -> pide el nombre,
@@ -2354,7 +2354,7 @@ function generateResponse(
     understanding.intent !== "ASKS_ABOUT_CONTRACT" &&
     understanding.intent !== "REQUESTS_HUMAN"
   ) {
-    return "Genial, te llamamos por WhatsApp lo antes posible.";
+    return "Genial, te llamamos lo antes posible.";
   }
 
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {

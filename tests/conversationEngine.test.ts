@@ -935,7 +935,7 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
       candidateId: seeded.id,
       role: "agent",
       author: "AI_AGENT",
-      content: "Que dia y hora te viene bien para la llamada por WhatsApp?",
+      content: "Que dia y hora te viene bien para la llamada?",
       createdAt: new Date()
     });
 

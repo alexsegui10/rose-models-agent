@@ -69,7 +69,7 @@ export const alexStyleProfile = {
     "Orden de cualificacion: nombre, edad, OF, agencias previas y SIEMPRE el movil (con su justificacion de calidad).",
     "Pitch breve de plantilla y despues 'Tienes alguna duda?'.",
     "La candidata propone dia y hora; al confirmar la llamada se pide SIEMPRE el numero de telefono.",
-    "La llamada la hace el socio por WhatsApp."
+    "La llamada te la hace el socio por telefono."
   ],
   followUpLadder: [
     "1. A las ~24h: 'Sigues interesada?'",

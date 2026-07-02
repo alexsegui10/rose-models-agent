@@ -31,7 +31,7 @@ const entries: KnowledgeEntryInput[] = [
   {
     id: "call-details-after-review",
     category: "CALL_POLICY",
-    title: "Llamadas por WhatsApp despues de valorar encaje",
+    title: "Llamada telefonica despues de valorar encaje",
     facts: [
       "El canal previsto para llamada es WhatsApp.",
       "La llamada dura aproximadamente entre 2 y 10 minutos.",
@@ -42,7 +42,7 @@ const entries: KnowledgeEntryInput[] = [
     ],
     // CTA de agenda directa (analisis iteracion 3, taxonomia 6): el Alex real agenda sin coletillas
     // de cobertura ("si vemos que encaja", "2 a 10 minutos"); propone cerrar dia y hora ya mismo.
-    approvedAnswerPoints: ["La llamada la hacemos por WhatsApp y es rapida.", "Si me dices un dia y una hora la agendamos."],
+    approvedAnswerPoints: ["La llamada es rapida: te llamamos por telefono al numero que nos pases.", "Si me dices un dia y una hora la agendamos."],
     prohibitedClaims: [
       "Prometer llamada inmediata.",
       "Recoger documentacion durante la llamada.",

@@ -199,7 +199,9 @@ describe("new knowledge entries from real conversation synthesis (2026-06-10)", 
     expect(entry).toBeDefined();
     expect(entry?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("si vemos que encaja"))).toBe(false);
     expect(entry?.approvedAnswerPoints.some((point) => point.includes("2 a 10 minutos"))).toBe(false);
-    expect(entry?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("whatsapp"))).toBe(true);
+    // jul-2026 (pivote SIP): la llamada ya NO es "por WhatsApp", es una llamada de telefono normal.
+    expect(entry?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("telefono"))).toBe(true);
+    expect(entry?.approvedAnswerPoints.some((point) => point.toLowerCase().includes("whatsapp"))).toBe(false);
   });
 
   // Iteracion 3, taxonomia 4: la linea tecnica del neto y la tercera persona ("Alex calcula...")
