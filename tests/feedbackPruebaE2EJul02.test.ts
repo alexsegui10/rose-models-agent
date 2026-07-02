@@ -126,6 +126,63 @@ describe("feedback de la LLAMADA real (2-jul): apertura, reparto cuestionado y c
   });
 });
 
+describe("transcript real de la llamada (2-jul): anti-loro, 'no sé' y la cifra en MONEY", () => {
+  it("ANTI-LORO: tras el handoff, el ruido del ASR ('...') ya no repite 'te paso con mi socio' en bucle", async () => {
+    const { respondToCall } = await import("@/application/callTurnResponder");
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      { role: "system", content: "p" },
+      { role: "assistant", content: "apertura..." },
+      // 3 turnos de ruido -> ASK_REPEAT x2 y al tercero HANDOFF (como en la llamada real).
+      { role: "user", content: "..." },
+      { role: "assistant", content: "¿Me lo puedes repetir?" },
+      { role: "user", content: "..." },
+      { role: "assistant", content: "¿Me lo puedes repetir?" },
+      { role: "user", content: "..." },
+      { role: "assistant", content: "te paso con mi socio..." },
+      // Cuarto ruido, YA transferida: SILENCIO (antes repetía el handoff cada 15s durante 8 minutos).
+      { role: "user", content: "..." }
+    ];
+    const res = await respondToCall({ messages });
+    expect(res.content).toBe("");
+  });
+
+  it("si dice algo REAL tras el handoff, el director sigue contestando (no se queda muda para siempre)", async () => {
+    const { respondToCall } = await import("@/application/callTurnResponder");
+    const res = await respondToCall({
+      messages: [
+        { role: "system", content: "p" },
+        { role: "assistant", content: "apertura..." },
+        { role: "user", content: "quiero hablar con una persona" },
+        { role: "assistant", content: "te paso con mi socio..." },
+        { role: "user", content: "vale gracias" }
+      ]
+    });
+    expect(res.content.trim().length).toBeGreaterThan(0);
+  });
+
+  it("'no sé' suelto -> duda (tranquilizar y seguir), no '¿me lo repites?'", async () => {
+    const { classifyCallSignal } = await import("@/application/callSignalClassifier");
+    expect(classifyCallSignal({ utterance: "no sé" })).toBe("distrust");
+    expect(classifyCallSignal({ utterance: "no se" })).toBe("distrust");
+  });
+
+  it("MONEY: el brief del redactor LLEVA la cifra autorizada y prohíbe aplazarla", async () => {
+    const { planCallUtterance } = await import("@/application/callRedaction");
+    const plan = planCallUtterance({
+      directive: {
+        type: "COVER_STAGE",
+        stageId: "MONEY",
+        shareOffer: { modelShare: 30, agencyShare: 70, step: 0, isFloor: false }
+      }
+    });
+    const facts = plan.draftingBrief?.groundingFacts.join(" ") ?? "";
+    expect(facts).toContain("30% para ti");
+    expect(facts).toContain("70% para la agencia");
+    expect(plan.draftingBrief?.instruction).toContain("CIFRA EXACTA");
+    expect(plan.draftingBrief?.prohibitedClaims.join(" ")).toContain("Aplazar la cifra");
+  });
+});
+
 describe("umbral de móvil (decisión Alex 2-jul): iPhone 12 mínimo aceptado", () => {
   it("iPhone 12 -> APROBADO directo (sin 'lo valoro con mi socio')", () => {
     expect(deviceEligibilityForDescription("un iphone 12")).toBe("APPROVED");

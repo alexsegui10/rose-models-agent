@@ -118,6 +118,18 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       ? await resolveCoveringEntries(lastUtterance, input.retriever ?? defaultRetriever)
       : [];
 
+  // ANTI-LORO tras el final (jul-2026, llamada real de Alex: 8 MINUTOS repitiendo "te paso con mi socio"
+  // cada 15s al ASR mandando "..."): con la llamada YA transferida o cerrada ANTES de este turno, un turno
+  // de ruido/silencio no repite el cierre — se calla (""). El colgado real lo pone ElevenLabs (timeout de
+  // silencio del agente); esto evita quemar minutos hablando solo. Si dice algo REAL tras el cierre, el
+  // director sigue decidiendo (repetir el cierre una vez / escalar por seguridad) como siempre.
+  const terminalBeforeTurn = state.handedOff || state.closed;
+  const lastUtteranceIsNoise = lastUtterance.trim().length === 0 || /^[\s.·…,;:!?-]*$/.test(lastUtterance);
+  if (botHasSpoken && terminalBeforeTurn && lastUtteranceIsNoise) {
+    console.log("[call-turn]", JSON.stringify({ signal: "noise-after-terminal", directive: "SILENCE", usedDrafter: false }));
+    return { content: "", signal: "unclear", directiveType: state.handedOff ? "HANDOFF_TO_ALEX" : "CLOSE_WITH_CONTRACT" };
+  }
+
   const result = runCallTurn({
     state,
     utterance: lastUtterance,

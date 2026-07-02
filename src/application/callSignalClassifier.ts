@@ -189,6 +189,9 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
   if (CONTINUATION.test(text)) return "follows-along";
+  // "No sé" SUELTO (jul-2026, llamada real de Alex): es DUDA, no ruido — tranquilizar y seguir (REASSURE),
+  // no el "¿me lo repites?" que sonaba a sordo. Con más contenido ("no sé si me fío") ya lo cazan otras.
+  if (/^(?:no se|no lo se|nose|no sabria decirte?|no sabria)$/.test(text)) return "distrust";
   // Política de edad ANTES que earnings/identity/question: "¿qué edad hay que tener?" contiene "que" (QUESTION).
   if (ASKS_AGE_POLICY.test(text)) return "asks-age-policy";
   if (ASKS_EARNINGS.test(text)) return "asks-earnings";

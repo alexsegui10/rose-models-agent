@@ -112,6 +112,7 @@ export function buildDraftPrompt(request: CallDraftRequest): string {
       "- NUNCA inventes datos, servicios ni cifras.",
       "- NUNCA prometas ingresos ni des cantidades de dinero.",
       "- NO menciones ningún porcentaje salvo los que aparezcan en los hechos de arriba.",
+      "- Ya ESTÁS hablando por teléfono con ella: jamás digas 'te lo explico en la llamada' ni propongas agendar una llamada.",
       "- Castellano de España, muletillas naturales (mira, oye, pues nada), sin sonar a folleto.",
       '- NO empieces la frase con "vale", "a ver", "ya" ni "pues" sueltos (a veces ya se antepone una muletilla automática).',
       "- Responde SOLO con lo que diría el bot, sin comillas ni acotaciones."

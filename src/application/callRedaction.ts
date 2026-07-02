@@ -253,10 +253,33 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
   // confirme que ella preguntó la cifra exacta.)
   const referenceInstagram = false;
 
+  // MONEY (jul-2026, llamada real de Alex): el conocimiento del DM llega SIN la cifra (gating de
+  // sensibles) y el redactor "bailaba" alrededor del dinero sin decir el 70/30 e incluso prometia
+  // "te lo explico en la llamada" (¡ya ESTABA en la llamada!). La cifra AUTORIZADA de la directiva
+  // (callNegotiation) se inyecta como hecho, y la instruccion exige decirla claro.
+  const isMoney = stageId === "MONEY" && input.directive.shareOffer;
+  const offer = input.directive.shareOffer;
+  const groundingFacts =
+    isMoney && offer
+      ? [
+          `El reparto es un ${offer.modelShare}% para ti y un ${offer.agencyShare}% para la agencia.`,
+          "El dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte: pasa primero por ti.",
+          "Se liquida cada 14 días.",
+          ...gathered.points
+        ]
+      : gathered.points;
+
   const brief: CallDraftingBrief = {
-    instruction: stage.objective,
-    groundingFacts: gathered.points,
-    prohibitedClaims: gathered.prohibited,
+    instruction: isMoney
+      ? "Presenta el reparto diciendo LA CIFRA EXACTA de los hechos (el porcentaje para ella y para la agencia), claro y sin rodeos, con la tranquilidad de que el dinero lo cobra ella primero. Remata preguntando qué le parece."
+      : stage.objective,
+    groundingFacts,
+    prohibitedClaims: isMoney
+      ? [
+          ...gathered.prohibited,
+          "Aplazar la cifra ('luego te lo explico', 'te lo cuento en la llamada'): la cifra se dice AHORA."
+        ]
+      : gathered.prohibited,
     mandatoryNuances: gathered.nuances,
     referenceInstagram,
     context: input.context,
