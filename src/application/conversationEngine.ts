@@ -11,6 +11,7 @@ import type {
 import type { AutomationMode, DraftDeliveryStatus } from "@/domain/automation";
 import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 import { canTransition, createTransition } from "@/domain/stateMachine";
+import { isStopRequest } from "@/domain/stopRequest";
 import type { CandidateRepository } from "@/infrastructure/repositories/types";
 import type { ConversationExample } from "@/domain/conversationExample";
 import type { StyleEvaluation } from "@/domain/styleEvaluation";
@@ -957,6 +958,9 @@ export class ConversationEngine {
     const bookedStarts = await this.dependencies.repository.listBookedCallStarts();
     if (conflictsWithBooked(parsed.startMsUtc, bookedStarts)) {
       // Hueco pillado: NO se cambia de estado; se pide otra hora. El mensaje entrante ya quedo guardado.
+      // jul-2026 (hallazgo texto-04): PERSISTIR la candidata antes de salir — en esta rama se perdian los
+      // datos extraidos en el turno (p.ej. el telefono que vino junto a la hora) porque nadie la guardaba.
+      await this.dependencies.repository.saveCandidate({ ...candidate, updatedAt: new Date() });
       const clashMessage = `Uf, esa hora justo la tengo pillada. ¿Me dices otra y la cuadramos?`;
       await this.dependencies.repository.addMessage(
         agentMessage(candidate.id, clashMessage, { provider: "deterministic", trigger: "CALL_SLOT_CLASH", proactive: false })
@@ -1133,8 +1137,15 @@ export class ConversationEngine {
     // turno sigue su curso para que la escalada a Alex (wantsToChangeScheduledCall) funcione. La deteccion
     // es determinista (regex), no necesita el modelo.
     if (isSilencedState(activeCandidate.currentState)) {
+      // jul-2026 (hallazgo texto-02): ademas de cambiar/cancelar, un RECHAZO explicito ("ya no me interesa",
+      // "no quiero la llamada") o un "para de escribirme" con la llamada agendada NO se silencia: debe
+      // escalar a Alex y DESARMAR el auto-marcador (si no, el bot la llamaba igual tras rechazarlo por escrito).
+      const normalizedInboundForGate = normalizeText(groupedMessage.content);
       const wantsCallChangeWhileScheduled =
-        activeCandidate.currentState === "CALL_SCHEDULED" && wantsCallChangePattern.test(normalizeText(groupedMessage.content));
+        activeCandidate.currentState === "CALL_SCHEDULED" &&
+        (wantsCallChangePattern.test(normalizedInboundForGate) ||
+          explicitDeclinePattern.test(normalizedInboundForGate) ||
+          isStopRequest(groupedMessage.content));
       if (!wantsCallChangeWhileScheduled) {
         return skippedResult(
           activeCandidate,
@@ -1213,9 +1224,15 @@ export class ConversationEngine {
     }
     // Llamada ya agendada y la candidata quiere cambiarla/cancelarla: NO se reconfirma la hora vieja
     // en silencio (se perdia el lead en la meta). Se escala a Alex para que reprograme o cancele.
+    const normalizedForCallChange = normalizeText(groupedMessage.content);
     const wantsToChangeScheduledCall =
       activeCandidate.currentState === "CALL_SCHEDULED" &&
-      (understanding.intent === "REQUESTS_CALL" || wantsCallChangePattern.test(normalizeText(groupedMessage.content)));
+      (understanding.intent === "REQUESTS_CALL" ||
+        wantsCallChangePattern.test(normalizedForCallChange) ||
+        // jul-2026 (texto-02): un rechazo/"stop" con la llamada agendada tambien lo decide Alex (y de paso
+        // desarma el auto-marcador: el estado deja de ser CALL_SCHEDULED y el dispatch no llama).
+        explicitDeclinePattern.test(normalizedForCallChange) ||
+        isStopRequest(groupedMessage.content));
     if (wantsToChangeScheduledCall) {
       understanding = {
         ...understanding,
@@ -2128,6 +2145,19 @@ function decideNextState(
   // estados un rechazo real si cierra. (resolveContextualDecline ya neutraliza el "no" que solo responde a
   // un slot, asi que aqui llegan rechazos genuinos.)
   if (understanding.intent === "DECLINES" && candidate.currentState !== "HUMAN_INTERVENTION_REQUIRED") {
+    // jul-2026 (hallazgo texto-03): a una candidata YA APROBADA por Alex (o con la llamada en marcha) un
+    // "no me interesa" NO la cierra el bot en terminal por su cuenta: pasa a REVISION HUMANA y Alex decide
+    // si pelearla o cerrarla (antes acababa en CLOSED irreversible, sin aviso, y el "Encaja" posterior era
+    // un no-op). Una MENOR sigue cerrando SIEMPRE (invariante 2 gana sobre esto).
+    const declaredMinor = (understanding.extractedData.age ?? candidate.age ?? 99) < 18;
+    const humanApproved =
+      candidate.humanFitDecision === "APPROVED" ||
+      ["APPROVED", "COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE", "CALL_SCHEDULED", "CALL_NO_ANSWER", "CALL_COMPLETED"].includes(
+        candidate.currentState
+      );
+    if (!declaredMinor && humanApproved && canTransition(candidate.currentState, "HUMAN_INTERVENTION_REQUIRED")) {
+      return "HUMAN_INTERVENTION_REQUIRED";
+    }
     return "CLOSED";
   }
 
@@ -2214,6 +2244,15 @@ function decideNextState(
   }
 
   return null;
+}
+
+// jul-2026 (hallazgo texto-05): tras la llamada HECHA (CALL_COMPLETED), el cierre "lo hablo con mi socio
+// para AGENDAR la llamada" era absurdo (la llamada ya pasó). El siguiente paso real es el contrato.
+function scheduleHoldingText(candidate: Candidate, ack: string): string {
+  if (candidate.currentState === "CALL_COMPLETED") {
+    return `${ack} Ahora te paso el contrato con las guías para que lo leas con calma, y cualquier duda me la dices, ¿vale?`;
+  }
+  return `${ack} Lo hablo con mi socio y te digo para agendar la llamada.`;
 }
 
 function generateResponse(
@@ -2421,7 +2460,7 @@ function generateResponse(
   // La pregunta la decide el plan (guion pendiente, dia/hora o telefono); aqui no se inventa otra.
   if (understanding.intent === "REQUESTS_CALL" && candidate.currentState !== "APPROVED") {
     if (candidate.age && candidate.isAdultConfirmed) {
-      if (candidate.phone) return "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada.";
+      if (candidate.phone) return scheduleHoldingText(candidate, "Perfecto.");
       return responsePlan.questionToAsk
         ? `Perfecto, agendamos una llamada y te lo explicamos todo bien.\n\n${responsePlan.questionToAsk}`
         : "Perfecto, agendamos una llamada y te lo explicamos todo bien.";
@@ -2438,9 +2477,16 @@ function generateResponse(
   // BUG A: con el telefono de una adulta ya capturado y sin pregunta pendiente, el cierre es
   // confirmar y derivar al socio, NUNCA reabrir el guion ("Como te llamas?" / "preguntas rapidas").
   // Si todavia falta la edad, no se cierra: se pide la edad (invariante 2).
+  // jul-2026 (texto-05): con la llamada YA hecha (CALL_COMPLETED), nada de re-cualificar ni de volver a
+  // "agendar": el siguiente paso real es el contrato. Las preguntas de negocio ya retornaron antes
+  // (answerFacts); esto cubre los acuses/¿y ahora qué? post-llamada.
+  if (candidate.currentState === "CALL_COMPLETED" && responsePlan.answerFacts.length === 0) {
+    return scheduleHoldingText(candidate, "Genial.");
+  }
+
   if (candidate.phone && !responsePlan.questionToAsk) {
     return candidate.age && candidate.isAdultConfirmed
-      ? "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada."
+      ? scheduleHoldingText(candidate, "Perfecto, lo apunto.")
       : "Perfecto, lo apunto.\n\nAntes de organizar la llamada dime una cosa, que edad tienes?";
   }
 
@@ -2478,7 +2524,7 @@ function generateResponse(
     candidate.phone &&
     (understanding.intent === "CONFIRMS_INTEREST" || understanding.intent === "REQUESTS_CALL" || understanding.requestsCall)
   ) {
-    return "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada.";
+    return scheduleHoldingText(candidate, "Perfecto.");
   }
 
   return "Perfecto, cualquier duda que tengas me dices sin problema.";
@@ -3885,8 +3931,10 @@ const faceRefusalSignalPattern =
 const facePartialPattern =
   /\b(solo (en )?(algun|alguna|algunas|algunos|parte|ciertas?|ratos?|a veces)|en algunas fotos|media cara|de espaldas|solo el cuerpo|parcial|sin que se vea del todo|a medias)\b/;
 // La candidata quiere mover/cancelar una llamada YA agendada (se evalua solo en CALL_SCHEDULED).
+// jul-2026 (hallazgo texto-02): cancel\w*/anul\w* cubren las formas con clitico del espanol rioplatense
+// ("cancelala", "cancelalo", "cancelen", "anulala") que el \b(cancela)\b anterior no casaba.
 const wantsCallChangePattern =
-  /\b(cambiar|cambio|cancelar|cancela|anular|reprogram|aplaz|posponer|mover|otra hora|otro dia|otra fecha|no me viene bien|no puedo el)\b/;
+  /\b(cambiar|cambio|cancel\w*|anul\w*|reprogram|aplaz|posponer|mover|otra hora|otro dia|otra fecha|no me viene bien|no puedo el)\b/;
 // Pide PENSARLO / pausar O expresa DUDA DE INTERES (no es un rechazo duro): el bot deja de empujar
 // preguntas, reconoce con calidez y espera a que retome. Incluye la indecision ("no se si me interesa",
 // "no me convence", "no lo veo claro") para no repetir mecanicamente la pregunta de slot.
