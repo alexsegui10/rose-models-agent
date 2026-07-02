@@ -110,11 +110,17 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   }
   let lastUtterance = "";
 
+  // Memoria de repetición (anti-bucle jul-2026): cuántas veces se dio YA cada directiva en la llamada.
+  // Se calcula durante el replay (determinista) y selecciona variantes de texto para no repetirse.
+  const directiveRepeats: Partial<Record<CallDirectiveType, number>> = {};
+
   if (botHasSpoken) {
     // Consume el primer turno del bot (la apertura legal si está activa, o la 1ª etapa si no) y reproduce
     // los turnos previos de la candidata para reconstruir el estado. La señal "none" produce lo correcto
     // en ambos casos (apertura si disclosureGiven=false; avanzar agenda si ya está dada).
-    state = decideCallDirective({ state, signal: "none" }).nextState;
+    const opening = decideCallDirective({ state, signal: "none" });
+    directiveRepeats[opening.directive.type] = (directiveRepeats[opening.directive.type] ?? 0) + 1;
+    state = opening.nextState;
     for (let i = 0; i < userUtterances.length - 1; i++) {
       // Espejo del atajo anti-loro EN VIVO (R1 jul-2026): un turno de ruido tras el estado terminal se
       // respondió con silencio SIN pasar por el director; el replay debe saltarlo igual, o incrementaría
@@ -122,7 +128,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       if ((state.handedOff || state.closed) && isNoiseUtterance(userUtterances[i])) continue;
       const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
       const signal = classifyCallSignal({ utterance: userUtterances[i], moneyContext });
-      state = decideCallDirective({ state, signal }).nextState;
+      const decision = decideCallDirective({ state, signal });
+      directiveRepeats[decision.directive.type] = (directiveRepeats[decision.directive.type] ?? 0) + 1;
+      state = decision.nextState;
     }
     lastUtterance = userUtterances[userUtterances.length - 1] ?? "";
   }
@@ -157,7 +165,8 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     resolveQuestion: () => coveringEntries,
     // Memoria de la llamada (jul-2026): lo que ELLA ya dijo en cualquier turno (extractor determinista),
     // para que el redactor no re-pregunte y pueda referenciarlo. No decide nada (solo informa).
-    callFacts: extractCallFacts(userUtterances)
+    callFacts: extractCallFacts(userUtterances),
+    directiveRepeats
   });
 
   const plan = result.utterancePlan;

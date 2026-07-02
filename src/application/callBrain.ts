@@ -47,6 +47,11 @@ export interface RunCallTurnInput {
   context?: CallContext;
   /** Hechos que ella YA dijo en esta llamada (extraídos determinista por el responder): no re-preguntar. */
   callFacts?: string[];
+  /**
+   * Veces que cada directiva YA se dio en esta llamada (lo calcula el replay del responder). Anti-bucle:
+   * selecciona variantes deterministas y avisa al redactor para que no repita la misma formulación.
+   */
+  directiveRepeats?: Partial<Record<CallDirective["type"], number>>;
 }
 
 /** Ejecuta un turno del cerebro de la llamada. */
@@ -74,7 +79,8 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
     utterance: input.utterance,
     coveredTopics: topicLabels(input.state.coveredStages),
     pendingTopics: topicLabels(CALL_AGENDA.map((s) => s.id).filter((id) => !nextState.coveredStages.includes(id))),
-    callFacts: input.callFacts
+    callFacts: input.callFacts,
+    repetitionIndex: input.directiveRepeats?.[directive.type] ?? 0
   });
   return { signal, directive, utterancePlan, nextState };
 }

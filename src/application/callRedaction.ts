@@ -72,18 +72,46 @@ export interface PlanCallUtteranceInput {
   pendingTopics?: string[];
   /** Hechos que ella ya dijo en esta llamada (extractor determinista). */
   callFacts?: string[];
+  /**
+   * Veces que esta MISMA directiva ya se dio en la llamada (0 = primera). Lo calcula el replay del
+   * responder. Selecciona la variante determinista (anti-bucle) y avisa al redactor de que no se repita.
+   */
+  repetitionIndex?: number;
 }
 
-const DEFER_TEXT = "Mira, eso lo confirmo con mi socio y te lo digo ahora por WhatsApp, ¿vale?";
-const HANDOFF_TEXT =
-  "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con mi socio; ahora mismo le digo que se ponga en contacto contigo, ¿vale?";
-const CLOSE_TEXT =
-  "Pues con esto te haces una idea de cómo trabajamos. Después de la llamada te paso el contrato, unas guías y el guion de OnlyFans, para que lo leas todo con calma; y cualquier duda que te surja, me la dices, ¿vale?";
-const IDENTITY_TEXT =
-  "Soy Alex, de Rose Models, la agencia; te escribí por Instagram hace nada. ¿Te sigo contando cómo trabajamos?";
+// ANTI-BUCLE (jul-2026, feedback de Alex "está lleno de bucles"): las directivas que pueden repetirse
+// tienen VARIANTES deterministas — la 1ª vez el texto completo, las siguientes una formulación distinta y
+// más corta (repetir la misma frase idéntica es lo que suena a robot). El índice lo aporta el replay
+// (nº de veces que esa directiva YA se dio en la llamada); todas las variantes respetan los invariantes
+// (sin cifras nuevas, sin promesas). Se elige con min(indice, última): no rota en círculo.
+function variantFor(texts: readonly string[], repetitionIndex: number): string {
+  return texts[Math.min(repetitionIndex, texts.length - 1)];
+}
+
+const DEFER_TEXTS = [
+  "Mira, eso lo confirmo con mi socio y te lo digo ahora por WhatsApp, ¿vale?",
+  "Eso también te lo confirmo por WhatsApp ahora al colgar, que no te quiero decir nada inexacto.",
+  "Pues eso va en el mismo paquete: te lo confirmo por escrito ahora, ¿vale?"
+] as const;
+const DEFER_TEXT = DEFER_TEXTS[0];
+const HANDOFF_TEXTS = [
+  "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con mi socio; ahora mismo le digo que se ponga en contacto contigo, ¿vale?",
+  "Que sí, de verdad: ya le he avisado y en un ratito se pone él en contacto contigo, tranquila."
+] as const;
+const CLOSE_TEXTS = [
+  "Pues con esto te haces una idea de cómo trabajamos. Después de la llamada te paso el contrato, unas guías y el guion de OnlyFans, para que lo leas todo con calma; y cualquier duda que te surja, me la dices, ¿vale?",
+  "Eso, pues nada más por mi parte: ahora al colgar te mando el contrato y las guías y lo miras con calma, ¿vale?"
+] as const;
+const IDENTITY_TEXTS = [
+  "Soy Alex, de Rose Models, la agencia; te escribí por Instagram hace nada. ¿Te sigo contando cómo trabajamos?",
+  "Que soy Alex, el de Rose Models, el que te escribió por Instagram. Tranquila, que es rapidito."
+] as const;
+const IDENTITY_TEXT = IDENTITY_TEXTS[0];
 // Ingresos: respuesta HONESTA determinista, SIN cifras ni promesas (invariante: no prometer ingresos).
-const EARNINGS_TEXT =
-  "Con sinceridad, depende mucho de ti: de tu constancia y de la calidad del contenido. No te puedo prometer una cifra porque sería mentirte. ¿Te sigo contando cómo trabajamos?";
+const EARNINGS_TEXTS = [
+  "Con sinceridad, depende mucho de ti: de tu constancia y de la calidad del contenido. No te puedo prometer una cifra porque sería mentirte. ¿Te sigo contando cómo trabajamos?",
+  "Pues como te decía, ahí no te voy a dar una cifra porque sería inventármela: depende de tu constancia y del contenido que subas."
+] as const;
 // Política de edad: requisito INNEGOCIABLE (solo 18+). Respuesta determinista, jamás se defiere ni se
 // suaviza (invariante 2: con la edad no se juega). El redactor NO la toca.
 const AGE_POLICY_TEXT =
@@ -108,22 +136,49 @@ const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
     "Una última cosa que siempre pregunto: ¿hay algún tipo de contenido que no quieras hacer o algún límite que deba tener en cuenta? Lo respetamos sin problema."
 };
 // Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
-const CLOSE_SOFT_TEXT =
-  "Te entiendo perfectamente, sin ningún problema. Lo dejamos aquí entonces; si en algún momento te animas, aquí nos tienes, ¿vale? Gracias por tu tiempo y un saludo.";
+const CLOSE_SOFT_TEXTS = [
+  "Te entiendo perfectamente, sin ningún problema. Lo dejamos aquí entonces; si en algún momento te animas, aquí nos tienes, ¿vale? Gracias por tu tiempo y un saludo.",
+  "Nada, de verdad, sin ningún problema. ¡Que te vaya muy bien!"
+] as const;
 // La pillamos en MAL MOMENTO nada más descolgar (jul-2026): cerrar rápido y reagendar por Instagram (el
 // sistema reabre el agendado por el DM). Sin contrato: aún no se le explicó nada.
-const CLOSE_RESCHEDULE_TEXT =
-  "Tranquila, sin problema, te pillo en mal momento. Te escribo por Instagram y buscamos otro hueco que te venga bien, ¿vale? ¡Hablamos!";
-// Corte seguro por minoría de edad (invariante 2): cierre educado y definitivo, sin valoraciones personales.
-const CLOSE_UNDERAGE_TEXT =
-  "Gracias por tu tiempo, pero solo trabajamos con personas mayores de edad, así que no podemos seguir adelante. Te deseo lo mejor, un saludo.";
+const CLOSE_RESCHEDULE_TEXTS = [
+  "Tranquila, sin problema, te pillo en mal momento. Te escribo por Instagram y buscamos otro hueco que te venga bien, ¿vale? ¡Hablamos!",
+  "Eso, tranquila: ahora te escribo por Instagram y lo movemos a otro día. ¡Hablamos!"
+] as const;
+// Corte seguro por minoría de edad (invariante 2): cierre educado y definitivo, sin valoraciones
+// personales. La variante de repetición mantiene EXACTAMENTE la misma firmeza (no se suaviza).
+const CLOSE_UNDERAGE_TEXTS = [
+  "Gracias por tu tiempo, pero solo trabajamos con personas mayores de edad, así que no podemos seguir adelante. Te deseo lo mejor, un saludo.",
+  "De verdad que no podemos seguir: solo trabajamos con personas mayores de edad. Un saludo."
+] as const;
 // Defensa del 70 una vez antes de bajar (el porqué del reparto; el modelo de la agencia ya documentado).
 // Defensa HONESTA del reparto (fix Alex jun-2026): la AGENCIA se queda el 70 PORQUE hace todo el
 // trabajo; ella se queda el 30. NUNCA decir "ese 70 es para ti" (era un bug que invertía el reparto).
 const DEFEND_SHARE_TEXT =
   "Te entiendo, es justo preguntarlo. Mira, nosotros nos quedamos ese 70% porque hacemos todo el trabajo: el tráfico, el equipo de chatters las 24 horas y toda la gestión, y tú solo subes el contenido. Por eso el reparto es así. ¿Cómo lo ves?";
 // No se entendió bien lo que dijo (ruido/STT): pedir que lo repita, sin asumir asentimiento.
-const ASK_REPEAT_TEXT = "Perdona, no te he pillado bien con la línea. ¿Me lo puedes repetir?";
+const ASK_REPEAT_TEXTS = [
+  "Perdona, no te he pillado bien con la línea. ¿Me lo puedes repetir?",
+  "Uy, es que se oye entrecortado. ¿Me lo dices otra vez?",
+  "Perdona, de verdad, la cobertura está fatal. ¿Qué me decías?"
+] as const;
+// Tranquilizar desconfianza sin conocimiento recuperado: fallback determinista con variante.
+const REASSURE_FALLBACK_TEXTS = [
+  "Te entiendo, es normal tener dudas. Vamos paso a paso y sin compromiso. Y lo importante: el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así que el dinero pasa primero por ti. ¿Qué es lo que más te preocupa?",
+  "Que es normal, de verdad, no te preocupes. Tú no te comprometes a nada hoy: lo lees todo con calma y me preguntas lo que quieras."
+] as const;
+
+/**
+ * Aviso al redactor cuando esta directiva YA se usó antes en la llamada: que no suene a disco rayado.
+ * Solo naturalidad — los hechos permitidos no cambian (el validador sigue detrás).
+ */
+function repeatHint(input: PlanCallUtteranceInput): string {
+  return (input.repetitionIndex ?? 0) > 0
+    ? " OJO: en esta llamada ya usaste antes una respuesta de este tipo — usa OTRA formulación distinta y más corta, sin repetir frases que ya dijiste."
+    : "";
+}
+
 // Despedida corta cuando ELLA se despide con la llamada ya cerrada (jul-2026): humana y breve, sin
 // re-explicar nada (el cierre ya se dio). El colgado lo pone la plataforma de voz. Tras un cierre
 // CÁLIDO (no le interesa) NO se promete escribirle ni se celebra ("¡Genial!") su rechazo.
@@ -140,15 +195,17 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       const text = callOpeningDisclosure({ candidateName, recorded: input.recorded });
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };
     }
-    case "DEFER_TO_PARTNER":
+    case "DEFER_TO_PARTNER": {
       // Deferir con NATURALIDAD (jul-2026): el redactor adapta el "eso te lo confirmo" a LO QUE ella
       // preguntó (una pregunta personal no se defiere a "mi socio", se sale del paso con simpatía). La
       // DECISIÓN de deferir sigue siendo del código; sin redactor, el texto fijo de siempre (fallback).
+      const deferFallback = variantFor(DEFER_TEXTS, input.repetitionIndex ?? 0);
       return {
         directiveType: directive.type,
         draftingBrief: {
           instruction:
-            "No tienes la respuesta segura a lo que acaba de decir. NO respondas su pregunta ni afirmes NINGÚN dato nuevo: si es una duda del negocio, dile con naturalidad que eso prefieres confirmarlo y se lo mandas por WhatsApp en cuanto colguéis; si es una pregunta personal o de charla, sal del paso con simpatía (sin inventar datos personales) y retoma la conversación con suavidad.",
+            "No tienes la respuesta segura a lo que acaba de decir. NO respondas su pregunta ni afirmes NINGÚN dato nuevo: si es una duda del negocio, dile con naturalidad que eso prefieres confirmarlo y se lo mandas por WhatsApp en cuanto colguéis; si es una pregunta personal o de charla, sal del paso con simpatía (sin inventar datos personales) y retoma la conversación con suavidad." +
+            repeatHint(input),
           groundingFacts: [],
           prohibitedClaims: ["Cualquier dato, servicio o cifra de la agencia que no esté en los hechos aprobados"],
           mandatoryNuances: [],
@@ -156,12 +213,17 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
           context: input.context,
           ...briefExtras(input)
         },
-        fallbackText: DEFER_TEXT
+        fallbackText: deferFallback
       };
-    case "HANDOFF_TO_ALEX":
-      return { directiveType: directive.type, deterministicText: HANDOFF_TEXT, fallbackText: HANDOFF_TEXT };
-    case "CLOSE_WITH_CONTRACT":
-      return { directiveType: directive.type, deterministicText: CLOSE_TEXT, fallbackText: CLOSE_TEXT };
+    }
+    case "HANDOFF_TO_ALEX": {
+      const text = variantFor(HANDOFF_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
+    case "CLOSE_WITH_CONTRACT": {
+      const text = variantFor(CLOSE_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
     case "GIVE_IDENTITY":
       // Identidad con naturalidad (jul-2026): el redactor responde a CÓMO lo preguntó ella ("¿quién
       // eres?", "¿cuántos años tienes?") sin inventar datos; los hechos son fijos. Fallback determinista.
@@ -169,7 +231,8 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
         directiveType: directive.type,
         draftingBrief: {
           instruction:
-            "Se está preguntando quién eres. Respóndele directo y con simpatía a como lo haya preguntado, presentándote solo con los hechos de abajo, y retoma la conversación. Si pregunta algo personal que no está en los hechos (tu edad, dónde vives), sal del paso con humor ligero SIN inventarte datos.",
+            "Se está preguntando quién eres. Respóndele directo y con simpatía a como lo haya preguntado, presentándote solo con los hechos de abajo, y retoma la conversación. Si pregunta algo personal que no está en los hechos (tu edad, dónde vives), sal del paso con humor ligero SIN inventarte datos." +
+            repeatHint(input),
           groundingFacts: [
             "Eres Alex, de Rose Models, la agencia.",
             "Le escribiste tú por Instagram hace poco y quedasteis en hablar por teléfono."
@@ -180,23 +243,34 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
           context: input.context,
           ...briefExtras(input)
         },
-        fallbackText: IDENTITY_TEXT
+        fallbackText: variantFor(IDENTITY_TEXTS, input.repetitionIndex ?? 0)
       };
-    case "GIVE_EARNINGS":
-      return { directiveType: directive.type, deterministicText: EARNINGS_TEXT, fallbackText: EARNINGS_TEXT };
+    case "GIVE_EARNINGS": {
+      const text = variantFor(EARNINGS_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
     case "GIVE_AGE_POLICY":
-      // Requisito de edad: SIEMPRE determinista (invariante 2): ni redactor ni matices.
+      // Requisito de edad: SIEMPRE determinista y SIEMPRE el mismo (invariante 2): ni redactor ni
+      // variantes — la firmeza idéntica es deliberada.
       return { directiveType: directive.type, deterministicText: AGE_POLICY_TEXT, fallbackText: AGE_POLICY_TEXT };
-    case "CLOSE_SOFT":
-      return { directiveType: directive.type, deterministicText: CLOSE_SOFT_TEXT, fallbackText: CLOSE_SOFT_TEXT };
-    case "CLOSE_RESCHEDULE":
-      return { directiveType: directive.type, deterministicText: CLOSE_RESCHEDULE_TEXT, fallbackText: CLOSE_RESCHEDULE_TEXT };
-    case "CLOSE_UNDERAGE":
-      return { directiveType: directive.type, deterministicText: CLOSE_UNDERAGE_TEXT, fallbackText: CLOSE_UNDERAGE_TEXT };
+    case "CLOSE_SOFT": {
+      const text = variantFor(CLOSE_SOFT_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
+    case "CLOSE_RESCHEDULE": {
+      const text = variantFor(CLOSE_RESCHEDULE_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
+    case "CLOSE_UNDERAGE": {
+      const text = variantFor(CLOSE_UNDERAGE_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
     case "DEFEND_SHARE":
       return { directiveType: directive.type, deterministicText: DEFEND_SHARE_TEXT, fallbackText: DEFEND_SHARE_TEXT };
-    case "ASK_REPEAT":
-      return { directiveType: directive.type, deterministicText: ASK_REPEAT_TEXT, fallbackText: ASK_REPEAT_TEXT };
+    case "ASK_REPEAT": {
+      const text = variantFor(ASK_REPEAT_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
     case "SAY_GOODBYE": {
       const goodbye = directive.afterClose === "CLOSE_SOFT" ? GOODBYE_AFTER_DECLINE_TEXT : GOODBYE_TEXT;
       return { directiveType: directive.type, deterministicText: goodbye, fallbackText: goodbye };
@@ -210,16 +284,17 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
     }
     case "ANSWER_FROM_KNOWLEDGE":
       return planFromKnowledge(directive.type, input, {
-        instruction: "Responde a su pregunta de forma directa, breve y cercana, apoyándote solo en estos hechos.",
+        instruction:
+          "Responde a su pregunta de forma directa, breve y cercana, apoyándote solo en estos hechos." + repeatHint(input),
         referenceInstagram: false,
-        emptyFallback: DEFER_TEXT
+        emptyFallback: variantFor(DEFER_TEXTS, input.repetitionIndex ?? 0)
       });
     case "REASSURE":
       return planFromKnowledge(directive.type, input, {
-        instruction: "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar, y retoma la conversación.",
+        instruction:
+          "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar, y retoma la conversación." + repeatHint(input),
         referenceInstagram: false,
-        emptyFallback:
-          "Te entiendo, es normal tener dudas. Vamos paso a paso y sin compromiso. Y lo importante: el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así que el dinero pasa primero por ti. ¿Qué es lo que más te preocupa?"
+        emptyFallback: variantFor(REASSURE_FALLBACK_TEXTS, input.repetitionIndex ?? 0)
       });
     case "COVER_STAGE":
     default:
