@@ -112,9 +112,10 @@ const DIRECT_SHARE_COMPLAINT =
 const ASKS_EARNINGS =
   /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|cobro|cobraria|cobrare|voy a cobrar|me llevo|me llevaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b/;
 
-// Quiere terminar / colgar -> cerrar con contrato.
+// Quiere terminar / colgar -> cerrar con contrato. Incluye despedidas sueltas ("chau chau", "bye"):
+// tras el cierre deben llevar a la despedida/silencio, no a repetir el discurso (barrido jul-2026).
 const WANTS_TO_END =
-  /(te dejo|te tengo que dejar|tengo que (irme|colgar|dejarlo|dejarte)|hablamos (luego|mas tarde|otro dia|en otro momento|manana)|ahora no puedo|no es buen momento|me tengo que ir|tengo prisa|me pillas (mal|liada)|adios|hasta luego|me voy|cuelgo)/;
+  /(te dejo|te tengo que dejar|tengo que (irme|colgar|dejarlo|dejarte)|hablamos (luego|mas tarde|otro dia|en otro momento|manana)|ahora no puedo|no es buen momento|me tengo que ir|tengo prisa|me pillas (mal|liada)|adios|hasta luego|me voy|cuelgo|\bcha[ou]+\b|\bbye\b|\bnos vemos\b)/;
 
 // Conformidad que el detector de preguntas confundiría ("como tu digas"). Se evalúa ANTES que QUESTION.
 const CONFORMITY =
@@ -159,9 +160,36 @@ const GREETING =
 const QUESTION =
   /\?\s*$|\b(que|como|cuando|cuanto|cuanta|cuantos|cual|cuales|donde|por que|porque|quien|para que)\b|(me puedes|puedes|podrias|podeis|me podeis|sabes|sabeis) (decir|explicar|contar|aclarar|mandar|ensenar|saber|si)|(tengo|una|otra) (duda|pregunta)/;
 
-// Afirmaciones / asentimiento -> avanzar (con relleno inicial opcional).
+// Afirmaciones / asentimiento -> avanzar. El prefijo tolera VARIAS coletillas encadenadas ("hola si",
+// "mmm vale...", "eh bueno dale") — jul-2026, barrido de personas: "hola si" caía en unclear y el bot
+// pedía repetir en el primer turno (sonaba a sordo).
 const FOLLOWS_ALONG =
-  /^\s*(ah+|ahh|pues|bueno)?\s*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|me parece (bien|genial|perfecto)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
+  /^\s*(?:(?:ah+|ahh|pues|bueno|hola+|buenas|holi|hey|oye|mira|mmm+|mm+|eh+|este|em+|uy|si\?)[\s,!¡.]*)*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|me parece (bien|genial|perfecto)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
+
+// Confirmación de identidad al descolgar ("sí, soy yo", "con ella habla", "la misma"): es un "sí, sigue",
+// no ruido (jul-2026, barrido de personas: "hola si soy yo" acababa en "¿me lo repites?"). ANCLADA a la
+// frase entera para que "lo hablo con ella" (consultar a alguien) no cuente como asentimiento.
+const IDENTITY_CONFIRM =
+  /^\s*(?:(?:hola+|buenas|alo+|si+|s[ií]\?|eh+|pues|bueno|dime|digame)[\s,¡!.?]*)*(?:soy yo|con ella hablas?|ella habla|habla con ella|la misma|yo misma|con ella habla)[\s,!.]*$/;
+
+// Pregunta por la CIFRA del reparto ("¿cuánto os lleváis?", "¿el reparto cómo era?", "¿qué porcentaje?"):
+// invariante 3 es REACTIVO — preguntada la cifra exacta, se responde la política autorizada (70/30 o el
+// escalón vigente), JAMÁS se defiere (jul-2026, barrido: "¿cuánto os lleváis?" acababa en "te lo mando por
+// WhatsApp", evasivo). Solo formas en 2ª/3ª persona (la agencia); "¿cuánto gano YO?" sigue siendo earnings.
+const ASKS_SHARE_FIGURE =
+  /\bcuanto (?:os|se|te) (?:llevais|llevas|lleva|llevan|quedais|quedas|queda|quedan|cobrais|cobran)\b|\bque (?:porcentaje|comision)\b|\bcomo (?:es|era|va|iba|funciona|queda) (?:el|lo del) reparto\b|\bel reparto como (?:es|era|va|iba|queda)\b|\bcual (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\bcuanto (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b/;
+
+// Pregunta si es un ROBOT/IA ("¿eres un robot?", "¿hablo con una máquina?"): se responde con IDENTIDAD
+// (soy Alex, el de Rose Models), sin afirmar ni negar ser humano (el validador veta "soy una persona").
+// El RECHAZO a la máquina ("no quiero hablar con un robot") lo caza antes REJECT_MACHINE (wants-human).
+const BOT_CHECK =
+  /\beres (?:un |una )?(?:robot|bot|ia|maquina|inteligencia artificial|grabacion|contestador)\b|\bhablo con (?:un |una )?(?:robot|bot|maquina|ia|grabacion)\b|\beres (?:real|de verdad|una persona|humano|humana)\b|\bsos (?:un |una )?(?:robot|bot|ia|maquina)\b/;
+
+// Pide que el BOT repita ("¿qué decías?", "no te escuché", "se corta, repite"): repetir lo último dicho,
+// NUNCA deferir a WhatsApp ni pedirle a ELLA que repita (jul-2026, barrido: acababa en el absurdo
+// "eso te lo confirmo por WhatsApp" cuando ella solo pedía que repitiera).
+const ASKS_BOT_REPEAT =
+  /\bque (?:decias|dijiste|has dicho|estabas diciendo|me contabas)\b|\bme lo (?:repites|puedes repetir|repetis|repite)\b|\brepite(?:melo|me)?\b|\bno te (?:escuche|escucho|oigo|oi|he oido|entendi bien)\b|\bse (?:corto|ha cortado|entrecorta|escucha entrecortado)\b|^\s*¿?\s*como\s*\??\s*$|^\s*¿?\s*que\s*\?+\s*$/;
 
 /** Clasifica lo dicho por la candidata en una señal para el director. */
 export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal {
@@ -189,6 +217,13 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
   if (CONTINUATION.test(text)) return "follows-along";
+  // Pide que el BOT repita lo último ("¿qué decías?", "no te escuché"): antes que QUESTION (contiene "que").
+  if (ASKS_BOT_REPEAT.test(text)) return "asks-bot-to-repeat";
+  // Pregunta la CIFRA del reparto (sin quejarse: las quejas ya se evaluaron antes) -> responderla (inv. 3
+  // reactivo), nunca deferir. Antes que QUESTION/earnings ("cuánto os lleváis" contiene "cuanto").
+  if (ASKS_SHARE_FIGURE.test(text)) return "asks-share-figure";
+  // "¿Eres un robot?" -> identidad (sin mentir), antes que QUESTION.
+  if (BOT_CHECK.test(text)) return "asks-identity";
   // "No sé" SUELTO (jul-2026, llamada real de Alex): es DUDA, no ruido — tranquilizar y seguir (REASSURE),
   // no el "¿me lo repites?" que sonaba a sordo. Con más contenido ("no sé si me fío") ya lo cazan otras.
   if (/^(?:no se|no lo se|nose|no sabria decirte?|no sabria)$/.test(text)) return "distrust";
@@ -197,6 +232,8 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (ASKS_EARNINGS.test(text)) return "asks-earnings";
   if (ASKS_IDENTITY.test(text)) return "asks-identity";
   if (GREETING.test(text)) return "follows-along";
+  // "Sí, soy yo" / "con ella habla": confirmación de identidad al descolgar -> seguir.
+  if (IDENTITY_CONFIRM.test(text)) return "follows-along";
   // Edad adulta declarada ("tengo 24", "tengo 24, ¿pasa algo?"): información -> asentir y seguir. ANTES
   // que QUESTION para que una coletilla trivial ("¿pasa algo?", "¿no?") no la convierta en "pregunta
   // desconocida" y acabe en el absurdo "lo comento con mi socio" (bug jul-2026). Si además hay una

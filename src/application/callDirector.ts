@@ -29,6 +29,8 @@ export type CallCandidateSignal =
   | "asks-identity" // pregunta quién es / de qué agencia -> el bot dice quién es (no defiere)
   | "asks-earnings" // pregunta cuánto se gana -> respuesta honesta sin cifras (no defiere)
   | "asks-age-policy" // pregunta el requisito de edad -> respuesta determinista (solo 18+), no defiere
+  | "asks-share-figure" // pregunta la CIFRA del reparto -> responderla (inv. 3 reactivo), nunca deferir
+  | "asks-bot-to-repeat" // pide que el bot repita lo último ("¿qué decías?") -> repetirlo, no deferir
   | "complains-about-share" // se queja del reparto -> negociar a la baja (lo decide el código)
   | "distrust" // desconfianza leve ("¿cómo sé que es real?") -> tranquilizar y seguir
   | "wants-human" // pide hablar con una persona -> handoff
@@ -57,7 +59,9 @@ export type CallDirectiveType =
   | "CLOSE_RESCHEDULE" // la pillamos en mal momento NADA MÁS descolgar: cerrar y reagendar por Instagram
   | "CLOSE_UNDERAGE" // corte seguro: menor de edad, no se puede seguir (invariante 2)
   | "SAY_GOODBYE" // despedida corta cuando ELLA se despide con la llamada ya cerrada
-  | "STAY_SILENT"; // no decir nada (anti-loro: el cierre/handoff ya se repitió una vez)
+  | "STAY_SILENT" // no decir nada (anti-loro: el cierre/handoff ya se repitió una vez)
+  | "GIVE_SHARE_FIGURE" // re-decir la cifra AUTORIZADA vigente del reparto (respuesta reactiva, inv. 3)
+  | "REPEAT_LAST_UTTERANCE"; // repetir lo último que dijo el bot (ella no lo oyó)
 
 export type CallHandoffReason =
   | "asked-for-human"
@@ -76,6 +80,12 @@ export interface CallDirectorState {
   shareDefended: boolean;
   /** Turnos consecutivos sin entender (se reinicia al entender algo); a UNCLEAR_HANDOFF_THRESHOLD -> handoff. */
   unclearStreak: number;
+  /**
+   * Peticiones CONSECUTIVAS de "¿qué decías?" (ella no nos oye). A la 3ª, el audio está roto en su
+   * dirección -> handoff (igual que unclearStreak, que cubre la dirección contraria). Sin este tope,
+   * un ASR roto emitiendo "¿cómo?" dejaría al bot repitiéndose para siempre (riesgo del revisor jul-2026).
+   */
+  repeatRequestStreak: number;
   handedOff: boolean;
   handoffReason?: CallHandoffReason;
   /** true tras cualquier cierre: es pegajoso (no reabre guion ni negociación). */
@@ -115,6 +125,7 @@ export function initialCallDirectorState(): CallDirectorState {
     revenueShareStep: 0,
     shareDefended: false,
     unclearStreak: 0,
+    repeatRequestStreak: 0,
     handedOff: false,
     closed: false,
     terminalRepeats: 0,
@@ -171,6 +182,21 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       if (signal === "asks-identity") return { directive: { type: "GIVE_IDENTITY" }, nextState: state };
       if (signal === "asks-earnings") return { directive: { type: "GIVE_EARNINGS" }, nextState: state };
       if (signal === "asks-age-policy") return { directive: { type: "GIVE_AGE_POLICY" }, nextState: state };
+      // Pregunta la cifra tras el cierre: se re-dice la AUTORIZADA vigente (reactivo, inv. 3), sin reabrir.
+      if (signal === "asks-share-figure") {
+        return {
+          directive: { type: "GIVE_SHARE_FIGURE", shareOffer: callRevenueShareOfferForStep(state.revenueShareStep) },
+          nextState: state
+        };
+      }
+      if (signal === "asks-bot-to-repeat") {
+        // Con tope también aquí: si tras el cierre sigue sin oírnos, silencio (no un bucle de repeticiones).
+        if (state.repeatRequestStreak >= 2) return { directive: { type: "STAY_SILENT" }, nextState: state };
+        return {
+          directive: { type: "REPEAT_LAST_UTTERANCE" },
+          nextState: { ...state, repeatRequestStreak: state.repeatRequestStreak + 1 }
+        };
+      }
       if (signal === "distrust") return { directive: { type: "REASSURE" }, nextState: state };
       // Queja del reparto o pregunta no cubierta tras el cierre: se defiere (sin cifras y sin reabrir la
       // negociación — invariante 3); nunca se repite el discurso del contrato como "respuesta".
@@ -188,7 +214,9 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
         };
       }
     }
-    if (state.terminalRepeats >= 1) {
+    // Tras la despedida ya dada, cualquier coletilla ("chau chau", "vale") es SILENCIO: re-soltar el
+    // cierre a quien se está despidiendo era el último loro que quedaba (barrido jul-2026).
+    if (state.goodbyeSaid || state.terminalRepeats >= 1) {
       return { directive: { type: "STAY_SILENT" }, nextState: state };
     }
     return {
@@ -207,8 +235,12 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
     return { directive: { type: "ASK_REPEAT" }, nextState: { ...state, unclearStreak: streak } };
   }
 
-  // Cualquier otra señal (sí se entendió) reinicia la racha de "no entiendo".
-  const s: CallDirectorState = state.unclearStreak === 0 ? state : { ...state, unclearStreak: 0 };
+  // Cualquier otra señal (sí se entendió) reinicia la racha de "no entiendo". La racha de "no me oye"
+  // (repeatRequestStreak) se reinicia con cualquier señal que NO sea pedir repetición otra vez.
+  let s: CallDirectorState = state.unclearStreak === 0 ? state : { ...state, unclearStreak: 0 };
+  if (signal !== "asks-bot-to-repeat" && s.repeatRequestStreak !== 0) {
+    s = { ...s, repeatRequestStreak: 0 };
+  }
 
   switch (signal) {
     case "hostile-or-suspicious":
@@ -233,6 +265,29 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       return { directive: { type: "GIVE_EARNINGS" }, nextState: s };
     case "asks-age-policy":
       return { directive: { type: "GIVE_AGE_POLICY" }, nextState: s };
+    case "asks-share-figure":
+      // Pregunta la CIFRA del reparto (invariante 3 es reactivo: preguntada, se dice — jamás se defiere).
+      // Si el dinero aún no se presentó, se presenta AHORA (cuenta como etapa cubierta); si ya se presentó,
+      // se repite la cifra AUTORIZADA vigente del escalón (70/30, 65/35 o 60/40), sin mover la negociación.
+      if (!s.coveredStages.includes("MONEY")) {
+        return {
+          directive: { type: "COVER_STAGE", stageId: "MONEY", shareOffer: initialCallRevenueShareOffer() },
+          nextState: { ...s, coveredStages: [...s.coveredStages, "MONEY"] }
+        };
+      }
+      return {
+        directive: { type: "GIVE_SHARE_FIGURE", shareOffer: callRevenueShareOfferForStep(s.revenueShareStep) },
+        nextState: s
+      };
+    case "asks-bot-to-repeat": {
+      // No lo oyó: se repite lo último dicho (lo aporta el responder desde el transcript), sin avanzar.
+      // A la TERCERA petición consecutiva, el audio hacia ella está roto -> a una persona (como unclear).
+      const streak = s.repeatRequestStreak + 1;
+      if (streak >= UNCLEAR_HANDOFF_THRESHOLD) {
+        return handoff(s, "audio-unintelligible");
+      }
+      return { directive: { type: "REPEAT_LAST_UTTERANCE" }, nextState: { ...s, repeatRequestStreak: streak } };
+    }
     case "distrust":
       return { directive: { type: "REASSURE" }, nextState: s };
     case "wants-to-end": {

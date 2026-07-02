@@ -15,6 +15,7 @@
  */
 
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
+import { validateCallUtterance } from "./callRedactionValidator";
 import { callAgendaStage, type CallAgendaStageId } from "./callAgenda";
 import type { CallContext } from "./callContext";
 import { callOpeningDisclosure } from "./callDisclosure";
@@ -77,6 +78,8 @@ export interface PlanCallUtteranceInput {
    * responder. Selecciona la variante determinista (anti-bucle) y avisa al redactor de que no se repita.
    */
   repetitionIndex?: number;
+  /** Lo último que DIJO EL BOT (del transcript), para REPEAT_LAST_UTTERANCE ("¿qué decías?"). */
+  lastBotUtterance?: string;
 }
 
 // ANTI-BUCLE (jul-2026, feedback de Alex "está lleno de bucles"): las directivas que pueden repetirse
@@ -106,7 +109,6 @@ const IDENTITY_TEXTS = [
   "Soy Alex, de Rose Models, la agencia; te escribí por Instagram hace nada. ¿Te sigo contando cómo trabajamos?",
   "Que soy Alex, el de Rose Models, el que te escribió por Instagram. Tranquila, que es rapidito."
 ] as const;
-const IDENTITY_TEXT = IDENTITY_TEXTS[0];
 // Ingresos: respuesta HONESTA determinista, SIN cifras ni promesas (invariante: no prometer ingresos).
 const EARNINGS_TEXTS = [
   "Con sinceridad, depende mucho de ti: de tu constancia y de la calidad del contenido. No te puedo prometer una cifra porque sería mentirte. ¿Te sigo contando cómo trabajamos?",
@@ -163,6 +165,10 @@ const ASK_REPEAT_TEXTS = [
   "Uy, es que se oye entrecortado. ¿Me lo dices otra vez?",
   "Perdona, de verdad, la cobertura está fatal. ¿Qué me decías?"
 ] as const;
+// Prefijo de la repetición ("¿qué decías?"). Constante para poder RECORTARLO si lo último dicho ya era
+// una repetición (evita el anidamiento "Sí, te decía: Sí, te decía: ...").
+const REPEAT_PREFIX = "Sí, te decía: ";
+
 // Tranquilizar desconfianza sin conocimiento recuperado: fallback determinista con variante.
 const REASSURE_FALLBACK_TEXTS = [
   "Te entiendo, es normal tener dudas. Vamos paso a paso y sin compromiso. Y lo importante: el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así que el dinero pasa primero por ti. ¿Qué es lo que más te preocupa?",
@@ -237,7 +243,10 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
             "Eres Alex, de Rose Models, la agencia.",
             "Le escribiste tú por Instagram hace poco y quedasteis en hablar por teléfono."
           ],
-          prohibitedClaims: ["Datos personales inventados (edad, ciudad, historia personal)"],
+          prohibitedClaims: [
+            "Datos personales inventados (edad, ciudad, historia personal)",
+            "Afirmar que eres una persona/humano o negar ser una IA (si pregunta si eres un robot, quita hierro con simpatía y redirige, sin confirmar ni negar)"
+          ],
           mandatoryNuances: [],
           referenceInstagram: true,
           context: input.context,
@@ -278,6 +287,34 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
     case "STAY_SILENT":
       // Anti-loro: turno sin habla. Texto vacío EXPLÍCITO (no cae al guion de etapa por el default).
       return { directiveType: directive.type, deterministicText: "", fallbackText: "" };
+    case "GIVE_SHARE_FIGURE": {
+      // Re-decir la cifra AUTORIZADA vigente (respuesta reactiva a "¿cuánto os lleváis?" — invariante 3:
+      // preguntada la cifra, se dice; la oferta viene del director/callNegotiation, jamás del LLM). Con
+      // variante por repetición (mismas cifras, otra formulación) para no sonar a contestador.
+      const offer = directive.shareOffer;
+      const text = offer
+        ? variantFor(
+            [
+              `Claro, te lo digo exacto: un ${offer.modelShare}% para ti y un ${offer.agencyShare}% para la agencia. Y el dinero lo cobras tú primero en tu cuenta y luego nos pasas nuestra parte, ¿vale?`,
+              `Que sí, tranquila, te lo repito: ${offer.modelShare}% para ti, ${offer.agencyShare}% para la agencia. Y cobras tú primero, ¿vale?`
+            ],
+            input.repetitionIndex ?? 0
+          )
+        : variantFor(DEFER_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
+    case "REPEAT_LAST_UTTERANCE": {
+      // Ella no lo oyó: se repite lo último que dijo el bot. El prefijo se RECORTA si ya venía de una
+      // repetición anterior (sin "Sí, te decía: Sí, te decía: ..." — riesgo del revisor jul-2026), y el
+      // eco viene del transcript que reporta la PLATAFORMA (fuente externa): se re-valida antes de decirlo
+      // — si no pasa, se retoma con la frase neutra en vez de repetir contenido dudoso.
+      const RETRY_FALLBACK = "Nada, te estaba contando cómo trabajamos. ¿Sigo?";
+      let last = input.lastBotUtterance?.trim() ?? "";
+      while (last.startsWith(REPEAT_PREFIX)) last = last.slice(REPEAT_PREFIX.length).trim();
+      const safeToEcho = last.length > 0 && validateCallUtterance(last).valid;
+      const text = safeToEcho ? `${REPEAT_PREFIX}${last}` : RETRY_FALLBACK;
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
     case "CONCEDE_SHARE": {
       const text = concedeShareText(directive.shareOffer);
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };

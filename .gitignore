@@ -23,3 +23,4 @@ backups/
 # Arneses de replay locales (leen el export real de IG) y sus salidas con posible PII
 tests/_*.test.ts
 tests/*.out.txt
+.sweep/

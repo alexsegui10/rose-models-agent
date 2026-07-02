@@ -13,9 +13,9 @@ const entries: KnowledgeEntryInput[] = [
     ],
     approvedAnswerPoints: [
       "La cara es imprescindible para nuestra estrategia.",
-      "Si es imprescindible para generar el trafico.",
+      "Es imprescindible para generar el trafico.",
       "Da mucha mas confianza al cliente.",
-      "Rechazo educado en cuatro mensajes si no acepta: 'Entiendo' / 'Pero es nuestra manera de trabajar' / 'Asi que no podemos trabjar contigo lamentablemente' / 'Espero que te vaya genial, un saludo'."
+      "Rechazo educado en cuatro mensajes si no acepta: 'Entiendo' / 'Pero es nuestra manera de trabajar' / 'Asi que no podemos trabajar contigo lamentablemente' / 'Espero que te vaya genial, un saludo'."
     ],
     prohibitedClaims: [
       "Ofrecer trabajo anonimo o una modalidad sin mostrar la cara.",
@@ -34,10 +34,12 @@ const entries: KnowledgeEntryInput[] = [
     allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED"],
     tags: ["face", "anonymity", "boundaries", "requirement", "rejection-script"],
     requiresHumanReview: false,
-    version: "face-requirement-mandatory-2026-06-10.1",
+    // 2026-07-02: solo ortografia ("Si es" ambiguo leido por TTS -> "Es imprescindible"; "trabjar"):
+    // misma politica aprobada, cero cambios de significado.
+    version: "face-requirement-mandatory-2026-07-02.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-10"
+    updatedAt: "2026-07-02"
   }
 ];
 

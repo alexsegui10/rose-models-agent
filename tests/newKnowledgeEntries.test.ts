@@ -58,7 +58,7 @@ describe("new knowledge entries from real conversation synthesis (2026-06-10)", 
     const entry = entries.find((candidate) => candidate.id === "face-requirement-mandatory");
     expect(entry).toBeDefined();
     expect(entry?.prohibitedClaims.some((claim) => claim.toLowerCase().includes("anonimo"))).toBe(true);
-    expect(entry?.approvedAnswerPoints.some((point) => point.includes("no podemos trabjar contigo lamentablemente"))).toBe(true);
+    expect(entry?.approvedAnswerPoints.some((point) => point.includes("no podemos trabajar contigo lamentablemente"))).toBe(true);
   });
 
   it("retrieves the multi-agency entry and asks about the traffic of the other agencies", async () => {

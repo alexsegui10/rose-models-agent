@@ -114,6 +114,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   // Se calcula durante el replay (determinista) y selecciona variantes de texto para no repetirse.
   const directiveRepeats: Partial<Record<CallDirectiveType, number>> = {};
 
+  const replayRetriever = input.retriever ?? defaultRetriever;
+  const answerEnabled = input.answerFromKnowledge !== false;
+
   if (botHasSpoken) {
     // Consume el primer turno del bot (la apertura legal si está activa, o la 1ª etapa si no) y reproduce
     // los turnos previos de la candidata para reconstruir el estado. La señal "none" produce lo correcto
@@ -127,7 +130,15 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       // un terminalRepeats fantasma y el cierre nunca llegaría a repetirse en vivo.
       if ((state.handedOff || state.closed) && isNoiseUtterance(userUtterances[i])) continue;
       const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
-      const signal = classifyCallSignal({ utterance: userUtterances[i], moneyContext });
+      // El replay clasifica con el MISMO conocimiento que el turno en vivo (riesgo del revisor jul-2026):
+      // sin esto, una pregunta respondida en vivo (asks-covered) se re-contaba como DEFER y la primera
+      // deferida real salía con la variante "también..." que presupone una anterior. Solo afecta a los
+      // CONTADORES (esas señales no mutan estado); el recuperador es local y barato.
+      const covered =
+        answerEnabled && userUtterances[i].trim().length > 0
+          ? (await resolveCoveringEntries(userUtterances[i], replayRetriever)).length > 0
+          : false;
+      const signal = classifyCallSignal({ utterance: userUtterances[i], isCoveredQuestion: covered, moneyContext });
       const decision = decideCallDirective({ state, signal });
       directiveRepeats[decision.directive.type] = (directiveRepeats[decision.directive.type] ?? 0) + 1;
       state = decision.nextState;
@@ -137,9 +148,12 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
 
   // Conocimiento que cubre la pregunta del turno EN VIVO (solo si responder está activo y hay texto).
   const coveringEntries =
-    input.answerFromKnowledge !== false && lastUtterance.trim().length > 0
-      ? await resolveCoveringEntries(lastUtterance, input.retriever ?? defaultRetriever)
-      : [];
+    answerEnabled && lastUtterance.trim().length > 0 ? await resolveCoveringEntries(lastUtterance, replayRetriever) : [];
+
+  // Lo último que DIJO EL BOT (para "¿qué decías?" -> repetirlo tal cual, ya validado cuando se dijo).
+  const lastBotUtterance = [...input.messages]
+    .reverse()
+    .find((m) => m.role === "assistant" && (m.content ?? "").trim().length > 0)?.content;
 
   // ANTI-LORO tras el final (jul-2026, llamada real de Alex: 8 MINUTOS repitiendo "te paso con mi socio"
   // cada 15s al ASR mandando "..."): con la llamada YA transferida o cerrada ANTES de este turno, un turno
@@ -166,7 +180,8 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // Memoria de la llamada (jul-2026): lo que ELLA ya dijo en cualquier turno (extractor determinista),
     // para que el redactor no re-pregunte y pueda referenciarlo. No decide nada (solo informa).
     callFacts: extractCallFacts(userUtterances),
-    directiveRepeats
+    directiveRepeats,
+    lastBotUtterance
   });
 
   const plan = result.utterancePlan;
@@ -189,8 +204,12 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     });
     // Cifras del reparto SOLO en el turno de dinero (endurecimiento R1 jul-2026): en cualquier otro turno
     // redactado, un porcentaje —aunque sea el autorizado— está fuera de sitio y tira el draft al fallback.
+    // Y un draft JAMÁS se despide (los cierres son deterministas): despedida improvisada -> fallback.
     const allowShare = result.directive.type === "COVER_STAGE" && result.directive.stageId === "MONEY";
-    if (draft && validateCallUtterance(draft, plan.draftingBrief, { allowAuthorizedShare: allowShare }).valid) {
+    if (
+      draft &&
+      validateCallUtterance(draft, plan.draftingBrief, { allowAuthorizedShare: allowShare, allowFarewell: false }).valid
+    ) {
       content = draft;
       usedDrafter = true;
     } else {

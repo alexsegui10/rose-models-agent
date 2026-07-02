@@ -26,6 +26,13 @@ export interface CallValidationOptions {
    * decidió comunicarla ahí). Por defecto true (compatibilidad con los textos deterministas ya validados).
    */
   allowAuthorizedShare?: boolean;
+  /**
+   * ¿Puede este turno despedirse/cerrar? Los turnos REDACTADOS por el LLM son siempre turnos intermedios
+   * (los cierres son deterministas): una despedida improvisada ("no podemos trabajar contigo, un saludo")
+   * suena a fin de llamada sin que el director haya cerrado (barrido jul-2026). Por defecto true
+   * (los textos deterministas de cierre/despedida sí se despiden, obviamente).
+   */
+  allowFarewell?: boolean;
 }
 
 /** Porcentajes (en dígitos) que el bot PUEDE decir: la escalera autorizada y sus complementarios. */
@@ -74,6 +81,28 @@ export function validateCallUtterance(
   if (trimmed.length > MAX_UTTERANCE_LENGTH) return { valid: false, reason: "demasiado largo para un turno de voz" };
 
   const norm = normalize(trimmed);
+
+  // El bot JAMÁS afirma ser humano ni niega ser una IA (barrido jul-2026: "¿eres un robot?" acabó en
+  // "Soy una persona, tranquila"). Se rechaza en cualquier draft; el fallback de identidad no miente.
+  // Cubre artículos y variantes ("soy un humano", "no soy ningún robot", "soy real") — huecos del revisor.
+  if (
+    /\bsoy (?:un |una )?(?:persona|human[oa]|ser humano)\b|\bno soy (?:un |una |ning\w+ )?(?:robot|bot|maquina|ia|inteligencia)\b|\bde carne y hueso\b|\bsoy (?:un )?(?:chico|hombre|tio) de verdad\b|\bsoy (?:real|de verdad)\b/.test(
+      norm
+    )
+  ) {
+    return { valid: false, reason: "afirma ser humano / niega ser IA" };
+  }
+
+  // Despedidas improvisadas en turnos intermedios: cerrar la llamada lo decide el DIRECTOR, no el LLM.
+  if (options?.allowFarewell === false) {
+    if (
+      /\bun saludo\b|\bque te vaya (?:bien|genial|bonito)\b|\badios\b|\bhasta (?:luego|pronto)\b|\bcha[ou]\b|\bnos vemos\b|\bun abrazo\b|\bun beso\b|\bte deseo lo mejor\b|\bgracias por tu tiempo\b|\bque tengas (?:buen|un buen)\b/.test(
+        norm
+      )
+    ) {
+      return { valid: false, reason: "despedida improvisada (el cierre lo decide el director)" };
+    }
+  }
 
   // INVERSIÓN del reparto (bug histórico "ese 70 es para ti", ahora también posible vía drafter): la parte
   // GRANDE (70/65/60) jamás es para ELLA, y la pequeña (30/35/40) jamás para la agencia. Se rechaza aunque
