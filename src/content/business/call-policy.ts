@@ -33,7 +33,7 @@ const entries: KnowledgeEntryInput[] = [
     category: "CALL_POLICY",
     title: "Llamada telefonica despues de valorar encaje",
     facts: [
-      "El canal previsto para llamada es WhatsApp.",
+      "La llamada es una llamada de telefono normal al numero que de la candidata.",
       "La llamada dura aproximadamente entre 2 y 10 minutos.",
       "La llamada sirve para presentarse, recordar lo hablado, explicar como trabaja Rose Models, resolver dudas, tratar porcentaje si corresponde e intentar cerrar.",
       "Alex enviara el contrato por WhatsApp para que la candidata lo lea tranquilamente.",

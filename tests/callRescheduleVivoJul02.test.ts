@@ -99,6 +99,29 @@ describe("motor + grafo: el webhook reabre el agendado y el ciclo se re-silencia
     expect(result.shouldRetryCall).toBeFalsy();
   });
 
+  it("respeta la PAUSA de Alex: candidata pausada -> reabre COLLECTING pero SIN mensaje automático (nota para Alex)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await repository.saveCandidate(
+      normalizeCandidate({
+        ...createCandidate({ instagramUsername: "resched_pausada" }),
+        currentState: "CALL_IN_PROGRESS",
+        manualControlActive: true,
+        callAttempts: 1
+      })
+    );
+    const result = await engine.recordCallOutcome({
+      candidateId: seeded.id,
+      outcome: "COMPLETED",
+      conversationId: "conv-rp",
+      transcriptFacts: { underage: false, handedOff: false, rescheduleRequested: true }
+    });
+    expect(result.candidate.currentState).toBe("COLLECTING_CALL_DETAILS");
+    expect(result.followUpMessage).toBeUndefined();
+    expect(result.candidate.notes.join(" ")).toContain("REAGENDAR PENDIENTE");
+    const messages = await repository.listMessages(seeded.id);
+    expect(messages.some((m) => m.role === "agent" && m.content.includes("mal momento"))).toBe(false);
+  });
+
   it("ADVERSARIAL invariante 2: menor + 'ahora no puedo' -> CLOSED gana al reagendado", async () => {
     const { engine, repository } = createEngine();
     const seeded = await repository.saveCandidate(

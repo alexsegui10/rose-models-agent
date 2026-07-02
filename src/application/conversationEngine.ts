@@ -776,10 +776,18 @@ export class ConversationEngine {
 
     // Reagendar VIVO (jul-2026): al reabrir el agendado se desarma la hora vieja y se deja PERSISTIDO el
     // mensaje proactivo de IG; la ruta lo ENVÍA (mismo patrón motor-guarda/ruta-envía de las decisiones).
+    // RESPETA la pausa/control manual de Alex (contrato del canal IG, nota del revisor): pausada -> no se
+    // persiste ni envía nada automático; queda una nota para que Alex reagende a mano.
     const isReschedule = toState === "COLLECTING_CALL_DETAILS";
-    const followUpMessage = isReschedule
-      ? "Perdona por pillarte en mal momento antes 🙈 ¿Qué otro día y hora te viene bien para la llamada y la cuadramos?"
-      : undefined;
+    const pausedByAlex = existing.manualControlActive || existing.automationPaused;
+    const followUpMessage =
+      isReschedule && !pausedByAlex
+        ? "Perdona por pillarte en mal momento antes 🙈 ¿Qué otro día y hora te viene bien para la llamada y la cuadramos?"
+        : undefined;
+    const pausedRescheduleNote =
+      isReschedule && pausedByAlex
+        ? ["REAGENDAR PENDIENTE: la pilló en mal momento y el bot está PAUSADO para ella; escríbele tú para reagendar."]
+        : [];
 
     const candidate: Candidate = {
       ...existing,
@@ -794,6 +802,7 @@ export class ConversationEngine {
         ...existing.notes,
         `CALL_${input.outcome}${summary ? `: ${summary}` : ""}`,
         ...safetyNote,
+        ...pausedRescheduleNote,
         ...retryNote,
         ...followUpNote
       ],

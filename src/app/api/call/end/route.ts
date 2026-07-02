@@ -231,7 +231,11 @@ export async function POST(request: Request) {
       const igConfig = getInstagramConfig();
       if (igConfig.isConfigured) {
         const provider = new GraphApiInstagramMessagingProvider(igConfig);
-        await provider.sendTextMessage(result.candidate.instagramUsername, result.followUpMessage);
+        // humanAgentTag: el último DM de la candidata suele ser de hace >24h (agendó ayer); sin la
+        // etiqueta, Meta rechazaría el RESPONSE y la promesa de la voz ("te escribo por IG") no llegaría.
+        await provider.sendTextMessage(result.candidate.instagramUsername, result.followUpMessage, {
+          humanAgentTag: true
+        });
       }
     } catch (error) {
       console.warn("[call-end] no se pudo enviar el mensaje de reagendado por IG", {
