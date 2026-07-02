@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { recoverStuckCalls } from "@/application/callWatchdog";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import { planOutreach, REENGAGE_TRIGGER, RESCHEDULE_TRIGGER } from "@/application/outreachPlanner";
+import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 import { createTransition } from "@/domain/stateMachine";
 import type { Candidate } from "@/domain/candidate";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
@@ -35,10 +37,25 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // WATCHDOG de llamadas atascadas (A1 jul-2026): ANTES del gate de Instagram (no lo necesita). Si el
+  // webhook de fin nunca llegó, la candidata quedaba "en curso" para siempre; aquí se re-arma y se avisa.
+  let watchdogRecovered = 0;
+  try {
+    const notifier = getOperatorNotifier();
+    const recovered = await recoverStuckCalls({
+      repository: getSimulatorRepository(),
+      notify: (r) =>
+        notifier.notify({ kind: "call-watchdog", conversationId: r.instagramUsername, detail: `${r.minutesStuck} min en curso.` })
+    });
+    watchdogRecovered = recovered.length;
+  } catch (error) {
+    console.error("[cron-outreach] watchdog de llamadas fallo (continuamos)", { error: errorName(error) });
+  }
+
   const config = getInstagramConfig();
   if (!config.isConfigured) {
     console.warn("[cron-outreach] SKIP: Instagram no configurado (no-op)");
-    return NextResponse.json({ ok: true, skipped: "instagram-not-configured" });
+    return NextResponse.json({ ok: true, skipped: "instagram-not-configured", watchdogRecovered });
   }
 
   const repository = getSimulatorRepository();
@@ -105,7 +122,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     cooled,
     failed
   });
-  return NextResponse.json({ ok: true, considered: candidates.length, reengaged, rescheduled, cooled, failed });
+  return NextResponse.json({
+    ok: true,
+    considered: candidates.length,
+    reengaged,
+    rescheduled,
+    cooled,
+    failed,
+    watchdogRecovered
+  });
 }
 
 /**

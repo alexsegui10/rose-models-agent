@@ -6,7 +6,7 @@ import type { Candidate, HumanReviewReason, StateTransition } from "@/domain/can
  * cuando hace falta. Secretos en `.env.local`; si no está configurado, el aviso es un no-op silencioso
  * y NUNCA tumba el turno (el procesamiento del mensaje es lo primero).
  */
-export type OperatorNotificationKind = "escalation" | "blocked" | "error" | "stop-request" | "follow-request";
+export type OperatorNotificationKind = "escalation" | "blocked" | "error" | "stop-request" | "follow-request" | "call-watchdog";
 
 // isStopRequest vive ahora en domain (funcion pura) para que la compartan infra y application sin cruzar
 // capas; se re-exporta aqui para no romper los imports existentes (webhook).
@@ -117,6 +117,12 @@ export function formatOperatorMessage(notification: OperatorNotification): strin
   }
   if (notification.kind === "error") {
     return `Rose Models ⚠️ Error procesando un mensaje en el webhook${notification.detail ? `: ${notification.detail}` : "."} Revisa los logs.`;
+  }
+  if (notification.kind === "call-watchdog") {
+    const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
+    // Honesto con lo que pasa de verdad (nota del revisor): el watchdog re-ARMA el estado, pero no
+    // programa él la rellamada — puede hacer falta que Alex pulse "Llamar" en el CRM.
+    return `Rose Models 📞⚠️ Una llamada se quedó "en curso" sin final (¿caída del proveedor o créditos agotados?). La he marcado como NO CONTESTA.${who}${notification.detail ? `\n${notification.detail}` : ""}\nRevisa el CRM: puede que tengas que volver a llamarla tú.`;
   }
   if (notification.kind === "blocked") {
     const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
