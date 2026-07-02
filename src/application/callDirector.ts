@@ -54,6 +54,7 @@ export type CallDirectiveType =
   | "HANDOFF_TO_ALEX" // pasar la llamada a una persona
   | "CLOSE_WITH_CONTRACT" // cerrar: "ahora te paso el contrato"
   | "CLOSE_SOFT" // cierre cálido sin contrato (no le interesa): puerta abierta
+  | "CLOSE_RESCHEDULE" // la pillamos en mal momento NADA MÁS descolgar: cerrar y reagendar por Instagram
   | "CLOSE_UNDERAGE"; // corte seguro: menor de edad, no se puede seguir (invariante 2)
 
 export type CallHandoffReason =
@@ -78,7 +79,7 @@ export interface CallDirectorState {
   /** true tras cualquier cierre: es pegajoso (no reabre guion ni negociación). */
   closed: boolean;
   /** Qué cierre se dio, para repetirlo si la candidata sigue hablando tras cerrar. */
-  closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT" | "CLOSE_UNDERAGE";
+  closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT" | "CLOSE_RESCHEDULE" | "CLOSE_UNDERAGE";
 }
 
 export interface CallDirective {
@@ -180,8 +181,20 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       return { directive: { type: "GIVE_AGE_POLICY" }, nextState: s };
     case "distrust":
       return { directive: { type: "REASSURE" }, nextState: s };
-    case "wants-to-end":
+    case "wants-to-end": {
+      // jul-2026 (decisión de Alex): si quiere colgar NADA MÁS descolgar (aún no se ha explicado NADA),
+      // no tiene sentido "te paso el contrato" — se cierra con reagendado por Instagram y el sistema
+      // reabre el agendado por el DM (webhook de fin -> COLLECTING_CALL_DETAILS). Si el pitch ya avanzó,
+      // el cierre con contrato de siempre.
+      const substantiveCovered = s.coveredStages.filter((id) => id !== "CLOSE").length;
+      if (substantiveCovered === 0) {
+        return {
+          directive: { type: "CLOSE_RESCHEDULE" },
+          nextState: { ...s, closed: true, closeDirective: "CLOSE_RESCHEDULE" }
+        };
+      }
       return closeWithContract(s);
+    }
     case "follows-along":
     case "none":
     default:

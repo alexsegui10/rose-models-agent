@@ -21,6 +21,8 @@ export interface CallTranscriptFacts {
   /** La llamada terminó transferida a Alex (pidió persona, agresión, rechazó el suelo, audio roto). */
   handedOff: boolean;
   handoffReason?: CallHandoffReason;
+  /** La pillamos en mal momento nada más descolgar: el cierre fue "te escribo por IG y lo movemos". */
+  rescheduleRequested?: boolean;
   /** % para la modelo al terminar, si el dinero llegó a presentarse (30 si no se negoció a la baja). */
   negotiatedModelShare?: number;
 }
@@ -52,6 +54,7 @@ export function analyzeCallTranscript(
     underage: underage || state.closeDirective === "CLOSE_UNDERAGE",
     handedOff: state.handedOff,
     handoffReason: state.handoffReason,
+    rescheduleRequested: state.closeDirective === "CLOSE_RESCHEDULE",
     negotiatedModelShare: moneyDiscussed ? callRevenueShareOfferForStep(state.revenueShareStep).modelShare : undefined
   };
 }

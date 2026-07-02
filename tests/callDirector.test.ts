@@ -121,9 +121,14 @@ describe("director de la llamada", () => {
     expect(third.nextState.handedOff).toBe(true);
   });
 
-  it("quiere terminar -> cierre con contrato", () => {
-    const state = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
-    expect(decideCallDirective({ state, signal: "wants-to-end" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
+  // jul-2026 (decision de Alex): 'quiere terminar' NADA MAS descolgar (cero etapas explicadas) ya no suelta
+  // el contrato — cierra con reagendado por Instagram. Con el pitch avanzado, el contrato de siempre.
+  it("quiere terminar sin nada explicado -> CLOSE_RESCHEDULE; con pitch avanzado -> contrato", () => {
+    const fresh = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    expect(decideCallDirective({ state: fresh, signal: "wants-to-end" }).directive.type).toBe("CLOSE_RESCHEDULE");
+
+    const midCall = { ...fresh, coveredStages: ["HOW_AGENCY_WORKS" as const] };
+    expect(decideCallDirective({ state: midCall, signal: "wants-to-end" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
   });
 
   it("no le interesa -> cierre CÁLIDO sin contrato (CLOSE_SOFT), pegajoso", () => {

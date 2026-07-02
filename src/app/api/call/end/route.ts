@@ -2,9 +2,11 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { analyzeCallTranscript } from "@/application/callTranscriptAnalysis";
+import { getInstagramConfig } from "@/application/instagramConfig";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { bearerMatches } from "@/server/bearerAuth";
 import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
+import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 
 /**
@@ -219,6 +221,24 @@ export async function POST(request: Request) {
     transcript: payload.transcript,
     transcriptFacts
   });
+
+  // REAGENDAR VIVO (jul-2026, decisión de Alex): si la llamada pilló a la candidata en mal momento, el
+  // motor la dejó en COLLECTING_CALL_DETAILS y PERSISTIÓ el mensaje proactivo; aquí se ENVÍA por Instagram
+  // (mismo patrón motor-guarda/ruta-envía). Best-effort: si el envío falla, el mensaje queda en el CRM y
+  // ella misma puede escribir (el bot ya está despierto para reagendar).
+  if (result.followUpMessage && result.transitions.length > 0) {
+    try {
+      const igConfig = getInstagramConfig();
+      if (igConfig.isConfigured) {
+        const provider = new GraphApiInstagramMessagingProvider(igConfig);
+        await provider.sendTextMessage(result.candidate.instagramUsername, result.followUpMessage);
+      }
+    } catch (error) {
+      console.warn("[call-end] no se pudo enviar el mensaje de reagendado por IG", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
 
   // Aviso a Alex (best-effort, nunca rompe el webhook): la llamada terminó necesitando SU decisión. Solo si
   // la transición OCURRIÓ en este webhook (transitions no vacío): un no-op sobre una ya cerrada no avisa.

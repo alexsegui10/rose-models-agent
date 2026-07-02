@@ -663,6 +663,8 @@ export class ConversationEngine {
     shouldRetryCall?: boolean;
     attemptsUsed?: number;
     retryScheduledForMs?: number;
+    /** Mensaje proactivo de IG YA PERSISTIDO (reagendar vivo); la ruta lo envía por el provider. */
+    followUpMessage?: string;
   }> {
     const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
     if (!existing) {
@@ -685,13 +687,18 @@ export class ConversationEngine {
     // CERRADA — jamás "completada → enviar contrato". Antes que cualquier otro resultado.
     // HANDOFF (invariante 4): si la llamada terminó transferida (pidió persona / agresión / rechazó el
     // suelo del 60 / audio roto), va a REVISIÓN HUMANA: Alex decide, no se le manda contrato en automático.
+    // REAGENDAR VIVO (jul-2026, decisión de Alex): "ahora no puedo" nada más descolgar → el cierre fue
+    // "te escribo por IG y lo movemos" → se REABRE el agendado (COLLECTING_CALL_DETAILS): el bot de IG
+    // vuelve a la vida SOLO para reagendar, y al agendar la nueva hora se silencia solo (CALL_SCHEDULED).
     const toState = facts?.underage
       ? "CLOSED"
       : input.outcome === "COMPLETED" && facts?.handedOff
         ? "HUMAN_INTERVENTION_REQUIRED"
-        : input.outcome === "COMPLETED"
-          ? "CALL_COMPLETED"
-          : "CALL_NO_ANSWER";
+        : input.outcome === "COMPLETED" && facts?.rescheduleRequested
+          ? "COLLECTING_CALL_DETAILS"
+          : input.outcome === "COMPLETED"
+            ? "CALL_COMPLETED"
+            : "CALL_NO_ANSWER";
     if (!canTransition(existing.currentState, toState)) {
       return { candidate: existing, transitions: [] };
     }
@@ -711,17 +718,21 @@ export class ConversationEngine {
           ? "CALL_UNDERAGE_WEBHOOK"
           : toState === "HUMAN_INTERVENTION_REQUIRED"
             ? "CALL_HANDOFF_WEBHOOK"
-            : input.outcome === "COMPLETED"
-              ? "CALL_COMPLETED_WEBHOOK"
-              : "CALL_NO_ANSWER_WEBHOOK",
+            : toState === "COLLECTING_CALL_DETAILS"
+              ? "CALL_RESCHEDULE_WEBHOOK"
+              : input.outcome === "COMPLETED"
+                ? "CALL_COMPLETED_WEBHOOK"
+                : "CALL_NO_ANSWER_WEBHOOK",
       reason:
         toState === "CLOSED"
           ? "SEGURIDAD: declaró ser menor de edad DURANTE la llamada; cerrada (invariante 2)."
           : toState === "HUMAN_INTERVENTION_REQUIRED"
             ? `La llamada terminó en handoff (${handoffReasonText[facts?.handoffReason ?? ""] ?? "transferida a Alex"}): lo decide Alex.`
-            : input.outcome === "COMPLETED"
-              ? "La llamada termino; Alex retoma el siguiente paso (enviar el contrato)."
-              : "La candidata no contesto la llamada; pendiente de reagendar o seguimiento de Alex."
+            : toState === "COLLECTING_CALL_DETAILS"
+              ? "La pillamos en mal momento nada mas descolgar: se reabre el agendado por Instagram (reagendar)."
+              : input.outcome === "COMPLETED"
+                ? "La llamada termino; Alex retoma el siguiente paso (enviar el contrato)."
+                : "La candidata no contesto la llamada; pendiente de reagendar o seguimiento de Alex."
     });
     // Registro descriptivo de la llamada (no decide negocio): lo muestra la ficha y la pestana Llamadas.
     // El % negociado sale del webhook si vino; si no, del replay determinista del transcript.
@@ -759,13 +770,23 @@ export class ConversationEngine {
           ? [
               `CALL_HANDOFF: la llamada terminó transferida (${handoffReasonText[facts?.handoffReason ?? ""] ?? "a Alex"}). Decide tú el siguiente paso.`
             ]
-          : [];
+          : toState === "COLLECTING_CALL_DETAILS"
+            ? ["CALL_RESCHEDULE: la pilló en mal momento; el bot le escribe por IG para reagendar y se re-silencia al agendar."]
+            : [];
+
+    // Reagendar VIVO (jul-2026): al reabrir el agendado se desarma la hora vieja y se deja PERSISTIDO el
+    // mensaje proactivo de IG; la ruta lo ENVÍA (mismo patrón motor-guarda/ruta-envía de las decisiones).
+    const isReschedule = toState === "COLLECTING_CALL_DETAILS";
+    const followUpMessage = isReschedule
+      ? "Perdona por pillarte en mal momento antes 🙈 ¿Qué otro día y hora te viene bien para la llamada y la cuadramos?"
+      : undefined;
 
     const candidate: Candidate = {
       ...existing,
       currentState: toState,
-      // Reintento: reprograma la hora +30 min (si quedan intentos); si no, respeta la que hubiera.
-      scheduledCallStartMs: retryScheduledForMs ?? existing.scheduledCallStartMs,
+      // Reintento: reprograma la hora +30 min (si quedan intentos); reagendado: se desarma la hora vieja.
+      scheduledCallStartMs: isReschedule ? undefined : (retryScheduledForMs ?? existing.scheduledCallStartMs),
+      scheduledCallSlot: isReschedule ? undefined : existing.scheduledCallSlot,
       // Grabación en el CRM: el conversation_id fiable llega en el webhook de FIN (en la salida SIP puede ser
       // null al iniciar). Se guarda aquí para que la ficha pueda reproducir el audio de la llamada.
       lastCallConversationId: input.conversationId ?? existing.lastCallConversationId,
@@ -782,7 +803,12 @@ export class ConversationEngine {
 
     await this.dependencies.repository.saveCandidate(candidate);
     await this.dependencies.repository.addTransition(transition);
-    return { candidate, transitions: [transition], shouldRetryCall, attemptsUsed, retryScheduledForMs };
+    if (followUpMessage) {
+      await this.dependencies.repository.addMessage(
+        agentMessage(candidate.id, followUpMessage, { provider: "deterministic", trigger: "CALL_RESCHEDULE", proactive: true })
+      );
+    }
+    return { candidate, transitions: [transition], shouldRetryCall, attemptsUsed, retryScheduledForMs, followUpMessage };
   }
 
   /**

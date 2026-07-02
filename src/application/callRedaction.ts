@@ -110,6 +110,10 @@ const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
 // Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
 const CLOSE_SOFT_TEXT =
   "Te entiendo perfectamente, sin ningún problema. Lo dejamos aquí entonces; si en algún momento te animas, aquí nos tienes, ¿vale? Gracias por tu tiempo y un saludo.";
+// La pillamos en MAL MOMENTO nada más descolgar (jul-2026): cerrar rápido y reagendar por Instagram (el
+// sistema reabre el agendado por el DM). Sin contrato: aún no se le explicó nada.
+const CLOSE_RESCHEDULE_TEXT =
+  "Tranquila, sin problema, te pillo en mal momento. Te escribo por Instagram y buscamos otro hueco que te venga bien, ¿vale? ¡Hablamos!";
 // Corte seguro por minoría de edad (invariante 2): cierre educado y definitivo, sin valoraciones personales.
 const CLOSE_UNDERAGE_TEXT =
   "Gracias por tu tiempo, pero solo trabajamos con personas mayores de edad, así que no podemos seguir adelante. Te deseo lo mejor, un saludo.";
@@ -180,6 +184,8 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: AGE_POLICY_TEXT, fallbackText: AGE_POLICY_TEXT };
     case "CLOSE_SOFT":
       return { directiveType: directive.type, deterministicText: CLOSE_SOFT_TEXT, fallbackText: CLOSE_SOFT_TEXT };
+    case "CLOSE_RESCHEDULE":
+      return { directiveType: directive.type, deterministicText: CLOSE_RESCHEDULE_TEXT, fallbackText: CLOSE_RESCHEDULE_TEXT };
     case "CLOSE_UNDERAGE":
       return { directiveType: directive.type, deterministicText: CLOSE_UNDERAGE_TEXT, fallbackText: CLOSE_UNDERAGE_TEXT };
     case "DEFEND_SHARE":

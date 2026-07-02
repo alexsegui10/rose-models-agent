@@ -31,8 +31,16 @@ export const allowedTransitions: Record<CandidateState, CandidateState[]> = {
     "HUMAN_INTERVENTION_REQUIRED",
     "CLOSED"
   ],
-  // Llamada en curso (bot de voz): termina, no contesta, o se transfiere a Alex en vivo.
-  CALL_IN_PROGRESS: ["CALL_COMPLETED", "CALL_NO_ANSWER", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
+  // Llamada en curso (bot de voz): termina, no contesta, se transfiere a Alex en vivo, o la pillamos en
+  // mal momento nada mas descolgar -> se reabre el agendado por Instagram (COLLECTING, jul-2026).
+  CALL_IN_PROGRESS: [
+    "CALL_COMPLETED",
+    "CALL_NO_ANSWER",
+    "COLLECTING_CALL_DETAILS",
+    "REJECTED",
+    "HUMAN_INTERVENTION_REQUIRED",
+    "CLOSED"
+  ],
   // Llamada hecha: el bot explico y dejo el siguiente paso; Alex lo retoma (o se reagenda/cierra).
   CALL_COMPLETED: ["READY_TO_SCHEDULE", "CALL_SCHEDULED", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
   // No contesto: se reagenda/reintenta o lo retoma Alex. COLLECTING_CALL_DETAILS habilita el
