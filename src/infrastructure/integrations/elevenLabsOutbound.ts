@@ -99,7 +99,11 @@ export async function startOutboundSipCall(
     agent_phone_number_id: config.agentPhoneNumberId,
     to_number: toNumber,
     conversation_initiation_client_data: {
-      dynamic_variables: buildDynamicVariables(candidate)
+      dynamic_variables: buildDynamicVariables(candidate),
+      // Cinturón + tirantes (jul-2026, llamada real sin nombre): las mismas variables TAMBIÉN como
+      // custom_llm_extra_body — es lo que ElevenLabs reenvía a nuestro Custom LLM cuando el toggle
+      // "Custom LLM extra body" del agente está activo. Así el contexto llega por la vía que esté abierta.
+      custom_llm_extra_body: buildDynamicVariables(candidate)
     }
   };
 
