@@ -1145,12 +1145,17 @@ export class ConversationEngine {
       // "no quiero la llamada") o un "para de escribirme" con la llamada agendada NO se silencia: debe
       // escalar a Alex y DESARMAR el auto-marcador (si no, el bot la llamaba igual tras rechazarlo por escrito).
       const normalizedInboundForGate = normalizeText(groupedMessage.content);
+      // SEGURIDAD (invariante 2, hallazgo RIESGO 4 del revisor): si con la llamada AGENDADA la candidata
+      // declara AHORA ser menor por texto, NO se silencia — el turno sigue y el cierre por edad (CLOSED)
+      // desarma el auto-marcador. Sin esto quedaba silenciada y el bot de voz la llamaba igual.
+      const declaresMinorWhileScheduled =
+        activeCandidate.currentState === "CALL_SCHEDULED" && textDeclaresMinor(normalizedInboundForGate);
       const wantsCallChangeWhileScheduled =
         activeCandidate.currentState === "CALL_SCHEDULED" &&
         (wantsCallChangePattern.test(normalizedInboundForGate) ||
           explicitDeclinePattern.test(normalizedInboundForGate) ||
           isStopRequest(groupedMessage.content));
-      if (!wantsCallChangeWhileScheduled) {
+      if (!wantsCallChangeWhileScheduled && !declaresMinorWhileScheduled) {
         return skippedResult(
           activeCandidate,
           "",
@@ -3852,6 +3857,13 @@ export function applyConversationalRhythm(response: string, recentAgentMessages:
 
 const explicitDeclinePattern =
   /\b(no me interesa|no me interesa nada|no quiero seguir|no quiero continuar|no gracias|dejalo|olvidalo|no insistas|no quiero saber nada)\b/;
+// Declaracion de MINORIA por texto (conservadora, misma linea que el UNDERAGE de la voz): "soy menor",
+// "no tengo 18", "tengo 1X años" (14-17). Excluye sustantivos que no son edad para no cortar a una adulta.
+// Solo se usa para SACAR del silencio en CALL_SCHEDULED (invariante 2); el cierre real lo decide el motor.
+const textDeclaresMinor = (text: string): boolean =>
+  /\b(soy|aun soy|todavia soy) menor\b|\bmenor de edad\b|\b(no tengo|aun no tengo|todavia no tengo) (los )?(18|dieciocho)\b|\btengo (1[0-7]|catorce|quince|dieciseis|diecisiete)\b(?!\s*(seguidor|foto|video|mensaj|euro|hij|gat|perr))|\b(1[0-7]|catorce|quince|dieciseis|diecisiete) an(os|itos)\b/.test(
+    text
+  );
 const reEngagementQuestionPattern = /\b(sigues interesada|te interesa|quieres seguir|quieres continuar|seguimos)\b/;
 const onlyFansQuestionPattern = /\b(tienes of|has tenido of|tienes onlyfans|has tenido onlyfans|of activo)\b/;
 const agenciesQuestionPattern = /\botras? agencias?\b/;

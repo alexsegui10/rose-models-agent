@@ -71,6 +71,29 @@ describe("texto-02: rechazo/cancelación con la llamada AGENDADA desarma el auto
     expect(result.response.toLowerCase()).not.toContain("no soy ningún bot");
   });
 
+  it("SEGURIDAD (RIESGO 4): 'tengo 16' con la llamada agendada NO se silencia -> sale del auto-marcador (invariante 2)", async () => {
+    const { engine, repository } = createEngine();
+    // Con una adulta ya aprobada, "tengo 16" es una CONTRADICCIÓN -> se escala a Alex (HIR): igual de seguro,
+    // porque deja de estar en CALL_SCHEDULED y el dispatch NO la llama. Lo clave: NO queda silenciada+agendada.
+    const seeded = await seed(repository, "CALL_SCHEDULED", scheduledOverrides);
+    await turn(engine, seeded, "espera que tengo 16 años");
+    const after = await repository.findCandidateById(seeded.id);
+    expect(after?.currentState).not.toBe("CALL_SCHEDULED");
+    expect(["CLOSED", "HUMAN_INTERVENTION_REQUIRED"]).toContain(after?.currentState);
+  });
+
+  it("SEGURIDAD (RIESGO 4): menor SIN edad adulta previa -> CLOSED limpio (invariante 2)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED", {
+      ...scheduledOverrides,
+      age: undefined,
+      isAdultConfirmed: false
+    });
+    await turn(engine, seeded, "oye espera que tengo 16");
+    const after = await repository.findCandidateById(seeded.id);
+    expect(after?.currentState).toBe("CLOSED");
+  });
+
   it("charla NEUTRA en CALL_SCHEDULED sigue silenciada (no se gasta OpenAI ni se responde)", async () => {
     const { engine, repository } = createEngine();
     const seeded = await seed(repository, "CALL_SCHEDULED", scheduledOverrides);
