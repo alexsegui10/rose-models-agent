@@ -415,7 +415,9 @@ export default function Home() {
         );
         return;
       }
-      setCrmNotice(`📞 Solicitud de llamada enviada a @${candidate.instagramUsername}. El bot la llamará cuando acepte.`);
+      setCrmNotice(
+        `📞 Llamando a @${candidate.instagramUsername} ahora. El bot marca su número y conecta; el resultado aparecerá en su ficha al colgar.`
+      );
     } catch (error) {
       setCrmNotice(`No se pudo iniciar la llamada: ${error instanceof Error ? error.message : "error de red"}.`);
     }
@@ -550,11 +552,25 @@ export default function Home() {
 
   async function setBotPaused(candidate: Candidate, paused: boolean) {
     // El bot se pausa/reanuda por candidata (peticion de Alex #3). manual-control fija ambos flags.
-    await fetch("/api/simulator/manual-control", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidateId: candidate.id, manualControlActive: paused })
-    });
+    // jul-2026: NO ser optimista — si el servidor falla, no decir "Bot pausado" (era un falso exito que
+    // dejaba a Alex creyendo que el bot estaba en pausa cuando seguia respondiendo).
+    let response: Response;
+    try {
+      response = await fetch("/api/simulator/manual-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId: candidate.id, manualControlActive: paused })
+      });
+    } catch (error) {
+      setCrmNotice(
+        `⚠️ No se pudo ${paused ? "pausar" : "reanudar"} el bot (error de red): ${error instanceof Error ? error.message : "sin conexión"}.`
+      );
+      return;
+    }
+    if (!response.ok) {
+      setCrmNotice(`⚠️ No se pudo ${paused ? "pausar" : "reanudar"} el bot (${response.status}). Vuelve a intentarlo.`);
+      return;
+    }
     setCrmNotice(
       paused ? `Bot pausado para @${candidate.instagramUsername}.` : `Bot reanudado para @${candidate.instagramUsername}.`
     );
@@ -570,20 +586,36 @@ export default function Home() {
 
   async function applyHumanDecision(candidate: Candidate, decision: "APPROVE" | "REJECT") {
     // Decision humana explicita (invariante 4). Al aprobar, el bot propone la llamada (peticion #5).
-    const response = await fetch("/api/simulator/human-review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidateId: candidate.id, decision })
-    });
+    let response: Response;
+    try {
+      response = await fetch("/api/simulator/human-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId: candidate.id, decision })
+      });
+    } catch (error) {
+      setCrmNotice(
+        `⚠️ No se pudo aplicar la decisión (error de red): ${error instanceof Error ? error.message : "sin conexión"}.`
+      );
+      return;
+    }
     if (!response.ok) {
       setCrmNotice("No se pudo aplicar la decision.");
       return;
     }
-    const data = (await response.json()) as { candidate: Candidate; proposedMessage: string | null };
+    const data = (await response.json()) as {
+      candidate: Candidate;
+      proposedMessage: string | null;
+      sentToCandidate?: string | null;
+      deliveryError?: boolean;
+    };
     if (decision === "APPROVE") {
+      const delivered = data.sentToCandidate && !data.deliveryError;
       setCrmNotice(
         data.proposedMessage
-          ? `Aprobada @${candidate.instagramUsername}. El bot propuso: "${data.proposedMessage.replace(/\n+/g, " ")}"`
+          ? delivered
+            ? `Aprobada @${candidate.instagramUsername}. El bot le escribió: "${data.proposedMessage.replace(/\n+/g, " ")}"`
+            : `Aprobada @${candidate.instagramUsername}. ⚠️ El mensaje NO llegó a Instagram (pendiente): "${data.proposedMessage.replace(/\n+/g, " ")}"`
           : `@${candidate.instagramUsername} no estaba en revision: sin cambios.`
       );
     } else {
@@ -773,15 +805,33 @@ export default function Home() {
       });
       return;
     }
+    // "No encaja" descarta a la candidata en la revisión de perfil (irreversible, y el botón está pegado a
+    // "Encaja"): pedir confirmación para evitar el clic por error (jul-2026, hallazgo no-encaja-sin-confirmacion).
+    if (action === "PROFILE_NO_FIT") {
+      openModal({
+        title: `¿Descartar a @${candidate.instagramUsername}?`,
+        body: "La marcarás como que NO encaja en la revisión de perfil y se descarta. Úsalo solo si de verdad no es válida.",
+        danger: true,
+        confirmLabel: "No encaja, descartar",
+        onConfirm: () => void doAdvanceStage(candidate, "PROFILE_NO_FIT")
+      });
+      return;
+    }
     void doAdvanceStage(candidate, action);
   }
 
   async function doAdvanceStage(candidate: Candidate, action: AdvanceAction, slot?: string) {
-    const response = await fetch("/api/simulator/advance-stage", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ candidateId: candidate.id, action, slot })
-    });
+    let response: Response;
+    try {
+      response = await fetch("/api/simulator/advance-stage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ candidateId: candidate.id, action, slot })
+      });
+    } catch (error) {
+      setCrmNotice(`⚠️ No se pudo aplicar la acción (error de red): ${error instanceof Error ? error.message : "sin conexión"}.`);
+      return;
+    }
     if (!response.ok) {
       setCrmNotice("No se pudo aplicar la accion.");
       return;
@@ -789,6 +839,8 @@ export default function Home() {
     const data = (await response.json()) as {
       candidate: Candidate;
       proposedMessage: string | null;
+      sentToCandidate?: string | null;
+      deliveryError?: boolean;
       blockedReason?: string | null;
     };
     // La accion no se pudo aplicar por falta de datos (p.ej. confirmar llamada sin telefono/hora): mostrar el
@@ -821,12 +873,18 @@ export default function Home() {
       setCrmNotice(
         `Sin cambios para @${candidate.instagramUsername}: esa acción no aplica en su estado actual (${stateLabel(candidate.currentState)}).`
       );
-    } else {
+    } else if (data.proposedMessage) {
+      // No mentir sobre la ENTREGA (jul-2026): "escribió" solo si de verdad se envió a la candidata. Si el
+      // envío falló (deliveryError) o no salió (sentToCandidate null), se avisa de que quedó SIN enviar.
+      const delivered = data.sentToCandidate && !data.deliveryError;
+      const msg = data.proposedMessage.replace(/\n+/g, " ");
       setCrmNotice(
-        data.proposedMessage
-          ? `${labels[action]} El bot escribio: "${data.proposedMessage.replace(/\n+/g, " ")}"`
-          : labels[action]
+        delivered
+          ? `${labels[action]} El bot escribió: "${msg}"`
+          : `${labels[action]} ⚠️ La respuesta NO llegó a enviarse a Instagram (queda pendiente): "${msg}"`
       );
+    } else {
+      setCrmNotice(labels[action]);
     }
     if (selectedCandidate?.id === candidate.id) {
       setSelectedCandidate(data.candidate);
