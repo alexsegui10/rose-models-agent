@@ -911,16 +911,17 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
     });
 
     expect(second.candidate.phone).toBe("612345678");
-    expect(second.response.toLowerCase()).toContain("socio");
-    expect(second.response.toLowerCase()).toContain("llamada");
+    // A0 (jul-2026): guion esencial incompleto -> apunta el numero y SIGUE cualificando (nada de socio-loop).
+    expect(second.responsePlan.questionToAsk).not.toBeNull();
     expect(second.response.toLowerCase()).not.toContain("ciudad");
     expect(second.response.toLowerCase()).not.toContain("que edad tienes");
   });
 
-  // Regresion taxonomia nº6 iteracion 2 (r4 T18): cuando la candidata senala que esta lista YA
-  // ("ahora si") y el telefono ya esta guardado, el bot bucleaba "dime dia y hora" o respondia el
-  // dead-end "cualquier duda me dices". El cierre real es el handoff inmediato al socio.
-  it("hands off to the socio when the candidate signals readiness now and the phone is already saved", async () => {
+  // Regresion taxonomia nº6 iteracion 2 (r4 T18) + A0 (jul-2026): cuando la candidata senala que esta
+  // lista YA ("ahora si") con el telefono guardado, JAMAS el dead-end "cualquier duda me dices". Con el
+  // guion esencial COMPLETO -> handoff al socio (regresion original); con guion INCOMPLETO -> sigue
+  // cualificando lo que falte (decision A0: el telefono pronto ya no mata la cualificacion).
+  it("hands off to the socio when readiness is signaled, the phone is saved and the script is complete", async () => {
     const { engine, repository } = createEngine();
     const seeded = await repository.saveCandidate({
       ...createCandidate({ instagramUsername: "lead_ahora_si", profileVisibility: "PUBLIC" }),
@@ -928,7 +929,9 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
       firstName: "Carla",
       age: 27,
       isAdultConfirmed: true,
-      phone: "5491123456789"
+      phone: "5491123456789",
+      hasOnlyFans: false,
+      deviceEligibility: "APPROVED"
     });
     await repository.addMessage({
       id: crypto.randomUUID(),
@@ -942,18 +945,41 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
     const result = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: "lead_ahora_si",
+      message: "ahora si, llamame"
+    });
+
+    // Guion completo + telefono + lista YA -> derivacion al socio (revision de Alex), jamas el dead-end.
+    expect(result.response.toLowerCase()).toContain("socio");
+    expect(result.response.toLowerCase()).not.toContain("cualquier duda");
+    expect(["QUALIFYING", "WAITING_HUMAN_REVIEW"]).toContain(result.candidate.currentState);
+  });
+
+  it("A0: readiness con guion INCOMPLETO -> sigue cualificando (nada de dead-end ni socio-loop)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: "lead_ahora_si_incompleta", profileVisibility: "PUBLIC" }),
+      currentState: "QUALIFYING",
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      phone: "5491123456789"
+    });
+
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_ahora_si_incompleta",
       message: "ahora si"
     });
 
-    expect(result.response.toLowerCase()).toContain("socio");
-    expect(result.response.toLowerCase()).toContain("llamada");
+    expect(result.responsePlan.questionToAsk).not.toBeNull();
     expect(result.response.toLowerCase()).not.toContain("cualquier duda");
+    expect(result.response.toLowerCase()).not.toContain("como te llamas");
   });
 
-  // Regresion BUG A (replay-1 T22, replay-3 T15, replay-14 T9): tras capturar el telefono el bot
-  // reiniciaba la cualificacion ("te hago unas preguntas rapidas... Como te llamas?") en vez de
-  // cerrar hacia la llamada. Una vez con telefono, confirma y deriva, sin reabrir el guion.
-  it("does not restart qualification after the phone is captured (confirms and hands off)", async () => {
+  // BUG A, ACOTADO (jul-2026, decision de Alex A0): un telefono dado con el guion ESENCIAL incompleto ya
+  // NO cierra la cualificacion (antes el lead moria en bucle de "socio" sin llegar a revision, texto-01).
+  // Lo que NO puede pasar sigue testeado: re-preguntar lo YA sabido (nombre/edad) ni "preguntas rapidas".
+  it("telefono pronto: lo apunta y SIGUE cualificando, sin re-preguntar lo ya sabido", async () => {
     const repository = new InMemoryCandidateRepository();
     const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
     // Adulta con slots aun pendientes (sin OF/agencias/movil): el telefono igualmente cierra el guion.
@@ -972,10 +998,13 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
     });
     expect(givesPhone.candidate.phone).toBe("5491123456789");
     expect(givesPhone.response.toLowerCase()).toContain("lo apunto");
+    // A0: sigue cualificando (hay pregunta pendiente del guion), pero JAMAS re-pregunta lo ya sabido.
+    expect(givesPhone.responsePlan.questionToAsk).not.toBeNull();
     expect(givesPhone.response.toLowerCase()).not.toContain("como te llamas");
+    expect(givesPhone.response.toLowerCase()).not.toContain("que edad tienes");
     expect(givesPhone.response.toLowerCase()).not.toContain("preguntas rapidas");
 
-    // Turno siguiente: la candidata responde algo benigno; el bot NO reabre el guion.
+    // Turno siguiente: sigue el guion pendiente, sin reiniciar nombre/edad.
     const followUp = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: "lead_no_reinicio",
@@ -984,7 +1013,29 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
     expect(followUp.response.toLowerCase()).not.toContain("como te llamas");
     expect(followUp.response.toLowerCase()).not.toContain("preguntas rapidas");
     expect(followUp.response.toLowerCase()).not.toContain("que edad tienes");
-    expect(followUp.responsePlan.questionToAsk).toBeNull();
+  });
+
+  it("BUG A intacto: guion esencial COMPLETO + telefono -> confirma y deriva, sin reabrir preguntas", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({ repository, understandingProvider: new DeterministicUnderstandingProvider() });
+    const seeded = await repository.saveCandidate({
+      ...createCandidate({ instagramUsername: "lead_guion_completo", profileVisibility: "PUBLIC" }),
+      currentState: "QUALIFYING",
+      firstName: "Veronica",
+      age: 31,
+      isAdultConfirmed: true,
+      hasOnlyFans: false,
+      deviceEligibility: "APPROVED"
+    });
+
+    const givesPhone = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "lead_guion_completo",
+      message: "Mi numero es +54 9 11 2345 6789"
+    });
+    expect(givesPhone.candidate.phone).toBe("5491123456789");
+    expect(givesPhone.responsePlan.questionToAsk).toBeNull();
+    expect(givesPhone.response.toLowerCase()).not.toContain("como te llamas");
   });
 
   it("does not restart qualification after the phone is captured in HUMAN_INTERVENTION_REQUIRED", async () => {

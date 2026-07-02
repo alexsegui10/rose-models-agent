@@ -2469,7 +2469,9 @@ function generateResponse(
   // La pregunta la decide el plan (guion pendiente, dia/hora o telefono); aqui no se inventa otra.
   if (understanding.intent === "REQUESTS_CALL" && candidate.currentState !== "APPROVED") {
     if (candidate.age && candidate.isAdultConfirmed) {
-      if (candidate.phone) return scheduleHoldingText(candidate, "Perfecto.");
+      // A0 (jul-2026): con telefono pero guion INCOMPLETO, el planner aun trae pregunta -> se sigue
+      // cualificando (no se promete "socio" en bucle). Sin pregunta pendiente, cierre de siempre.
+      if (candidate.phone && !responsePlan.questionToAsk) return scheduleHoldingText(candidate, "Perfecto.");
       return responsePlan.questionToAsk
         ? `Perfecto, agendamos una llamada y te lo explicamos todo bien.\n\n${responsePlan.questionToAsk}`
         : "Perfecto, agendamos una llamada y te lo explicamos todo bien.";
@@ -2478,9 +2480,14 @@ function generateResponse(
   }
 
   if (understanding.intent === "PROVIDES_PHONE" && candidate.phone) {
-    return candidate.age && candidate.isAdultConfirmed
-      ? "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada."
-      : "Perfecto, lo apunto.\n\nAntes de organizar la llamada dime una cosa, que edad tienes?";
+    if (candidate.age && candidate.isAdultConfirmed) {
+      // A0 (jul-2026): telefono dado PRONTO (guion incompleto) -> se apunta y se SIGUE cualificando con la
+      // pregunta pendiente del plan, en vez del "lo hablo con mi socio" que mataba el funnel (texto-01).
+      return responsePlan.questionToAsk
+        ? `Perfecto, lo apunto.\n\n${responsePlan.questionToAsk}`
+        : "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada.";
+    }
+    return "Perfecto, lo apunto.\n\nAntes de organizar la llamada dime una cosa, que edad tienes?";
   }
 
   // BUG A: con el telefono de una adulta ya capturado y sin pregunta pendiente, el cierre es

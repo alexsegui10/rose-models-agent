@@ -304,13 +304,21 @@ function questionToAskFor(
   // Opener canonico (primer turno de un lead nuevo): presentacion + gate/marco, sin preguntas.
   if (input.isOpenerTurn && candidate.currentState === "NEW_LEAD") return null;
   if (candidate.age && candidate.age < 18) return null;
-  // BUG A (replay-1 T22, replay-3 T15, replay-14 T9): una vez capturado el telefono el funnel NO
-  // se reabre. Sin esto el planner seguia pidiendo slots pendientes (OF, agencias, movil) o incluso
-  // el nombre, reiniciando el guion despues de tener el dato que cierra la conversacion hacia la
-  // llamada. El cierre (confirmar + derivar al socio) lo redacta el motor; aqui solo se silencia
-  // cualquier pregunta de cualificacion. No debilita ninguna escalada: si el turno requiere humano
-  // ya retorno null arriba.
-  if (candidate.phone) return null;
+  // BUG A, ACOTADO (jul-2026, decision de Alex A0): el telefono capturado solo CIERRA las preguntas si el
+  // guion ESENCIAL ya esta completo (ahi si: confirmar + derivar, sin reabrir nombre/OF — el BUG A original)
+  // o si la candidata ya esta post-aprobacion. ANTES el gate era incondicional (`if (candidate.phone)`) y un
+  // telefono soltado en el 2o mensaje (habitual en Argentina) mataba TODA la cualificacion: el bot dejaba de
+  // preguntar OF/movil, prometia "lo hablo con mi socio" en bucle y el lead moria sin llegar nunca a
+  // revision (hallazgo texto-01). Ahora: apunta el telefono y SIGUE cualificando lo que falte.
+  const postApprovalState = [
+    "APPROVED",
+    "COLLECTING_CALL_DETAILS",
+    "READY_TO_SCHEDULE",
+    "CALL_SCHEDULED",
+    "CALL_NO_ANSWER",
+    "CALL_COMPLETED"
+  ].includes(candidate.currentState);
+  if (candidate.phone && (postApprovalState || essentialScriptDone(candidate))) return null;
   // En intervencion humana no se cualifica, pero cerrar la llamada (dia/hora y despues el numero)
   // no decide nada de negocio y es obligatorio en el guion real (se le olvido dos veces a Alex).
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
@@ -338,7 +346,12 @@ function questionToAskFor(
   }
 
   if (adultConfirmed && confirmsCall) {
-    if (candidate.phone) return null;
+    // A0 (jul-2026): mismo acotado que arriba — el telefono cierra SOLO con el guion esencial hecho (o
+    // post-aprobacion); si llego pronto, se sigue con la pregunta esencial pendiente.
+    if (candidate.phone) {
+      if (postApprovalState || essentialScriptDone(candidate)) return null;
+      return nextSlotQuestion(candidate, recentAgentMessages, { skipOptional: true, divertedWithQuestion });
+    }
     // Dia/hora concreto sobre la mesa: se pide el numero YA y no se reabre la cualificacion
     // (fallo real: "Como te llamas?" justo despues de recibir el telefono mataba el cierre).
     if (proposesTime) return askWithCap(PHONE_QUESTION, phoneAskPattern, recentAgentMessages);

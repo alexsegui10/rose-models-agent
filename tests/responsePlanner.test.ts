@@ -381,8 +381,16 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBeNull();
   });
 
-  it("asks nothing more when the call is requested and the phone is already saved", () => {
-    const candidate = candidateWith({ age: 27, isAdultConfirmed: true, phone: "5491123456789" });
+  // A0 (jul-2026): con guion esencial COMPLETO + telefono, no pregunta nada mas (BUG A intacto).
+  it("asks nothing more when the call is requested, the phone is saved and the script is complete", () => {
+    const candidate = candidateWith({
+      age: 27,
+      isAdultConfirmed: true,
+      phone: "5491123456789",
+      firstName: "Carla",
+      hasOnlyFans: false,
+      deviceEligibility: "APPROVED"
+    });
     const plan = planFor({
       candidate,
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
@@ -391,12 +399,12 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBeNull();
   });
 
-  // Regresion BUG A (replay-1 T22, replay-3 T15, replay-14 T9): una vez capturado el telefono de
-  // una adulta confirmada, el bot NUNCA reabre el guion de cualificacion (nombre, edad, slots).
-  // Antes seguia preguntando slots pendientes y reiniciaba el funnel.
-  it("never reopens qualification slots once the phone is captured for an adult (QUALIFYING)", () => {
-    // Candidata adulta con telefono pero con slots aun pendientes (sin OF, sin agencias, sin movil):
-    // el telefono cierra el guion, no se vuelve a preguntar nada.
+  // BUG A, ACOTADO (jul-2026, decision de Alex A0 en el pre-lanzamiento): el telefono capturado solo
+  // cierra el guion cuando el guion ESENCIAL esta completo (regresion BUG A original: no reabrir nombre/
+  // slots tras el cierre) — pero un telefono soltado PRONTO ya NO mata la cualificacion (hallazgo
+  // texto-01: el lead moria en bucle de "lo hablo con mi socio" sin llegar a revision).
+  it("telefono PRONTO (guion esencial incompleto): SIGUE cualificando (decision A0)", () => {
+    // Adulta con telefono pero sin OF/movil/nombre: el bot apunta el numero y pregunta lo que falta.
     const candidate = candidateWith({
       age: 31,
       isAdultConfirmed: true,
@@ -407,11 +415,33 @@ describe("responsePlanner question gating", () => {
       understanding: understandingWith({ intent: "OTHER" }),
       inboundMessage: "Si"
     });
+    expect(plan.questionToAsk).not.toBeNull();
+  });
+
+  it("BUG A intacto: guion esencial COMPLETO + telefono -> no reabre ninguna pregunta", () => {
+    const candidate = candidateWith({
+      age: 31,
+      isAdultConfirmed: true,
+      phone: "5491123456789",
+      firstName: "Carla",
+      hasOnlyFans: false,
+      deviceEligibility: "APPROVED"
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "OTHER" }),
+      inboundMessage: "Listo"
+    });
     expect(plan.questionToAsk).toBeNull();
   });
 
-  it("never asks the name again after the phone is captured even if firstName is still empty", () => {
-    const candidate = candidateWith({ age: 31, isAdultConfirmed: true, phone: "5491123456789" });
+  it("post-aprobacion + telefono -> tampoco re-cualifica aunque falten slots opcionales", () => {
+    const candidate = candidateWith({
+      currentState: "COLLECTING_CALL_DETAILS",
+      age: 31,
+      isAdultConfirmed: true,
+      phone: "5491123456789"
+    });
     const plan = planFor({
       candidate,
       understanding: understandingWith({ intent: "OTHER" }),
