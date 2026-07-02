@@ -56,13 +56,17 @@ describe("responder de turno de llamada (stateless por replay)", () => {
   });
 
   it("reproduce el estado: varios 'vale' acaban cerrando con el contrato", async () => {
+    // Se avanza turno a turno hasta que aparezca el cierre (robusto a la longitud de la agenda; tras el
+    // cierre repetido vendría el silencio anti-loro, cubierto en callAntiLoopJul02).
     const messages: CallChatMessage[] = [sys, { role: "assistant", content: "apertura..." }];
-    for (let i = 0; i < 8; i++) {
+    let closeContent = "";
+    for (let i = 0; i < 10 && !closeContent; i++) {
       messages.push({ role: "user", content: "vale" });
-      messages.push({ role: "assistant", content: "..." });
+      const res = await respondToCall({ messages: [...messages] });
+      if (res.directiveType === "CLOSE_WITH_CONTRACT") closeContent = res.content;
+      messages.push({ role: "assistant", content: res.content || "..." });
     }
-    const res = await respondToCall({ messages });
-    expect(res.content.toLowerCase()).toContain("contrato");
+    expect(closeContent.toLowerCase()).toContain("contrato");
   });
 
   it("una pregunta NO cubierta (impuestos) se defiere a Alex (no improvisa)", async () => {

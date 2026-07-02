@@ -124,6 +124,11 @@ const DEFEND_SHARE_TEXT =
   "Te entiendo, es justo preguntarlo. Mira, nosotros nos quedamos ese 70% porque hacemos todo el trabajo: el tráfico, el equipo de chatters las 24 horas y toda la gestión, y tú solo subes el contenido. Por eso el reparto es así. ¿Cómo lo ves?";
 // No se entendió bien lo que dijo (ruido/STT): pedir que lo repita, sin asumir asentimiento.
 const ASK_REPEAT_TEXT = "Perdona, no te he pillado bien con la línea. ¿Me lo puedes repetir?";
+// Despedida corta cuando ELLA se despide con la llamada ya cerrada (jul-2026): humana y breve, sin
+// re-explicar nada (el cierre ya se dio). El colgado lo pone la plataforma de voz. Tras un cierre
+// CÁLIDO (no le interesa) NO se promete escribirle ni se celebra ("¡Genial!") su rechazo.
+const GOODBYE_TEXT = "¡Genial! Pues eso es todo, ahora te escribo. Un abrazo, ¡chao!";
+const GOODBYE_AFTER_DECLINE_TEXT = "Nada, gracias a ti por el ratito. ¡Que te vaya muy bien, un saludo!";
 
 /** Convierte una directiva del director en un plan de enunciado. */
 export function planCallUtterance(input: PlanCallUtteranceInput): CallUtterancePlan {
@@ -192,6 +197,13 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: DEFEND_SHARE_TEXT, fallbackText: DEFEND_SHARE_TEXT };
     case "ASK_REPEAT":
       return { directiveType: directive.type, deterministicText: ASK_REPEAT_TEXT, fallbackText: ASK_REPEAT_TEXT };
+    case "SAY_GOODBYE": {
+      const goodbye = directive.afterClose === "CLOSE_SOFT" ? GOODBYE_AFTER_DECLINE_TEXT : GOODBYE_TEXT;
+      return { directiveType: directive.type, deterministicText: goodbye, fallbackText: goodbye };
+    }
+    case "STAY_SILENT":
+      // Anti-loro: turno sin habla. Texto vacío EXPLÍCITO (no cae al guion de etapa por el default).
+      return { directiveType: directive.type, deterministicText: "", fallbackText: "" };
     case "CONCEDE_SHARE": {
       const text = concedeShareText(directive.shareOffer);
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };

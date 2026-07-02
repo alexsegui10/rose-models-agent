@@ -32,8 +32,11 @@ describe("director de la llamada", () => {
     expect(covered[0]).toBe("HOW_AGENCY_WORKS");
     expect(covered).toContain("MONEY");
     expect(covered).toContain("BOUNDARIES");
-    // La última directiva es el cierre con contrato.
-    expect(directives[directives.length - 1].type).toBe("CLOSE_WITH_CONTRACT");
+    // Se cierra con el contrato y, si ella sigue asintiendo, se repite UNA vez y después silencio
+    // (anti-loro jul-2026; el detalle en callAntiLoopJul02).
+    const closes = directives.filter((d) => d.type === "CLOSE_WITH_CONTRACT").length;
+    expect(closes).toBe(2);
+    expect(directives[directives.length - 1].type).toBe("STAY_SILENT");
   });
 
   it("al introducir MONEY adjunta la oferta inicial determinista 70/30", () => {
@@ -171,10 +174,16 @@ describe("director de la llamada", () => {
   it("cierre PEGAJOSO: tras cerrar con el contrato no reabre negociación ni guion", () => {
     const { state } = run(["none", ...Array(8).fill("follows-along")] as CallCandidateSignal[]);
     expect(state.closed).toBe(true);
-    // Una queja del reparto DESPUÉS del cierre no reabre la negociación: repite el cierre.
-    expect(decideCallDirective({ state, signal: "complains-about-share" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
-    // Una pregunta tras el cierre tampoco reabre conversación sustantiva.
-    expect(decideCallDirective({ state, signal: "asks-covered" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
+    // Una queja del reparto DESPUÉS del cierre no reabre la negociación: se defiere sin cifras (jul-2026;
+    // antes repetía el cierre, lo que en bucle sonaba a loro — ver callAntiLoopJul02).
+    const complaint = decideCallDirective({ state, signal: "complains-about-share" });
+    expect(complaint.directive.type).toBe("DEFER_TO_PARTNER");
+    expect(complaint.directive.shareOffer).toBeUndefined();
+    expect(complaint.nextState.revenueShareStep).toBe(state.revenueShareStep);
+    // Una pregunta tras el cierre se RESPONDE (decisión de Alex: contestar siempre), sin reabrir el guion.
+    const question = decideCallDirective({ state, signal: "asks-covered" });
+    expect(question.directive.type).toBe("ANSWER_FROM_KNOWLEDGE");
+    expect(question.nextState.closed).toBe(true);
     // Pero la SEGURIDAD sigue: agresión o pedir persona tras el cierre escalan.
     expect(decideCallDirective({ state, signal: "hostile-or-suspicious" }).directive.type).toBe("HANDOFF_TO_ALEX");
     expect(decideCallDirective({ state, signal: "wants-human" }).directive.type).toBe("HANDOFF_TO_ALEX");

@@ -55,7 +55,9 @@ export type CallDirectiveType =
   | "CLOSE_WITH_CONTRACT" // cerrar: "ahora te paso el contrato"
   | "CLOSE_SOFT" // cierre cálido sin contrato (no le interesa): puerta abierta
   | "CLOSE_RESCHEDULE" // la pillamos en mal momento NADA MÁS descolgar: cerrar y reagendar por Instagram
-  | "CLOSE_UNDERAGE"; // corte seguro: menor de edad, no se puede seguir (invariante 2)
+  | "CLOSE_UNDERAGE" // corte seguro: menor de edad, no se puede seguir (invariante 2)
+  | "SAY_GOODBYE" // despedida corta cuando ELLA se despide con la llamada ya cerrada
+  | "STAY_SILENT"; // no decir nada (anti-loro: el cierre/handoff ya se repitió una vez)
 
 export type CallHandoffReason =
   | "asked-for-human"
@@ -80,6 +82,13 @@ export interface CallDirectorState {
   closed: boolean;
   /** Qué cierre se dio, para repetirlo si la candidata sigue hablando tras cerrar. */
   closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT" | "CLOSE_RESCHEDULE" | "CLOSE_UNDERAGE";
+  /**
+   * Veces que ya se REPITIÓ el mensaje terminal (cierre o handoff) tras darlo (jul-2026, anti-loro con
+   * habla real: la simulación repetía el contrato en bucle a cada "dale"). Tope 1: después, silencio.
+   */
+  terminalRepeats: number;
+  /** true cuando ya se dio la despedida corta post-cierre (no despedirse dos veces). */
+  goodbyeSaid: boolean;
 }
 
 export interface CallDirective {
@@ -90,6 +99,8 @@ export interface CallDirective {
   shareOffer?: CallRevenueShareOffer;
   /** Motivo del handoff (para HANDOFF_TO_ALEX). */
   handoffReason?: CallHandoffReason;
+  /** Qué cierre precedió a la despedida (para SAY_GOODBYE: tras un rechazo no se promete escribir). */
+  afterClose?: CallDirectorState["closeDirective"];
 }
 
 export interface CallTurnDecision {
@@ -105,7 +116,9 @@ export function initialCallDirectorState(): CallDirectorState {
     shareDefended: false,
     unclearStreak: 0,
     handedOff: false,
-    closed: false
+    closed: false,
+    terminalRepeats: 0,
+    goodbyeSaid: false
   };
 }
 
@@ -113,17 +126,24 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
   const { state, signal } = input;
 
   // Una vez transferida a Alex, el bot no retoma el guion: la persona tiene el control (invariante 4).
+  // Anti-loro (jul-2026): el mensaje de handoff se repite UNA vez como máximo; después, silencio (el
+  // colgado lo pone el timeout de silencio del agente de voz). handedOff sigue pegajoso siempre.
   if (state.handedOff) {
+    if (state.terminalRepeats >= 1) {
+      return { directive: { type: "STAY_SILENT" }, nextState: state };
+    }
     return {
       directive: { type: "HANDOFF_TO_ALEX", handoffReason: state.handoffReason },
-      nextState: state
+      nextState: { ...state, terminalRepeats: state.terminalRepeats + 1 }
     };
   }
 
   // SEGURIDAD (invariante 2 en la voz): si declara ser menor de edad, corte seguro INMEDIATO, antes que
   // nada (incluso antes de la apertura): no se cualifica ni se vende contenido adulto a una menor. Es
   // determinista (no pasa por el LLM) y pegajoso (no reabre el guion). Equivale a "Edad<18 -> CLOSED" del DM.
-  if (signal === "underage") {
+  // Si YA está cortada por menor, la re-declaración no repite el corte íntegro en bucle: cae al bloque
+  // closed (repite una vez / silencio) — misma familia anti-loro, invariante 2 intacto.
+  if (signal === "underage" && !(state.closed && state.closeDirective === "CLOSE_UNDERAGE")) {
     return closeUnderage(state);
   }
 
@@ -135,12 +155,46 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
     };
   }
 
-  // Cierre pegajoso: ya se cerró. No reabre guion ni negociación; solo escala por seguridad (agresión /
-  // pide persona). Cualquier otra cosa repite el MISMO cierre que se dio (contrato o cálido).
+  // Cierre pegajoso: ya se cerró. No reabre guion ni negociación; la seguridad sigue escalando (agresión /
+  // pide persona). Una pregunta REAL se responde (decisión de Alex: "el bot siempre contesta primero"),
+  // sin tocar el estado. El cierre solo se repite UNA vez (anti-loro jul-2026: la simulación repetía el
+  // contrato en bucle a cada "dale, perfecto"); después, silencio. Si ELLA se despide, despedida corta.
   if (state.closed) {
-    if (signal === "hostile-or-suspicious") return handoff(state, "suspicion-or-aggression");
-    if (signal === "wants-human") return handoff(state, "asked-for-human");
-    return { directive: { type: state.closeDirective ?? "CLOSE_WITH_CONTRACT" }, nextState: state };
+    // Corte por MENOR (invariante 2): el corte ES el corte. A una menor declarada no se le vuelve a
+    // hablar de negocio: ni ingresos, ni conocimiento, ni "te escribo/te paso con mi socio" (promesas de
+    // contacto). CUALQUIER señal repite el corte una vez y después silencio; Alex ya queda avisado por el
+    // webhook de fin (underage -> CLOSED + notificación).
+    if (state.closeDirective !== "CLOSE_UNDERAGE") {
+      if (signal === "hostile-or-suspicious") return handoff(state, "suspicion-or-aggression");
+      if (signal === "wants-human") return handoff(state, "asked-for-human");
+      if (signal === "asks-covered") return { directive: { type: "ANSWER_FROM_KNOWLEDGE" }, nextState: state };
+      if (signal === "asks-identity") return { directive: { type: "GIVE_IDENTITY" }, nextState: state };
+      if (signal === "asks-earnings") return { directive: { type: "GIVE_EARNINGS" }, nextState: state };
+      if (signal === "asks-age-policy") return { directive: { type: "GIVE_AGE_POLICY" }, nextState: state };
+      if (signal === "distrust") return { directive: { type: "REASSURE" }, nextState: state };
+      // Queja del reparto o pregunta no cubierta tras el cierre: se defiere (sin cifras y sin reabrir la
+      // negociación — invariante 3); nunca se repite el discurso del contrato como "respuesta".
+      if (signal === "complains-about-share" || signal === "asks-unknown") {
+        return { directive: { type: "DEFER_TO_PARTNER" }, nextState: state };
+      }
+      if (signal === "wants-to-end" || signal === "not-interested" || signal === "wants-to-think") {
+        if (state.goodbyeSaid) return { directive: { type: "STAY_SILENT" }, nextState: state };
+        // La despedida se adapta: si ELLA está declinando (aunque el cierre fuera con contrato), variante
+        // de declive (sin "¡Genial!" ni promesa de escribirle); si solo se despide, según el cierre dado.
+        const declining = signal === "not-interested" || signal === "wants-to-think";
+        return {
+          directive: { type: "SAY_GOODBYE", afterClose: declining ? "CLOSE_SOFT" : state.closeDirective },
+          nextState: { ...state, goodbyeSaid: true }
+        };
+      }
+    }
+    if (state.terminalRepeats >= 1) {
+      return { directive: { type: "STAY_SILENT" }, nextState: state };
+    }
+    return {
+      directive: { type: state.closeDirective ?? "CLOSE_WITH_CONTRACT" },
+      nextState: { ...state, terminalRepeats: state.terminalRepeats + 1 }
+    };
   }
 
   // No se entendió (ruido/STT): pedir que lo repita, sin avanzar el guion. Si pasa varias veces seguidas,

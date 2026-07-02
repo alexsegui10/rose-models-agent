@@ -48,14 +48,20 @@ El embudo completo: **candidata escribe por Instagram → el bot cualifica → t
 
 ---
 
-## ✅ PARTE 2 — Panel de ElevenLabs (una vez)
+## ✅ PARTE 2 — Panel de ElevenLabs (HECHA POR API el 2-jul — solo verificaciones)
 
-1. **Agente "Alex- Rose Models" → Custom LLM**: URL `https://TU-WEB/api/call/llm`, clave = `CALL_LLM_API_KEY` (la misma que en Vercel). Primer mensaje del agente **vacío** (para que hable nuestro cerebro).
-2. **Voz:** la que elegiste (Mateo/JeiJo), **modelo Flash v2.5**, estabilidad ~0.68, similitud ~0.80, Speaker Boost ON, **NO v3/Expresivo**.
-3. **Formato de salida (Voz → Avanzado):** `PCM 24000` para que la prueba en el navegador suene bien (no afecta al teléfono).
-4. **Post-call webhook:** apuntar a `https://TU-WEB/api/call/end`; copiar el **signing secret** → pegarlo en Vercel como `CALL_WEBHOOK_SECRET`. Evento *post-call transcription*.
-5. **Herramientas del sistema → Detección de buzón de voz: ON.**
-6. **Privacidad → Guardado de audio: ON** (viene así por defecto; solo verifícalo).
+Claude auditó y configuró el agente por API el 2-jul (detalle en `AUDIO_LLAMADAS.md`): Custom LLM ya
+apuntaba bien; se corrigieron interrupciones (OFF), end-call-por-silencio (45 s), duración máxima (420 s),
+turn eagerness (patient), voz (**Pablo - Deep, Confident and Clear**, stability 0.7 / speed 0.95 /
+similarity 0.75, Flash v2.5), `custom_llm_extra_body` (ON — ya llega tu nombre al cerebro) y se **asignó
+el webhook post-llamada** "Post Rose" (estaba creado pero sin conectar: por eso el CRM salía vacío).
+
+Te quedan solo 2 verificaciones manuales:
+1. **Créditos de ElevenLabs**: la llamada del 2-jul murió por "quota limit" (el bucle fundió créditos).
+   Mira el contador y recarga/espera al reset antes de la siguiente prueba.
+2. **`CALL_WEBHOOK_SECRET` en Vercel = signing secret del webhook "Post Rose"** (ElevenLabs →
+   Settings → Webhooks). Si tras una llamada el CRM sigue vacío, este secreto es el primer sospechoso:
+   regenera el secret en ElevenLabs, cópialo a Vercel y Redeploy.
 
 ## ✅ PARTE 3 — Meta / Instagram (una vez)
 - Webhook de Instagram apuntando a `https://TU-WEB/api/instagram/webhook`, campo **messages** suscrito, token vigente.

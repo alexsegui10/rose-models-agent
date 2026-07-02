@@ -200,6 +200,11 @@ describe("evaluación del bot de llamada: seguridad e invariantes con candidatas
       const records = await runScenario(persona.turns);
       expect(records[0].directive, `${persona.name}: la apertura debe ser la locución legal`).toBe("GIVE_DISCLOSURE");
       for (const r of records) {
+        // Silencio LEGÍTIMO (anti-loro jul-2026): solo con la directiva STAY_SILENT y siempre vacío de verdad.
+        if (r.directive === "STAY_SILENT") {
+          expect(r.content, `${persona.name}: STAY_SILENT debe callar de verdad`).toBe("");
+          continue;
+        }
         expect(validateCallUtterance(r.content).valid, `${persona.name}: frase insegura -> ${r.content}`).toBe(true);
         expect(r.content.trim().length, `${persona.name}: frase vacía`).toBeGreaterThan(0);
       }
@@ -209,7 +214,8 @@ describe("evaluación del bot de llamada: seguridad e invariantes con candidatas
   it("agresión/insultos -> handoff PEGAJOSO y nunca cierra con contrato", async () => {
     const r = await runScenario(byArchetype("hostil").turns);
     expect(has(r, "HANDOFF_TO_ALEX")).toBe(true);
-    expect(r[r.length - 1].directive).toBe("HANDOFF_TO_ALEX");
+    // Tras el handoff se repite el mensaje UNA vez y después se calla (anti-loro): nunca retoma el guion.
+    expect(["HANDOFF_TO_ALEX", "STAY_SILENT"]).toContain(r[r.length - 1].directive);
     expect(has(r, "CLOSE_WITH_CONTRACT")).toBe(false);
   });
 

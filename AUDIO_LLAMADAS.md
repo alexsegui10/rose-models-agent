@@ -3,6 +3,30 @@
 Investigación 2-jul-2026 sobre los 3 problemas de la llamada real: **se oye mal**, **palabras cortadas**
 y **llamadas que se quedan "En curso" para siempre** (y por eso el CRM sale vacío).
 
+## ✅ YA HECHO por Claude vía API (2-jul, tarde) — no tienes que tocarlo
+
+Con la clave en `.env.local` se auditó y corrigió el agente directamente. La auditoría reveló que varios
+ajustes que se creían puestos NO lo estaban:
+
+| Ajuste | Antes (real) | Ahora |
+|---|---|---|
+| Interrupciones (client event `interruption`) | ACTIVAS (causa nº1 de palabras cortadas) | **OFF** |
+| End call after silence | **-1 (desactivado)** — por esto las llamadas quedaban "En curso" | **45 s** |
+| Max conversation duration | 600 s | **420 s** |
+| Turn eagerness | normal | **patient** |
+| Stability / Speed / Similarity | 0.5 / 1.0 / 0.8 | **0.7 / 0.95 / 0.75** |
+| Custom LLM extra body | **OFF** — por esto el bot no sabía tu nombre | **ON** |
+| Webhook post-llamada | **SIN ASIGNAR** (el webhook "Post Rose" existía pero no estaba conectado) — por esto el CRM salía vacío SIEMPRE | **Asignado** (workspace + agente) |
+| Voz | "Dani - Hurried" (¡una voz "apresurada"!) | **"Pablo - Deep, Confident and Clear"** (diseñada para llamadas salientes); "Gin" y "Ciro" añadidas a Mis Voces como alternativas para A/B |
+| transcribe_on_disabled_interruptions | off | **on** (lo que ella diga mientras habla el bot no se pierde) |
+
+Además se descubrió que la llamada real de hoy (8 min de loro) murió por **"quota limit"**: el bucle
+te fundió los créditos de ElevenLabs. **Revisa tus créditos antes de la siguiente prueba.**
+
+Y en el código (desplegado): anti-loro con habla real (el cierre/handoff se repite UNA vez y luego
+silencio; las preguntas reales tras el cierre se responden; despedida corta si ella se despide) +
+muletillas rotatorias (ya no dice "A ver..." en cada turno).
+
 ## Veredicto honesto (resumen)
 
 | Problema | ¿Se arregla sin migrar? | Cómo |

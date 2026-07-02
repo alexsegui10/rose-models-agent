@@ -70,16 +70,27 @@ const callKnowledgeCandidate = normalizeCandidate({
 
 const defaultRetriever = new LocalBusinessKnowledgeRetriever(businessKnowledgeEntries);
 
-// Muletilla por directiva para tapar la latencia del redactor (elegida para no chocar con los arranques
+// Muletillas por directiva para tapar la latencia del redactor (elegidas para no chocar con los arranques
 // típicos del fallback de cada directiva). La elipsis + espacio final es el formato que la plataforma de
-// voz pronuncia con pausa natural sin distorsión.
-const DRAFT_BUFFER_WORDS: Partial<Record<CallDirectiveType, string>> = {
-  COVER_STAGE: "Vale... ",
-  ANSWER_FROM_KNOWLEDGE: "A ver... ",
-  REASSURE: "Ya... ",
-  DEFER_TO_PARTNER: "Pues... ",
-  GIVE_IDENTITY: "Eh... "
+// voz pronuncia con pausa natural sin distorsión. ROTAN por turno (jul-2026: en la simulación el "A ver..."
+// idéntico en cada turno sonaba a disco rayado); la rotación es determinista (nº de turnos), replay-safe.
+const DRAFT_BUFFER_WORDS: Partial<Record<CallDirectiveType, string[]>> = {
+  COVER_STAGE: ["Vale... ", "Perfecto... ", "Muy bien... "],
+  ANSWER_FROM_KNOWLEDGE: ["A ver... ", "Pues mira... ", "Claro... "],
+  REASSURE: ["Ya... ", "Te entiendo... "],
+  DEFER_TO_PARTNER: ["Pues... ", "Mmm... "],
+  GIVE_IDENTITY: ["Eh... "]
 };
+
+function draftBufferWord(directive: CallDirectiveType, turnIndex: number): string {
+  const options = DRAFT_BUFFER_WORDS[directive] ?? ["Eh... "];
+  return options[turnIndex % options.length];
+}
+
+/** Ruido de ASR/línea: vacío o solo puntuación ("...", "…"). Compartido por el atajo en vivo y el replay. */
+function isNoiseUtterance(utterance: string): boolean {
+  return utterance.trim().length === 0 || /^[\s.·…,;:!?-]*$/.test(utterance);
+}
 
 export async function respondToCall(input: RespondToCallInput): Promise<CallResponderResult> {
   const userUtterances = input.messages.filter((m) => m.role === "user").map((m) => m.content ?? "");
@@ -105,6 +116,10 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // en ambos casos (apertura si disclosureGiven=false; avanzar agenda si ya está dada).
     state = decideCallDirective({ state, signal: "none" }).nextState;
     for (let i = 0; i < userUtterances.length - 1; i++) {
+      // Espejo del atajo anti-loro EN VIVO (R1 jul-2026): un turno de ruido tras el estado terminal se
+      // respondió con silencio SIN pasar por el director; el replay debe saltarlo igual, o incrementaría
+      // un terminalRepeats fantasma y el cierre nunca llegaría a repetirse en vivo.
+      if ((state.handedOff || state.closed) && isNoiseUtterance(userUtterances[i])) continue;
       const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
       const signal = classifyCallSignal({ utterance: userUtterances[i], moneyContext });
       state = decideCallDirective({ state, signal }).nextState;
@@ -124,10 +139,11 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   // silencio del agente); esto evita quemar minutos hablando solo. Si dice algo REAL tras el cierre, el
   // director sigue decidiendo (repetir el cierre una vez / escalar por seguridad) como siempre.
   const terminalBeforeTurn = state.handedOff || state.closed;
-  const lastUtteranceIsNoise = lastUtterance.trim().length === 0 || /^[\s.·…,;:!?-]*$/.test(lastUtterance);
-  if (botHasSpoken && terminalBeforeTurn && lastUtteranceIsNoise) {
-    console.log("[call-turn]", JSON.stringify({ signal: "noise-after-terminal", directive: "SILENCE", usedDrafter: false }));
-    return { content: "", signal: "unclear", directiveType: state.handedOff ? "HANDOFF_TO_ALEX" : "CLOSE_WITH_CONTRACT" };
+  if (botHasSpoken && terminalBeforeTurn && isNoiseUtterance(lastUtterance)) {
+    // Traza honesta (R2 jul-2026): el silencio se reporta como lo que es (STAY_SILENT), no como si se
+    // hubiera dicho el cierre/handoff.
+    console.log("[call-turn]", JSON.stringify({ signal: "noise-after-terminal", directive: "STAY_SILENT", usedDrafter: false }));
+    return { content: "", signal: "unclear", directiveType: "STAY_SILENT" };
   }
 
   const result = runCallTurn({
@@ -147,13 +163,15 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   const plan = result.utterancePlan;
   let content: string;
   let usedDrafter = false;
-  if (plan.deterministicText) {
-    // Crítico/guion (apertura, cifra del reparto, handoff, cierre): NUNCA pasa por el LLM.
+  if (plan.deterministicText !== undefined) {
+    // Crítico/guion (apertura, cifra del reparto, handoff, cierre, silencio anti-loro): NUNCA pasa por el
+    // LLM. El vacío ("" de STAY_SILENT) es determinista válido: significa callarse.
     content = plan.deterministicText;
   } else if (plan.draftingBrief && input.drafter) {
     // Buffer words: avisar al endpoint ANTES de la única espera lenta (el LLM), para que la voz ya esté
     // diciendo algo ("Vale... ") mientras se redacta. Sin drafter no hay espera y no se emite nada.
-    input.onDraftStart?.(DRAFT_BUFFER_WORDS[result.directive.type] ?? "Eh... ");
+    // La muletilla rota por turno para no repetirse (determinista: nº de turnos de la candidata).
+    input.onDraftStart?.(draftBufferWord(result.directive.type, userUtterances.length));
     // Redacción natural por LLM, SOLO si pasa el validador de voz; si no, fallback determinista (inv. 6).
     const draft = await input.drafter.draft({
       brief: plan.draftingBrief,
@@ -180,7 +198,7 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       signal: result.signal,
       directive: result.directive.type,
       usedDrafter,
-      deterministic: Boolean(plan.deterministicText),
+      deterministic: plan.deterministicText !== undefined,
       hasContext: Boolean(input.context),
       handoffReason: result.directive.handoffReason ?? null
     })

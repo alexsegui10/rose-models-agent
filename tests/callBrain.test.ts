@@ -43,8 +43,10 @@ describe("cerebro de la llamada (end-to-end por turnos)", () => {
     expect(types[0]).toBe("GIVE_DISCLOSURE");
     // Por el medio se cubren etapas.
     expect(types).toContain("COVER_STAGE");
-    // Acaba cerrando con el contrato.
-    expect(types[types.length - 1]).toBe("CLOSE_WITH_CONTRACT");
+    // Acaba cerrando con el contrato; si sigue asintiendo, el cierre se repite UNA vez y luego silencio
+    // (anti-loro jul-2026, detalle en callAntiLoopJul02).
+    expect(types).toContain("CLOSE_WITH_CONTRACT");
+    expect(types[types.length - 1]).toBe("STAY_SILENT");
     // El dinero se presenta FRESCO (sin "como te dije por Instagram") y lleva la cifra 70/30.
     expect(moneyFallback).not.toContain("Instagram");
     expect(moneyFallback).toContain("70");
