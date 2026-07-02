@@ -62,9 +62,13 @@ describe("texto-02: rechazo/cancelación con la llamada AGENDADA desarma el auto
   it("'cancelala porfa' (clítico argentino) en CALL_SCHEDULED -> tampoco se silencia", async () => {
     const { engine, repository } = createEngine();
     const seeded = await seed(repository, "CALL_SCHEDULED", scheduledOverrides);
-    await turn(engine, seeded, "cancelala porfa");
+    const result = await turn(engine, seeded, "cancelala porfa");
     const after = await repository.findCandidateById(seeded.id);
     expect(after?.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    // RIESGO 2 del revisor: cancelar la llamada NO debe disparar el "no soy ningún bot" (el .includes("ia")
+    // casaba "cambiar/cancelar la llamada"). El borrador para Alex debe ser coherente con cancelar.
+    expect(result.response.toLowerCase()).not.toContain("no soy ningun bot");
+    expect(result.response.toLowerCase()).not.toContain("no soy ningún bot");
   });
 
   it("charla NEUTRA en CALL_SCHEDULED sigue silenciada (no se gasta OpenAI ni se responde)", async () => {

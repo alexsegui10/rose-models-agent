@@ -671,10 +671,12 @@ export class ConversationEngine {
     if (existing.currentState !== "CALL_SCHEDULED" && existing.currentState !== "CALL_IN_PROGRESS") {
       return { candidate: existing, transitions: [] };
     }
-    // IDEMPOTENCIA por conversación (jul-2026, hallazgo voz-05): si ya registramos el resultado de ESTA
-    // misma conversación (webhook duplicado/tardío de un intento anterior durante un reintento), se ignora.
-    // Sin esto, un NO_ANSWER rezagado podía pisar el intento en curso y re-armar reintentos fantasma.
-    if (input.conversationId && existing.lastCall && existing.lastCallConversationId === input.conversationId) {
+    // IDEMPOTENCIA por conversación (jul-2026, hallazgo voz-05 + BLOQUEANTE del revisor): si ya registramos
+    // el OUTCOME de ESTA misma conversación, se ignora el webhook duplicado/rezagado. Se compara contra
+    // `lastCall.conversationId` (que SOLO escribe recordCallOutcome), NO contra lastCallConversationId (que
+    // noteCallAttempt pisa AL MARCAR: en un reintento cambia, y anclar ahí descartaba el webhook REAL del
+    // reintento, dejando a la candidata atascada y sin cerrar a una menor declarada en el 2º intento).
+    if (input.conversationId && existing.lastCall?.conversationId === input.conversationId) {
       return { candidate: existing, transitions: [] };
     }
 
@@ -729,7 +731,9 @@ export class ConversationEngine {
       negotiatedModelShare: input.negotiatedModelShare ?? facts?.negotiatedModelShare,
       summary: summary ?? "",
       transcript: input.transcript ?? [],
-      endedAt: new Date().toISOString()
+      endedAt: new Date().toISOString(),
+      // Clave de idempotencia del webhook: el conversationId del outcome que ACABAMOS de registrar.
+      conversationId: input.conversationId ?? existing.lastCall?.conversationId
     };
 
     // Reintento DIFERIDO: solo si el estado RESULTANTE es CALL_NO_ANSWER (jul-2026: un NO_ANSWER de una
@@ -2552,10 +2556,11 @@ function humanInterventionResponse(
     return "Eso se puede valorar segun el perfil y el potencial de la cuenta. Lo comento con mi socio y en la llamada te explicamos que condiciones podriamos ofrecerte.";
   }
 
-  if (
-    understanding.humanReviewReason?.toLowerCase().includes("ia") ||
-    understanding.humanReviewReason?.toLowerCase().includes("bot")
-  ) {
+  // jul-2026 (RIESGO 2 del revisor): el `.includes("ia")` casaba "camb**ia**r/cancelar la llamada" y otras
+  // razones con esas letras, soltando "no soy ningun bot" a quien solo pedia cancelar. Se ancla a la
+  // acusacion REAL de ser un bot/IA con limites de palabra, no a un substring.
+  const reasonForBotCheck = normalizeText(understanding.humanReviewReason ?? "");
+  if (/\b(bot|robot|inteligencia artificial|una ia|eres (?:una )?ia|maquina|grabacion|contestador)\b/.test(reasonForBotCheck)) {
     // Decision de Alex 23-jun: si preguntan si es un bot, dice que NO y el caso pasa a revision humana (HIR)
     // para que Alex lo atienda en persona. Revierte la transparencia previa por instruccion explicita de Alex.
     return "Jaja que va, no soy ningun bot. Soy del equipo de Rose Models y te atiendo personalmente.";

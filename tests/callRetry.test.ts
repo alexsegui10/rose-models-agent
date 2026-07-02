@@ -133,21 +133,38 @@ describe("recordCallOutcome NO_ANSWER: reintento diferido", () => {
     expect(result.shouldRetryCall).toBeFalsy();
   });
 
-  // jul-2026 (hallazgo voz-05): un webhook NO_ANSWER rezagado del intento ANTERIOR (mismo conversation_id)
-  // no debe pisar el intento en curso ni re-armar reintentos fantasma.
-  it("voz-05: webhook duplicado (mismo conversation_id) durante el reintento en curso se ignora", async () => {
+  // jul-2026 (voz-05 + BLOQUEANTE del revisor): reproduce el camino REAL del dispatch — al re-marcar, el
+  // dispatch pasa el conversationId del NUEVO intento a noteCallAttempt (pisa lastCallConversationId). El
+  // webhook REAL del reintento DEBE registrarse (antes se descartaba por anclar la idempotencia ahí), y un
+  // duplicado del intento ANTERIOR (ya registrado) SÍ se ignora.
+  it("BLOQUEANTE: el webhook real del REINTENTO se registra; el duplicado del intento anterior se ignora", async () => {
     const { engine, repository } = createEngine();
-    const seeded = await seed(repository, "CALL_SCHEDULED", { callAttempts: 1 });
-    // Intento 1 no contesta (conv-1): reintento armado.
+    const seeded = await seed(repository, "CALL_SCHEDULED", { callAttempts: 1, lastCallConversationId: "conv-1" });
+    // Intento 1 no contesta (conv-1): outcome registrado -> reintento armado.
     await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "NO_ANSWER", conversationId: "conv-1" });
-    // El reintento dispara: en curso.
-    await engine.noteCallAttempt(seeded.id);
-    // Webhook rezagado del intento 1 (conv-1): se ignora (no pisa el intento en curso).
+    // Duplicado rezagado del intento 1 (conv-1, ya registrado): se ignora.
     const dup = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "NO_ANSWER", conversationId: "conv-1" });
     expect(dup.transitions).toHaveLength(0);
-    expect((await repository.findCandidateById(seeded.id))?.currentState).toBe("CALL_IN_PROGRESS");
-    // El resultado REAL del intento 2 (conv-2) sí se registra.
+    // El reintento DISPARA con el conversationId del intento 2 (como hace el dispatch real): CALL_IN_PROGRESS.
+    await engine.noteCallAttempt(seeded.id, "conv-2");
+    // El webhook REAL del intento 2 (conv-2) DEBE registrarse (antes se perdia por anclar al campo pisado).
     const real = await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "COMPLETED", conversationId: "conv-2" });
+    expect(real.transitions.length).toBeGreaterThan(0);
     expect(real.candidate.currentState).toBe("CALL_COMPLETED");
+  });
+
+  // El mismo BLOQUEANTE aplicado al invariante 2: una MENOR declarada en el REINTENTO debe CERRAR.
+  it("BLOQUEANTE + invariante 2: menor declarada en el REINTENTO -> CLOSED (no se pierde el cierre)", async () => {
+    const { engine, repository } = createEngine();
+    const seeded = await seed(repository, "CALL_SCHEDULED", { callAttempts: 1, lastCallConversationId: "conv-1" });
+    await engine.recordCallOutcome({ candidateId: seeded.id, outcome: "NO_ANSWER", conversationId: "conv-1" });
+    await engine.noteCallAttempt(seeded.id, "conv-2");
+    const result = await engine.recordCallOutcome({
+      candidateId: seeded.id,
+      outcome: "COMPLETED",
+      conversationId: "conv-2",
+      transcriptFacts: { underage: true, handedOff: false }
+    });
+    expect(result.candidate.currentState).toBe("CLOSED");
   });
 });

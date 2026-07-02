@@ -103,7 +103,12 @@ export const CallRecordSchema = z.object({
   negotiatedModelShare: z.number().int().min(0).max(100).optional(),
   summary: z.string().default(""),
   transcript: z.array(z.object({ role: z.string(), content: z.string() })).default([]),
-  endedAt: z.string().optional()
+  endedAt: z.string().optional(),
+  // conversationId del outcome YA REGISTRADO (lo escribe SOLO recordCallOutcome). Es la clave de
+  // idempotencia del webhook de fin: distinto de lastCallConversationId, que lo pisa noteCallAttempt AL
+  // MARCAR (un reintento cambia ese ultimo, y anclar la idempotencia ahi descartaba el webhook REAL del
+  // reintento y dejaba a la candidata atascada). BLOQUEANTE arreglado jul-2026.
+  conversationId: z.string().optional()
 });
 export type CallRecord = z.infer<typeof CallRecordSchema>;
 
