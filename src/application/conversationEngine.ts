@@ -1896,42 +1896,45 @@ export class ConversationEngine {
     }
 
     await this.dependencies.repository.saveCandidate(projectedCandidate);
-    await this.dependencies.repository.addMessage(
-      agentMessage(projectedCandidate.id, response, {
-        deliveryStatus,
-        automationMode: this.automationMode,
-        draftProvider: draft.provider,
-        draftModelVersion: draft.modelVersion,
-        draftPromptVersion: draft.promptVersion,
-        draftUsedFallback: draft.usedFallback,
-        requestedProvider: draft.requestedProvider,
-        actualProvider: draft.actualProvider,
-        requestedModel: draft.requestedModel,
-        actualModel: draft.actualModel,
-        fallbackReason: draft.fallbackReason ?? draft.error ?? "",
-        durationMs: draft.durationMs + understanding.durationMs,
-        retryCount: draft.retryCount + understanding.retryCount,
-        inputTokens: draft.inputTokens ?? understanding.inputTokens ?? 0,
-        outputTokens: draft.outputTokens ?? understanding.outputTokens ?? 0,
-        estimatedCostUsd: draft.estimatedCostUsd ?? understanding.estimatedCostUsd ?? 0,
-        styleProfileVersion: styleContext.styleProfileVersion,
-        promptVersion: styleContext.promptVersion,
-        understandingPromptVersion: promptRegistry.understanding.version,
-        draftingPromptVersion: promptRegistry.drafting.version,
-        factualValidationPromptVersion: promptRegistry.factualValidation.version,
-        summaryPromptVersion: promptRegistry.summary.version,
-        humanReviewPromptVersion: promptRegistry.humanReview.version,
-        rulesVersion: styleContext.rulesVersion,
-        retrieverVersion: styleContext.retrieverVersion,
-        modelVersion: styleContext.modelVersion,
-        styleScore: styleEvaluation.score,
-        knowledgeEntryIds: responsePlan.knowledgeEntryIds.join(","),
-        knowledgeVersions: responsePlan.knowledgeVersions.join(","),
-        revenueSharePolicyVersion: responsePlan.revenueSharePolicyVersion ?? "",
-        factualValidationPassed: factualValidation.valid,
-        inboundExternalMessageIds: groupedMessage.externalMessageId ?? ""
-      })
-    );
+    // Respuesta VACÍA = silencio deliberado (p.ej. ack trivial durante la revisión, Alex 2-jul): no se
+    // persiste una burbuja vacía en el historial ni se envía nada.
+    if (response.trim().length > 0)
+      await this.dependencies.repository.addMessage(
+        agentMessage(projectedCandidate.id, response, {
+          deliveryStatus,
+          automationMode: this.automationMode,
+          draftProvider: draft.provider,
+          draftModelVersion: draft.modelVersion,
+          draftPromptVersion: draft.promptVersion,
+          draftUsedFallback: draft.usedFallback,
+          requestedProvider: draft.requestedProvider,
+          actualProvider: draft.actualProvider,
+          requestedModel: draft.requestedModel,
+          actualModel: draft.actualModel,
+          fallbackReason: draft.fallbackReason ?? draft.error ?? "",
+          durationMs: draft.durationMs + understanding.durationMs,
+          retryCount: draft.retryCount + understanding.retryCount,
+          inputTokens: draft.inputTokens ?? understanding.inputTokens ?? 0,
+          outputTokens: draft.outputTokens ?? understanding.outputTokens ?? 0,
+          estimatedCostUsd: draft.estimatedCostUsd ?? understanding.estimatedCostUsd ?? 0,
+          styleProfileVersion: styleContext.styleProfileVersion,
+          promptVersion: styleContext.promptVersion,
+          understandingPromptVersion: promptRegistry.understanding.version,
+          draftingPromptVersion: promptRegistry.drafting.version,
+          factualValidationPromptVersion: promptRegistry.factualValidation.version,
+          summaryPromptVersion: promptRegistry.summary.version,
+          humanReviewPromptVersion: promptRegistry.humanReview.version,
+          rulesVersion: styleContext.rulesVersion,
+          retrieverVersion: styleContext.retrieverVersion,
+          modelVersion: styleContext.modelVersion,
+          styleScore: styleEvaluation.score,
+          knowledgeEntryIds: responsePlan.knowledgeEntryIds.join(","),
+          knowledgeVersions: responsePlan.knowledgeVersions.join(","),
+          revenueSharePolicyVersion: responsePlan.revenueSharePolicyVersion ?? "",
+          factualValidationPassed: factualValidation.valid,
+          inboundExternalMessageIds: groupedMessage.externalMessageId ?? ""
+        })
+      );
     for (const transition of plannedTransitions) {
       await this.dependencies.repository.addTransition(transition);
     }
@@ -2425,6 +2428,14 @@ function generateResponse(
     ) {
       return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
     }
+    // SILENCIO en revision para acuses triviales (Alex, 2-jul, prueba E2E): a un "okeyy perfecto" durante
+    // la espera NO se responde nada (el "Sin prisa..." de relleno sonaba a bot). Al darle Alex "Encaja",
+    // el reproceso ya lee y contesta lo que ella escribio durante la pausa (feature C). Las preguntas de
+    // verdad siguen respondiendose (rama de arriba) y la primera explicacion del "lo comento con mi socio"
+    // se mantiene (que sepa por que se para la conversacion).
+    if (alreadyAwaitingPartner && isTrivialAck(inboundMessage)) {
+      return "";
+    }
     // Coherencia (fallo real: el bot repetia "lo comento con mi socio" en bucle si la candidata seguia
     // escribiendo): la primera vez se explica; despues se reconoce de forma breve y variada, sin repetir.
     return alreadyAwaitingPartner
@@ -2849,6 +2860,15 @@ export function acknowledgementFor(understanding: ModelConversationOutput, inbou
     return understanding.intent === "UNCLEAR" ? "Entiendo" : "Te entiendo";
   }
   if (understanding.intent === "UNCLEAR") return "Okeyy";
+  // Tono cercano (Alex, 2-jul): al capturar el NOMBRE, usarlo una vez ("Perfecto Ana"); y un "no" a la
+  // pregunta de OF se reconoce con "Entiendo" antes de seguir (no un "Perfecto" que suena a formulario).
+  const justGaveName =
+    typeof understanding.extractedData.firstName === "string" && understanding.extractedData.firstName.trim().length > 1;
+  if (justGaveName) {
+    const name = understanding.extractedData.firstName!.trim();
+    return `Perfecto ${name.charAt(0).toUpperCase()}${name.slice(1).toLowerCase()}`;
+  }
+  if (understanding.extractedData.hasOnlyFans === false) return "Entiendo";
   if (Object.keys(understanding.extractedData).length > 0) return "Perfecto";
   return "Vale pues";
 }
@@ -4130,9 +4150,11 @@ function isTrivialAck(message: string): boolean {
     .replace(/\s+/g, " ")
     .trim();
   if (collapsed.length === 0) return true; // solo emojis/espacios/puntuacion
-  return /^(ok+|okay+|okey+|vale+|va|dale|listo|perfecto|perfe|genial|guay|estupendo|fenomenal|bien|de acuerdo|deacuerdo|claro|si|sip|sii+|si claro|gracias+|muchas gracias|de nada|bueno)$/.test(
-    collapsed
-  );
+  // Hasta 3 acuses encadenados tambien son triviales ("okeyy perfecto", "vale genial gracias") — caso real
+  // de la prueba E2E de Alex (2-jul). Cualquier palabra con chicha rompe el patron y se responde.
+  const ackToken =
+    "(?:ok+|okay+|okey+|vale+|va|dale|listo|perfecto|perfe|genial|guay|estupendo|fenomenal|bien|muy bien|de acuerdo|deacuerdo|claro|si|sip|sii+|gracias+|muchas gracias|de nada|bueno|jaja+|jeje+)";
+  return new RegExp(`^${ackToken}(?:\\s+${ackToken}){0,2}$`).test(collapsed);
 }
 
 function criticalRestrictionReason(

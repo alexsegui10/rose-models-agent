@@ -64,12 +64,15 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
   if (/\b(?:motorola|moto)\s?[eg]\s?\d{1,2}(?!\d)/.test(normalized)) return "NOT_ELIGIBLE";
   // (?!\d) en vez de \b: "iphone 13pro max" pega el sufijo al numero y \b no corta entre "13" y "pro".
   if (new RegExp(`\\b${IPHONE_TYPO}\\s?(1[3-9]|[2-9]\\d)(?!\\d)`).test(normalized)) return "APPROVED";
-  // Decision de Alex (22-jun): un iPhone 11/12 PRO o Pro Max tiene buena camara -> APROBADO directo (igual
-  // que 13+). El iPhone 11 y 12 NORMAL son DUDOSOS -> prueba de calidad (el bot SIGUE y se revisa al final).
-  // iPhone 10 o anterior es CLARAMENTE VIEJO -> NOT_ELIGIBLE (escala a Alex / pausa).
+  // Decision de Alex (2-jul, prueba E2E de lanzamiento): el iPhone 12 es el MINIMO ACEPTADO -> APROBADO
+  // directo (nada de "lo valoro con mi socio"). El DUDOSO ("iPhone X o por ahi": X/10, XS, XR y el 11
+  // normal) -> prueba de calidad (frase del socio y el bot SIGUE; se revisa al final). iPhone 9 o anterior
+  // es CLARAMENTE malo -> NOT_ELIGIBLE (la conversacion se pausa ahi directo).
   if (new RegExp(`\\b${IPHONE_TYPO}\\s?1[12]\\s?(pro\\s?max|pro)\\b`).test(normalized)) return "APPROVED";
-  if (new RegExp(`\\b${IPHONE_TYPO}\\s?1[12](?!\\d)`).test(normalized)) return "PENDING_QUALITY_TEST";
-  if (new RegExp(`\\b${IPHONE_TYPO}\\s?([1-9]|10)(?!\\d)`).test(normalized)) return "NOT_ELIGIBLE";
+  if (new RegExp(`\\b${IPHONE_TYPO}\\s?12(?!\\d)`).test(normalized)) return "APPROVED";
+  if (new RegExp(`\\b${IPHONE_TYPO}\\s?(?:11|10)(?!\\d)`).test(normalized)) return "PENDING_QUALITY_TEST";
+  if (new RegExp(`\\b${IPHONE_TYPO}\\s?(?:xs|xr|x)(?!\\w)`).test(normalized)) return "PENDING_QUALITY_TEST";
+  if (new RegExp(`\\b${IPHONE_TYPO}\\s?[1-9](?!\\d)`).test(normalized)) return "NOT_ELIGIBLE";
   if (/\b(galaxy\s?s2[3-9]|samsung\s?s2[3-9])\b/.test(normalized)) return "APPROVED";
   // Samsung de gama baja/entrada (Galaxy A/J, p.ej. "samsung a15") = CLARAMENTE malo -> NOT_ELIGIBLE (pausa).
   // El resto de Samsung/Galaxy sin modelo claro cae al fallback de abajo como dudoso (PENDING).

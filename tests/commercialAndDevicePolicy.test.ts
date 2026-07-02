@@ -186,18 +186,23 @@ describe("commercial and device policy", () => {
     expect(result.response.toLowerCase()).not.toContain("sirve igual");
   });
 
-  it("classifies iPhone 11 and 12 as pending quality test, not rejected", () => {
+  // Decision de Alex (2-jul, prueba E2E): el iPhone 12 es el MINIMO ACEPTADO -> APROBADO directo.
+  // El dudoso ("iPhone X o por ahi") es X/10, XS, XR y el 11 normal.
+  it("iPhone 12 aprobado directo; iPhone 11/X/XS/XR dudosos (prueba de calidad)", () => {
+    expect(deviceEligibilityForDescription("Tengo iPhone 12")).toBe("APPROVED");
     expect(deviceEligibilityForDescription("Tengo iPhone 11")).toBe("PENDING_QUALITY_TEST");
-    expect(deviceEligibilityForDescription("Tengo iPhone 12")).toBe("PENDING_QUALITY_TEST");
+    expect(deviceEligibilityForDescription("tengo un iphone x")).toBe("PENDING_QUALITY_TEST");
+    expect(deviceEligibilityForDescription("iphone xr")).toBe("PENDING_QUALITY_TEST");
   });
 
-  it("iPhone <=10 y Samsung de gama baja (A/J) = CLARAMENTE malo -> NOT_ELIGIBLE (pausa; Alex 22-jun)", () => {
-    // Dudoso (iPhone 11/12) sigue cualificando; claramente viejo/gama baja pausa para decision de Alex (HIR).
+  it("iPhone <=9 y Samsung de gama baja (A/J) = CLARAMENTE malo -> NOT_ELIGIBLE (pausa directa; Alex 2-jul)", () => {
+    // Dudoso (iPhone X/10, XS, XR, 11) sigue cualificando; claramente viejo/gama baja pausa para Alex (HIR).
     expect(deviceEligibilityForDescription("Tengo iPhone 8")).toBe("NOT_ELIGIBLE");
-    expect(deviceEligibilityForDescription("tengo un iphone 10")).toBe("NOT_ELIGIBLE");
+    expect(deviceEligibilityForDescription("iphone 9")).toBe("NOT_ELIGIBLE");
     expect(deviceEligibilityForDescription("tengo un samsung a15")).toBe("NOT_ELIGIBLE");
     expect(deviceEligibilityForDescription("galaxy a54")).toBe("NOT_ELIGIBLE");
-    // Frontera: 11/12 siguen siendo dudosos (no rechazados) y S23+ aprobado.
+    // Frontera: 10/11 dudosos (no rechazados), 12 aprobado y S23+ aprobado.
+    expect(deviceEligibilityForDescription("tengo un iphone 10")).toBe("PENDING_QUALITY_TEST");
     expect(deviceEligibilityForDescription("iPhone 11")).toBe("PENDING_QUALITY_TEST");
     expect(deviceEligibilityForDescription("galaxy s24")).toBe("APPROVED");
   });
@@ -206,8 +211,9 @@ describe("commercial and device policy", () => {
     expect(deviceEligibilityForDescription("iphone 12 pro max")).toBe("APPROVED");
     expect(deviceEligibilityForDescription("tengo un iphone 11 pro")).toBe("APPROVED");
     expect(deviceEligibilityForDescription("iPhone 12 Pro")).toBe("APPROVED");
-    // El 11/12 NORMAL (sin Pro) sigue dudoso.
-    expect(deviceEligibilityForDescription("iphone 12")).toBe("PENDING_QUALITY_TEST");
+    // El 11 NORMAL sigue dudoso; el 12 normal ya es el minimo aceptado (Alex 2-jul).
+    expect(deviceEligibilityForDescription("iphone 11")).toBe("PENDING_QUALITY_TEST");
+    expect(deviceEligibilityForDescription("iphone 12")).toBe("APPROVED");
   });
 
   it("tolerates common iphone typos so the device slot is not re-asked (spot-check de Alex: 'ipone 13')", () => {
