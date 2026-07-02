@@ -153,6 +153,12 @@ function applyMeridiem(hour: number, meridiem: string | undefined, context: stri
   if (hour >= 1 && hour <= 11) {
     if (/\b(de la tarde|de la noche|por la tarde|por la noche)\b/.test(context)) return hour + 12;
     if (/\bmediodia\b/.test(context)) return 12;
+    // jul-2026 (decisión de Alex): "a las 6" SIN franja = 18:00 argentina — nadie agenda una llamada
+    // comercial a las 6 de la madrugada. Solo 1-8 ("a las 9/10/11" siguen siendo mañana literal); si
+    // dice mañana/madrugada explícita, se respeta tal cual.
+    if (hour <= 8 && !/\b(de la manana|por la manana|de la madrugada|por la madrugada)\b/.test(context)) {
+      return hour + 12;
+    }
   }
   return hour;
 }

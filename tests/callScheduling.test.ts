@@ -34,6 +34,19 @@ describe("parseProposedCallTime: la candidata oye SU hora (Argentina), Alex ve l
   // de Espana). La cifra de Espana es para Alex (cuando llama); a la candidata se le confirma SU hora.
   const now = new Date(Date.UTC(2026, 5, 23, 10, 0)); // 23-jun, 07:00 en Argentina
 
+  // jul-2026 (decisión de Alex): "a las 6" SIN franja = 18:00 argentina (nadie agenda una llamada comercial
+  // a las 6 AM). Solo 1-8; "a las 10" sigue siendo 10:00; "6 de la mañana" explícita se respeta.
+  it("'mañana a las 6' SIN franja -> 18:00 argentina (no 06:00 de la madrugada)", () => {
+    const r = parseProposedCallTime("mañana a las 6", now);
+    expect(r).not.toBeNull();
+    expect(r!.labelAr).toContain("18:00");
+  });
+
+  it("'mañana a las 10' sigue siendo 10:00 y '6 de la mañana' explícita se respeta", () => {
+    expect(parseProposedCallTime("mañana a las 10", now)!.labelAr).toContain("10:00");
+    expect(parseProposedCallTime("mañana a las 6 de la mañana", now)!.labelAr).toContain("06:00");
+  });
+
   it("'mañana a las 6 de la tarde' -> labelEs en Espana (23:00) y labelAr en Argentina (18:00)", () => {
     const r = parseProposedCallTime("mañana a las 6 de la tarde", now);
     expect(r).not.toBeNull();
