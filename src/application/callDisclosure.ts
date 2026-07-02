@@ -23,5 +23,8 @@ export function callOpeningDisclosure(input: CallOpeningDisclosureInput = {}): s
   const name = input.candidateName?.trim();
   const greeting = name ? `Hola ${name}` : "Hola";
   const recordingClause = input.recorded === true ? " Oye, te aviso que grabo la llamada, ¿vale?" : "";
-  return `${greeting}, soy Alex, de Rose Models.${recordingClause} Que es rapidita. ¿Te cuento cómo trabajamos?`;
+  // Feedback de Alex (2-jul, llamada real): la apertura natural es "hablamos por Instagram" (continuidad
+  // con el DM), no "de Rose Models. Que es rapidita" (sonaba a telemarketing). La marca se cuela natural
+  // ("el de Rose Models") para no perder la identidad.
+  return `${greeting}, soy Alex, el de Rose Models, hablamos por Instagram hace poco.${recordingClause} ¿Te pillo bien? Te cuento rapidito cómo trabajamos, ¿vale?`;
 }

@@ -177,13 +177,18 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   return { content, signal: result.signal, directiveType: result.directive.type };
 }
 
+// Conocimiento del DM que NO tiene sentido decir EN la llamada (jul-2026, llamada real de Alex): las
+// entradas de "agendar la llamada" proponen agendar/te llamamos — absurdo cuando YA estás en la llamada.
+const IN_CALL_KNOWLEDGE_BLOCKLIST = new Set(["call-details-after-review", "call-post-summary"]);
+
 /** Entradas de conocimiento aprobado que cubren la pregunta (vacío si ninguna -> se defiere a Alex). */
 async function resolveCoveringEntries(question: string, retriever: BusinessKnowledgeRetriever): Promise<KnowledgeEntry[]> {
-  return retriever.retrieve({
+  const entries = await retriever.retrieve({
     candidate: callKnowledgeCandidate,
     intent: "REQUESTS_INFORMATION",
     question,
     limit: 3,
     ignoreStateGating: true
   });
+  return entries.filter((entry) => !IN_CALL_KNOWLEDGE_BLOCKLIST.has(entry.id));
 }

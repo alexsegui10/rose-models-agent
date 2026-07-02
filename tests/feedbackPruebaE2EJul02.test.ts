@@ -95,6 +95,37 @@ describe("silencio en revisión humana para acuses triviales (el 'Sin prisa...' 
   });
 });
 
+describe("feedback de la LLAMADA real (2-jul): apertura, reparto cuestionado y conocimiento absurdo", () => {
+  it("la apertura es 'hablamos por Instagram' con el nombre (no 'de Rose Models. Que es rapidita')", async () => {
+    const { callOpeningDisclosure } = await import("@/application/callDisclosure");
+    const text = callOpeningDisclosure({ candidateName: "Ana" });
+    expect(text).toContain("Hola Ana");
+    expect(text.toLowerCase()).toContain("hablamos por instagram");
+    expect(text.toLowerCase()).not.toContain("que es rapidita");
+  });
+
+  it("'¿por qué solo el 30 para mí?' -> cuestiona el reparto (defensa del 70), JAMÁS 'mi socio'", async () => {
+    const { classifyCallSignal } = await import("@/application/callSignalClassifier");
+    expect(classifyCallSignal({ utterance: "¿por qué solo el 30 para mí?" })).toBe("complains-about-share");
+    expect(classifyCallSignal({ utterance: "y por que os llevais el 70?" })).toBe("complains-about-share");
+    // Falsos positivos fuera: "¿por qué 30 fotos?" no es el reparto.
+    expect(classifyCallSignal({ utterance: "¿por qué 30 fotos al principio?" })).not.toBe("complains-about-share");
+  });
+
+  it("EN la llamada, el conocimiento de 'agendar la llamada' está bloqueado (no propone agendar otra)", async () => {
+    const { respondToCall } = await import("@/application/callTurnResponder");
+    const res = await respondToCall({
+      messages: [
+        { role: "system", content: "p" },
+        { role: "assistant", content: "apertura..." },
+        { role: "user", content: "¿y cómo va lo de la llamada esta?" }
+      ]
+    });
+    expect(res.content.toLowerCase()).not.toContain("la agendamos");
+    expect(res.content.toLowerCase()).not.toContain("te llamamos por telefono");
+  });
+});
+
 describe("umbral de móvil (decisión Alex 2-jul): iPhone 12 mínimo aceptado", () => {
   it("iPhone 12 -> APROBADO directo (sin 'lo valoro con mi socio')", () => {
     expect(deviceEligibilityForDescription("un iphone 12")).toBe("APPROVED");

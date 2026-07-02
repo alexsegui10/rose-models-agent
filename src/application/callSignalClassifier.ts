@@ -102,8 +102,10 @@ const NOT_INTERESTED =
 // término "30/70"): "mitad y mitad", "50/50", "quiero más para mí", "en otra agencia me dan el 50".
 // Solo lo INEQUÍVOCO va sin contexto de dinero. "más para mí" se quitó de aquí (pillaba "más para mí GUSTO"
 // y regalaba un escalón); ahora "más para mí" solo cuenta como queja dentro de FOLLOWUP (exige moneyContext).
+// jul-2026 (llamada real de Alex): "¿por qué (solo el) 30 para mí?" / "¿por qué os lleváis el 70?" es un
+// CUESTIONAMIENTO del reparto -> defensa del 70 (escalera), JAMÁS "lo hablo con mi socio" (quedaba absurdo).
 const DIRECT_SHARE_COMPLAINT =
-  /mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|(?:otra agencia|la otra|otras agencias)[^,.!?]{0,30}(?:me dan|me dejan|dan el|el \d{2}|mejor|mas)|me (?:dan|dejan|ofrecen) el \d{2}/;
+  /mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|(?:otra agencia|la otra|otras agencias)[^,.!?]{0,30}(?:me dan|me dejan|dan el|el \d{2}|mejor|mas)|me (?:dan|dejan|ofrecen) el \d{2}|\bpor\s?que\b[^.?!]{0,25}\b(?:30|treinta|70|setenta)\b(?!\s*(?:fotos?|videos?|minutos?|dias?|anos?|seguidor|reels?))|\bpor\s?que\s+tan\s+poco\b/;
 
 // Pregunta de INGRESOS ("¿cuánto se gana?", "¿cuánto voy a ganar?", "¿se gana bien?"): respuesta HONESTA
 // (depende de ti, SIN cifras ni promesas), no se defiere. Se evalúa antes que QUESTION.
