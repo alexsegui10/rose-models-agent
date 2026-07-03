@@ -190,6 +190,12 @@ const ASKS_SHARE_FIGURE =
 const BOT_CHECK =
   /\beres (?:un |una )?(?:robot|bot|ia|maquina|inteligencia artificial|grabacion|contestador)\b|\bhablo con (?:un |una )?(?:robot|bot|maquina|ia|grabacion)\b|\beres (?:real|de verdad|una persona|humano|humana)\b|\bsos (?:un |una )?(?:robot|bot|ia|maquina)\b/;
 
+// Pregunta PERSONAL/charla dirigida al bot ("¿estás soltero? jaja", "¿tú también tienes OnlyFans?",
+// "¿qué hora es allí?"): se gestiona como IDENTIDAD (el brief ya manda salir del paso con humor, sin
+// inventar datos) — jamás "lo hablo con mi socio" para una broma (barrido 3-jul).
+const PERSONAL_TO_BOT =
+  /\b(?:tu|vos) tambien\b[^.?!]{0,25}\b(?:onlyfans|of|fotos|contenido)\b|\bestas solter[oa]\b|\btienes (?:novia|novio|pareja)\b|\bque hora es (?:alli|alla|ahi|por alla|en espana|donde estas)\b|\bcomo estas tu\b|\by tu que tal\b|\bcuantos anos me das\b|\beres guap[oa]\b/;
+
 // Pide que el BOT repita ("¿qué decías?", "no te escuché", "se corta, repite"): repetir lo último dicho,
 // NUNCA deferir a WhatsApp ni pedirle a ELLA que repita (jul-2026, barrido: acababa en el absurdo
 // "eso te lo confirmo por WhatsApp" cuando ella solo pedía que repitiera).
@@ -261,6 +267,8 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (ASKS_SHARE_FIGURE.test(text)) return "asks-share-figure";
   // "¿Eres un robot?" -> identidad (sin mentir), antes que QUESTION.
   if (BOT_CHECK.test(text)) return "asks-identity";
+  // Pregunta personal/broma al bot -> identidad con gracia (no "mi socio"), antes que QUESTION.
+  if (PERSONAL_TO_BOT.test(text)) return "asks-identity";
   // "No sé" SUELTO (jul-2026, llamada real de Alex): es DUDA, no ruido — tranquilizar y seguir (REASSURE),
   // no el "¿me lo repites?" que sonaba a sordo. Con más contenido ("no sé si me fío") ya lo cazan otras.
   if (/^(?:no se|no lo se|nose|no sabria decirte?|no sabria)$/.test(text)) return "distrust";

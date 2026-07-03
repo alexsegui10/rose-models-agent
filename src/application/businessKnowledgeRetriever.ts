@@ -118,8 +118,12 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
   if (/\b(70\/30|quien recibe|quien se queda)\b/.test(message)) tags.push("percentage", "revenue-share");
   if (/\b(por que.*70|porque.*70|porcentaje.*alto|os quedais.*70)\b/.test(message)) tags.push("why-70", "percentage", "services");
-  if (/\b(skrill|liquidacion|cada 14|14 dias|neto|comision de la plataforma)\b/.test(message))
+  if (/\b(skrill|liquidacion|liquidar?|cada 14|14 dias|neto|comision de la plataforma)\b/.test(message))
     tags.push("settlement", "skrill", "payment", "revenue-share");
+  // LATAM/coloquial del cobro ("¿cómo me llega la plata?"): misma respuesta de settlement/pagos.
+  // (Barrido 3-jul: acababa en "mi socio" con la respuesta documentada delante.)
+  if (/\b(plata|me llega (?:la plata|el dinero|el pago)|como (?:me llega|recibo) )\b|\bcomo me llega\b/.test(message))
+    tags.push("settlement", "payment", "salary");
   // Negociacion del reparto -> % + sensitive + revision humana (invariante 3). OJO: "me dais"/"dame" eran un
   // FALSO POSITIVO grave con "me dais info" / "dame info / detalles" (peticion GENERICA de info, el primer
   // mensaje tipico): le pegaba el % + sensitive, surfaceaba el 70/30 (riesgo invariante 3) y, al haber
@@ -179,7 +183,12 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   ) {
     tags.push("old-material", "new-content", "onlyfans", "instagram");
   }
-  if (/\b(limites|no quiero hacer|contenido anal|desnudo|juguetes)\b/.test(message)) tags.push("boundaries", "limits", "content");
+  if (
+    /\b(limites|no quiero hacer|contenido anal|desnudo|juguetes|muy fuertes?|videos?[^.!?]{0,12}fuertes?|explicito|hardcore|hasta donde|es porno|pornografia|contenido sexual)\b/.test(
+      message
+    )
+  )
+    tags.push("boundaries", "limits", "content");
   // "me puedes llamar anita" / "llamame X" / "me llaman X" = ponerle un APODO, NO la llamada de telefono. El
   // verbo "llamar" usado para NOMBRAR surfaceaba el conocimiento de la llamada por WhatsApp y el bot proponia
   // agendar a mitad de la cualificacion (bug Alex 24-jun). "llamada/telefono/whatsapp" y un "llamar" que NO sea
@@ -204,7 +213,11 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("iphone", "galaxy", "device", "quality");
   if (/\b(ia|inteligencia artificial|bot|asistente virtual)\b/.test(message)) tags.push("ai", "identity", "transparency");
   if (/\b(no responde|seguimiento|volver a escribir|insistir)\b/.test(message)) tags.push("follow-up", "decline", "limited");
-  if (/\b(lanzamiento|lanzar|lanzais|cuando empiezo|cuando se lanza|cuanto tarda|30 dias|semanas)\b/.test(message))
+  if (
+    /\b(lanzamiento|lanzar|lanzais|cuando empiezo|cuando empezamos|cuando empezariamos|cuando empezaria|cuando arrancamos|cuando se lanza|cuanto tarda|30 dias|semanas)\b/.test(
+      message
+    )
+  )
     tags.push("launch", "timeline", "warmup");
   if (/\b(paises|que pais|vendeis|venden|mercado|compradores|poder adquisitivo)\b/.test(message))
     tags.push("countries", "market", "faq");
@@ -278,14 +291,18 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // Miedo a que la RECONOZCA gente concreta (familia, conocidos, pareja, jefe): es una duda de privacidad,
   // no un dato. Anclado a un verbo de ver/reconocer/enterarse para no disparar con cualquier "familia".
   if (
-    /\b(?:me|nos)\s+(?:vea|vean|reconozca|reconozcan|entere|enteren|pille|pillen|descubra|descubran)\b[^.!?]{0,30}\b(familia|conocid\w*|gente|amig\w*|hermano|hermana|padre|madre|novio|pareja|jefe|trabajo|vecin\w*)\b/.test(
+    /\b(?:me|nos)\s+(?:vea|vean|ve|ven|viera|vieran|reconozca|reconozcan|reconoce|reconocen|entere|enteren|entera|enteran|pille|pillen|pilla|pillan|descubra|descubran|descubre|descubren)\b[^.!?]{0,30}\b(familia|conocid\w*|gente|amig\w*|hermano|hermana|padre|madre|novio|pareja|jefe|trabajo|vecin\w*)\b/.test(
       message
     ) ||
-    /\b(familia|gente conocida|alguien conocido|conocidos|amig\w*)\b[^.!?]{0,30}\b(me|nos)\s+(?:vea|vean|reconozca|reconozcan|entere|enteren|pille|descubr\w*)\b/.test(
+    /\b(familia|gente conocida|alguien conocido|conocidos|amig\w*)\b[^.!?]{0,30}\b(me|nos)\s+(?:vea|vean|ve|ven|reconozca|reconozcan|reconoce|entere|enteren|entera|pille|pilla|descubr\w*)\b/.test(
       message
     )
   )
     tags.push("geo-privacy", "privacy", "objection");
+  // Nombre artístico / no usar su nombre real ("¿puedo usar otro nombre?"): la identidad de las cuentas
+  // la crea la agencia (española) — misma respuesta de privacidad (barrido 3-jul).
+  if (/\b(otro nombre|nombre falso|nombre artistico|mi nombre real|sin mi nombre|con mi nombre)\b/.test(message))
+    tags.push("geo-privacy", "privacy");
   if (/\b(cara|rostro|anonima|sin mostrarme|sin ensenarme)\b/.test(message)) tags.push("face", "anonymity", "requirement");
   // Solo si la mencion no es negada: "no trabajo con otra agencia" es un dato, no una objecion.
   if (
@@ -295,6 +312,27 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("multi-agency", "agencies", "market-conflict");
   if (/\b(no uso instagram|no tengo instagram|no subo fotos|no uso redes)\b/.test(message))
     tags.push("agency-responsibilities", "instagram", "operations");
+  // Propiedad/control de la cuenta de IG ("¿la cuenta es mía o vuestra?") y quién habla con los clientes
+  // ("¿quién contesta los mensajes?"): respuestas documentadas de servicios/operaciones (barrido 3-jul).
+  if (
+    /\bcuenta\b[^.!?]{0,25}\b(mia|tuya|vuestra|de quien|de ustedes)\b|\bde quien es la cuenta\b/.test(message) ||
+    /\b(quien|quienes)\b[^.!?]{0,20}\b(contesta|responde|habla|chatea)\b[^.!?]{0,25}\b(mensajes?|clientes?|fans?|suscriptores?|chats?)\b/.test(
+      message
+    ) ||
+    /\bchatters?\b/.test(message)
+  )
+    tags.push("services", "agency", "agency-responsibilities", "instagram", "operations");
+  // Ubicación de la agencia ("¿dónde estáis?", "¿de dónde sois?"): perfil de agencia (española).
+  if (
+    /\b(donde (?:estais|estan|esta la agencia|trabajais)|de donde (?:sois|son)|ubicad\w*|ubicacion de la agencia)\b/.test(message)
+  )
+    tags.push("agency", "identity");
+  // Verificación de la cuenta de OnlyFans ("¿me verifico con mi DNI?"): proceso documentado de apertura.
+  if (
+    /\b(verificar|verificacion|verificarme|dni|documento de identidad)\b[^.!?]{0,30}\b(onlyfans|of|cuenta)\b/.test(message) ||
+    /\b(onlyfans|of)\b[^.!?]{0,30}\b(verificar|verificacion|dni)\b/.test(message)
+  )
+    tags.push("of-account", "account-setup", "onboarding", "faq");
   if (/\b(pruebas|demostrar|demuestren|demuestra|resultados de otras|otras modelos|garantias)\b/.test(message))
     tags.push("distrust", "objection");
   // PETICION DE PRUEBAS sensibles (capturas del panel de ganancias, backend, "muestrame cuentas que
