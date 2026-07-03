@@ -119,7 +119,11 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
         botBefore.push(lastAssistant);
         botSpokeSinceLastUser = false;
       } else {
-        userUtterances[userUtterances.length - 1] = `${userUtterances[userUtterances.length - 1]} ${content}`.trim();
+        // Tope defensivo (nota del revisor): un ASR patológico podría mandar decenas de fragmentos; el
+        // turno fundido se acota (2000 chars sobran para cualquier turno real de voz) para no inflar el
+        // brief del redactor ni la recuperación. Las señales ya se detectan en los primeros caracteres.
+        const merged = `${userUtterances[userUtterances.length - 1]} ${content}`.trim();
+        userUtterances[userUtterances.length - 1] = merged.length > 2000 ? merged.slice(0, 2000) : merged;
       }
     }
   }
