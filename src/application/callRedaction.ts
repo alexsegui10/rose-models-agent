@@ -485,7 +485,8 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
     prohibitedClaims: isMoney
       ? [
           ...gathered.prohibited,
-          "Aplazar la cifra ('luego te lo explico', 'te lo cuento en la llamada'): la cifra se dice AHORA."
+          "Aplazar la cifra ('luego te lo explico', 'te lo cuento en la llamada'): la cifra se dice AHORA.",
+          "Decir 'se liquida' o 'liquidación' (jerga que no entiende): di siempre 'cobras cada 14 días'."
         ]
       : gathered.prohibited,
     mandatoryNuances: gathered.nuances,

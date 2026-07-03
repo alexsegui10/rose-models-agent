@@ -80,7 +80,7 @@ const DRAFT_BUFFER_WORDS: Partial<Record<CallDirectiveType, string[]>> = {
   REASSURE: ["Ya... ", "Te entiendo... "],
   DEFER_TO_PARTNER: ["Pues... ", "Mmm... "],
   GIVE_IDENTITY: ["Eh... "],
-  CLARIFY_LAST_UTTERANCE: ["Ah, sí... ", "O sea... "],
+  CLARIFY_LAST_UTTERANCE: ["O sea... ", "Pues mira... "],
   REPEAT_LAST_UTTERANCE: ["Sí, claro... "]
 };
 

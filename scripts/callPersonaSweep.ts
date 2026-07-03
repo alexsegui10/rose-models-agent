@@ -127,6 +127,22 @@ const PERSONAS: Persona[] = [
     turns: ["hola ¿quien habla?", "¿eres un robot o una persona?", "mmm vale...", "bueno sigue", "dale", "vale", "dale"]
   },
   {
+    name: "aclaradora",
+    context: { candidateName: "Ana", age: 24 },
+    turns: [
+      "si dime",
+      "vale",
+      "¿guiones de que?",
+      "ah vale, dale",
+      "si",
+      "¿que significa reparto?",
+      "ah ok dale",
+      "¿limite de que?",
+      "ah vale, no, nada raro",
+      "dale perfecto"
+    ]
+  },
+  {
     name: "desconfiada-doble",
     context: { candidateName: "Cami", age: 29 },
     turns: [

@@ -111,6 +111,17 @@ describe("repetición PARCIAL y eco limpio", () => {
 });
 
 describe("lenguaje claro en el dinero: 'cobras', nunca 'se liquida'", () => {
+  it("el brief de MONEY prohíbe la jerga 'se liquida' al redactor", () => {
+    const plan = planCallUtterance({
+      directive: {
+        type: "COVER_STAGE",
+        stageId: "MONEY",
+        shareOffer: { modelShare: 30, agencyShare: 70, step: 0, isFloor: false }
+      }
+    });
+    expect(plan.draftingBrief!.prohibitedClaims.join(" ")).toContain("se liquida");
+  });
+
   it("el fallback de MONEY ya no dice 'se liquida'", () => {
     const plan = planCallUtterance({
       directive: {
