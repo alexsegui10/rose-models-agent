@@ -75,6 +75,43 @@ describe("no se salta el guion cuando la candidata suelta varios turnos seguidos
     expect(res.content.toLowerCase()).toContain("mayores de edad");
   });
 
+  it("SEGURIDAD (inv. 4): 'quiero hablar con una persona' AL DESCOLGAR -> handoff pegajoso, no el pitch", async () => {
+    const messages: CallChatMessage[] = [
+      { role: "system", content: "p" },
+      { role: "user", content: "quiero hablar con una persona real" },
+      { role: "assistant", content: "..." },
+      { role: "user", content: "vale" }
+    ];
+    const res = await respondToCall({ messages });
+    expect(res.directiveType).toBe("HANDOFF_TO_ALEX");
+    // El handoff ocurrió en su PRIMER turno (replay); este turno vivo recibe la variante de repetición.
+    expect(res.content.toLowerCase()).toMatch(/socio|le he avisado|contacto contigo/);
+  });
+
+  it("SEGURIDAD (inv. 4): hostilidad AL DESCOLGAR -> handoff, no la apertura del pitch", async () => {
+    const messages: CallChatMessage[] = [
+      { role: "system", content: "p" },
+      { role: "user", content: "sois unos estafadores de mierda" },
+      { role: "assistant", content: "..." },
+      { role: "user", content: "que quieres" }
+    ];
+    const res = await respondToCall({ messages });
+    expect(res.directiveType).toBe("HANDOFF_TO_ALEX");
+  });
+
+  it("el gate de MENOR no se toca: hostilidad DESPUÉS del corte por menor sigue repitiendo el corte", async () => {
+    const messages: CallChatMessage[] = [
+      { role: "system", content: "p" },
+      { role: "assistant", content: "apertura..." },
+      { role: "user", content: "tengo 16" },
+      { role: "assistant", content: "solo mayores de edad..." },
+      { role: "user", content: "sois unos bordes de mierda" }
+    ];
+    const res = await respondToCall({ messages });
+    expect(res.directiveType).toBe("CLOSE_UNDERAGE");
+    expect(res.content.toLowerCase()).not.toContain("socio");
+  });
+
   it("una pregunta partida en dos turnos se responde entera ('¿qué significa' + 'se liquida?')", async () => {
     const messages: CallChatMessage[] = [
       { role: "system", content: "p" },

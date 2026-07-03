@@ -160,6 +160,14 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
     return closeUnderage(state);
   }
 
+  // SEGURIDAD antes de la apertura (bloqueante del revisor 3-jul): quien DESCUELGA pidiendo una persona
+  // o con hostilidad no recibe el pitch — antes el gate de la apertura se tragaba la señal y el guion
+  // seguía (invariante 4 roto en el primer aliento). Guardado a !disclosureGiven: el resto de estados
+  // (incluido el corte por menor, que fija disclosureGiven=true) no cambian de camino.
+  if (!state.disclosureGiven && (signal === "wants-human" || signal === "hostile-or-suspicious")) {
+    return handoff(state, signal === "wants-human" ? "asked-for-human" : "suspicion-or-aggression");
+  }
+
   // Paso 0 obligatorio: apertura legal (IA + grabación). Siempre lo primero, pase lo que pase.
   if (!state.disclosureGiven) {
     return {
