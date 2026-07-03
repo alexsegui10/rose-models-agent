@@ -33,6 +33,14 @@ export interface OutboundCallResult {
   ok: boolean;
   conversationId?: string;
   reason?: string;
+  /**
+   * true cuando el fallo es de RED/TIMEOUT: la petición pudo llegar a ElevenLabs y la llamada estar YA
+   * sonando aunque el HTTP muriera (abortar el fetch NO aborta el marcado SIP). En ese caso el resultado
+   * es DESCONOCIDO, no "no salió": el que llama debe registrar el intento igualmente y dejar que el
+   * webhook de fin / watchdog reconcilien (3-jul: un TimeoutError aquí hizo sonar el teléfono de Alex
+   * "por la cara" con el sistema creyendo que la llamada no había salido).
+   */
+  indeterminate?: boolean;
 }
 
 // Variables dinámicas (planas) con el contexto del DM, para que el agente sepa con quién habla.
@@ -112,9 +120,9 @@ export async function startOutboundSipCall(
       method: "POST",
       headers: { "Content-Type": "application/json", "xi-api-key": config.apiKey },
       body: JSON.stringify(body),
-      // Timeout defensivo (jul-2026): sin él, un cuelgue de la API mataba la lambda entera (techo ~10s de
-      // Vercel) SIN registrar el intento -> el tope de 3 llamadas dejaba de ser fiable. 6.5s deja margen.
-      signal: AbortSignal.timeout(6500)
+      // Timeout defensivo. 15s (3-jul): con maxDuration=60 en las rutas que marcan ya no compite con el
+      // techo de la lambda, y el 6.5s anterior daba falsos TimeoutError con la llamada YA lanzada.
+      signal: AbortSignal.timeout(15000)
     });
     if (!response.ok) {
       let detail = "";
@@ -137,6 +145,12 @@ export async function startOutboundSipCall(
     }
     return { ok: true, conversationId: typeof data.conversation_id === "string" ? data.conversation_id : undefined };
   } catch (error) {
-    return { ok: false, reason: `error de red (${error instanceof Error ? error.name : "desconocido"})` };
+    // Error de red/timeout: RESULTADO DESCONOCIDO (la llamada puede estar sonando). indeterminate=true
+    // para que el que llama registre el intento en vez de asumir que no salió.
+    return {
+      ok: false,
+      reason: `error de red (${error instanceof Error ? error.name : "desconocido"})`,
+      indeterminate: true
+    };
   }
 }

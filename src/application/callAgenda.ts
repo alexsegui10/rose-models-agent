@@ -72,7 +72,7 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
     order: 4,
     label: "Reparto y cobro",
     objective:
-      "Presentar el reparto 70/30 FRESCO en la llamada (sin dar por hecho que ya se dijo por Instagram), liquidación cada 14 días (ella cobra primero), sin salario fijo y sin prometer cifras. La negociación a la baja la decide el código si se queja.",
+      "Presentar el reparto 70/30 FRESCO en la llamada (sin dar por hecho que ya se dijo por Instagram), cobro cada 14 días (ella cobra primero; di 'cobras', nunca 'se liquida'), sin salario fijo y sin prometer cifras. La negociación a la baja la decide el código si se queja.",
     knowledgeRefs: [
       "commercial-revenue-share-general",
       "commercial-revenue-share-settlement",

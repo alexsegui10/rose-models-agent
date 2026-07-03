@@ -130,7 +130,8 @@ const entries: KnowledgeEntryInput[] = [
       // Lenguaje CLARO (Alex 22-jun): "pagos", NUNCA "liquidacion" (jerga que la candidata no entiende y le
       // hacia preguntar). Solo la cadencia general; el metodo concreto (Skrill) y el calculo manual no salen.
       "Los pagos son cada 14 dias desde que la cuenta empieza a generar ingresos.",
-      "La plataforma te paga a ti directamente y despues nos pasas la parte de la agencia."
+      "La plataforma te paga a ti directamente y despues nos pasas la parte de la agencia.",
+      "Liquidar significa hacer cuentas y pagarte lo acumulado: cobras lo generado cada 14 dias."
     ],
     prohibitedClaims: [
       "Prometer automatizacion de pagos.",
@@ -142,10 +143,10 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["Explicar solo si pregunta.", "No pedir informacion sensible de pago en esta fase."],
     escalationConditions: ["Pide excepciones de pago.", "Pide condiciones no previstas."],
     requiresHumanReview: false,
-    version: "commercial-revenue-share-settlement-2026-06-22.1",
+    version: "commercial-revenue-share-settlement-2026-07-03.1", // 3-jul: +definicion de liquidar (antes se deferia)
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-22"
+    updatedAt: "2026-07-03"
   },
   {
     id: "commercial-why-agency-70",

@@ -169,6 +169,30 @@ const ASK_REPEAT_TEXTS = [
 // una repetición (evita el anidamiento "Sí, te decía: Sí, te decía: ...").
 const REPEAT_PREFIX = "Sí, te decía: ";
 
+// Muletillas de arranque que el streaming antepone al turno hablado ("Vale... ", "Muy bien... "): se
+// recortan del ECO para no decir "Sí, te decía: Vale... Claro..." (3-jul, transcripción real).
+const SPOKEN_PREFIX = /^(?:vale|perfecto|muy bien|a ver|pues mira|claro|ya|te entiendo|pues|mmm+|eh+|o sea|si)\s*[.…]{1,3}\s*/i;
+function stripSpokenPrefixes(text: string): string {
+  let out = text.trim();
+  let prev = "";
+  while (prev !== out) {
+    prev = out;
+    out = out.replace(SPOKEN_PREFIX, "").trim();
+  }
+  return out;
+}
+
+// "Repíteme LO DE X": tema concreto que pidió re-oír (última coincidencia gana: "lo de on-- lo de onlyfans").
+function repeatTopicFrom(utterance?: string): string | undefined {
+  if (!utterance) return undefined;
+  const matches = [
+    ...utterance.toLowerCase().matchAll(/(?:lo|eso|la parte)\s+de(?:l)?\s+([a-záéíóúñ0-9][a-záéíóúñ0-9\s]{2,28})/g)
+  ];
+  const last = matches.at(-1)?.[1]?.trim();
+  if (!last) return undefined;
+  return last.split(/[.,;!?]/)[0].trim() || undefined;
+}
+
 // Tranquilizar desconfianza sin conocimiento recuperado: fallback determinista con variante.
 const REASSURE_FALLBACK_TEXTS = [
   "Te entiendo, es normal tener dudas. Vamos paso a paso y sin compromiso. Y lo importante: el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así que el dinero pasa primero por ti. ¿Qué es lo que más te preocupa?",
@@ -305,15 +329,64 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
     }
     case "REPEAT_LAST_UTTERANCE": {
       // Ella no lo oyó: se repite lo último que dijo el bot. El prefijo se RECORTA si ya venía de una
-      // repetición anterior (sin "Sí, te decía: Sí, te decía: ..." — riesgo del revisor jul-2026), y el
-      // eco viene del transcript que reporta la PLATAFORMA (fuente externa): se re-valida antes de decirlo
-      // — si no pasa, se retoma con la frase neutra en vez de repetir contenido dudoso.
+      // repetición anterior (sin "Sí, te decía: Sí, te decía: ..." — riesgo del revisor jul-2026) y
+      // también la muletilla de arranque ("Vale... "); el eco viene del transcript que reporta la
+      // PLATAFORMA (fuente externa): se re-valida antes de decirlo — si no pasa, frase neutra.
       const RETRY_FALLBACK = "Nada, te estaba contando cómo trabajamos. ¿Sigo?";
       let last = input.lastBotUtterance?.trim() ?? "";
       while (last.startsWith(REPEAT_PREFIX)) last = last.slice(REPEAT_PREFIX.length).trim();
+      last = stripSpokenPrefixes(last);
       const safeToEcho = last.length > 0 && validateCallUtterance(last).valid;
-      const text = safeToEcho ? `${REPEAT_PREFIX}${last}` : RETRY_FALLBACK;
-      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+      const echo = safeToEcho ? `${REPEAT_PREFIX}${last}` : RETRY_FALLBACK;
+      // "Repíteme LO DE X" (3-jul, llamada real): si pidió una PARTE concreta, el redactor repite SOLO esa
+      // parte más despacio y simple (fallback: el eco completo). Sin tema -> eco determinista de siempre.
+      const topic = repeatTopicFrom(input.utterance);
+      if (topic && safeToEcho) {
+        return {
+          directiveType: directive.type,
+          draftingBrief: {
+            instruction: `No oyó bien la parte sobre "${topic}" de tu última frase. Repite SOLO esa parte, más despacio y con palabras sencillas, sin añadir datos nuevos ni temas que no estén en ella.`,
+            groundingFacts: [`Tu última frase fue: "${last}"`],
+            prohibitedClaims: ["Añadir datos, cifras o temas que no estén en la última frase"],
+            mandatoryNuances: [],
+            referenceInstagram: false,
+            context: input.context,
+            ...briefExtras(input)
+          },
+          fallbackText: echo
+        };
+      }
+      return { directiveType: directive.type, deterministicText: echo, fallbackText: echo };
+    }
+    case "CLARIFY_LAST_UTTERANCE": {
+      // No entendió una PALABRA/parte de lo que el bot acaba de decir (3-jul: "¿qué significa se
+      // liquida?" / "¿límite de qué?" acababan en "mi socio"). El redactor lo explica en SIMPLE,
+      // reformulando SOLO lo ya dicho + los hechos aprobados de la etapa; jamás datos nuevos.
+      const gathered = gatherKnowledge(input.knowledge);
+      const last = stripSpokenPrefixes(input.lastBotUtterance?.trim() ?? "");
+      const clarifyFallback =
+        last.length > 0 && validateCallUtterance(last).valid
+          ? `O sea, te lo digo más fácil: ${last}`
+          : variantFor(REASSURE_FALLBACK_TEXTS, input.repetitionIndex ?? 0);
+      return {
+        directiveType: directive.type,
+        draftingBrief: {
+          instruction:
+            "No ha entendido una palabra o parte de LO QUE ACABAS DE DECIR (su pregunta la tienes en 'ella acaba de decir'). Explícaselo con palabras muy sencillas y cercanas, reformulando solo tu última frase y apoyándote en los hechos aprobados. Nada de tecnicismos, nada de datos nuevos. Remata con una comprobación corta ('¿mejor así?')." +
+            repeatHint(input),
+          groundingFacts: [...(last ? [`Tu última frase fue: "${last}"`] : []), ...gathered.points],
+          prohibitedClaims: [
+            ...gathered.prohibited,
+            "Añadir datos, cifras o promesas que no estén en los hechos",
+            "Deferir a 'mi socio' o a WhatsApp una palabra que tú mismo usaste"
+          ],
+          mandatoryNuances: gathered.nuances,
+          referenceInstagram: false,
+          context: input.context,
+          ...briefExtras(input)
+        },
+        fallbackText: clarifyFallback
+      };
     }
     case "CONCEDE_SHARE": {
       const text = concedeShareText(directive.shareOffer);
@@ -388,15 +461,26 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
       ? [
           `El reparto es un ${offer.modelShare}% para ti y un ${offer.agencyShare}% para la agencia.`,
           "El dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte: pasa primero por ti.",
-          "Se liquida cada 14 días.",
+          // Lenguaje CLARO (Alex 3-jul, misma regla que el DM del 22-jun): "cobras", NUNCA "se liquida"
+          // (jerga que la hizo preguntar y acabó en el absurdo "te lo confirmo por WhatsApp").
+          "Cobras cada 14 días.",
           ...gathered.points
         ]
       : gathered.points;
 
+  // TRANSICIONES (3-jul, feedback de Alex en la llamada real): al arrancar el primer tema se ENMARCA
+  // ("pues mira, primero te cuento cómo trabajamos...") y al cambiar de tema se ANUNCIA con una
+  // transición corta y natural — sin sonar a índice ni a lista. Solo naturalidad: el orden es del director.
+  const transitionHint =
+    (input.coveredTopics?.length ?? 0) > 0
+      ? ` ESTÁS CAMBIANDO DE TEMA a "${stage.label}": arranca con una transición corta y natural que lo anuncie (p. ej. "vale, y ahora ${stage.label.toLowerCase()}"), sin sonar a lista.`
+      : ' Es el PRIMER tema tras el saludo: enmárcalo con una frase corta antes de entrar (p. ej. "pues mira, primero te cuento cómo trabajamos").';
+
   const brief: CallDraftingBrief = {
-    instruction: isMoney
-      ? "Presenta el reparto diciendo LA CIFRA EXACTA de los hechos (el porcentaje para ella y para la agencia), claro y sin rodeos, con la tranquilidad de que el dinero lo cobra ella primero. Remata preguntando qué le parece."
-      : stage.objective,
+    instruction:
+      (isMoney
+        ? "Presenta el reparto diciendo LA CIFRA EXACTA de los hechos (el porcentaje para ella y para la agencia), claro y sin rodeos, con la tranquilidad de que el dinero lo cobra ella primero. Remata preguntando qué le parece."
+        : stage.objective) + transitionHint,
     groundingFacts,
     prohibitedClaims: isMoney
       ? [
@@ -465,7 +549,7 @@ function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOf
   if (stageId === "MONEY") {
     // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"). FRESCA, sin referenciar el DM.
     if (shareOffer) {
-      return `Y el dinero, que es lo importante: el reparto es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para la agencia. Y tranquila, que el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así siempre pasa primero por ti. Se liquida cada 14 días. ¿Qué te parece?`;
+      return `Y el dinero, que es lo importante: el reparto es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para la agencia. Y tranquila, que el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así siempre pasa primero por ti. Cobras cada 14 días. ¿Qué te parece?`;
     }
     // Sin oferta autorizada NO inventamos ni referenciamos el DM (no deberia ocurrir: el director siempre la pasa).
     return points[0] ?? DEFER_TEXT;

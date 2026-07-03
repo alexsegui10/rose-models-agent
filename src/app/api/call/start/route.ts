@@ -4,6 +4,9 @@ import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorSt
 import { getElevenLabsOutboundConfig, startOutboundSipCall } from "@/infrastructure/integrations/elevenLabsOutbound";
 
 export const runtime = "nodejs";
+// 60s (3-jul): el camino síncrono (Neon fría + ElevenLabs + escrituras) superaba el techo por defecto de
+// ~10s y la lambda moría a MEDIAS (llamada sonando sin registrar). Con 60s hay margen de sobra.
+export const maxDuration = 60;
 
 /**
  * Dispara la llamada saliente por teléfono (SIP/Zadarma vía ElevenLabs) a una candidata. Lo llama el CRM
@@ -35,12 +38,20 @@ export async function POST(request: Request) {
   }
 
   const result = await startOutboundSipCall(candidate, config);
-  if (!result.ok) {
+  // Fallo LIMPIO (ElevenLabs respondió que NO): la llamada seguro que no salió -> 502 sin gastar intento.
+  if (!result.ok && !result.indeterminate) {
     return NextResponse.json({ error: result.reason ?? "No se pudo iniciar la llamada." }, { status: 502 });
   }
 
-  // El contador de intentos se incrementa SOLO cuando la llamada ARRANCÓ de verdad (un 502 al iniciar no
-  // gasta intento): así recordCallOutcome solo lo lee para decidir el reintento diferido (hasta 3).
+  // OK o resultado DESCONOCIDO (timeout/red con la llamada posiblemente sonando, 3-jul): se registra el
+  // intento IGUAL — así callAttempts y CALL_IN_PROGRESS reflejan el mundo real y el tope de 3 y la guarda
+  // anti-doble-llamada son fiables. Si en realidad no salió, el watchdog (20 min) la re-arma solo.
   await getSimulatorEngine().noteCallAttempt(parsed.data.candidateId, result.conversationId ?? undefined);
-  return NextResponse.json({ ok: true, conversationId: result.conversationId ?? null });
+  if (!result.ok) {
+    console.warn("[call-start] llamada disparada SIN confirmación de ElevenLabs (se registra igual)", {
+      candidateId: parsed.data.candidateId,
+      reason: result.reason ?? "desconocido"
+    });
+  }
+  return NextResponse.json({ ok: true, conversationId: result.conversationId ?? null, unconfirmed: !result.ok });
 }

@@ -79,7 +79,9 @@ const DRAFT_BUFFER_WORDS: Partial<Record<CallDirectiveType, string[]>> = {
   ANSWER_FROM_KNOWLEDGE: ["A ver... ", "Pues mira... ", "Claro... "],
   REASSURE: ["Ya... ", "Te entiendo... "],
   DEFER_TO_PARTNER: ["Pues... ", "Mmm... "],
-  GIVE_IDENTITY: ["Eh... "]
+  GIVE_IDENTITY: ["Eh... "],
+  CLARIFY_LAST_UTTERANCE: ["Ah, sí... ", "O sea... "],
+  REPEAT_LAST_UTTERANCE: ["Sí, claro... "]
 };
 
 function draftBufferWord(directive: CallDirectiveType, turnIndex: number): string {
@@ -93,7 +95,19 @@ function isNoiseUtterance(utterance: string): boolean {
 }
 
 export async function respondToCall(input: RespondToCallInput): Promise<CallResponderResult> {
-  const userUtterances = input.messages.filter((m) => m.role === "user").map((m) => m.content ?? "");
+  // Turnos de la candidata + lo ÚLTIMO que dijo el BOT antes de cada uno (para las señales de
+  // aclaración/repetición: "¿qué significa X?" solo es aclaración si X está en la frase previa del bot).
+  const userUtterances: string[] = [];
+  const botBefore: Array<string | undefined> = [];
+  let lastAssistant: string | undefined;
+  for (const message of input.messages) {
+    if (message.role === "assistant" && (message.content ?? "").trim().length > 0) {
+      lastAssistant = message.content;
+    } else if (message.role === "user") {
+      userUtterances.push(message.content ?? "");
+      botBefore.push(lastAssistant);
+    }
+  }
 
   // La apertura legal se considera dada SOLO si el BOT ya habló (mensaje assistant no vacío). NO se infiere
   // de que la candidata haya hablado: si ella habla primero, el bot debe abrir igualmente con la locución
@@ -138,7 +152,12 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
         answerEnabled && userUtterances[i].trim().length > 0
           ? (await resolveCoveringEntries(userUtterances[i], replayRetriever)).length > 0
           : false;
-      const signal = classifyCallSignal({ utterance: userUtterances[i], isCoveredQuestion: covered, moneyContext });
+      const signal = classifyCallSignal({
+        utterance: userUtterances[i],
+        isCoveredQuestion: covered,
+        moneyContext,
+        lastBotUtterance: botBefore[i]
+      });
       const decision = decideCallDirective({ state, signal });
       directiveRepeats[decision.directive.type] = (directiveRepeats[decision.directive.type] ?? 0) + 1;
       state = decision.nextState;
@@ -150,10 +169,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   const coveringEntries =
     answerEnabled && lastUtterance.trim().length > 0 ? await resolveCoveringEntries(lastUtterance, replayRetriever) : [];
 
-  // Lo último que DIJO EL BOT (para "¿qué decías?" -> repetirlo tal cual, ya validado cuando se dijo).
-  const lastBotUtterance = [...input.messages]
-    .reverse()
-    .find((m) => m.role === "assistant" && (m.content ?? "").trim().length > 0)?.content;
+  // Lo último que DIJO EL BOT (para "¿qué decías?"/aclaraciones): ya lo dejó calculado el barrido de
+  // mensajes de arriba (es el último assistant no vacío del transcript).
+  const lastBotUtterance = lastAssistant;
 
   // ANTI-LORO tras el final (jul-2026, llamada real de Alex: 8 MINUTOS repitiendo "te paso con mi socio"
   // cada 15s al ASR mandando "..."): con la llamada YA transferida o cerrada ANTES de este turno, un turno

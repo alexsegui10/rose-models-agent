@@ -66,10 +66,13 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
     classifyCallSignal({
       utterance: input.utterance,
       isCoveredQuestion: coveringEntries.length > 0,
-      moneyContext
+      moneyContext,
+      lastBotUtterance: input.lastBotUtterance
     });
   const { directive, nextState } = decideCallDirective({ state: input.state, signal });
-  const knowledge = knowledgeForDirective(directive, coveringEntries);
+  // Para las ACLARACIONES, el redactor se apoya en el conocimiento de la etapa que se estaba explicando.
+  const lastStageId = input.state.coveredStages.filter((id) => id !== "CLOSE").at(-1);
+  const knowledge = knowledgeForDirective(directive, coveringEntries, lastStageId);
   const utterancePlan = planCallUtterance({
     directive,
     candidateName: input.candidateName ?? input.context?.candidateName,
@@ -93,7 +96,11 @@ function topicLabels(stages: readonly CallAgendaStageId[]): string[] {
   return stages.filter((id) => id !== "CLOSE").map((id) => callAgendaStage(id).label);
 }
 
-function knowledgeForDirective(directive: CallDirective, coveringEntries: KnowledgeEntry[]): KnowledgeEntry[] | undefined {
+function knowledgeForDirective(
+  directive: CallDirective,
+  coveringEntries: KnowledgeEntry[],
+  lastStageId?: CallAgendaStageId
+): KnowledgeEntry[] | undefined {
   switch (directive.type) {
     case "COVER_STAGE":
       return directive.stageId ? knowledgeByIds(callAgendaStage(directive.stageId).knowledgeRefs) : undefined;
@@ -101,6 +108,13 @@ function knowledgeForDirective(directive: CallDirective, coveringEntries: Knowle
       return coveringEntries;
     case "REASSURE":
       return knowledgeByIds([DISTRUST_KNOWLEDGE_ID]);
+    case "CLARIFY_LAST_UTTERANCE": {
+      // Aclarar lo recién dicho: los hechos de la ETAPA que se estaba explicando + lo que cubra el
+      // recuperador (p. ej. la entrada de la liquidación si preguntó por esa palabra).
+      const stageKnowledge = lastStageId ? knowledgeByIds(callAgendaStage(lastStageId).knowledgeRefs) : [];
+      const merged = [...coveringEntries, ...stageKnowledge];
+      return merged.filter((entry, index) => merged.findIndex((e) => e.id === entry.id) === index);
+    }
     default:
       return undefined;
   }

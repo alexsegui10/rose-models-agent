@@ -6,6 +6,8 @@ import { getElevenLabsOutboundConfig, startOutboundSipCall } from "@/infrastruct
 import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 
 export const runtime = "nodejs";
+// 60s (3-jul): igual que /api/call/start — el camino Neon + ElevenLabs + escrituras necesita margen.
+export const maxDuration = 60;
 
 // El bot reintenta hasta 3 veces (mismo limite que recordCallOutcome); no marca un 4o.
 const MAX_CALL_ATTEMPTS = 3;
@@ -67,10 +69,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const result = await startOutboundSipCall(candidate, config);
-  if (!result.ok) {
-    // Fallo al ARRANCAR. OJO (jul-2026, hallazgo config-06): el encolado va con Upstash-Retries:0
-    // (at-most-once, anti doble-llamada), asi que un 502 aqui NO provoca reintento — la llamada se
-    // perderia EN SILENCIO. En su lugar: aviso directo a Alex para que la haga a mano.
+  if (!result.ok && !result.indeterminate) {
+    // Fallo LIMPIO al ARRANCAR (ElevenLabs respondió que NO). OJO (jul-2026, hallazgo config-06): el
+    // encolado va con Upstash-Retries:0 (at-most-once, anti doble-llamada), asi que un fallo aqui NO
+    // provoca reintento — la llamada se perderia EN SILENCIO. En su lugar: aviso directo a Alex.
     console.error("[call-dispatch] no se pudo iniciar la llamada agendada", {
       candidateId,
       reason: result.reason ?? "desconocido"
@@ -88,7 +90,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
     return NextResponse.json({ ok: false, error: result.reason ?? "No se pudo iniciar la llamada." });
   }
-  // El contador se incrementa solo cuando la llamada arranco de verdad (igual que el boton manual).
+  // OK o resultado DESCONOCIDO (timeout/red, 3-jul: la llamada puede estar YA sonando — a Alex le sonó
+  // "por la cara" mientras el sistema avisaba de error): se registra el intento IGUAL y reconcilian el
+  // webhook de fin o el watchdog. Nada de avisos alarmantes por un timeout con la llamada en el aire.
   await getSimulatorEngine().noteCallAttempt(candidateId, result.conversationId ?? undefined);
-  return NextResponse.json({ ok: true, conversationId: result.conversationId ?? null });
+  if (!result.ok) {
+    console.warn("[call-dispatch] llamada disparada SIN confirmación de ElevenLabs (se registra igual)", {
+      candidateId,
+      reason: result.reason ?? "desconocido"
+    });
+  }
+  return NextResponse.json({ ok: true, conversationId: result.conversationId ?? null, unconfirmed: !result.ok });
 }

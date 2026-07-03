@@ -31,6 +31,7 @@ export type CallCandidateSignal =
   | "asks-age-policy" // pregunta el requisito de edad -> respuesta determinista (solo 18+), no defiere
   | "asks-share-figure" // pregunta la CIFRA del reparto -> responderla (inv. 3 reactivo), nunca deferir
   | "asks-bot-to-repeat" // pide que el bot repita lo último ("¿qué decías?") -> repetirlo, no deferir
+  | "asks-clarification" // no entendió una PALABRA/frase del bot ("¿qué significa X?") -> explicarla en simple
   | "complains-about-share" // se queja del reparto -> negociar a la baja (lo decide el código)
   | "distrust" // desconfianza leve ("¿cómo sé que es real?") -> tranquilizar y seguir
   | "wants-human" // pide hablar con una persona -> handoff
@@ -61,7 +62,8 @@ export type CallDirectiveType =
   | "SAY_GOODBYE" // despedida corta cuando ELLA se despide con la llamada ya cerrada
   | "STAY_SILENT" // no decir nada (anti-loro: el cierre/handoff ya se repitió una vez)
   | "GIVE_SHARE_FIGURE" // re-decir la cifra AUTORIZADA vigente del reparto (respuesta reactiva, inv. 3)
-  | "REPEAT_LAST_UTTERANCE"; // repetir lo último que dijo el bot (ella no lo oyó)
+  | "REPEAT_LAST_UTTERANCE" // repetir lo último que dijo el bot (ella no lo oyó)
+  | "CLARIFY_LAST_UTTERANCE"; // explicar en simple lo que el bot acaba de decir (no lo entendió)
 
 export type CallHandoffReason =
   | "asked-for-human"
@@ -197,6 +199,7 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
           nextState: { ...state, repeatRequestStreak: state.repeatRequestStreak + 1 }
         };
       }
+      if (signal === "asks-clarification") return { directive: { type: "CLARIFY_LAST_UTTERANCE" }, nextState: state };
       if (signal === "distrust") return { directive: { type: "REASSURE" }, nextState: state };
       // Queja del reparto o pregunta no cubierta tras el cierre: se defiere (sin cifras y sin reabrir la
       // negociación — invariante 3); nunca se repite el discurso del contrato como "respuesta".
@@ -288,6 +291,10 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       }
       return { directive: { type: "REPEAT_LAST_UTTERANCE" }, nextState: { ...s, repeatRequestStreak: streak } };
     }
+    case "asks-clarification":
+      // No entendió una palabra/frase del bot: se explica en SIMPLE (el redactor reformula lo ya dicho
+      // con los hechos de la etapa; jamás "mi socio" para el propio vocabulario del bot — 3-jul).
+      return { directive: { type: "CLARIFY_LAST_UTTERANCE" }, nextState: s };
     case "distrust":
       return { directive: { type: "REASSURE" }, nextState: s };
     case "wants-to-end": {

@@ -140,6 +140,30 @@ const CHAT_AUTHOR_LABELS: Record<string, string> = {
   system: "Sistema"
 };
 
+// Qué enseñar en el hueco de la CITA de una tarjeta de llamada (3-jul): con la llamada YA hecha, la
+// franja vieja ("el viernes a las 23:00") confunde — se muestra el RESULTADO con su fecha (misma
+// precedencia lastCall-sobre-slot que ya usaba el drawer). El reintento programado se anuncia.
+function callCardSlotText(item: Candidate): string {
+  if (item.currentState === "CALL_IN_PROGRESS") return "en curso ahora";
+  if (item.lastCall) {
+    const base = item.lastCall.result === "COMPLETED" ? "Completada" : "No contestó";
+    const when = item.lastCall.endedAt
+      ? new Date(item.lastCall.endedAt).toLocaleString("es-ES", {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit"
+        })
+      : "";
+    const retry =
+      item.currentState === "CALL_NO_ANSWER" && item.scheduledCallStartMs && item.scheduledCallStartMs > Date.now()
+        ? " · reintento programado"
+        : "";
+    return `${base}${when ? ` · ${when}` : ""}${retry}`;
+  }
+  return item.scheduledCallSlot || "Sin franja";
+}
+
 // Estilo inline de la pill de estado (color por estado, vía var CSS para respetar tema claro/oscuro).
 function statePillStyle(state: Candidate["currentState"]): { color: string; background: string; border: string } {
   const colorVar = stateColorVar(state);
@@ -1167,7 +1191,7 @@ export default function Home() {
                               </span>
                               <div className="dash2-call-body">
                                 <div className="dash2-call-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
-                                <div className="dash2-call-slot">{item.scheduledCallSlot || "en curso"}</div>
+                                <div className="dash2-call-slot">{callCardSlotText(item)}</div>
                               </div>
                               <span
                                 style={{
@@ -1299,7 +1323,9 @@ export default function Home() {
               { label: "Agendadas", value: sched, colorVar: "--info" },
               { label: "Duración media", value: fmtDur(avgDurSec), colorVar: "--accent" }
             ];
-            const outcomeMax = Math.max(1, sched, inprog, completed, noans);
+            // Denominador = TOTAL (3-jul): antes se normalizaba contra el máximo de categorías y la
+            // dominante (o única) salía clavada al 100% — parecía una barra de progreso rota.
+            const outcomeMax = Math.max(1, sched + inprog + completed + noans);
             const outcomes: { label: string; count: number; colorVar: string }[] = [
               { label: "Agendadas", count: sched, colorVar: "--info" },
               { label: "En curso", count: inprog, colorVar: "--purple" },
@@ -1399,7 +1425,7 @@ export default function Home() {
                                   <circle cx="12" cy="12" r="9" />
                                   <path d="M12 7v5l3 2" />
                                 </svg>
-                                {item.scheduledCallSlot || "Sin franja"}
+                                {callCardSlotText(item)}
                               </div>
                             </div>
                             <div className="calls2-status-wrap">

@@ -163,7 +163,7 @@ describe("recordCallOutcome NO_ANSWER: reintento diferido", () => {
       candidateId: seeded.id,
       outcome: "COMPLETED",
       conversationId: "conv-2",
-      transcriptFacts: { underage: true, handedOff: false }
+      transcriptFacts: { underage: true, handedOff: false, coveredStages: [], closedWithContract: false, deferredQuestions: 0, candidateTurns: 3 }
     });
     expect(result.candidate.currentState).toBe("CLOSED");
   });

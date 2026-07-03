@@ -158,17 +158,22 @@ const entries: KnowledgeEntryInput[] = [
       "No se presiona a la modelo para cambiarlos.",
       "Los detalles completos se tratan en llamada y Alex gestiona guiones despues."
     ],
-    approvedAnswerPoints: ["Hay algun tipo de contenido que no quieras hacer o algun limite que debamos tener en cuenta?"],
+    approvedAnswerPoints: [
+      "Hay algun tipo de contenido que no quieras hacer o algun limite que debamos tener en cuenta?",
+      "Los limites son sobre el contenido intimo: practicas o escenas concretas que no quieras hacer.",
+      "Lo que digas que no quieres hacer se respeta siempre, sin pedirte explicaciones."
+    ],
     prohibitedClaims: ["Presionar para cambiar limites.", "Entrar en descripciones innecesariamente explicitas por Instagram."],
     mandatoryNuances: ["Registrar limites.", "Si necesita ejemplos, usar categorias profesionales y breves."],
     escalationConditions: ["Detalles explicitos o dudas sensibles."],
     allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
     tags: ["boundaries", "limits", "content"],
     requiresHumanReview: false,
-    version: "content-boundaries-neutral-question-2026-06-09.1",
+    // 2026-07-03 (Alex): definicion clara de "limites" para la llamada ("limite de que?" quedaba deferido).
+    version: "content-boundaries-neutral-question-2026-07-03.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-07-03"
   }
 ];
 

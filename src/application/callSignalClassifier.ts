@@ -33,6 +33,11 @@ export interface CallSignalInput {
    * repita la palabra "reparto/comisión/30" igualmente cuenta como complains-about-share (insistencia).
    */
   moneyContext?: boolean;
+  /**
+   * Lo ÚLTIMO que dijo el BOT (jul-2026, aclaraciones): "¿qué significa X?" solo es una ACLARACIÓN de lo
+   * ya dicho si X aparece en el último enunciado del bot; si no, sigue el camino normal de preguntas.
+   */
+  lastBotUtterance?: string;
 }
 
 function normalize(text: string): string {
@@ -191,6 +196,35 @@ const BOT_CHECK =
 const ASKS_BOT_REPEAT =
   /\bque (?:decias|dijiste|has dicho|estabas diciendo|me contabas)\b|\bme lo (?:repites|puedes repetir|repetis|repite)\b|\brepite(?:melo|me)?\b|\bno te (?:escuche|escucho|oigo|oi|he oido|entendi bien)\b|\bse (?:corto|ha cortado|entrecorta|escucha entrecortado)\b|^\s*¿?\s*como\s*\??\s*$|^\s*¿?\s*que\s*\?+\s*$/;
 
+// ACLARACIÓN de lo que el bot ACABA de decir (3-jul, llamada real de Alex: "¿qué significa se liquida?"
+// y "¿límite de qué?" acababan en el absurdo "te lo confirmo por WhatsApp"). Dos formas:
+//  - con TÉRMINO capturable ("¿qué significa X?", "¿X de qué?"): solo cuenta si X está en el último
+//    enunciado del bot (si es un término nuevo, sigue el camino normal covered/unknown);
+//  - sin término ("¿a qué te refieres?", "no lo entiendo", "¿cómo que?"): siempre es aclaración.
+const CLARIFY_WITH_TERM = [
+  /\bque (?:significa|quiere decir|quieres decir con|es eso de|seria eso de)\s+(?:el |la |los |las |lo de |un |una |se |eso de )?([a-z0-9]+)/,
+  /\bcomo que\s+([a-z0-9]+)/,
+  /\b([a-z0-9]+)(?:s)?\s+de\s+que\s*\??\s*$/,
+  /\bno (?:se|entiendo) (?:que|lo que) es\s+(?:el |la |lo de |un |una )?([a-z0-9]+)/
+];
+const CLARIFY_NO_TERM =
+  /^\s*¿?\s*a que te refieres\s*\??\s*$|\ba que te refieres con eso\b|^\s*¿?\s*(?:no (?:lo|te) entiendo|no entiendo eso|eso que significa|como que)\s*\??\s*$|\beso que (?:significa|quiere decir)\b/;
+
+/** Aclaración sobre lo último dicho por el bot (con guard: el término citado debe estar en su frase). */
+function isClarificationOfLastUtterance(text: string, lastBotUtterance?: string): boolean {
+  if (CLARIFY_NO_TERM.test(text)) return true;
+  const lastBot = normalize(lastBotUtterance ?? "");
+  if (lastBot.length === 0) return false;
+  for (const pattern of CLARIFY_WITH_TERM) {
+    const match = pattern.exec(text);
+    if (match?.[1]) {
+      const term = match[1].replace(/s$/, ""); // singulariza burdo: "limites" -> "limite"
+      if (term.length >= 3 && lastBot.includes(term)) return true;
+    }
+  }
+  return false;
+}
+
 /** Clasifica lo dicho por la candidata en una señal para el director. */
 export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal {
   const text = normalize(input.utterance ?? "");
@@ -217,6 +251,9 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (WANTS_TO_END.test(text)) return "wants-to-end";
   if (CONFORMITY.test(text)) return "follows-along";
   if (CONTINUATION.test(text)) return "follows-along";
+  // Aclaración de lo que el bot ACABA de decir ("¿qué significa se liquida?", "¿límite de qué?"): se
+  // reformula en simple, jamás "mi socio". Antes que repeat/QUESTION (todas contienen "que").
+  if (isClarificationOfLastUtterance(text, input.lastBotUtterance)) return "asks-clarification";
   // Pide que el BOT repita lo último ("¿qué decías?", "no te escuché"): antes que QUESTION (contiene "que").
   if (ASKS_BOT_REPEAT.test(text)) return "asks-bot-to-repeat";
   // Pregunta la CIFRA del reparto (sin quejarse: las quejas ya se evaluaron antes) -> responderla (inv. 3

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { buildSpanishCallSummary } from "@/application/callSummary";
 import { analyzeCallTranscript } from "@/application/callTranscriptAnalysis";
 import { getInstagramConfig } from "@/application/instagramConfig";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
@@ -211,10 +212,34 @@ export async function POST(request: Request) {
   // -> CERRADA (invariante 2); handoff (pide persona/agresión/rechazó el suelo) -> revisión humana; % al que
   // quedó la negociación -> ficha. Los decide el CÓDIGO con el mismo replay del cerebro en vivo.
   const transcriptFacts = analyzeCallTranscript(payload.transcript);
+  // LA EVIDENCIA MANDA SOBRE LA ETIQUETA (3-jul, llamada real de Alex): ElevenLabs marcó "failed" una
+  // llamada de 2:59 con conversación completa (el colgado SIP de Zadarma) -> falso NO CONTESTA -> el bot
+  // RE-LLAMÓ a quien ya había cerrado con contrato. Si el status dice fallo pero el transcript demuestra
+  // conversación real (ella habló varias veces y duró >= 1 min), la llamada FUE atendida: COMPLETED.
+  // El buzón sigue siendo NO_ANSWER (cero turnos de ella, no pasa este umbral).
+  if (
+    outcome === "NO_ANSWER" &&
+    transcriptFacts.candidateTurns >= 2 &&
+    typeof payload.durationSec === "number" &&
+    payload.durationSec >= 60
+  ) {
+    console.warn("[call-end] status de fallo con conversación real: se registra COMPLETED (evidencia sobre etiqueta)", {
+      status: payload.status,
+      candidateTurns: transcriptFacts.candidateTurns,
+      durationSec: payload.durationSec
+    });
+    outcome = "COMPLETED";
+  }
+  // Resumen EN ESPAÑOL y determinista, construido desde el replay (jul-2026): el transcript_summary de
+  // ElevenLabs llega en inglés y no se muestra (queda en su dashboard; aquí solo se loguea que existía).
+  const summaryEs = buildSpanishCallSummary({ outcome, durationSec: payload.durationSec, facts: transcriptFacts });
+  if (payload.summary) {
+    console.log("[call-end] resumen de ElevenLabs (EN) sustituido por el resumen español determinista");
+  }
   const result = await engine.recordCallOutcome({
     candidateId: payload.candidateId,
     outcome,
-    summary: payload.summary,
+    summary: summaryEs,
     durationSec: payload.durationSec,
     negotiatedModelShare: payload.negotiatedModelShare,
     conversationId: payload.conversationId,

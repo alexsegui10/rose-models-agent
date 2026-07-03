@@ -86,7 +86,7 @@ describe("motor + grafo: el webhook reabre el agendado y el ciclo se re-silencia
       candidateId: seeded.id,
       outcome: "COMPLETED",
       conversationId: "conv-r1",
-      transcriptFacts: { underage: false, handedOff: false, rescheduleRequested: true }
+      transcriptFacts: { underage: false, handedOff: false, rescheduleRequested: true, coveredStages: [], closedWithContract: false, deferredQuestions: 0, candidateTurns: 3 }
     });
     expect(result.candidate.currentState).toBe("COLLECTING_CALL_DETAILS");
     expect(result.candidate.scheduledCallStartMs).toBeUndefined();
@@ -113,7 +113,7 @@ describe("motor + grafo: el webhook reabre el agendado y el ciclo se re-silencia
       candidateId: seeded.id,
       outcome: "COMPLETED",
       conversationId: "conv-rp",
-      transcriptFacts: { underage: false, handedOff: false, rescheduleRequested: true }
+      transcriptFacts: { underage: false, handedOff: false, rescheduleRequested: true, coveredStages: [], closedWithContract: false, deferredQuestions: 0, candidateTurns: 3 }
     });
     expect(result.candidate.currentState).toBe("COLLECTING_CALL_DETAILS");
     expect(result.followUpMessage).toBeUndefined();
@@ -135,7 +135,7 @@ describe("motor + grafo: el webhook reabre el agendado y el ciclo se re-silencia
       candidateId: seeded.id,
       outcome: "COMPLETED",
       conversationId: "conv-r2",
-      transcriptFacts: { underage: true, handedOff: false, rescheduleRequested: true }
+      transcriptFacts: { underage: true, handedOff: false, rescheduleRequested: true, coveredStages: [], closedWithContract: false, deferredQuestions: 0, candidateTurns: 3 }
     });
     expect(result.candidate.currentState).toBe("CLOSED");
     expect(result.followUpMessage).toBeUndefined();
@@ -160,7 +160,7 @@ describe("motor + grafo: el webhook reabre el agendado y el ciclo se re-silencia
       candidateId: seeded.id,
       outcome: "COMPLETED",
       conversationId: "conv-r3",
-      transcriptFacts: { underage: false, handedOff: false, rescheduleRequested: true }
+      transcriptFacts: { underage: false, handedOff: false, rescheduleRequested: true, coveredStages: [], closedWithContract: false, deferredQuestions: 0, candidateTurns: 3 }
     });
 
     // Ella contesta al proactivo con una hora nueva -> el bot agenda (auto-agendado determinista).
