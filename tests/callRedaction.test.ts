@@ -99,7 +99,7 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.draftingBrief?.prohibitedClaims).toContain("No prometemos ingresos concretos.");
     expect(plan.draftingBrief?.mandatoryNuances).toContain("El volumen de contenido es orientativo, no contractual.");
     // El fallback determinista es el guion propio de la llamada (la voz de Alex), conversacional.
-    expect(plan.fallbackText.toLowerCase()).toContain("nos ocupamos nosotros");
+    expect(plan.fallbackText.toLowerCase()).toContain("cuentas de instagram españolas");
     expect(plan.fallbackText.trim().endsWith("?")).toBe(true);
   });
 

@@ -127,15 +127,18 @@ const AGE_POLICY_TEXT =
 // Guion conversacional (Alex jun-2026): turnos cortos que terminan invitando a responder, pero SIN
 // preguntar en cada frase (solo en los momentos clave). La cara y la privacidad NO se mencionan
 // proactivamente: solo se responden si la candidata pregunta (las cubre el conocimiento de forma reactiva).
+// GUION COMPLETO en la voz de Alex (3-jul, construido con él): cada parte ENMARCA al entrar (feedback de
+// la llamada real: "primero te cuento...", "y ahora tu parte..."). Es la BASE: el redactor lo dice con
+// sus palabras (se le pasa como guion base en el brief); sin redactor, se dice tal cual (fallback).
 const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
   HOW_AGENCY_WORKS:
-    "Pues mira, como veías por Instagram, es fácil: tú solo te encargas de mandarnos el contenido, del resto nos ocupamos nosotros. El tráfico lo generamos con cuentas de Instagram españolas y, cuando cogen seguidores, ponemos el link a tu OnlyFans. Un equipo de chatters lo lleva las 24 horas, tú no escribes con nadie. ¿Me sigues?",
+    "Vale, pues mira, primero te cuento nuestra forma de trabajar. Nosotros lo que hacemos es crearte cuentas de Instagram españolas y moverlas para que cojan seguidores; cuando la cuenta tira, ponemos el enlace a tu OnlyFans, que es de donde sale todo. Y el chat lo lleva un equipo nuestro las 24 horas, o sea que tú no tienes que escribirte con nadie. ¿Me sigues?",
   HER_RESPONSIBILITIES:
-    "Por tu parte es sencillo: tú creas el contenido y lo subes a una carpeta de Drive que compartimos contigo. Y para que sepas qué tipo de contenido va bien, te pasamos por WhatsApp unos perfiles de referencia, tanto para Instagram como para OnlyFans. ¿Vale?",
+    "Y ahora tu parte, que es lo fácil: tú solo te encargas del contenido. Lo subes a una carpeta de Drive que te compartimos, y nosotros te vamos pasando referencias y guiones para que sepas exactamente qué grabar. Lo único que te pedimos es que no tardes mucho en contestar, un día o dos como mucho, ¿vale?",
   CONTENT_AND_FACE:
-    "Sobre el contenido: al principio son unos cinco días más suaves, dos o tres fotos al día, y luego vamos pasando a vídeos cada semana. Nosotros te vamos guiando, así que tranquila. ¿Todo bien?",
+    "Del contenido en sí: empezamos suave, unos cinco días con dos o tres fotos al día, y desde el principio vas preparando algún Reel, que eso ayuda un montón a mover Instagram. Luego ya vamos metiendo vídeos poco a poco, a tu ritmo, y te vamos guiando en todo. ¿Bien?",
   BOUNDARIES:
-    "Una última cosa que siempre pregunto: ¿hay algún tipo de contenido que no quieras hacer o algún límite que deba tener en cuenta? Lo respetamos sin problema."
+    "Una última cosa que pregunto siempre: ¿hay algún tipo de contenido que no quieras hacer? O sea, dentro del contenido íntimo, si hay algo con lo que no te sientas cómoda, me lo dices y punto: se respeta siempre, sin darle más vueltas."
 };
 // Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
 const CLOSE_SOFT_TEXTS = [
@@ -456,6 +459,9 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
   // (callNegotiation) se inyecta como hecho, y la instruccion exige decirla claro.
   const isMoney = stageId === "MONEY" && input.directive.shareOffer;
   const offer = input.directive.shareOffer;
+  // GUION BASE de Alex para esta etapa: el redactor lo dice con sus palabras (no lo recita); es también
+  // el fallback determinista. MONEY no lo usa (su texto se construye con la cifra autorizada).
+  const baseScript = CALL_SCRIPT[stageId];
   const groundingFacts =
     isMoney && offer
       ? [
@@ -464,9 +470,13 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
           // Lenguaje CLARO (Alex 3-jul, misma regla que el DM del 22-jun): "cobras", NUNCA "se liquida"
           // (jerga que la hizo preguntar y acabó en el absurdo "te lo confirmo por WhatsApp").
           "Cobras cada 14 días.",
+          "El reparto es así porque la agencia pone todo el trabajo (cuentas, tráfico, equipo de chat) y ella solo el contenido.",
           ...gathered.points
         ]
-      : gathered.points;
+      : [
+          ...(baseScript ? [`GUION BASE de Alex (dilo con tus palabras, natural, sin recitarlo): «${baseScript}»`] : []),
+          ...gathered.points
+        ];
 
   // TRANSICIONES (3-jul, feedback de Alex en la llamada real): al arrancar el primer tema se ENMARCA
   // ("pues mira, primero te cuento cómo trabajamos...") y al cambiar de tema se ANUNCIA con una
