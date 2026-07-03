@@ -12,13 +12,7 @@
  * siguiente paso (enviar el contrato). NO se cierra compromiso firme en la llamada.
  */
 
-export type CallAgendaStageId =
-  | "HOW_AGENCY_WORKS"
-  | "HER_RESPONSIBILITIES"
-  | "CONTENT_AND_FACE"
-  | "MONEY"
-  | "BOUNDARIES"
-  | "CLOSE";
+export type CallAgendaStageId = "HOW_AGENCY_WORKS" | "HER_RESPONSIBILITIES" | "CONTENT_AND_FACE" | "MONEY" | "CLOSE";
 
 export interface CallAgendaStage {
   id: CallAgendaStageId;
@@ -56,7 +50,7 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
     order: 2,
     label: "Qué hace ella",
     objective:
-      "Explicar su parte: crear contenido, subirlo a Drive, seguir referencias/guiones, comunicar sus límites y responder en plazo.",
+      "Explicar su parte, CORTA: crear el contenido, subirlo a Drive y responder en plazo (un día o dos). Los límites NO se sacan proactivamente (decisión de Alex 3-jul: van por WhatsApp tras leer el guion; solo se explican si ella los menciona).",
     knowledgeRefs: ["content-model-responsibilities"]
   },
   {
@@ -80,16 +74,13 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
       "commercial-why-agency-70"
     ]
   },
-  {
-    id: "BOUNDARIES",
-    order: 5,
-    label: "Límites y consentimiento",
-    objective: "Preguntar con tacto si hay algún tipo de contenido que no quiera hacer y dejar claro que se respeta.",
-    knowledgeRefs: ["content-boundaries-neutral-question"]
-  },
+  // BOUNDARIES eliminada de la agenda PROACTIVA (decisión de Alex 3-jul): la pregunta de límites en frío
+  // alargaba la llamada y quedaba rara; el cierre remite a WhatsApp ("si hay algo que no quieras hacer,
+  // me lo dices") y el conocimiento de límites SIGUE activo de forma REACTIVA (si ella lo saca, el bot
+  // sabe explicarlo y registrarlo).
   {
     id: "CLOSE",
-    order: 6,
+    order: 5,
     label: "Cierre y siguiente paso",
     objective:
       "Si no le quedan dudas, cerrar cálido: 'ahora te paso el contrato, léelo con calma y cualquier duda sobre él me avisas'. NO cerrar compromiso firme.",

@@ -31,7 +31,8 @@ describe("director de la llamada", () => {
     const covered = directives.filter((d) => d.type === "COVER_STAGE").map((d) => d.stageId);
     expect(covered[0]).toBe("HOW_AGENCY_WORKS");
     expect(covered).toContain("MONEY");
-    expect(covered).toContain("BOUNDARIES");
+    // BOUNDARIES fuera de la agenda proactiva (Alex 3-jul): los limites van reactivos + WhatsApp.
+    expect(covered).not.toContain("BOUNDARIES" as never);
     // Se cierra con el contrato y, si ella sigue asintiendo, se repite UNA vez y después silencio
     // (anti-loro jul-2026; el detalle en callAntiLoopJul02).
     const closes = directives.filter((d) => d.type === "CLOSE_WITH_CONTRACT").length;

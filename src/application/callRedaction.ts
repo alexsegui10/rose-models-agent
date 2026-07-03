@@ -101,8 +101,11 @@ const HANDOFF_TEXTS = [
   "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con mi socio; ahora mismo le digo que se ponga en contacto contigo, ¿vale?",
   "Que sí, de verdad: ya le he avisado y en un ratito se pone él en contacto contigo, tranquila."
 ] as const;
+// El cierre remite los LÍMITES a WhatsApp (3-jul: la pregunta proactiva de límites se quitó del guion;
+// si hay algo que no quiera hacer, lo dice al leer el guion — y si lo saca ELLA en la llamada, el
+// conocimiento reactivo lo cubre).
 const CLOSE_TEXTS = [
-  "Pues con esto te haces una idea de cómo trabajamos. Después de la llamada te paso el contrato, unas guías y el guion de OnlyFans, para que lo leas todo con calma; y cualquier duda que te surja, me la dices, ¿vale?",
+  "Pues con esto te haces una idea de cómo trabajamos. Ahora al colgar te paso el contrato, las guías y el guion de OnlyFans, para que lo leas todo con calma. Y cualquier duda, o si hay algo que no quieras hacer, me lo dices por WhatsApp y lo vemos, ¿vale?",
   "Eso, pues nada más por mi parte: ahora al colgar te mando el contrato y las guías y lo miras con calma, ¿vale?"
 ] as const;
 const IDENTITY_TEXTS = [
@@ -130,15 +133,17 @@ const AGE_POLICY_TEXT =
 // GUION COMPLETO en la voz de Alex (3-jul, construido con él): cada parte ENMARCA al entrar (feedback de
 // la llamada real: "primero te cuento...", "y ahora tu parte..."). Es la BASE: el redactor lo dice con
 // sus palabras (se le pasa como guion base en el brief); sin redactor, se dice tal cual (fallback).
+// GUION v2 (3-jul, palabras de Alex): fase de crecimiento ~30 días -> enlace a OF -> monetización con
+// chatters; su parte corta (Drive + contestar rápido); contenido por FASES (calentamiento = fotos sin
+// cantidad; luego 2-3 Reels/día = grabar bastantes vídeos; en casa / calle / hobby de vez en cuando) +
+// referencias y guion de sexting al acabar la llamada (decisión: van en CONTENIDO, no en "tu parte").
 const CALL_SCRIPT: Partial<Record<CallAgendaStageId, string>> = {
   HOW_AGENCY_WORKS:
-    "Vale, pues mira, primero te cuento nuestra forma de trabajar. Nosotros lo que hacemos es crearte cuentas de Instagram españolas y moverlas para que cojan seguidores; cuando la cuenta tira, ponemos el enlace a tu OnlyFans, que es de donde sale todo. Y el chat lo lleva un equipo nuestro las 24 horas, o sea que tú no tienes que escribirte con nadie. ¿Me sigues?",
+    "Vale, pues mira, primero te cuento nuestra forma de trabajar. Nosotros te creamos cuentas de Instagram españolas y las hacemos crecer hasta que tienen bastantes seguidores, que suele ser un mes más o menos. Y al pasar esos treinta días, ponemos el enlace a tu OnlyFans en el Instagram y empezamos a monetizar en OnlyFans con nuestro equipo de chatters, que lo lleva las veinticuatro horas — tú no tienes que escribirte con nadie. ¿Me sigues?",
   HER_RESPONSIBILITIES:
-    "Y ahora tu parte, que es lo fácil: tú solo te encargas del contenido. Lo subes a una carpeta de Drive que te compartimos, y nosotros te vamos pasando referencias y guiones para que sepas exactamente qué grabar. Lo único que te pedimos es que no tardes mucho en contestar, un día o dos como mucho, ¿vale?",
+    "Y ahora tu parte, que es lo fácil: tú te encargas del contenido y lo subes a una carpeta de Drive que te compartimos. Lo único que te pedimos es que no tardes mucho en contestar, un día o dos como mucho, ¿vale?",
   CONTENT_AND_FACE:
-    "Del contenido en sí: empezamos suave, unos cinco días con dos o tres fotos al día, y desde el principio vas preparando algún Reel, que eso ayuda un montón a mover Instagram. Luego ya vamos metiendo vídeos poco a poco, a tu ritmo, y te vamos guiando en todo. ¿Bien?",
-  BOUNDARIES:
-    "Una última cosa que pregunto siempre: ¿hay algún tipo de contenido que no quieras hacer? O sea, dentro del contenido íntimo, si hay algo con lo que no te sientas cómoda, me lo dices y punto: se respeta siempre, sin darle más vueltas."
+    "Del contenido en sí: al principio, en la fase de calentamiento de la cuenta, necesitamos sobre todo fotos. Y al pasar esos días subimos Reels a diario, unos dos o tres al día, así que ahí necesitaremos que grabes bastantes vídeos. Lo de Instagram lo puedes grabar casi todo en casa; si de vez en cuando grabas algo por la calle, genial, y si tienes algún hobby tipo gimnasio o así, también nos vale, muy de vez en cuando. Para que veas el estilo, al acabar la llamada te paso por WhatsApp unos perfiles de referencia para los posts y los Reels, y para OnlyFans un guion de sexting. ¿Bien?"
 };
 // Cierre cálido sin contrato (no le interesa): no se presiona, puerta abierta.
 const CLOSE_SOFT_TEXTS = [
@@ -489,7 +494,7 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
   const brief: CallDraftingBrief = {
     instruction:
       (isMoney
-        ? "Presenta el reparto diciendo LA CIFRA EXACTA de los hechos (el porcentaje para ella y para la agencia), claro y sin rodeos, con la tranquilidad de que el dinero lo cobra ella primero. Remata preguntando qué le parece."
+        ? "Presenta el reparto diciendo LA CIFRA EXACTA de los hechos (el porcentaje para ella y para la agencia), claro y sin rodeos, y JUSTIFÍCALO brevemente (la agencia hace toda la monetización, el tráfico y el equipo de chatters; ella solo pone el contenido). Después, la tranquilidad: el dinero lo cobra ella primero y cobra cada 14 días. Remata preguntando qué le parece."
         : stage.objective) + transitionHint,
     groundingFacts,
     prohibitedClaims: isMoney
@@ -560,7 +565,7 @@ function stageFallbackText(stageId: CallAgendaStageId, points: string[], shareOf
   if (stageId === "MONEY") {
     // Cifra exacta de la oferta autorizada + "%" (los TTS lo leen "por ciento"). FRESCA, sin referenciar el DM.
     if (shareOffer) {
-      return `Y el dinero, que es lo importante: el reparto es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para la agencia. Y tranquila, que el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así siempre pasa primero por ti. Cobras cada 14 días. ¿Qué te parece?`;
+      return `Y ahora lo importante, el dinero: el reparto es un ${shareOffer.modelShare}% para ti y un ${shareOffer.agencyShare}% para la agencia. Y te explico por qué: nosotros nos encargamos de toda la monetización, el tráfico, el equipo de chatters... tú solo pones el contenido. Y tranquila, que el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así siempre pasa primero por ti. Cobras cada 14 días. ¿Qué te parece?`;
     }
     // Sin oferta autorizada NO inventamos ni referenciamos el DM (no deberia ocurrir: el director siempre la pasa).
     return points[0] ?? DEFER_TEXT;
