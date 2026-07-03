@@ -47,6 +47,34 @@ describe("no se salta el guion cuando la candidata suelta varios turnos seguidos
     expect(res.content.toLowerCase()).toContain("mayores de edad");
   });
 
+  it("la candidata HABLA PRIMERO ('Sí' al descolgar) -> el guion NO se salta la 1ª etapa", async () => {
+    // Caso REAL de la llamada de Alex: descolgó diciendo "Sí", el bot abrió, ella dijo "Ya", y el bot
+    // saltó a la etapa 2. La apertura fue la respuesta a su "Sí", no una etapa.
+    const messages: CallChatMessage[] = [
+      { role: "system", content: "p" },
+      { role: "user", content: "Sí" },
+      { role: "assistant", content: "Hola Ana, soy Alex... ¿te pillo bien?" },
+      { role: "user", content: "Ya" }
+    ];
+    const res = await respondToCall({ messages });
+    expect(res.directiveType).toBe("COVER_STAGE");
+    const text = res.content.toLowerCase();
+    expect(text.includes("forma de trabajar") || text.includes("cuentas de instagram")).toBe(true);
+    expect(text).not.toContain("tu parte");
+  });
+
+  it("SEGURIDAD: 'tengo 16' AL DESCOLGAR (antes de la apertura) sigue cortando por menor", async () => {
+    const messages: CallChatMessage[] = [
+      { role: "system", content: "p" },
+      { role: "user", content: "hola tengo 16 años" },
+      { role: "assistant", content: "Hola, soy Alex..." },
+      { role: "user", content: "vale" }
+    ];
+    const res = await respondToCall({ messages });
+    expect(res.directiveType).toBe("CLOSE_UNDERAGE");
+    expect(res.content.toLowerCase()).toContain("mayores de edad");
+  });
+
   it("una pregunta partida en dos turnos se responde entera ('¿qué significa' + 'se liquida?')", async () => {
     const messages: CallChatMessage[] = [
       { role: "system", content: "p" },

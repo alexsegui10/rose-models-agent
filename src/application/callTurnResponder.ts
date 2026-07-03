@@ -133,6 +133,13 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   // legal (no perderla nunca; riesgo EU AI Act / RGPD).
   const botHasSpoken = input.messages.some((m) => m.role === "assistant" && (m.content ?? "").trim().length > 0);
 
+  // ¿La candidata HABLÓ ANTES de que el bot abriera? (3-jul, llamada real: descolgó diciendo "Sí?" y el
+  // ASR lo transcribió antes de la apertura). En ese caso, la APERTURA fue la respuesta a ese primer turno
+  // suyo — NO una etapa del guion. El replay, que avanza una etapa por turno suyo ya respondido, se
+  // descuadraba en uno y SALTABA la 1ª etapa ("cómo trabajamos"). Se corrige saltando ese primer turno.
+  const firstRealMessage = input.messages.find((m) => m.role !== "system" && (m.content ?? "").trim().length > 0);
+  const candidateSpokeFirst = firstRealMessage?.role === "user";
+
   // Interruptor de la apertura legal. Por defecto ACTIVA (es obligatoria por ley antes de una llamada
   // real). CALL_DISCLOSURE=off la desactiva SOLO para pruebas; debe volver a ON antes de producción.
   const disclosureEnabled = process.env.CALL_DISCLOSURE !== "off";
@@ -151,12 +158,20 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   const answerEnabled = input.answerFromKnowledge !== false;
 
   if (botHasSpoken) {
-    // Consume el primer turno del bot (la apertura legal si está activa, o la 1ª etapa si no) y reproduce
-    // los turnos previos de la candidata para reconstruir el estado. La señal "none" produce lo correcto
-    // en ambos casos (apertura si disclosureGiven=false; avanzar agenda si ya está dada).
-    const opening = decideCallDirective({ state, signal: "none" });
-    directiveRepeats[opening.directive.type] = (directiveRepeats[opening.directive.type] ?? 0) + 1;
-    state = opening.nextState;
+    // Consume el primer turno del bot y reproduce los turnos previos de la candidata para reconstruir el
+    // estado. DOS casos:
+    //  - Bot habló primero (o modo prueba sin disclosure): su 1er turno fue "de inicio" (apertura / 1ª
+    //    etapa) sin input previo -> se consume con una decisión 'none'.
+    //  - La candidata habló ANTES de la apertura (descolgó diciendo "Sí?"): su 1er turno lo respondió la
+    //    APERTURA, no una etapa. NO se hace 'opening' artificial; ese turno se procesa en el loop con el
+    //    estado fresco -> el director da GIVE_DISCLOSURE (o CLOSE_UNDERAGE si declaró menor: la SEGURIDAD
+    //    no se pierde). Así no se descuadra en uno ni se salta la 1ª etapa (bug real 3-jul).
+    const candidateFirstConsumedDisclosure = candidateSpokeFirst && disclosureEnabled;
+    if (!candidateFirstConsumedDisclosure) {
+      const opening = decideCallDirective({ state, signal: "none" });
+      directiveRepeats[opening.directive.type] = (directiveRepeats[opening.directive.type] ?? 0) + 1;
+      state = opening.nextState;
+    }
     for (let i = 0; i < userUtterances.length - 1; i++) {
       // Espejo del atajo anti-loro EN VIVO (R1 jul-2026): un turno de ruido tras el estado terminal se
       // respondió con silencio SIN pasar por el director; el replay debe saltarlo igual, o incrementaría
