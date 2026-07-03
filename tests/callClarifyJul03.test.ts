@@ -110,6 +110,22 @@ describe("repetición PARCIAL y eco limpio", () => {
   });
 });
 
+describe("canal de VOZ: los emojis del redactor se eliminan del texto hablado", () => {
+  it("un draft con 😄 sale limpio (el TTS no lee emojis)", async () => {
+    const drafter = { draft: async () => "Jaja, no te voy a dar mi DNI 😄. Soy Alex, de Rose Models. ¿Seguimos?" };
+    const res = await respondToCall({
+      messages: [
+        { role: "system", content: "p" },
+        { role: "assistant", content: "apertura..." },
+        { role: "user", content: "vale, cuéntame" }
+      ],
+      drafter
+    });
+    expect(res.content).not.toMatch(/\p{Extended_Pictographic}/u);
+    expect(res.content).toContain("Soy Alex");
+  });
+});
+
 describe("lenguaje claro en el dinero: 'cobras', nunca 'se liquida'", () => {
   it("el brief de MONEY prohíbe la jerga 'se liquida' al redactor", () => {
     const plan = planCallUtterance({

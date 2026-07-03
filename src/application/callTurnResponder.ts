@@ -224,11 +224,17 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // redactado, un porcentaje —aunque sea el autorizado— está fuera de sitio y tira el draft al fallback.
     // Y un draft JAMÁS se despide (los cierres son deterministas): despedida improvisada -> fallback.
     const allowShare = result.directive.type === "COVER_STAGE" && result.directive.stageId === "MONEY";
+    // Emojis fuera del canal de VOZ (3-jul): el redactor a veces cuela un 😄 y el TTS lo lee raro o lo
+    // ignora con pausa; se eliminan del texto hablado (el humor va en las palabras).
+    const spokenDraft = draft
+      ?.replace(/\p{Extended_Pictographic}/gu, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
     if (
-      draft &&
-      validateCallUtterance(draft, plan.draftingBrief, { allowAuthorizedShare: allowShare, allowFarewell: false }).valid
+      spokenDraft &&
+      validateCallUtterance(spokenDraft, plan.draftingBrief, { allowAuthorizedShare: allowShare, allowFarewell: false }).valid
     ) {
-      content = draft;
+      content = spokenDraft;
       usedDrafter = true;
     } else {
       content = plan.fallbackText;
