@@ -97,15 +97,30 @@ function isNoiseUtterance(utterance: string): boolean {
 export async function respondToCall(input: RespondToCallInput): Promise<CallResponderResult> {
   // Turnos de la candidata + lo ÚLTIMO que dijo el BOT antes de cada uno (para las señales de
   // aclaración/repetición: "¿qué significa X?" solo es aclaración si X está en la frase previa del bot).
+  //
+  // FUSIÓN de turnos consecutivos (3-jul, llamada real de Alex — el bot "se saltó el guion"): cuando la
+  // candidata suelta VARIOS turnos seguidos SIN que el bot conteste entre medias (pasa cuando no puede
+  // interrumpirla y ella habla por encima: "Sí", "Ya", "¿qué?", "para para"), ElevenLabs los manda como
+  // turnos separados. El replay avanzaba UNA etapa por turno pero solo VOCALIZABA la última → se saltaban
+  // etapas en voz. Si el bot no llegó a hablar entre dos turnos suyos, es UN turno (habló seguido), no N
+  // avances de guion: se funden en uno.
   const userUtterances: string[] = [];
   const botBefore: Array<string | undefined> = [];
   let lastAssistant: string | undefined;
+  let botSpokeSinceLastUser = true;
   for (const message of input.messages) {
     if (message.role === "assistant" && (message.content ?? "").trim().length > 0) {
       lastAssistant = message.content;
+      botSpokeSinceLastUser = true;
     } else if (message.role === "user") {
-      userUtterances.push(message.content ?? "");
-      botBefore.push(lastAssistant);
+      const content = message.content ?? "";
+      if (botSpokeSinceLastUser || userUtterances.length === 0) {
+        userUtterances.push(content);
+        botBefore.push(lastAssistant);
+        botSpokeSinceLastUser = false;
+      } else {
+        userUtterances[userUtterances.length - 1] = `${userUtterances[userUtterances.length - 1]} ${content}`.trim();
+      }
     }
   }
 
