@@ -11,7 +11,10 @@ export const activeRevenueSharePolicy = RevenueSharePolicySchema.parse({
   negotiationRequiresHumanReview: true,
   approvedGeneralExplanation:
     "No funciona como un salario fijo. Va por reparto y los detalles concretos se explican mejor en llamada.",
-  approvedPercentageExplanation: "El reparto estandar es 70% para Rose Models y 30% para la modelo.",
+  // jul-2026 (Alex): cuando la candidata pregunta SU cifra, dar el 70/30 con la justificacion breve
+  // ("porque nos encargamos de todo") en la misma respuesta, en vez de repetir "no salario fijo".
+  approvedPercentageExplanation:
+    "El reparto estandar es 70% para Rose Models y 30% para ti, porque nosotros nos encargamos de toda la parte operativa (el trafico, los chatters y la gestion) y tu solo del contenido.",
   minimumAgencyPercentage: 60,
   maximumModelPercentage: 40,
   calculationBasis: "NET_AFTER_PLATFORM_COMMISSION",
@@ -20,7 +23,7 @@ export const activeRevenueSharePolicy = RevenueSharePolicySchema.parse({
   settlementIntervalDays: 14,
   settlementStartsFromFirstRevenue: true,
   alexCalculatesSettlementManually: true,
-  version: "commercial-revenue-share-2026-06-09.2"
+  version: "commercial-revenue-share-2026-07-03.1"
 });
 
 const entries: KnowledgeEntryInput[] = [

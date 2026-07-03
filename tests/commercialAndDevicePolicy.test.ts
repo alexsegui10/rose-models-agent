@@ -72,6 +72,47 @@ describe("commercial and device policy", () => {
     expect(result.responsePlan.requiresHumanReview).toBe(false);
   });
 
+  // Prueba E2E de Alba (3-jul): insistir preguntando SU porcentaje debe dar el 70/30 con la justificación
+  // breve, JAMÁS repetir "no salario fijo" (que ya se dijo) — antinatural y evasivo (queja de Alex).
+  it("'cual es mi porcentaje' da el 70/30 con el porqué y SIN repetir 'salario fijo'", async () => {
+    const { engine } = createEngine();
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "mi_porcentaje_case",
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "mi_porcentaje_case",
+      profileVisibility: "PUBLIC",
+      message: "y cual es mi porcentaje"
+    });
+    expect(result.response).toContain("70%");
+    expect(result.response).toContain("30%");
+    // La justificación breve ("nos encargamos de todo / la parte operativa").
+    expect(result.response.toLowerCase()).toMatch(/encargamos|parte operativa|trafico|gestion/);
+    // NO repite el boilerplate del salario (ya se sabe que no es salario si le das el reparto).
+    expect(result.response.toLowerCase()).not.toContain("salario");
+    expect(result.responsePlan.requiresHumanReview).toBe(false);
+  });
+
+  // El REGEX ampliado no debe activarse a nivel de patrón para negociaciones (unit del filtro), aunque el
+  // guard de escalado ya las intercepta antes. Verificamos ambos lados con el motor:
+  // INVARIANTE 3 (adversarial): ampliar la cobertura de "mi porcentaje" NO libera la cifra en una
+  // NEGOCIACIÓN — pedir una cifra propia sigue escalando a revisión humana, sin ofrecer ninguna.
+  it("pedir una cifra para ella ('me dais el 50% a mi?') escala y NO da cifra", async () => {
+    const { engine } = createEngine();
+    const result = await engine.handleIncomingMessage({
+      instagramUsername: "nego_50_case",
+      profileVisibility: "PUBLIC",
+      message: "me dais el 50% a mi?"
+    });
+    expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
+    expect(result.candidate.humanReviewReason).toBe("PERCENTAGE_NEGOTIATION");
+    expect(result.response).not.toContain("50%");
+    expect(result.response).not.toContain("70%");
+  });
+
   it("accepts a confirmed percentage policy shape", () => {
     const policy = RevenueSharePolicySchema.parse({
       agencyPercentage: 70,

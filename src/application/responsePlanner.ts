@@ -524,14 +524,29 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
     // Una NEGOCIACION nunca libera la cifra (gana el escalado): aunque el mensaje tambien parezca pregunta
     // de pago ("cuanto me pagan? quiero el 50 para mi"), se trata como negociacion -> revision (invariante 3).
     !isCommercialEscalation(input) &&
-    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro)\b/.test(
+    // Preguntar la CIFRA del reparto, del lado agencia ("os quedais") o del PROPIO ("mi porcentaje",
+    // "lo que gano yo", "cual es mi porcentaje"). jul-2026 (prueba E2E de Alba): "cual es mi porcentaje"
+    // y "el que ganare yo" se clasificaban ASKS_ABOUT_PERCENTAGE pero el regex no los pillaba -> caian en
+    // la rama general que REPETIA "no salario fijo" en vez de dar el 70/30 (antinatural, evasivo).
+    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro|mi porcentaje|porcentaje (para mi|mio)|el que (ganare|gano|gane|voy a ganar) yo|lo que (ganare|gano|voy a ganar|me llevo|me queda|me toca)|que me queda a mi|que me llevo yo)\b/.test(
       message
     );
   const generalCommercialQuestion =
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" ||
     /\b(salario|sueldo|porcentaje|reparto|cuanto cobra|comision|skrill|liquidacion)\b/.test(message);
 
-  if (exactPercentageQuestion) return facts;
+  if (exactPercentageQuestion) {
+    // Preguntó SU cifra: se responde con el 70/30 + justificación breve, y NADA MÁS. Se quita el
+    // boilerplate de "no salario fijo" (Alex 3-jul: repetirlo cuando ya se dijo y no lo pregunta queda
+    // antinatural — la cifra ya deja claro que no es salario). Si el recuperador no trajo el fact del
+    // 70/30 (preguntas elípticas como "el que ganaré yo", sin la palabra "porcentaje"), se inyecta la
+    // explicación autorizada. Invariante 3: la cifra solo sale aquí, cuando la pregunta es explícita.
+    const withoutSalaryBoilerplate = facts.filter((fact) => !/\bsalario\b/i.test(fact));
+    const hasFigure = withoutSalaryBoilerplate.some((fact) => /\b(70|30)\s?%|70\/30\b/.test(fact));
+    const authorizedFigure =
+      activeRevenueSharePolicy.approvedPercentageExplanation ?? "El reparto estandar es 70% para Rose Models y 30% para ti.";
+    return hasFigure ? withoutSalaryBoilerplate : [authorizedFigure, ...withoutSalaryBoilerplate];
+  }
   if (generalCommercialQuestion) return facts.filter((fact) => !/\b70%|30%|70\/30\b/i.test(fact));
   return facts.filter((fact) => !/\b(salario|porcentaje|reparto|econom|comercial|70%|30%)\b/i.test(fact));
 }
