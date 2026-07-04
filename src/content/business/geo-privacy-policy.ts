@@ -36,6 +36,7 @@ const entries: KnowledgeEntryInput[] = [
       "NEW_LEAD",
       "WAITING_PROFILE_ACCESS",
       "QUALIFYING",
+      "WAITING_HUMAN_REVIEW",
       "APPROVED",
       "COLLECTING_CALL_DETAILS",
       "HUMAN_INTERVENTION_REQUIRED"

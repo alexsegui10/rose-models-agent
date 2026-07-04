@@ -2463,6 +2463,19 @@ function generateResponse(
     ) {
       return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
     }
+    // Duda de IDENTIDAD/PRIVACIDAD geografica en revision (re-sonda 4-jul, caso Fernanda: "¿seria con mi
+    // nombre original?" recibia el holding del socio, ignorando su pregunta). Se responde con el conocimiento
+    // APROBADO de geo-privacidad y NADA MAS. Acotado a ESA entrada a proposito: es objection-handling que no
+    // avanza el funnel; ampliarlo a cualquier cobertura rompia holds deliberados (agendar sin OK, limites del
+    // guion, handoff de readiness). No cambia de estado ni reabre la cualificacion (invariante 4); la
+    // negociacion nunca entra aqui (requiresHumanReview la excluye, invariante 3).
+    if (
+      responsePlan.answerFacts.length > 0 &&
+      !responsePlan.requiresHumanReview &&
+      responsePlan.knowledgeEntryIds.includes("geo-privacy-three-layers")
+    ) {
+      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
+    }
     // SILENCIO en revision para acuses triviales (Alex, 2-jul, prueba E2E): a un "okeyy perfecto" durante
     // la espera NO se responde nada (el "Sin prisa..." de relleno sonaba a bot). Al darle Alex "Encaja",
     // el reproceso ya lee y contesta lo que ella escribio durante la pausa (feature C). Las preguntas de
