@@ -353,4 +353,20 @@ describe("revisión humana: despedidas y gratitud con sentido (caso Mayra '👍�
     });
     expect(result.response.toLowerCase()).not.toContain("gracias por explicarmelo");
   });
+
+  it("un '?' suelto durante la revisión NUNCA recibe silencio (es un 'contéstame', no un acuse; caso Mayra)", async () => {
+    const { engine, seeded } = await seedInReview();
+    // Primer turno: recibe la explicación del socio (queda alreadyAwaitingPartner).
+    await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: seeded.instagramUsername,
+      message: "Ah ok"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: seeded.instagramUsername,
+      message: "?"
+    });
+    expect(result.response.trim().length).toBeGreaterThan(0);
+  });
 });

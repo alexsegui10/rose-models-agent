@@ -8,6 +8,7 @@ import type { Candidate } from "@/domain/candidate";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import type { CandidateRepository } from "@/infrastructure/repositories/types";
 import { bearerMatches } from "@/server/bearerAuth";
+import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { getSimulatorRepository } from "@/server/simulatorStore";
 
 /**
@@ -44,9 +45,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     const notifier = getOperatorNotifier();
     const recovered = await recoverStuckCalls({
       repository: getSimulatorRepository(),
-      notify: (r) =>
-        notifier.notify({ kind: "call-watchdog", conversationId: r.instagramUsername, detail: `${r.minutesStuck} min en curso.` })
+      notify: (r) => notifier.notify({ kind: "call-watchdog", conversationId: r.instagramUsername, detail: r.detail })
     });
+    // Cita vencida re-armada: re-encolar el auto-marcador con la NUEVA hora (best-effort; ya se avisó).
+    for (const r of recovered) {
+      if (r.kind === "MISSED_DISPATCH" && r.rearmed) {
+        await enqueueCallDispatchIfScheduled({
+          candidate: r.rearmed,
+          origin: new URL(request.url).origin,
+          nowMs: Date.now()
+        });
+      }
+    }
     watchdogRecovered = recovered.length;
   } catch (error) {
     console.error("[cron-outreach] watchdog de llamadas fallo (continuamos)", { error: errorName(error) });

@@ -36,7 +36,7 @@ import type {
 } from "./llmProvider";
 import { promptRegistry } from "./promptRegistry";
 import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
-import { conflictsWithBooked, parseProposedCallTime, argentinaLabelFromMs } from "./callScheduling";
+import { candidateLabelFromMs, candidateZoneFromPhone, conflictsWithBooked, parseProposedCallTime } from "./callScheduling";
 import type { CallTranscriptFacts } from "./callTranscriptAnalysis";
 import { buildResponsePlan, PHONE_QUESTION, proposesConcreteTime } from "./responsePlanner";
 import { safeFallbackResponse, validateAgentResponse } from "./responseValidator";
@@ -979,7 +979,9 @@ export class ConversationEngine {
    * no hay hora clara (parser=null), para que el turno siga su curso y el planner vuelva a pedir el dia/hora.
    */
   private async tryAutoScheduleCall(candidate: Candidate, message: string): Promise<HandleIncomingMessageResult | null> {
-    const parsed = parseProposedCallTime(message, new Date());
+    // La hora se interpreta en la ZONA de la candidata (por prefijo: +34 España, resto Argentina).
+    // Lanzamiento 3-jul: a una española "a las 18" se le agendaba a las 18 argentinas (23:00 suyas).
+    const parsed = parseProposedCallTime(message, new Date(), candidateZoneFromPhone(candidate.phone));
     if (!parsed) {
       return null;
     }
@@ -1017,9 +1019,9 @@ export class ConversationEngine {
       labelEs: parsed.labelEs,
       startMsUtc: parsed.startMsUtc,
       trigger: "AUTO_SCHEDULE_CALL",
-      reason: `Auto-agendada por el bot: ${parsed.labelEs} (Espana) / ${parsed.labelAr} (hora de la candidata).`,
-      // A la candidata se le confirma SU hora (Argentina); scheduledCallSlot (Espana) queda para el CRM de Alex.
-      proposedMessage: `Genial, te llamo ${parsed.labelAr}. Cualquier cosa me dices, hablamos pronto!`
+      reason: `Auto-agendada por el bot: ${parsed.labelEs} (Espana) / ${parsed.labelCandidate} (hora de la candidata).`,
+      // A la candidata se le confirma SU hora (segun su zona); scheduledCallSlot (Espana) queda para el CRM de Alex.
+      proposedMessage: `Genial, te llamo ${parsed.labelCandidate}. Cualquier cosa me dices, hablamos pronto!`
     });
     // Ya agendada: se limpia la preferencia de hora persistida (ya no hace falta y honra el contrato del campo).
     const scheduled: Candidate = { ...scheduledRaw, callTimePreference: undefined };
@@ -1050,7 +1052,7 @@ export class ConversationEngine {
     if (!candidate.phone || !candidate.phone.trim()) return null;
     const windowText = (candidate.callTimePreference ?? "").trim();
     if (windowText.length === 0) return null;
-    if (parseProposedCallTime(windowText, new Date()) !== null) return null;
+    if (parseProposedCallTime(windowText, new Date(), candidateZoneFromPhone(candidate.phone)) !== null) return null;
     const latest = await this.dependencies.repository.findCandidateById(candidate.id);
     if (latest && (latest.manualControlActive || latest.automationPaused)) return null;
 
@@ -1387,7 +1389,9 @@ export class ConversationEngine {
     // fresca tal cual (cubre que cambie de dia). Si es PARCIAL ("a las 6"), se combina con la franja persistida
     // ("manana por la tarde") para poder agendar; si no propone hora, se usa la persistida. Asi una hora dada en
     // un turno y el telefono en otro SI se combinan (antes la hora se perdia y acababa en "lo antes posible").
-    const inboundParsesAlone = inboundProposesTime && parseProposedCallTime(inboundTimeText, new Date()) !== null;
+    const inboundParsesAlone =
+      inboundProposesTime &&
+      parseProposedCallTime(inboundTimeText, new Date(), candidateZoneFromPhone(updatedCandidate.phone)) !== null;
     const effectiveCallTimeText = inboundParsesAlone
       ? inboundTimeText
       : inboundProposesTime && priorCallTimePreference && priorCallTimePreference !== inboundTimeText
@@ -2364,11 +2368,11 @@ function generateResponse(
 
   // Llamada ya confirmada por Alex: el bot mantiene la cita, no reabre el guion ni cae al dead-end.
   if (candidate.currentState === "CALL_SCHEDULED") {
-    // A la candidata se le recuerda SU hora (Argentina), derivada del instante real; scheduledCallSlot
-    // (hora de Espana) es para el CRM de Alex. Si no hay instante (confirmacion manual con texto libre),
-    // se cae al slot tal cual.
+    // A la candidata se le recuerda SU hora (segun su zona por prefijo), derivada del instante real;
+    // scheduledCallSlot (hora de Espana) es para el CRM de Alex. Si no hay instante (confirmacion manual
+    // con texto libre), se cae al slot tal cual.
     const candidateFacingSlot = candidate.scheduledCallStartMs
-      ? argentinaLabelFromMs(candidate.scheduledCallStartMs)
+      ? candidateLabelFromMs(candidate.scheduledCallStartMs, candidateZoneFromPhone(candidate.phone))
       : candidate.scheduledCallSlot;
     return candidateFacingSlot
       ? `Todo listo, te llamo ${candidateFacingSlot}. Si necesitas cambiar algo me dices.`
@@ -2464,7 +2468,9 @@ function generateResponse(
     // el reproceso ya lee y contesta lo que ella escribio durante la pausa (feature C). Las preguntas de
     // verdad siguen respondiendose (rama de arriba) y la primera explicacion del "lo comento con mi socio"
     // se mantiene (que sepa por que se para la conversacion).
-    if (alreadyAwaitingPartner && isTrivialAck(inboundMessage)) {
+    // Un "?" (o "??") NO es un acuse: es un "contéstame" (re-sonda 4-jul: el "?" de Mayra recibía
+    // SILENCIO porque isTrivialAck lo trataba como puntuación). Cae al holding de abajo, nunca a "".
+    if (alreadyAwaitingPartner && isTrivialAck(inboundMessage) && !inboundMessage.includes("?")) {
       return "";
     }
     // Despedida durante la revisión (lanzamiento real 3-jul: a un '👍🏻 saludos' se respondió 'muchas

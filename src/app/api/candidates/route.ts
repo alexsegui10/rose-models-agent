@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { recoverStuckCalls } from "@/application/callWatchdog";
 import { normalizeCandidate } from "@/domain/candidate";
 import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
+import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { getSimulatorRepository } from "@/server/simulatorStore";
 
 /**
@@ -18,7 +19,7 @@ import { getSimulatorRepository } from "@/server/simulatorStore";
 const WATCHDOG_MIN_INTERVAL_MS = 5 * 60 * 1000;
 let lastWatchdogRunMs = 0;
 
-export async function GET() {
+export async function GET(request: Request) {
   const repository = getSimulatorRepository();
   let candidates = await repository.listCandidates();
 
@@ -34,9 +35,20 @@ export async function GET() {
           notifier.notify({
             kind: "call-watchdog",
             conversationId: r.instagramUsername,
-            detail: `${r.minutesStuck} min en curso.`
+            detail: r.detail
           })
       });
+      // Cita vencida re-armada: re-encolar el auto-marcador con la NUEVA hora (la entrega vieja de
+      // QStash, si llega, ve la hora cambiada y no llama). Best-effort: si falla, ya se avisó a Alex.
+      for (const r of recovered) {
+        if (r.kind === "MISSED_DISPATCH" && r.rearmed) {
+          await enqueueCallDispatchIfScheduled({
+            candidate: r.rearmed,
+            origin: new URL(request.url).origin,
+            nowMs: Date.now()
+          });
+        }
+      }
       if (recovered.length > 0) {
         // La lista ya cargada quedó vieja para las recuperadas: se relee para que el CRM pinte el estado real.
         candidates = await repository.listCandidates();

@@ -13,6 +13,71 @@ export const CALL_DURATION_MINUTES = 30;
 const ARGENTINA_UTC_OFFSET_HOURS = -3;
 
 /**
+ * Zona horaria de la candidata, decidida por el PREFIJO de su teléfono (lanzamiento 3-jul: a una
+ * candidata española +34 se le interpretaba "a las 18" como hora ARGENTINA y la llamada salía 5 horas
+ * tarde). +34/0034 (o 34 + móvil español de 9 dígitos) -> España; +54 y todo lo demás (incluidos los
+ * números sin prefijo) -> Argentina, el país del anuncio.
+ */
+export type CandidateCallZone = "AR" | "ES";
+
+export function candidateZoneFromPhone(phone: string | null | undefined): CandidateCallZone {
+  const compact = (phone ?? "").replace(/[\s\-().]/g, "");
+  if (/^(?:\+34|0034)\d{6,}$/.test(compact) || /^34[67]\d{8}$/.test(compact)) return "ES";
+  return "AR";
+}
+
+// Offset de Madrid (local - UTC, en ms) en un instante dado, vía Intl (respeta el DST español).
+function madridOffsetMs(utcMs: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Madrid",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+  const wallAsUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"));
+  return wallAsUtc - utcMs;
+}
+
+// Instante UTC de una hora de PARED de Madrid (doble pasada para acertar el offset aunque el día caiga
+// junto a un cambio de hora).
+function madridWallClockToUtcMs(year: number, monthIndex: number, day: number, hour: number, minute: number): number {
+  const naive = Date.UTC(year, monthIndex, day, hour, minute);
+  let utc = naive - madridOffsetMs(naive);
+  utc = naive - madridOffsetMs(utc);
+  return utc;
+}
+
+// Componentes de fecha del día ACTUAL en el calendario de Madrid (para resolver "hoy/mañana" de una
+// candidata española: a las 23:30 UTC en Madrid ya es el día siguiente).
+function madridDateComponents(now: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+  return { year: get("year"), month: get("month") - 1, day: get("day") };
+}
+
+// "HH:MM" de pared en Madrid para un instante UTC.
+function madridClockLabel(utcMs: number): string {
+  const parts = new Intl.DateTimeFormat("es-ES", {
+    timeZone: "Europe/Madrid",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(new Date(utcMs));
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0") % 24;
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/**
  * Convierte una hora de pared de Argentina a hora de pared de España, respetando el horario de verano
  * español del día indicado. `onDate` es el día de la llamada (para saber si en España es verano o
  * invierno); en verano la diferencia es de 5h (18:00 AR → 23:00 ES) y en invierno de 4h.
@@ -68,19 +133,23 @@ const NEGATED_TIME_PATTERN =
   /\bno\b[^.!?]{0,15}\b(ahora|hoy|manana|pasado|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|mediodia)\b|\b(ahora|hoy|manana|pasado|lunes|martes|miercoles|jueves|viernes|sabado|domingo|tarde|noche|mediodia)\b[^.!?]{0,15}\b(no|tampoco)\b/;
 
 /**
- * Calcula el día (en el CALENDARIO de Argentina) sobre el que cae la propuesta, a partir de `now` (instante
- * UTC) y del texto. Devuelve los componentes de fecha de ese día en Argentina. "hoy/manana/pasado" son
- * relativos al día actual en Argentina; "[proximo] lunes..domingo" salta al PRÓXIMO día de esa semana
- * (estrictamente futuro respecto a hoy en Argentina). Si no hay marcador de día, asume HOY.
+ * Calcula el día (en el CALENDARIO de la candidata: Argentina o España según su zona) sobre el que cae
+ * la propuesta, a partir de `now` (instante UTC) y del texto. "hoy/manana/pasado" son relativos al día
+ * actual EN SU zona; "[proximo] lunes..domingo" salta al PRÓXIMO día de esa semana (estrictamente futuro
+ * respecto a hoy en su zona). Si no hay marcador de día, asume HOY.
  */
-function resolveArgentinaDate(message: string, now: Date): { year: number; month: number; day: number } {
-  // Día actual en Argentina (UTC-3): el instante UTC menos 3h da la hora de pared argentina.
-  const argentinaNowMs = now.getTime() + ARGENTINA_UTC_OFFSET_HOURS * 60 * 60_000;
-  const argentinaNow = new Date(argentinaNowMs);
-  const baseY = argentinaNow.getUTCFullYear();
-  const baseM = argentinaNow.getUTCMonth();
-  const baseD = argentinaNow.getUTCDate();
-  const todayUtcMidnight = Date.UTC(baseY, baseM, baseD);
+function resolveCandidateDate(message: string, now: Date, zone: CandidateCallZone): { year: number; month: number; day: number } {
+  let todayUtcMidnight: number;
+  if (zone === "ES") {
+    // Día actual en el calendario de Madrid (con su DST, vía Intl).
+    const madrid = madridDateComponents(now);
+    todayUtcMidnight = Date.UTC(madrid.year, madrid.month, madrid.day);
+  } else {
+    // Día actual en Argentina (UTC-3): el instante UTC menos 3h da la hora de pared argentina.
+    const argentinaNowMs = now.getTime() + ARGENTINA_UTC_OFFSET_HOURS * 60 * 60_000;
+    const argentinaNow = new Date(argentinaNowMs);
+    todayUtcMidnight = Date.UTC(argentinaNow.getUTCFullYear(), argentinaNow.getUTCMonth(), argentinaNow.getUTCDate());
+  }
 
   // "de/por la manana" es la FRANJA del dia (8 de la manana), NO el dia "manana" (tomorrow): se elimina
   // antes de detectar el marcador de dia para no agendar tomorrow cuando dicen "a las 8 de la manana".
@@ -184,10 +253,33 @@ export function argentinaLabelFromMs(startMsUtc: number): string {
   return `el ${weekday} a las ${hh}:${mm}`;
 }
 
+/**
+ * Label en la hora de PARED de la CANDIDATA (según su zona por prefijo) para un instante UTC:
+ * "el lunes a las 18:00". Es lo que se le confirma/recuerda a ELLA; `labelEs` queda para Alex/CRM.
+ */
+export function candidateLabelFromMs(startMsUtc: number, zone: CandidateCallZone): string {
+  if (zone === "ES") {
+    return `el ${spainWeekday(startMsUtc)} a las ${madridClockLabel(startMsUtc)}`;
+  }
+  return argentinaLabelFromMs(startMsUtc);
+}
+
+/** Hora local (0-23) de la candidata en un instante UTC (franja horaria para no llamar de madrugada). */
+export function candidateLocalHour(utcMs: number, zone: CandidateCallZone): number {
+  if (zone === "ES") {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Madrid", hour: "2-digit", hour12: false }).formatToParts(
+      new Date(utcMs)
+    );
+    return Number(parts.find((part) => part.type === "hour")?.value ?? "0") % 24;
+  }
+  return new Date(utcMs + ARGENTINA_UTC_OFFSET_HOURS * 60 * 60_000).getUTCHours();
+}
+
 export function parseProposedCallTime(
   message: string,
-  now: Date
-): { startMsUtc: number; labelEs: string; labelAr: string } | null {
+  now: Date,
+  zone: CandidateCallZone = "AR"
+): { startMsUtc: number; labelEs: string; labelAr: string; labelCandidate: string } | null {
   const normalized = normalizeForParse(message);
 
   // Propuesta negada ("el viernes no puedo", "ahora no, manana tampoco"): no se agenda nada.
@@ -200,22 +292,25 @@ export function parseProposedCallTime(
     return null;
   }
 
-  const date = resolveArgentinaDate(normalized, now);
-  // Instante UTC de esa hora de pared argentina: AR menos su offset (-3) => AR + 3h.
-  const startMsUtc = Date.UTC(date.year, date.month, date.day, time.hour - ARGENTINA_UTC_OFFSET_HOURS, time.minute);
+  const date = resolveCandidateDate(normalized, now, zone);
+  // Instante UTC de esa hora de PARED en la zona de la candidata: Argentina es UTC-3 fijo (AR + 3h);
+  // España va con su DST vía Intl (lanzamiento 3-jul: a una +34 se le agendaba en hora argentina).
+  const startMsUtc =
+    zone === "ES"
+      ? madridWallClockToUtcMs(date.year, date.month, date.day, time.hour, time.minute)
+      : Date.UTC(date.year, date.month, date.day, time.hour - ARGENTINA_UTC_OFFSET_HOURS, time.minute);
   // No agendar en el PASADO: "hoy a las 10" cuando ya son las 11 (sin marcador de dia futuro) es ambiguo;
   // devolvemos null para que el bot vuelva a pedir la hora en vez de agendar una cita ya pasada.
   if (startMsUtc <= now.getTime()) {
     return null;
   }
-  const onDate = new Date(Date.UTC(date.year, date.month, date.day));
-  const spain = argentinaToSpainClock(time.hour, time.minute, onDate);
-  // El label se expresa en hora de España (la que vive Alex/el bot): el día también es el de España en ese
-  // instante, que puede cruzar medianoche respecto a Argentina (21:00 AR -> 02:00 ES del día siguiente).
-  const weekday = spainWeekday(startMsUtc);
-  const labelEs = `el ${weekday} a las ${spain.label}`;
+  // labelEs: hora de España (la que vive Alex/el CRM), derivada del instante real. labelCandidate: SU
+  // hora (la que se le confirma a ella). labelAr se mantiene por compatibilidad: es SIEMPRE la lectura
+  // argentina del instante (== labelCandidate cuando la zona es AR).
+  const labelEs = `el ${spainWeekday(startMsUtc)} a las ${madridClockLabel(startMsUtc)}`;
   const labelAr = argentinaLabelFromMs(startMsUtc);
-  return { startMsUtc, labelEs, labelAr };
+  const labelCandidate = candidateLabelFromMs(startMsUtc, zone);
+  return { startMsUtc, labelEs, labelAr, labelCandidate };
 }
 
 // Día de la semana (en español, sin acentos) en el huso de España para un instante UTC dado.
