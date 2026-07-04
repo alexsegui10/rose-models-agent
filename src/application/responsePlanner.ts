@@ -497,6 +497,9 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
       // mi") es negociacion -> revision, no una pregunta de cifra a la que se responda 70/30 (invariante 3).
       /\bquiero\s+(el\s+|un\s+)?\d{1,3}\b/.test(message) ||
       /\bquiero\s+(ganar\s+)?mas\b/.test(message) ||
+      // "minimo el 50" / "minimo un 40" pegado a la pregunta del porcentaje es EXIGIR una cifra, no
+      // preguntarla (revisor 4-jul: "q porcentaje, minimo el 50" recibia el 70/30 sin escalar).
+      /\bminimo\s+(el\s+|un\s+)?\d{1,3}\b/.test(message) ||
       /\b\d{1,3}\s+para mi\b/.test(message) ||
       guaranteedMoneyDemandPattern.test(message) ||
       ((/\b\d{1,3}\s?%/.test(message) || /\b\d{1,2}\/\d{1,2}\b/.test(message)) && !/(70\s?%|30\s?%|70\/30)/.test(message)))
@@ -507,8 +510,10 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
   const message = normalize(input.inboundMessage);
   // Preguntar la CIFRA del reparto ("que porcentaje os quedais?", "cuanto os llevais?", "cual es el
   // reparto?") SI se responde con el 70/30 (decision de Alex; invariante 3: solo si preguntan la cifra,
-  // nunca proactivo). OJO: una pregunta del MODELO de pago ("porcentaje o salario fijo?", "que
-  // porcentaje es?") NO pide el reparto -> sin cifra; por eso NO basta con que aparezca "porcentaje".
+  // nunca proactivo). CAMBIO 4-jul (lanzamiento real): "¿que porcentaje?" a secas SI pide la cifra —
+  // la exclusion conservadora de antes le costo un lead real (Mayra pregunto 'Que porcentaje' TRES
+  // veces, recibio 'Okeyy' y se fue). Lo unico que sigue sin dar cifra es la pregunta del MODELO de
+  // pago sin cifra pedida ("porcentaje o salario fijo?"), que no lleva "que porcentaje".
   // Incluye la pregunta por la PROPIA parte ("cuanto me llevo yo", "mi parte", "como es el reparto"): es
   // pedir la cifra exacta (la suya = 30/70), asi que SI se responde con el 70/30 (invariante 3 — solo si
   // preguntan la cifra). Antes solo se cubria el lado-agencia ("os quedais") y se le ocultaba a quien
@@ -528,7 +533,7 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
     // "lo que gano yo", "cual es mi porcentaje"). jul-2026 (prueba E2E de Alba): "cual es mi porcentaje"
     // y "el que ganare yo" se clasificaban ASKS_ABOUT_PERCENTAGE pero el regex no los pillaba -> caian en
     // la rama general que REPETIA "no salario fijo" en vez de dar el 70/30 (antinatural, evasivo).
-    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro|mi porcentaje|porcentaje (para mi|mio)|el que (ganare|gano|gane|voy a ganar) yo|lo que (ganare|gano|voy a ganar|me llevo|me queda|me toca)|que me queda a mi|que me llevo yo)\b/.test(
+    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro|mi porcentaje|porcentaje (para mi|mio)|el que (ganare|gano|gane|voy a ganar) yo|lo que (ganare|gano|voy a ganar|me llevo|me queda|me toca)|que me queda a mi|que me llevo yo|q(ue)? porcentaje|porcentaje[^.?!]{0,15}para (mi|ustedes|vosotros)|mi ganancia|su comision|cual es (su|la) comision)\b/.test(
       message
     );
   const generalCommercialQuestion =

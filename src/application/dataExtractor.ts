@@ -480,6 +480,9 @@ function bareNameFromReply(normalized: string): string | undefined {
 export function isImplausibleFirstName(name: string): boolean {
   const firstWord = normalize(name).trim().split(/\s+/)[0] ?? "";
   if (firstWord.length < 2) return true;
+  // Un nombre solo lleva letras (3-jul: '/xf' pasó como nombre y se imprimió 'Perfecto /xf' a una
+  // candidata real). Guiones/apóstrofes permitidos; los acentos ya se normalizaron.
+  if (/[^a-zñ'-]/.test(firstWord)) return true;
   if (/^(.)\1+$/.test(firstWord)) return true; // "mmm", "aaa"
   if (nameRejectWords.has(firstWord)) return true;
   if (nameStopwords.has(firstWord)) return true;
@@ -699,7 +702,9 @@ export function extractDeterministicUnderstanding(
     extractedData.hasOnlyFans = true;
   // Negacion antes de la mencion ("no tengo of", "nunca tuve onlyfans", "no, jamas use only").
   if (/\b(no tengo onlyfans|sin onlyfans|no tengo of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
-  if (/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\b(?:onlyfans|only|of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
+  // La ventana NO cruza burbujas (3-jul, Romy: el 'NUNCA' de la burbuja de AGENCIAS alcanzo el 'only'
+  // de la burbuja siguiente y piso el true correcto de 'tuve only'): corta en salto de linea.
+  if (/\b(?:no|nunca|jamas)\b[^.!?\n]{0,30}\b(?:onlyfans|only|of)\b/.test(normalized)) extractedData.hasOnlyFans = false;
 
   // Positivo: ademas de "otra agencia/tengo agencia", el pasado/plural real ("trabaje con 4 agencias", "siempre
   // trabaje con agencias", "he trabajado con agencias") -> el slot ya estaba respondido y NO debe re-preguntarse.
@@ -711,7 +716,7 @@ export function extractDeterministicUnderstanding(
   // Negacion en cualquier formulacion ("no he trabajado con agencias", "nunca trabaje con agencias",
   // "no trabajo con ninguna agencia"): una negacion a <=30 chars de "agencia(s)" es un NO. Va despues
   // del positivo para corregir "no trabajo con otra agencia" (que el positivo marcaria true).
-  if (/\b(?:no|nunca|jamas|ninguna)\b[^.!?]{0,30}\bagencias?\b/.test(normalized)) extractedData.worksWithAnotherAgency = false;
+  if (/\b(?:no|nunca|jamas|ninguna)\b[^.!?\n]{0,30}\bagencias?\b/.test(normalized)) extractedData.worksWithAnotherAgency = false;
   // Trabajo SOLA / sin agencia: tambien es respuesta al slot ("trabaje sola", "sin agencia", "por mi cuenta").
   // Los terminos genericos (sola/independiente/freelance) solo cuentan si el agente PREGUNTO por agencias, para
   // no marcar false por "soy autonoma"/"trabajo sola" dichos en otro contexto. Va al final para ganar al positivo.
@@ -722,7 +727,19 @@ export function extractDeterministicUnderstanding(
   )
     extractedData.worksWithAnotherAgency = false;
 
-  const revenueMatch = normalized.match(/\b(?:ingreso|ingresos|facturo|gano)\s*(?:unos|sobre)?\s*(\d{3,6})\b/);
+  // Facturacion (revisor 4-jul: el respaldo determinista era estrecho y el descarte anti-cruces tiraba
+  // cifras legitimas del LLM). Tres formas: verbo de ganar + cifra ("gano 800", "saco unos 900€", "hago
+  // 600 al mes") con lookahead que excluye unidades no-dinero ("hago 600 fotos" NO es facturacion);
+  // cifra pegada a "al mes" ("600 al mes"); o cifra sola/con moneda cuando el AGENTE acaba de preguntar
+  // la facturacion. Nada de esto toca edades: "tengo 46" no lleva verbo de ganar, ni "al mes", ni ancla.
+  const agentAskedRevenue =
+    /\b(facturando|facturas|facturacion|cuanto (estas )?(ganando|generando|sacando)|cuanto ganas|ingresos)\b/.test(lastAgent);
+  const revenueMatch =
+    normalized.match(
+      /\b(?:ingreso|ingresos|facturo|facturaba|gano|ganaba|saco|sacaba|genero|generaba|hago|hacia)\s*(?:unos|sobre|casi|como)?\s*(\d{3,6})\s*(?:€|euros?|eur|dolares|usd)?\b(?!\s*(?:fotos?|videos?|posts?|seguidores|likes|horas?|minutos?))/
+    ) ??
+    normalized.match(/\b(\d{3,6})\s*(?:€|euros?|eur|dolares|usd)?\s*al mes\b/) ??
+    (agentAskedRevenue ? normalized.match(/\b(\d{3,6})\s*(?:€|euros?|eur|dolares|usd)?\b/) : null);
   if (revenueMatch) extractedData.currentMonthlyRevenue = Number(revenueMatch[1]);
 
   if (/\b(disponible|disponibilidad|por las tardes|por las mananas|findes|fines de semana|horas)\b/.test(normalized)) {
@@ -833,7 +850,8 @@ export function extractDeterministicUnderstanding(
   const personalQuestion = detectPersonalQuestion(normalized);
 
   if (extractedData.age) return baseOutput("PROVIDES_AGE", extractedData, 0.78, false, null, internalNotes, personalQuestion);
-  if (/\b(si|sí|vale|me interesa|info|informacion)\b/.test(normalized))
+  // 'estoy interesada' es frase LITERAL del lanzamiento (3-jul, Ana) que caía en UNCLEAR.
+  if (/\b(si|sí|vale|me interesa|estoy interesad[ao]|interesad[ao]|info|informacion)\b/.test(normalized))
     return baseOutput("CONFIRMS_INTEREST", extractedData, 0.72, false, null, internalNotes, personalQuestion);
 
   return baseOutput(

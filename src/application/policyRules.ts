@@ -48,9 +48,20 @@ export function createNegotiationLog(input: NegotiationLog): NegotiationLog {
 // informe...). Sin esto, "Ipohne 13" dejaba deviceEligibility en UNKNOWN y el slot del movil se preguntaba EN
 // BUCLE aunque la candidata ya hubiera contestado (bug grave reproducido por Alex 22-jun).
 const IPHONE_TYPO = "i(?:ph|hp|p|f)o?h?ne?";
+// Typos reales de marca (lanzamiento 3-jul: "Galaxi A31" y "Sansung" no se reconocían y el móvil se
+// re-preguntaba en bucle).
+const SAMSUNG_TYPO = "sam?sung|samsun\\b|sansung|samsumg";
+const GALAXY_TYPO = "galax[iy]e?";
+
+// Orden invertido "13 iPhone" (lanzamiento 3-jul: caía al genérico -> falso PENDING con la frase del
+// socio, teniendo un 13 APROBADO). Se normaliza a "iphone 13" antes de evaluar. Solo números de modelo
+// plausibles (6-17) para no convertir "tengo 2 iphones viejos" en un "iphone 2".
+function normalizeInvertedIphone(normalized: string): string {
+  return normalized.replace(new RegExp(`\\b([6-9]|1[0-7])\\s*(?:${IPHONE_TYPO})\\b`), (_m, n) => `iphone ${n}`);
+}
 
 export function deviceEligibilityForDescription(description: string): DeviceEligibility {
-  const normalized = normalize(description);
+  const normalized = normalizeInvertedIphone(normalize(description));
 
   if (
     new RegExp(
@@ -73,16 +84,16 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
   if (new RegExp(`\\b${IPHONE_TYPO}\\s?(?:11|10)(?!\\d)`).test(normalized)) return "PENDING_QUALITY_TEST";
   if (new RegExp(`\\b${IPHONE_TYPO}\\s?(?:xs|xr|x)(?!\\w)`).test(normalized)) return "PENDING_QUALITY_TEST";
   if (new RegExp(`\\b${IPHONE_TYPO}\\s?[1-9](?!\\d)`).test(normalized)) return "NOT_ELIGIBLE";
-  if (/\b(galaxy\s?s2[3-9]|samsung\s?s2[3-9])\b/.test(normalized)) return "APPROVED";
+  if (new RegExp(`\\b(?:${GALAXY_TYPO}|${SAMSUNG_TYPO})\\s?s2[3-9]\\b`).test(normalized)) return "APPROVED";
   // Samsung de gama baja/entrada (Galaxy A/J, p.ej. "samsung a15") = CLARAMENTE malo -> NOT_ELIGIBLE (pausa).
   // El resto de Samsung/Galaxy sin modelo claro cae al fallback de abajo como dudoso (PENDING).
-  if (/\b(galaxy|samsung)\s?[aj]\s?\d/.test(normalized)) return "NOT_ELIGIBLE";
+  if (new RegExp(`\\b(?:${GALAXY_TYPO}|${SAMSUNG_TYPO})\\s?[aj]\\s?\\d`).test(normalized)) return "NOT_ELIGIBLE";
   if (/\b(pro|max|ultra|gama alta|high end|xiaomi 14|xiaomi 15|pixel 8|pixel 9)\b/.test(normalized))
     return "PENDING_QUALITY_TEST";
   if (
-    new RegExp(`\\b(?:${IPHONE_TYPO}|samsung|galaxy|android|xiaomi|redmi|huawei|honor|oppo|realme|pixel|motorola|moto)\\b`).test(
-      normalized
-    )
+    new RegExp(
+      `\\b(?:${IPHONE_TYPO}|${SAMSUNG_TYPO}|${GALAXY_TYPO}|android|xiaomi|redmi|huawei|honor|oppo|realme|pixel|motorola|moto)\\b`
+    ).test(normalized)
   )
     return "PENDING_QUALITY_TEST";
 
@@ -90,21 +101,31 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
 }
 
 export function deviceTypeForDescription(description: string): DeviceType {
-  const normalized = normalize(description);
+  const normalized = normalizeInvertedIphone(normalize(description));
   if (new RegExp(`\\b(?:${IPHONE_TYPO}|i phone|ios)\\b`).test(normalized)) return "IPHONE";
-  if (/\b(samsung|galaxy)\b/.test(normalized)) return "SAMSUNG";
+  if (new RegExp(`\\b(?:${SAMSUNG_TYPO}|${GALAXY_TYPO})\\b`).test(normalized)) return "SAMSUNG";
   if (/\b(android|xiaomi|redmi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono|celular)\b/.test(normalized)) return "OTHER";
   return "UNKNOWN";
 }
 
 export function deviceModelForDescription(description: string): string | null {
-  const normalized = normalize(description);
+  // Mismas familias que clasifica el gate (lanzamiento 3-jul: 'Moto g 85' y 'Galaxy A31' quedaban con
+  // eligibility PERO sin modelo en la ficha, y Alex tenía que releer el chat para saber qué valoraba).
+  const normalized = normalizeInvertedIphone(normalize(description));
   const match = normalized.match(
     new RegExp(
-      `\\b(${IPHONE_TYPO}\\s?\\d{1,2}(?:\\s?(?:pro\\s?max|pro|max|plus|mini))?|galaxy\\s?s\\d{2}(?:\\s?(?:ultra|plus))?|samsung\\s?s\\d{2}(?:\\s?(?:ultra|plus))?|pixel\\s?\\d{1,2}\\s?pro|pixel\\s?\\d{1,2}|xiaomi\\s?\\d{1,2})\\b`
+      `\\b(${IPHONE_TYPO}\\s?\\d{1,2}(?:\\s?(?:pro\\s?max|pro|max|plus|mini))?|(?:${GALAXY_TYPO}|${SAMSUNG_TYPO})\\s?[sajm]\\s?\\d{1,3}(?:\\s?(?:ultra|plus))?|(?:motorola|moto)\\s?[eg]\\s?\\d{1,3}|redmi\\s?(?:note\\s?)?\\d{1,2}|pixel\\s?\\d{1,2}\\s?pro|pixel\\s?\\d{1,2}|xiaomi\\s?(?:poco\\s?)?[a-z]?\\d{1,2})\\b`
     )
   );
-  return match ? match[1].replace(/\s+/g, " ").trim() : null;
+  if (match) return match[1].replace(/\s+/g, " ").trim();
+  // Red de seguridad: si hay una MARCA reconocible pero el patrón fino no capturó el modelo, se guarda
+  // desde la marca (hasta ~24 chars) para que Alex SIEMPRE vea en la ficha qué móvil está valorando.
+  const brandAnchored = normalized.match(
+    new RegExp(
+      `\\b(?:${IPHONE_TYPO}|${SAMSUNG_TYPO}|${GALAXY_TYPO}|xiaomi|redmi|huawei|honor|oppo|realme|pixel|motorola|moto)\\b[a-z0-9 +]{0,20}`
+    )
+  );
+  return brandAnchored ? brandAnchored[0].replace(/\s+/g, " ").trim() : null;
 }
 
 export function shouldAskCurrentRevenue(hasOnlyFans: boolean | undefined): boolean {

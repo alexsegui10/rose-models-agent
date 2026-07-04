@@ -22,7 +22,7 @@ import { businessKnowledgeEntries } from "@/content/business";
 import { buildConsistentCandidatePatch } from "./dataConsistency";
 import type { ProfilePrivacyProvider } from "./profilePrivacyProvider";
 import { applyHumanReviewDecision, humanDecisionToState, type HumanReviewDecision } from "./humanReview";
-import { extractDeterministicUnderstanding, guaranteedMoneyDemandPattern } from "./dataExtractor";
+import { extractDeterministicUnderstanding, guaranteedMoneyDemandPattern, isImplausibleFirstName } from "./dataExtractor";
 import { deviceEligibilityForDescription } from "./policyRules";
 import type { ExampleRetriever } from "./exampleRetriever";
 import { LocalExampleRetriever } from "./exampleRetriever";
@@ -1349,6 +1349,11 @@ export class ConversationEngine {
         ...consistency.corrections.map((item) => `CORRECTION: ${item}`)
       ],
       onboardingBlockers: onboardingBlockersFor(updatedCandidate),
+      // NIVEL DE INTERÉS determinista (3-jul: 'Holaa, estoy interesada' dejaba interes:UNKNOWN — el campo
+      // no se escribía desde la conversación en ningún sitio). Lo decide el CÓDIGO por el intent, con
+      // política de solo-subidas (salvo DECLINES): jamás desde texto libre del modelo (invariante 1) y
+      // sin pisar el control manual de Alex.
+      interestLevel: deterministicInterestLevel(updatedCandidate, understanding),
       lastMessageAt: new Date(),
       updatedAt: new Date()
     };
@@ -1455,10 +1460,19 @@ export class ConversationEngine {
         break;
       }
 
+      // Trigger derivado de la CAUSA REAL (3-jul: la pausa por móvil salía etiquetada PROVIDES_NAME
+      // porque se usaba siempre el intent del turno): si la escalada la provocó el gate crítico, el
+      // trigger lo dice; si no, el intent de siempre.
+      const transitionTrigger =
+        nextState === "HUMAN_INTERVENTION_REQUIRED" && criticalHumanReviewReason
+          ? criticalHumanReviewReason === "Movil no elegible por calidad."
+            ? "DEVICE_NOT_ELIGIBLE"
+            : "CRITICAL_RESTRICTION"
+          : understanding.intent;
       const transition = createTransition({
         candidate: projectedCandidate,
         toState: nextState,
-        trigger: understanding.intent,
+        trigger: transitionTrigger,
         reason: transitionReason(nextState, understanding, criticalHumanReviewReason)
       });
       plannedTransitions.push(transition);
@@ -1773,7 +1787,17 @@ export class ConversationEngine {
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
     // Las variantes son estaticamente seguras (acuses o derivacion honesta al socio), por lo que
     // no invalidan la validacion factual ya realizada.
-    const dedupedResponse = withoutVerbatimRepetition(response, lastAgentMsg, responsePlan, projectedCandidate.currentState);
+    const inboundIsQuestion =
+      groupedMessage.content.includes("?") ||
+      understanding.intent.startsWith("ASKS_") ||
+      understanding.intent === "REQUESTS_INFORMATION";
+    const dedupedResponse = withoutVerbatimRepetition(
+      response,
+      lastAgentMsg,
+      responsePlan,
+      projectedCandidate.currentState,
+      inboundIsQuestion
+    );
     if (dedupedResponse !== response) {
       response = dedupedResponse;
       draft = { ...draft, response };
@@ -1828,7 +1852,14 @@ export class ConversationEngine {
       };
     }
 
-    const deliveryStatus = deliveryStatusFor(this.automationMode, responsePlan, projectedCandidate, factualValidation.valid);
+    const deliveryStatus = deliveryStatusFor(
+      this.automationMode,
+      responsePlan,
+      projectedCandidate,
+      factualValidation.valid,
+      criticalHumanReviewReason,
+      response
+    );
     if (deliveryStatus === "BLOCKED") {
       // La entrega se bloquea (escala a revision humana, fallo de validacion factual, o ya en HIR),
       // pero la transicion de estado decidida por codigo (p. ej. -> HUMAN_INTERVENTION_REQUIRED) SI
@@ -2436,11 +2467,23 @@ function generateResponse(
     if (alreadyAwaitingPartner && isTrivialAck(inboundMessage)) {
       return "";
     }
+    // Despedida durante la revisión (lanzamiento real 3-jul: a un '👍🏻 saludos' se respondió 'muchas
+    // gracias por explicarmelo', absurdo): cierre breve y natural.
+    if (/\b(saludos|un saludo|chau|chao|adios|hasta luego|nos vemos|besos|cuidate|bye)\b/.test(normalizeText(inboundMessage))) {
+      return "Igualmente. Te escribo en cuanto lo hayamos revisado.";
+    }
     // Coherencia (fallo real: el bot repetia "lo comento con mi socio" en bucle si la candidata seguia
     // escribiendo): la primera vez se explica; despues se reconoce de forma breve y variada, sin repetir.
+    // La gratitud ('muchas gracias por explicarmelo') SOLO si el turno aportó información de verdad
+    // (3-jul: se agradecía "explicar" a mensajes que no explicaban nada).
+    const turnProvidedInfo =
+      understanding.intent.startsWith("PROVIDES_") ||
+      Object.values(understanding.extractedData ?? {}).some((value) => value !== null && value !== undefined && value !== "");
     return alreadyAwaitingPartner
       ? "Sin prisa, en cuanto lo vea con mi socio te confirmo. Cualquier cosa que necesites me dices."
-      : "Perfecto, muchas gracias por explicarmelo.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
+      : turnProvidedInfo
+        ? "Perfecto, muchas gracias por explicarmelo.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado."
+        : "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
   }
 
   // Pregunta de ELEGIBILIDAD por la edad ("¿hay posibilidades con 21 años?", "¿sirvo teniendo 23?"): desde
@@ -2862,8 +2905,12 @@ export function acknowledgementFor(understanding: ModelConversationOutput, inbou
   if (understanding.intent === "UNCLEAR") return "Okeyy";
   // Tono cercano (Alex, 2-jul): al capturar el NOMBRE, usarlo una vez ("Perfecto Ana"); y un "no" a la
   // pregunta de OF se reconoce con "Entiendo" antes de seguir (no un "Perfecto" que suena a formulario).
+  // El acuse valida la plausibilidad IGUAL que la persistencia (3-jul: 'Perfecto /xf' impreso a una
+  // candidata real — el guard existía para guardar el nombre pero no para pronunciarlo).
   const justGaveName =
-    typeof understanding.extractedData.firstName === "string" && understanding.extractedData.firstName.trim().length > 1;
+    typeof understanding.extractedData.firstName === "string" &&
+    understanding.extractedData.firstName.trim().length > 1 &&
+    !isImplausibleFirstName(understanding.extractedData.firstName);
   if (justGaveName) {
     const name = understanding.extractedData.firstName!.trim();
     return `Perfecto ${name.charAt(0).toUpperCase()}${name.slice(1).toLowerCase()}`;
@@ -3213,6 +3260,50 @@ function mergeDeterministicExtraction(
   if (typeof merged.hasOnlyFans === "boolean" && deterministic.hasOnlyFans === undefined) {
     merged.hasOnlyFans = undefined;
     changed = true;
+  }
+
+  // FACTURACIÓN solo con respaldo determinista (lanzamiento 3-jul: Ana dijo 'tengo 46' — su EDAD — y el
+  // LLM lo metió en currentMonthlyRevenue=46; la ficha decía que facturaba 46€/mes). Mismo patrón que
+  // hasOnlyFans: un número de ingresos inferido por el modelo sin señal monetaria real se descarta.
+  if (typeof merged.currentMonthlyRevenue === "number" && deterministic.currentMonthlyRevenue === undefined) {
+    merged.currentMonthlyRevenue = undefined;
+    changed = true;
+  }
+
+  // TELÉFONO anti-alucinación (3-jul: fichas con 'tel: SI' fantasma — el LLM sacó un número de 'iphon
+  // 12'): los dígitos del teléfono deben ser 7-15 Y aparecer de verdad en el mensaje entrante.
+  if (typeof merged.phone === "string") {
+    const digits = merged.phone.replace(/\D/g, "");
+    const inboundDigits = inboundMessage.replace(/\D/g, "");
+    if (digits.length < 7 || digits.length > 15 || !inboundDigits.includes(digits)) {
+      merged.phone = undefined;
+      changed = true;
+    }
+  }
+
+  // NOMBRE plausible (3-jul: 'Perfecto /xf' impreso a una candidata — el token basura del primer mensaje
+  // acabó de nombre): un firstName del LLM que no pasa el guard de plausibilidad se descarta aquí mismo,
+  // para que ni el acuse ni la persistencia lo vean.
+  if (typeof merged.firstName === "string" && isImplausibleFirstName(merged.firstName)) {
+    merged.firstName = undefined;
+    changed = true;
+  }
+
+  // PAÍS/CIUDAD/OBJECIONES: saneo básico anti-basura del modelo (3-jul: 'pais: /xf / /xf' y objeciones
+  // ['/xf'] en fichas reales). Solo letras y longitud mínima; las objeciones exigen una palabra real.
+  for (const key of ["country", "city"] as const) {
+    const value = merged[key];
+    if (typeof value === "string" && !/^[a-zñáéíóúü\s'-]{3,40}$/i.test(value.trim())) {
+      merged[key] = undefined;
+      changed = true;
+    }
+  }
+  if (Array.isArray(merged.objections)) {
+    const cleaned = merged.objections.filter((o) => typeof o === "string" && /[a-zñáéíóúü]{4,}/i.test(o));
+    if (cleaned.length !== merged.objections.length) {
+      merged.objections = cleaned;
+      changed = true;
+    }
   }
 
   // La pregunta PERSONAL/SOCIAL la detecta SIEMPRE el determinista (regex), nunca el LLM: asi el modo OpenAI
@@ -3744,7 +3835,9 @@ export function withoutVerbatimRepetition(
   response: string,
   lastAgentMessage: string | null,
   responsePlan: ResponsePlan,
-  currentState?: CandidateState
+  currentState?: CandidateState,
+  /** ¿El mensaje entrante era una PREGUNTA? Una pregunta nunca degrada a acuse vacío (3-jul, Mayra). */
+  inboundIsQuestion = false
 ): string {
   if (!lastAgentMessage || normalizeText(response.trim()) !== normalizeText(lastAgentMessage.trim())) {
     return response;
@@ -3776,6 +3869,18 @@ export function withoutVerbatimRepetition(
     if (normalizeText(planAnswer.trim()) !== normalizeText(lastAgentMessage.trim())) {
       return planAnswer;
     }
+    // La respuesta autorizada TAMBIÉN repite verbatim: ante una PREGUNTA se re-explica con variación
+    // (lanzamiento real 3-jul: Mayra preguntó 'Qué porcentaje' TRES veces, recibió 'Okeyy' dos y se
+    // perdió el lead). Solo re-emite hechos YA autorizados por el plan (factual-safe).
+    if (inboundIsQuestion) {
+      return `Te lo vuelvo a decir: ${planAnswer.charAt(0).toLowerCase()}${planAnswer.slice(1)}`;
+    }
+  }
+
+  // Una PREGUNTA jamás recibe un acuse vacío: si no hay nada autorizado que responder, derivación
+  // honesta (es un defer real) en vez de un "Okeyy" que suena a ignorarla.
+  if (inboundIsQuestion) {
+    return "Esto sigue pendiente con mi socio. En cuanto lo hable con el te digo, no te preocupes.";
   }
 
   return normalizeText(lastAgentMessage).startsWith("okeyy") ? "Vale pues" : "Okeyy";
@@ -4157,6 +4262,22 @@ function isTrivialAck(message: string): boolean {
   return new RegExp(`^${ackToken}(?:\\s+${ackToken}){0,2}$`).test(collapsed);
 }
 
+// Rango de interés para la política de solo-subidas (un acuse posterior no degrada un HIGH ya ganado).
+const INTEREST_RANK: Record<Candidate["interestLevel"], number> = { UNKNOWN: 0, LOW: 1, MEDIUM: 2, HIGH: 3 };
+
+/** Nivel de interés DERIVADO del turno (determinista, invariante 1): CONFIRMS_INTEREST sube a MEDIUM;
+ *  dar el teléfono o proponer hora de llamada sube a HIGH; DECLINES baja a LOW. Solo-subidas en el resto. */
+function deterministicInterestLevel(candidate: Candidate, understanding: ModelConversationOutput): Candidate["interestLevel"] {
+  if (candidate.manualControlActive) return candidate.interestLevel;
+  const current = candidate.interestLevel;
+  if (understanding.intent === "DECLINES") return "LOW";
+  let proposed: Candidate["interestLevel"] | null = null;
+  if (understanding.intent === "CONFIRMS_INTEREST") proposed = "MEDIUM";
+  if (typeof understanding.extractedData.phone === "string" || understanding.intent === "REQUESTS_CALL") proposed = "HIGH";
+  if (proposed && INTEREST_RANK[proposed] > INTEREST_RANK[current]) return proposed;
+  return current;
+}
+
 function criticalRestrictionReason(
   candidate: Candidate,
   understanding: ModelConversationOutput,
@@ -4164,8 +4285,10 @@ function criticalRestrictionReason(
 ): string | null {
   if (candidate.manualControlActive || candidate.automationPaused) return "La automatizacion esta pausada por control manual.";
   if (contradictions.length > 0) return `Datos contradictorios detectados: ${contradictions.join("; ")}`;
-  if (candidate.deviceEligibility === "NOT_ELIGIBLE") return "Movil no elegible por calidad.";
+  // La INYECCION gana al movil (revisor 4-jul): si en el mismo turno hay movil vetado + intento de sacar
+  // instrucciones, el motivo debe ser la inyeccion (fail-closed: nada se auto-envia), no el guion del movil.
   if (understanding.intent === "PROMPT_INJECTION") return "Intento de obtener instrucciones internas.";
+  if (candidate.deviceEligibility === "NOT_ELIGIBLE") return "Movil no elegible por calidad.";
   return null;
 }
 
@@ -4193,17 +4316,44 @@ function isSilencedState(state: CandidateState): boolean {
   return state === "REJECTED" || state === "CLOSED" || state === "CALL_SCHEDULED";
 }
 
+// Los DOS textos deterministas del gate del movil (humanInterventionResponse). La excepcion de envio en
+// HIR se limita a ELLOS: cualquier otra respuesta generada estando en HIR-movil (p.ej. el "no soy un bot"
+// del bot-check) vuelve al fail-closed de siempre (borrador para Alex) — revisor 4-jul: la excepcion debe
+// mirar QUE se envia, no solo el motivo de la pausa.
+function isDeviceHoldingScript(response: string): boolean {
+  const normalized = normalizeText(response);
+  return (
+    normalized.includes("lamentablemente con ese movil no podemos trabajar") ||
+    normalized.includes("como te decia, en cuanto tengas un movil mejor")
+  );
+}
+
 function deliveryStatusFor(
   automationMode: AutomationMode,
   responsePlan: ResponsePlan,
   candidate: Candidate,
-  factualValidationPassed: boolean
+  factualValidationPassed: boolean,
+  criticalHumanReviewReason: string | null | undefined,
+  response: string
 ): DraftDeliveryStatus {
   if (automationMode === "DRAFT_ONLY") return "DRAFT_ONLY";
 
   if (automationMode === "HUMAN_APPROVAL") return "PENDING_APPROVAL";
 
-  if (!factualValidationPassed || responsePlan.requiresHumanReview || candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
+  if (!factualValidationPassed || responsePlan.requiresHumanReview) {
+    return "BLOCKED";
+  }
+
+  if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
+    // EXCEPCIÓN quirúrgica (lanzamiento 3-jul: 4 leads en visto +24h): la pausa por MÓVIL genera un
+    // mensaje DETERMINISTA de despedida/puente ("lamentablemente con ese movil...") que ya se generaba
+    // y se tiraba a la basura — la candidata respondía lo que se le pedía y recibía silencio. Solo se
+    // envía cuando el ÚNICO motivo del bloqueo es el gate del móvil (validación factual pasada y sin
+    // revisión del plan) Y la respuesta es exactamente el guion determinista del móvil; el resto de
+    // escaladas (inyección, contradicciones, pausa manual) y cualquier otra respuesta siguen mudas.
+    if (criticalHumanReviewReason === "Movil no elegible por calidad." && isDeviceHoldingScript(response)) {
+      return "SENT";
+    }
     return "BLOCKED";
   }
 
