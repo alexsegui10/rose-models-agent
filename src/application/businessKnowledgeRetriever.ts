@@ -277,10 +277,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("age", "target-profile", "selection", "faq");
-  if (
-    /\b(bloquear|bloqueo|bloqueen|que no me vean|me reconozcan|me vea alguien|privacidad|anonimato|mi pais|conocidos)\b/.test(
+  // "me bloqueo / me han bloqueado / me bloquearon / me dejo y me bloqueo": es SU historia personal
+  // (alguien la bloqueo a ELLA), NO una pregunta de si se puede bloquear un pais. Sin este guard, la
+  // palabra "bloqueo" (normalizada de "bloqueó") disparaba la respuesta enlatada de geo-bloqueo a una
+  // pregunta que nunca hizo (re-sonda 4-jul, caso Romy: "me dejo sola y despues me bloqueo"). "mi pais"
+  // sigue siendo red independiente para una peticion legitima que use "me bloqueen a los de mi pais".
+  const blockedByThirdParty =
+    /\b(?:me|te|la|lo|nos|le|les)\s+(?:ha\s+|han\s+|habia\s+|hubiera\s+|hubieran\s+)?bloque(?:o|a|an|aron|ado|ada|aban)\b/.test(
       message
-    ) ||
+    );
+  const asksAboutBlocking = !blockedByThirdParty && /\b(bloquear|bloqueo|bloqueen|bloquea)\b/.test(message);
+  if (
+    asksAboutBlocking ||
+    /\b(que no me vean|me reconozcan|me vea alguien|privacidad|anonimato|mi pais|conocidos)\b/.test(message) ||
     // Tambien "no quiero que (en X) me vean", "que me vean en mi pais", "me vea aqui": misma duda de privacidad
     // geografica (Alex 22-jun) que antes se ignoraba y se trataba como simple "mirarlo con calma".
     /\bno quiero que\b[^.!?]{0,30}\bme\s+vea/.test(message) ||

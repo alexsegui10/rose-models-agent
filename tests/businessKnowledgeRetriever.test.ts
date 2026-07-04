@@ -151,3 +151,43 @@ describe("Retriever: 'me dais/dame info' es peticion generica, NO negociacion de
     }
   });
 });
+
+// Re-sonda 4-jul, caso Romy: contando su historia ("me dejo sola y despues me bloqueo") disparaba la
+// respuesta enlatada de geo-bloqueo de paises a una pregunta que ella NUNCA hizo. "bloqueo" (de "me
+// bloqueo") es SU historia personal, no una duda de privacidad.
+describe("Retriever: 'me bloqueo' (historia personal) NO es la duda de geo-privacidad (caso Romy)", () => {
+  function qualifying(): Candidate {
+    return { ...createCandidate({ instagramUsername: "romy", profileVisibility: "PUBLIC" }), currentState: "QUALIFYING" };
+  }
+
+  it("'me dejo sola y despues me bloqueo' NO surfacea la respuesta de geo-bloqueo", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    for (const story of [
+      "me dejo sola y despues me bloqueo",
+      "la que me vendio el curso me bloqueo",
+      "me han bloqueado sin avisar",
+      "me bloquearon del grupo"
+    ]) {
+      const entries = await retriever.retrieve({ candidate: qualifying(), intent: "OTHER", question: story });
+      expect(
+        entries.some((entry) => entry.id === "geo-privacy-three-layers"),
+        story
+      ).toBe(false);
+    }
+  });
+
+  it("la pregunta REAL de privacidad SIGUE surfaceando la respuesta de geo-bloqueo (sin regresion)", async () => {
+    const retriever = new LocalBusinessKnowledgeRetriever();
+    for (const question of [
+      "se puede bloquear mi pais para que no me vean?",
+      "pueden bloquear Argentina?",
+      "quiero que bloqueen a la gente de mi pais"
+    ]) {
+      const entries = await retriever.retrieve({ candidate: qualifying(), intent: "REQUESTS_INFORMATION", question });
+      expect(
+        entries.some((entry) => entry.id === "geo-privacy-three-layers"),
+        question
+      ).toBe(true);
+    }
+  });
+});
