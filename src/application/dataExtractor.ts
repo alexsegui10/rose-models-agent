@@ -484,6 +484,10 @@ export function isImplausibleFirstName(name: string): boolean {
   // candidata real). Guiones/apóstrofes permitidos; los acentos ya se normalizaron.
   if (/[^a-zñ'-]/.test(firstWord)) return true;
   if (/^(.)\1+$/.test(firstWord)) return true; // "mmm", "aaa"
+  // Familia de saludos CON typos/letras repetidas ("Buenoss diass", "holaaa", "wenas"): jamás son un
+  // nombre (re-sonda 4-jul: Ana contestó "Buenoss diass" a la pregunta del nombre y la ficha quedó
+  // bautizada "Buenoss"; el "mi nombre es ana" posterior ya no corregía). "Diana"/"Sol" no matchean.
+  if (/^(?:h?ola+|holis+|wenas+|buen[ao]s*|dia+s*|tarde+s*|noche+s*|saludos+|hey+|hello+)$/.test(firstWord)) return true;
   if (nameRejectWords.has(firstWord)) return true;
   if (nameStopwords.has(firstWord)) return true;
   if (locationKeywords.some((entry) => entry.keyword === firstWord)) return true;

@@ -137,6 +137,37 @@ describe("extractor: los cruces de datos reales ya no pasan", () => {
     expect(result.candidate.phone).toContain("5352");
   });
 
+  it("'Buenoss diass' a la pregunta del nombre NO bautiza a la candidata (caso Ana, re-sonda 4-jul)", async () => {
+    expect(isImplausibleFirstName("Buenoss")).toBe(true);
+    expect(isImplausibleFirstName("holaaa")).toBe(true);
+    expect(isImplausibleFirstName("wenas")).toBe(true);
+    // Nombres reales parecidos NO caen: Diana lleva 'n', Sol no es saludo.
+    expect(isImplausibleFirstName("Diana")).toBe(false);
+    expect(isImplausibleFirstName("Sol")).toBe(false);
+    const { engine } = createEngine();
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: "ana_saludo",
+      profileVisibility: "PUBLIC",
+      message: "Holaa, estoy interesada"
+    });
+    const greeted = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "ana_saludo",
+      profileVisibility: "PUBLIC",
+      message: "Buenoss diass"
+    });
+    expect(greeted.response).not.toContain("Buenoss");
+    expect(greeted.candidate.firstName ?? "").not.toContain("Buenoss");
+    // La corrección posterior SÍ fija el nombre real.
+    const named = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "ana_saludo",
+      profileVisibility: "PUBLIC",
+      message: "mi nombre es ana"
+    });
+    expect(named.candidate.firstName).toBe("Ana");
+  });
+
   it("'/xf' jamás vuelve a imprimirse como nombre (caso Gise): implausible -> descartado", async () => {
     expect(isImplausibleFirstName("/xf")).toBe(true);
     expect(isImplausibleFirstName("xf2")).toBe(true);
