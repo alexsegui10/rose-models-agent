@@ -60,8 +60,25 @@ function normalizeInvertedIphone(normalized: string): string {
   return normalized.replace(new RegExp(`\\b([6-9]|1[0-7])\\s*(?:${IPHONE_TYPO})\\b`), (_m, n) => `iphone ${n}`);
 }
 
+// "iphone pro 15" / "iphone pro max 15" (el modificador VA ANTES del numero): se reordena a "iphone 15 pro"
+// para que el gate lo trate como el modelo real. Sin esto, la palabra "pro" suelta caia en el generico de
+// gama alta -> PENDING ("lo valoro con mi socio") teniendo un iPhone 15 Pro que es APROBADO directo (caso
+// real Janna 5-jul: "iPhone pro 15"). Solo reordena cuando hay numero detras; "iphone pro" a secas no se toca.
+function normalizeIphoneModifierOrder(normalized: string): string {
+  return normalized.replace(
+    new RegExp(`\\b(?:${IPHONE_TYPO})\\s?(pro\\s?max|pro|plus|max)\\s?(\\d{1,2})(?!\\d)`, "g"),
+    (_m, modifier: string, num: string) => `iphone ${num} ${modifier}`
+  );
+}
+
+// Normalizacion completa del texto de dispositivo antes de evaluarlo (orden invertido + modificador antes
+// del numero). Una sola funcion para que las tres consultas (elegibilidad, tipo, modelo) no diverjan.
+function normalizeDeviceText(description: string): string {
+  return normalizeIphoneModifierOrder(normalizeInvertedIphone(normalize(description)));
+}
+
 export function deviceEligibilityForDescription(description: string): DeviceEligibility {
-  const normalized = normalizeInvertedIphone(normalize(description));
+  const normalized = normalizeDeviceText(description);
 
   if (
     new RegExp(
@@ -101,7 +118,7 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
 }
 
 export function deviceTypeForDescription(description: string): DeviceType {
-  const normalized = normalizeInvertedIphone(normalize(description));
+  const normalized = normalizeDeviceText(description);
   if (new RegExp(`\\b(?:${IPHONE_TYPO}|i phone|ios)\\b`).test(normalized)) return "IPHONE";
   if (new RegExp(`\\b(?:${SAMSUNG_TYPO}|${GALAXY_TYPO})\\b`).test(normalized)) return "SAMSUNG";
   if (/\b(android|xiaomi|redmi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono|celular)\b/.test(normalized)) return "OTHER";
@@ -111,7 +128,7 @@ export function deviceTypeForDescription(description: string): DeviceType {
 export function deviceModelForDescription(description: string): string | null {
   // Mismas familias que clasifica el gate (lanzamiento 3-jul: 'Moto g 85' y 'Galaxy A31' quedaban con
   // eligibility PERO sin modelo en la ficha, y Alex tenía que releer el chat para saber qué valoraba).
-  const normalized = normalizeInvertedIphone(normalize(description));
+  const normalized = normalizeDeviceText(description);
   const match = normalized.match(
     new RegExp(
       `\\b(${IPHONE_TYPO}\\s?\\d{1,2}(?:\\s?(?:pro\\s?max|pro|max|plus|mini))?|(?:${GALAXY_TYPO}|${SAMSUNG_TYPO})\\s?[sajm]\\s?\\d{1,3}(?:\\s?(?:ultra|plus))?|(?:motorola|moto)\\s?[eg]\\s?\\d{1,3}|redmi\\s?(?:note\\s?)?\\d{1,2}|pixel\\s?\\d{1,2}\\s?pro|pixel\\s?\\d{1,2}|xiaomi\\s?(?:poco\\s?)?[a-z]?\\d{1,2})\\b`

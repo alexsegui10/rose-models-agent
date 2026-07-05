@@ -714,7 +714,13 @@ export function extractDeterministicUnderstanding(
   // trabaje con agencias", "he trabajado con agencias") -> el slot ya estaba respondido y NO debe re-preguntarse.
   if (
     /\b(otra agencia|agencia actual|trabajo con agencia|tengo agencia)\b/.test(normalized) ||
-    /\b(?:he\s+)?trabaj(?:e|o|ado|aba|amos)\b[^.!?]{0,20}\bagencias?\b/.test(normalized)
+    // Incluye el GERUNDIO ("trabajando con una agencia" = hecho presente): sin el "ando", "Tengo un perfil
+    // trabajando con una agencia" no rellenaba el slot y el bot RE-PREGUNTABA la agencia (caso real Janna
+    // 5-jul). NO se incluye el infinitivo "trabajar" A PROPOSITO: es futuro/hipotetico/pregunta ("me gustaria
+    // trabajar con una agencia", "quiero trabajar con una agencia como la vuestra") y marcaria como que YA
+    // trabaja con otra a un lead que justo quiere unirse (regresion cazada por el revisor 5-jul). La negacion
+    // de abajo sigue ganando ("no trabajo con agencias").
+    /\b(?:he\s+)?trabaj(?:e|o|ando|ado|aba|amos)\b[^.!?]{0,20}\bagencias?\b/.test(normalized)
   )
     extractedData.worksWithAnotherAgency = true;
   // Negacion en cualquier formulacion ("no he trabajado con agencias", "nunca trabaje con agencias",
