@@ -4356,16 +4356,16 @@ function isSilencedState(state: CandidateState): boolean {
   return state === "REJECTED" || state === "CLOSED" || state === "CALL_SCHEDULED";
 }
 
-// Los DOS textos deterministas del gate del movil (humanInterventionResponse). La excepcion de envio en
-// HIR se limita a ELLOS: cualquier otra respuesta generada estando en HIR-movil (p.ej. el "no soy un bot"
-// del bot-check) vuelve al fail-closed de siempre (borrador para Alex) — revisor 4-jul: la excepcion debe
-// mirar QUE se envia, no solo el motivo de la pausa.
+// El mensaje determinista del gate del movil que SI se entrega en HIR. La excepcion de envio en HIR se
+// limita a EL: cualquier otra respuesta generada estando en HIR-movil (el "no soy un bot" del bot-check,
+// o el "como te decia..." repetido) vuelve al fail-closed de siempre (borrador para Alex) — revisor 4-jul:
+// la excepcion debe mirar QUE se envia, no solo el motivo de la pausa.
+// ITEM 4 de Alex (5-jul): el bot debe avisar del movil UNA vez y luego CALLARSE (Alex toma el relevo). El
+// "Como te decia, en cuanto tengas un movil mejor..." repetido ya NO se envia (queda bloqueado): antes la
+// candidata recibia dos mensajes de rechazo y parecia que el bot seguia insistiendo. El primer aviso
+// ("Lamentablemente...") sigue saliendo para no dejarla en visto; el resto de sus mensajes -> silencio.
 function isDeviceHoldingScript(response: string): boolean {
-  const normalized = normalizeText(response);
-  return (
-    normalized.includes("lamentablemente con ese movil no podemos trabajar") ||
-    normalized.includes("como te decia, en cuanto tengas un movil mejor")
-  );
+  return normalizeText(response).includes("lamentablemente con ese movil no podemos trabajar");
 }
 
 function deliveryStatusFor(

@@ -259,7 +259,10 @@ describe("revisor 4-jul: la inyección gana al móvil y el SENT de HIR se limita
     expect(hir?.trigger).toBe("CRITICAL_RESTRICTION");
   });
 
-  it("en HIR-móvil, el holding del móvil ('como te decia...') SÍ sale solo (SENT)", async () => {
+  it("en HIR-móvil, el PRIMER aviso del móvil ('Lamentablemente...') SÍ sale solo (SENT)", async () => {
+    // seedHirMovil no deja historial de agente -> alreadyToldDeviceIssue=false -> se genera el PRIMER
+    // aviso ("Lamentablemente..."), que es el que se entrega. El "Como te decia..." repetido (2o turno)
+    // ya NO se envía (ver tests/deviceStopsAfterOnceJul05.test.ts, ITEM 4 de Alex).
     const { engine, repository } = createAutoEngine();
     const seeded = await seedHirMovil(repository);
     const result = await engine.handleIncomingMessage({
