@@ -2501,7 +2501,9 @@ function generateResponse(
     return alreadyAwaitingPartner
       ? "Sin prisa, en cuanto lo vea con mi socio te confirmo. Cualquier cosa que necesites me dices."
       : turnProvidedInfo
-        ? "Perfecto, muchas gracias por explicarmelo.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado."
+        ? // "gracias" generico en vez de "por explicarmelo": esto ultimo suena a non-sequitur cuando ella no
+          // explico nada (dio un telefono, dijo "Bien", etc.) — re-sonda 4-jul (Lourdes, silvana).
+          "Perfecto, gracias.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado."
         : "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
   }
 
@@ -4284,14 +4286,33 @@ function isTrivialAck(message: string): boolean {
 // Rango de interés para la política de solo-subidas (un acuse posterior no degrada un HIGH ya ganado).
 const INTEREST_RANK: Record<Candidate["interestLevel"], number> = { UNKNOWN: 0, LOW: 1, MEDIUM: 2, HIGH: 3 };
 
-/** Nivel de interés DERIVADO del turno (determinista, invariante 1): CONFIRMS_INTEREST sube a MEDIUM;
- *  dar el teléfono o proponer hora de llamada sube a HIGH; DECLINES baja a LOW. Solo-subidas en el resto. */
+// Intents que muestran que la candidata SE ENGANCHA con el funnel (responder datos, aceptar la solicitud,
+// pedir info): interes al menos BAJO (deja de ser UNKNOWN). Preguntar por el DEAL (%/contrato) o confirmar
+// interes es una senal mas fuerte -> MEDIO.
+const ENGAGED_INTENTS = new Set<ModelConversationOutput["intent"]>([
+  "PROVIDES_NAME",
+  "PROVIDES_AGE",
+  "PROVIDES_PHONE",
+  "ACCEPTS_PROFILE_REQUEST",
+  "REQUESTS_INFORMATION"
+]);
+const INTERESTED_INTENTS = new Set<ModelConversationOutput["intent"]>([
+  "CONFIRMS_INTEREST",
+  "ASKS_ABOUT_PERCENTAGE",
+  "ASKS_ABOUT_CONTRACT"
+]);
+
+/** Nivel de interés DERIVADO del turno (determinista, invariante 1). Escala solo-subidas: engancharse con el
+ *  funnel (responder datos, pedir info) -> LOW; preguntar por el deal o confirmar interés -> MEDIUM; dar el
+ *  teléfono o pedir llamada -> HIGH; DECLINES -> LOW. Sin esto, un lead que completaba TODO el cuestionario
+ *  quedaba en UNKNOWN en el CRM (re-sonda 4-jul: infravaloraba leads claramente enganchados). */
 function deterministicInterestLevel(candidate: Candidate, understanding: ModelConversationOutput): Candidate["interestLevel"] {
   if (candidate.manualControlActive) return candidate.interestLevel;
   const current = candidate.interestLevel;
   if (understanding.intent === "DECLINES") return "LOW";
   let proposed: Candidate["interestLevel"] | null = null;
-  if (understanding.intent === "CONFIRMS_INTEREST") proposed = "MEDIUM";
+  if (ENGAGED_INTENTS.has(understanding.intent)) proposed = "LOW";
+  if (INTERESTED_INTENTS.has(understanding.intent)) proposed = "MEDIUM";
   if (typeof understanding.extractedData.phone === "string" || understanding.intent === "REQUESTS_CALL") proposed = "HIGH";
   if (proposed && INTEREST_RANK[proposed] > INTEREST_RANK[current]) return proposed;
   return current;
