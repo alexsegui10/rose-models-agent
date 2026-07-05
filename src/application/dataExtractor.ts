@@ -277,7 +277,9 @@ const locationPattern = new RegExp(`\\b(?:${locationKeywords.map((entry) => entr
 
 // "soy laura" captura nombre; "soy de madrid" / "soy argentina" / "soy modelo" no.
 const explicitNamePattern = /\b(?:me llamo|mi nombre es)\s+([a-zñ]{2,})/;
-const casualNamePattern = /\bsoy\s+([a-zñ]{3,})\b/;
+// [\s,] tras "soy" para captar la coma tras el saludo ("buenas tardes soy, Vanesa" — caso real 5-jul:
+// la coma rompia el match y el bot repreguntaba el nombre en bucle en el fallback determinista).
+const casualNamePattern = /\bsoy[\s,]+([a-zñ]{3,})\b/;
 const nameStopwords = new Set([
   "del",
   "los",
@@ -838,7 +840,12 @@ export function extractDeterministicUnderstanding(
   if (/\b(no me interesa|paso|no gracias|no quiero)\b/.test(normalized))
     return baseOutput("DECLINES", extractedData, 0.82, false, null, internalNotes);
 
-  if (/\b(persona|alex|humano|hablar con alguien)\b/.test(normalized)) {
+  // OJO: "alex" NO va aqui. El bot SE PRESENTA como Alex ("soy Alex de Rose Models"), asi que una
+  // candidata simpatica que dice "Hola Alex", "Gracias Alex" o "Un gusto Alex!" (en Argentina, casi
+  // todas) NO pide un humano: el bot ya es Alex. Antes "alex" a secas escalaba a HIR y el bot enmudecia,
+  // matando el saludo calido (caso real Vanesa 5-jul, en el fallback determinista). Pedir un humano de
+  // verdad se capta por "persona/humano/hablar con alguien" y por la desconfianza/agresion de abajo.
+  if (/\b(persona|humano|hablar con alguien)\b/.test(normalized)) {
     return baseOutput("REQUESTS_HUMAN", extractedData, 0.82, true, "La candidata pide hablar con una persona.", internalNotes);
   }
 
