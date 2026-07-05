@@ -20,6 +20,31 @@ describe("nombre con coma tras 'soy'", () => {
   });
 });
 
+describe("saludo + nombre en la misma burbuja ('Hola silvana') capta el nombre (caso silvana 5-jul)", () => {
+  for (const [msg, expected] of [
+    ["hola silvana", "Silvana"],
+    ["buenas ana", "Ana"],
+    ["hola sofia", "Sofia"]
+  ] as const) {
+    it(`'${msg}' -> ${expected} (salta el saludo, no repregunta el nombre)`, () => {
+      const u = extractDeterministicUnderstanding(msg, { lastAgentMessage: "Para empezar, como te llamas?" });
+      expect(u.extractedData.firstName).toBe(expected);
+    });
+  }
+  it("regresión: un saludo sin nombre ('buenas tardes', 'hola') NO inventa un nombre", () => {
+    for (const msg of ["buenas tardes", "hola", "buenos dias"]) {
+      const u = extractDeterministicUnderstanding(msg, { lastAgentMessage: "como te llamas?" });
+      expect(u.extractedData.firstName, msg).toBeUndefined();
+    }
+  });
+  it("regresión: un ACUSE ('vale dale', 'dale') NO se toma como nombre (solo se salta un SALUDO)", () => {
+    for (const msg of ["vale dale", "dale", "vale"]) {
+      const u = extractDeterministicUnderstanding(msg, { lastAgentMessage: "como te llamas?" });
+      expect(u.extractedData.firstName, msg).toBeUndefined();
+    }
+  });
+});
+
 describe("saludar al bot por su nombre (Alex) NO es pedir un humano", () => {
   for (const msg of ["Un gusto Alex!", "Hola Alex", "Gracias Alex", "que tal alex"]) {
     it(`'${msg}' -> NO escala a REQUESTS_HUMAN`, () => {

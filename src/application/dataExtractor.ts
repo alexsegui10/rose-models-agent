@@ -419,6 +419,8 @@ const nameRejectWords = new Set([
   "ok",
   "okey",
   "okay",
+  "dale",
+  "listo",
   "si",
   "sii",
   "no",
@@ -461,16 +463,22 @@ const nameRejectWords = new Set([
  * Lee un nombre pelado ("Noelia", "gisell torres") cuando el agente acaba de pedir el nombre.
  * Toma solo la primera palabra, rechaza fillers/saludos/dias y exige caracteres alfabeticos.
  */
+// Saludos de apertura (solo estos) que pueden preceder al nombre: "hola silvana", "buenas ana". NO
+// incluye acuses ("vale", "dale") a proposito: "vale dale" / "dale contame" NO llevan nombre.
+const leadingGreetingPattern = /^(?:h?ola+|holaa*|holis+|wenas+|buen[ao]s+|hey+|hello+|hi+)$/;
+
 function bareNameFromReply(normalized: string): string | undefined {
   const trimmed = normalized.trim();
-  // Solo letras y espacios, una o dos palabras: una respuesta pelada de nombre, no una frase.
+  // Solo letras y espacios, una o dos palabras: una respuesta pelada de nombre, no una frase. (Sin coma a
+  // proposito: "Vale, dale" / "Dale, contame" son acuses, no nombres; la coma los deja fuera.)
   if (!/^[a-zñ]{2,}(?:\s+[a-zñ]{2,})?$/.test(trimmed)) return undefined;
-  const firstWord = trimmed.split(/\s+/)[0];
-  if (nameRejectWords.has(firstWord)) return undefined;
-  if (nameStopwords.has(firstWord)) return undefined;
-  if (locationKeywords.some((entry) => entry.keyword === firstWord)) return undefined;
-  // Una "palabra" de una sola letra repetida ("mmm", "aaa", "jjj") es ruido, no un nombre.
-  if (/^(.)\1+$/.test(firstWord)) return undefined;
+  const words = trimmed.split(/\s+/);
+  // SALTA un SALUDO inicial (solo saludo, no cualquier filler): "hola silvana" / "buenas ana" -> el nombre
+  // es la 2a palabra (bug real 5-jul: "Hola silvana" se descartaba entero y el bot repreguntaba en bucle).
+  const idx = words.length > 1 && leadingGreetingPattern.test(words[0]) ? 1 : 0;
+  const firstWord = words[idx];
+  // isImplausibleFirstName rechaza saludos/lugares/stopwords/ruido, asi que "buenas tardes" -> undefined.
+  if (isImplausibleFirstName(firstWord)) return undefined;
   return firstWord.charAt(0).toUpperCase() + firstWord.slice(1);
 }
 
