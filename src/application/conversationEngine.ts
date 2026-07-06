@@ -1803,6 +1803,30 @@ export class ConversationEngine {
         draft = { ...draft, response, usedFallback: true, error: "gender-eligibility-guard" };
       }
     }
+    // GUARD "nunca preguntar el pais" (Alex 6-jul): TODAS las candidatas son de Argentina, asi que el bot
+    // JAMAS pregunta de que pais / de donde es. A veces el modelo la cuelga para rellenar (visto en la sim);
+    // se quita esa linea de forma determinista (que no dependa de que el modelo obedezca el prompt). Si eso
+    // deja el turno sin nada, se pone la pregunta del guion o un acuse. Re-validado factualmente.
+    const countryQuestionLine = /\bde que pais\b|\bde donde (?:eres|sos)\b|\bpais eres\b/i;
+    if (countryQuestionLine.test(normalizeText(response))) {
+      const kept = response
+        .split(/\n+/)
+        .filter((line) => line.trim().length > 0 && !countryQuestionLine.test(normalizeText(line)));
+      const cleaned = kept.join("\n\n").trim();
+      // Si solo quitamos la linea del pais y conservamos el texto del LLM, la respuesta SIGUE siendo suya:
+      // no se marca usedFallback (traza honesta, igual que el guard hermano). Solo se marca cuando se
+      // sustituye el turno ENTERO (la del pais era la unica linea) por la del guion / un acuse.
+      const fullReplace = cleaned.length === 0;
+      const replacement = fullReplace
+        ? responsePlan.questionToAsk
+          ? bridgeBackToQuestion(responsePlan.questionToAsk)
+          : "Perfecto"
+        : cleaned;
+      if (replacement !== response && validateFactualResponse(replacement, responsePlan).valid) {
+        response = replacement;
+        draft = { ...draft, response, ...(fullReplace ? { usedFallback: true } : {}), error: "country-question-stripped" };
+      }
+    }
     // GUARD "no dejar el turno de cualificacion sin pregunta" (PIVOTE Fase 2, Alex 6-jul): al soltar los
     // turnos de cualificacion al LLM (ya no plantilla fija), si el borrador se queda SIN ninguna pregunta y
     // el plan tenia una pendiente (questionToAsk), se anade el puente a esa pregunta para NO estancar el
