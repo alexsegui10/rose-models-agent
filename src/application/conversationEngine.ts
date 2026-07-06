@@ -1659,6 +1659,17 @@ export class ConversationEngine {
     if (projectedCandidate.isAdultConfirmed && projectedCandidate.currentState !== "CLOSED") {
       suppressedFramings.push(ADULTS_ONLY_FRAMING);
     }
+    // Multi-agencia (Alex 6-jul, caso Julia): "al tener dos cuentas puedes trabajar con dos agencias..." NO
+    // se recita salvo que la candidata TRABAJE con otra agencia o lo haya sacado en este mensaje. El modelo
+    // la surfaceaba por el boost de su categoria y la soltaba de la nada (ella dijo "tengo cuenta solo" y el
+    // bot respondio "al tener dos cuentas..."). Se suprime el encuadre si no aplica (mismo mecanismo que la
+    // politica de mayores de edad). Cuando SI trabaja con otra agencia, la ficha sigue disponible.
+    const raisedMultiAgency = /\b(otra agencia|otras agencias|dos agencias|multi ?agencia|dos cuentas|otra empresa)\b/.test(
+      normalizeText(groupedMessage.content)
+    );
+    if (projectedCandidate.worksWithAnotherAgency !== true && !raisedMultiAgency) {
+      suppressedFramings.push(MULTI_AGENCY_FRAMING);
+    }
     const draftKnowledgeEntries =
       suppressedFramings.length === 0
         ? knowledgeEntries
@@ -2967,6 +2978,11 @@ interface SuppressedTopic {
 // es un sinsentido para una de 45 que pregunta por preferencias de edad ("o buscais mas menores?"). Bug Alex
 // 26-jun. La frase del cierre de MENORES (otra rama, terminal, con isAdultConfirmed=false) NO se ve afectada.
 const ADULTS_ONLY_FRAMING = /\bmayores de edad\b|\bsolo podemos valorar perfiles de personas mayores\b/i;
+// Encuadre de multi-agencia (la ficha "al tener dos cuentas puedes trabajar con dos agencias..."): se
+// suprime cuando la candidata NO trabaja con otra agencia ni lo saco, para que el modelo no lo recite de
+// la nada (caso Julia 6-jul: "tengo cuenta solo" -> el bot solto "al tener dos cuentas...").
+const MULTI_AGENCY_FRAMING =
+  /\b(dos cuentas|dos agencias|trabj?ar con dos|del mismo trafico|mismo trafico o mercado|conflicto de mercado|trafico espanol las otras)\b/i;
 
 // ¿La candidata MENCIONO la cara/privacidad en este mensaje? Señal para NO recitar la politica de la cara si
 // ella no la saco (la entrada face-requirement-mandatory se surfacea por el boost de su categoria; sin esta

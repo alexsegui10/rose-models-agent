@@ -83,7 +83,7 @@ const rawExamples: ConversationExampleInput[] = [
       {
         role: "alex",
         content:
-          "Nosotros te abrimos dos cuentas de Instagram con un nombre español y perfil español para maximizar el trafico de españa ya que tienen mas poder adquisitivo"
+          "Nosotros te abrimos cuentas de Instagram con un nombre español y perfil español para maximizar el trafico de españa ya que tienen mas poder adquisitivo"
       },
       { role: "alex", content: "Entonces subimos reels hasta conseguir una cantidad grande de seguidores" },
       { role: "alex", content: "y cuando los tenemos ponemos el link a of en el perifl para que entren" },
