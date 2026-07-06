@@ -20,8 +20,10 @@ const entries: KnowledgeEntryInput[] = [
       "Nosotros hacemos el resto: la monetizacion, el trafico y toda la gestion.",
       "El trafico lo hacemos con cuentas de instagram que creamos con ubicaciones y nombres españoles.",
       "Al tener bastantes seguidores ponemos el link a tu of y empezamos a monetizar con el equipo de chatters 24/7.",
-      // Cierre calido del pitch (peticion de Alex 15-jun): invita a preguntar sin presionar.
-      "En la llamada te lo explico todo mejor. Cualquier duda me preguntas sin problema."
+      "En la llamada te lo explico todo mejor.",
+      // Cierre calido del pitch en su PROPIA burbuja (peticion de Alex 7-jul): tras explicar como trabajamos,
+      // invita a preguntar sin presionar, como mensaje aparte.
+      "Si tienes cualquier duda me preguntas sin problema."
     ],
     prohibitedClaims: [
       "Prometer resultados concretos.",
