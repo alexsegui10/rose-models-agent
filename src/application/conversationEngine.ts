@@ -1753,6 +1753,16 @@ export class ConversationEngine {
       if (cleaned.length > 0 && cleaned !== response && validateFactualResponse(cleaned, responsePlan).valid) {
         response = cleaned;
         draft = { ...draft, response, error: "stripped-unsolicited-topic" };
+      } else if (cleaned.length === 0) {
+        // TODA la respuesta era un tema suprimido (bug sim 6-jul: a "Nunca" el fallback determinista recito
+        // "la cara es imprescindible" de la nada; al quitarla quedaba vacio y ANTES se dejaba pasar). Un tema
+        // suprimido NUNCA puede ser el turno entero: se sustituye por la pregunta del guion si la hay, o por
+        // un acuse neutro seguro. Asi la cara/dinero/privacidad jamas se sueltan por su cuenta.
+        const safe = responsePlan.questionToAsk ? bridgeBackToQuestion(responsePlan.questionToAsk) : "Perfecto";
+        if (safe !== response && validateFactualResponse(safe, responsePlan).valid) {
+          response = safe;
+          draft = { ...draft, response, usedFallback: true, error: "suppressed-topic-only-response" };
+        }
       }
     }
     // ANTI-ALUCINACION DE PLATAFORMA (QA 26-jun + panel prod 27-jun): la agencia SOLO gestiona OnlyFans. Si la
