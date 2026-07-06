@@ -1453,8 +1453,17 @@ export class ConversationEngine {
 
     let projectedCandidate = updatedCandidate;
     const plannedTransitions: StateTransition[] = [];
+    // No-fit por plataforma: si BUSCA Fansly/otra en vez de OnlyFans, se cierra (Alex 6-jul). Solo cuando lo
+    // busca, no cuando solo pregunta si trabajamos con ella (eso lo aclara el guard de plataforma y se sigue).
+    const wantsOtherPlatform = wantsCompetitorPlatformInsteadOfOF(groupedMessage.content);
     for (let step = 0; step < 3; step += 1) {
-      const nextState = decideNextState(projectedCandidate, understanding, responsePlan, criticalHumanReviewReason);
+      const nextState = decideNextState(
+        projectedCandidate,
+        understanding,
+        responsePlan,
+        criticalHumanReviewReason,
+        wantsOtherPlatform
+      );
       if (!nextState || nextState === projectedCandidate.currentState) {
         break;
       }
@@ -2290,7 +2299,8 @@ function decideNextState(
   candidate: Candidate,
   understanding: ModelConversationOutput,
   responsePlan: ResponsePlan,
-  criticalHumanReviewReason: string | null
+  criticalHumanReviewReason: string | null,
+  wantsOtherPlatform = false
 ): CandidateState | null {
   // CLOSED es terminal: ningun plan posterior puede sacar a la candidata de ahi.
   if (candidate.currentState === "CLOSED") {
@@ -2315,6 +2325,18 @@ function decideNextState(
     if (!declaredMinor && humanApproved && canTransition(candidate.currentState, "HUMAN_INTERVENTION_REQUIRED")) {
       return "HUMAN_INTERVENTION_REQUIRED";
     }
+    return "CLOSED";
+  }
+
+  // "Quiere OTRA plataforma (Fansly...) EN VEZ de OnlyFans" (Alex 6-jul): Rose Models solo gestiona OnlyFans,
+  // asi que es un no-fit claro. Se cierra con educacion (mensaje especifico en generateResponse), sin
+  // insistirle con el modelo espanol. SOLO en cualificacion activa (NEW_LEAD/QUALIFYING) y adulta; una ya
+  // aprobada por Alex o en la fase de llamada NO se auto-cierra (Alex decide). Una menor cierra por edad abajo.
+  if (
+    wantsOtherPlatform &&
+    (candidate.currentState === "NEW_LEAD" || candidate.currentState === "QUALIFYING") &&
+    (candidate.age ?? 99) >= 18
+  ) {
     return "CLOSED";
   }
 
@@ -2427,6 +2449,11 @@ function generateResponse(
   }
 
   if (candidate.currentState === "CLOSED") {
+    // Cierre por plataforma (Alex 6-jul): busca Fansly/otra en vez de OnlyFans -> no-fit, cierre honesto y
+    // amable, sin insistirle con el modelo espanol que no le encaja.
+    if (wantsCompetitorPlatformInsteadOfOF(inboundMessage)) {
+      return "Entiendo, nosotros gestionamos solo OnlyFans, asi que por lo que buscas creo que no somos lo que necesitas.\n\nTe deseo mucha suerte, un saludo!";
+    }
     // Rechazo educado especifico de la cara (peticion de Alex #2): cuando insiste tras reconducir, se
     // cierra con tacto, dejando la puerta abierta y sin valoraciones personales. El resto: cierre generico.
     if (candidate.faceObjectionCount >= 1 && classifyFaceConcern(inboundMessage) === "refusal") {
@@ -2971,6 +2998,23 @@ function faceRaisedIn(message: string): boolean {
 // fancentro/fanhouse), que no colisionan con palabras corrientes.
 const competitorPlatformPattern =
   /\b(fansly|many\s?vids|fanvue|fanhouse|fancentro|justforfans|just for fans|fanfix|chaturbate|patreon|mym\b)\b/i;
+
+// "Quiere OTRA plataforma EN VEZ de OnlyFans" (Alex 6-jul): Rose Models solo gestiona OnlyFans, asi que si
+// BUSCA/SE PASA a Fansly u otra en vez de OF es un no-fit claro y hay que cerrar con educacion (no insistirle
+// con el modelo espanol). CLAVE: solo cuando lo BUSCA/quiere, NO cuando solo PREGUNTA "trabajan con Fansly?"
+// (eso se responde 'solo OnlyFans' y se sigue, por si le vale OF). "quiero SABER si..." queda excluido (no
+// se incluye el verbo "quiero" suelto; solo verbos de busqueda/migracion inequivocos).
+const seeksCompetitorPlatform =
+  /\b(?:busco|buscando|buscar|paso a|me paso a|cambiarme a|migrar(?:me)?|migrando|empezar (?:en|con))\b[^.!?\n]{0,25}\b(?:fansly|many\s?vids|fanvue|fanhouse|fancentro|justforfans|just for fans|fanfix|mym)\b/;
+// DIRECCION (revisor 6-jul, falso positivo grave): NO cerrar si OnlyFans es su DESTINO — esas se pasan A OF y
+// son el lead IDEAL ("estoy migrando de fansly a only", "tengo fansly y quiero only", "empezar en onlyfans").
+// Solo se cierra cuando el competidor es el destino Y OF NO aparece como algo que ella quiere/adonde va.
+const onlyFansIsHerGoal =
+  /\b(?:a|hacia|para|en)\s+only(?:\s?fans?)?\b|\b(?:quiero|prefiero|me interesa|me vengo|me vine|vengo|vine|migro|migrar|migrando|paso|empezar|empezando|arrancar|comenzar|abrir(?:me)?|abri)\b[^.!?\n]{0,20}\bonly(?:\s?fans?)?\b/;
+function wantsCompetitorPlatformInsteadOfOF(message: string): boolean {
+  const m = normalizeText(message);
+  return seeksCompetitorPlatform.test(m) && !onlyFansIsHerGoal.test(m);
+}
 
 // GENERO (Alex 27-jun): la agencia trabaja SOLO con chicas. Si preguntan por hombres / "solo chicas?" / alguien
 // se identifica como chico, el bot lo aclara de forma determinista ("solo trabajamos con chicas") en vez de dejar
