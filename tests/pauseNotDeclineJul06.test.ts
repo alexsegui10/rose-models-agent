@@ -17,7 +17,7 @@ class DeclineOnPauseProvider implements ConversationUnderstandingProvider {
   private base = new DeterministicUnderstandingProvider();
   async understand(input: ConversationUnderstandingInput) {
     const out = await this.base.understand(input);
-    if (/lo pienso/i.test(input.inboundMessage)) {
+    if (/pienso|pensar|pensarlo/i.test(input.inboundMessage)) {
       return { ...out, intent: "DECLINES" as const };
     }
     return out;
@@ -54,6 +54,23 @@ describe("'Me lo pienso' es pausa, NUNCA rechazo (P0 sim completa 6-jul)", () =>
 
     // Lo critico: NO se cierra. Sigue esperando (la decision es de Alex, no del bot).
     expect(res.candidate.currentState).not.toBe("CLOSED");
+  });
+
+  it("variantes de 'pensarlo' (lo tengo que pensar / lo voy a pensar / tendria que pensarlo) NO cierran", async () => {
+    for (const frase of [
+      "mmm no se, lo tengo que pensar",
+      "lo voy a pensar y te digo",
+      "tendria que pensarlo mejor",
+      "me lo voy a pensar"
+    ]) {
+      const { engine } = mk();
+      const u = "var_" + Math.random().toString().slice(2, 8);
+      await engine.handleIncomingTurn({ instagramUsername: u, profileVisibility: "PUBLIC", messages: [{ content: "hola" }] });
+      await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: "me llamo sofia" }] });
+      await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: "31" }] });
+      const res = await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: frase }] });
+      expect(res.candidate.currentState, `"${frase}" NO debe cerrar`).not.toBe("CLOSED");
+    }
   });
 
   it("un rechazo REAL y explicito ('no me interesa, dejalo') si se respeta (no lo confunde con pausa)", async () => {

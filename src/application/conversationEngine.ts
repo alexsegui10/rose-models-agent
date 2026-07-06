@@ -4307,7 +4307,7 @@ const wantsCallChangePattern =
 // preguntas, reconoce con calidez y espera a que retome. Incluye la indecision ("no se si me interesa",
 // "no me convence", "no lo veo claro") para no repetir mecanicamente la pregunta de slot.
 const wantsToPausePattern =
-  /\b(dejame pensarlo|me lo pienso|lo pienso|tengo que pensarlo|me lo tengo que pensar|dame (?:unos |un par de )?dias|dame tiempo|necesito (?:pensarlo|tiempo)|luego te (?:digo|contesto|escribo)|te (?:digo|escribo|contesto) (?:luego|mas tarde|despues)|me lo miro y te digo|ahora no puedo seguir|no se si me interesa|no se si esto es para mi|no se si es para mi|no me convence|no me termina de convencer|no lo veo claro|no estoy segura de esto|no estoy muy segura de esto)\b/;
+  /\b(dejame pensarlo|me lo pienso|lo pienso|(?:(?:me )?lo )?(?:tengo que|voy a|debo|tendria que) pensar(?:lo|melo)?|dame (?:unos |un par de )?dias|dame tiempo|necesito (?:pensarlo|tiempo)|luego te (?:digo|contesto|escribo)|te (?:digo|escribo|contesto) (?:luego|mas tarde|despues)|me lo miro y te digo|ahora no puedo seguir|no se si me interesa|no se si esto es para mi|no se si es para mi|no me convence|no me termina de convencer|no lo veo claro|no estoy segura de esto|no estoy muy segura de esto)\b/;
 
 // Variantes deterministas del acuse de pausa: todas calidas, sin prisa y SIN pregunta. Se rota por el
 // numero de mensajes del agente, asi una pausa repetida no recibe el mismo literal (sonaria a robot) y
