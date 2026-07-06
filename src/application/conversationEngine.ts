@@ -4145,6 +4145,21 @@ function resolveContextualDecline(
     return understanding;
   }
 
+  // Un "me lo pienso / lo pienso / dame unos dias / luego te digo" JAMAS es un rechazo del proceso: es una
+  // PAUSA (deja la puerta abierta). Fallo real (sim completa 6-jul): el modelo clasifico "ok gracias, lo
+  // pienso" como DECLINES y en WAITING_HUMAN_REVIEW eso CERRABA a una candidata buena. El codigo corrige al
+  // modelo (invariante 1): si el mensaje es de pausa, no es decline. La rama de pausa/espera lo trata con calma.
+  if (wantsToPausePattern.test(normalizedInbound)) {
+    return {
+      ...understanding,
+      intent: "OTHER",
+      internalNotes: [
+        ...understanding.internalNotes,
+        "Es un 'me lo pienso' (pausa, puerta abierta); NUNCA se interpreta como rechazo del proceso."
+      ]
+    };
+  }
+
   // Un mensaje largo y explicativo NUNCA es un rechazo seco del proceso, aunque empiece por "No,"
   // o mencione que "dejo"/"borraron" algo (fallo real del replay: una candidata que contaba su
   // historial en un parrafo acababa en CLOSED). Un decline real es corto ("no me interesa", "paso").
