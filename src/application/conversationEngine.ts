@@ -1557,22 +1557,14 @@ export class ConversationEngine {
     // de forma proactiva (decision de Alex) con el pitch confirmado verbatim, sin pasar por el LLM, pero
     // SOLO cuando el guion esencial (incl. movil) ya esta completo, para que el movil vaya antes del pitch.
     const agencyExplanation = agencyExplanationBeat(projectedCandidate, activeCandidate, recentMessages, responsePlan);
-    // Control determinista del guion (decision de Alex 14-jun): en un turno que es SOLO una pregunta de
-    // cualificacion (sin nada que responder, sin escalada), el CODIGO pone la pregunta (plantilla real de
-    // Alex, orden fijo, sin saltarse ni reordenar). Asi el LLM no rompe el orden ni la deteccion
-    // contextual del turno siguiente. OpenAI se reserva para objeciones/explicaciones/pitch (answerFacts).
-    const useDeterministicQuestionTurn =
-      !useCanonicalOpenerTemplate &&
-      agencyExplanation === null &&
-      responsePlan.questionToAsk !== null &&
-      responsePlan.answerFacts.length === 0 &&
-      !responsePlan.requiresHumanReview &&
-      !responsePlan.uncoveredQuestion &&
-      // Turno SOCIAL (la candidata pregunto algo personal/identidad): NO es canonico-vacio, hay algo que
-      // responder primero. En modo OpenAI dejamos que el LLM redacte la respuesta social con la voz de Alex
-      // (guion estricto: termina con mainQuestion); el fallback determinista de generateResponse cubre el mismo
-      // turno si OpenAI falla (mezcla pedida por Alex 22-jun: OpenAI natural + guion estricto).
-      responsePlan.pendingPersonalQuestion === null;
+    // PIVOTE Fase 2 (Alex 6-jul, esere.md): los turnos de cualificacion YA NO usan la plantilla determinista
+    // fija. Antes, un turno que era SOLO una pregunta de cualificacion (sin nada que responder) emitia la
+    // pregunta de guion tal cual (robotico); ahora pasa por el LLM (gpt-5.4) para que REACCIONE a su situacion
+    // e INDAGUE con naturalidad (Alex quiere que el bot piense, no que recite). El CODIGO sigue llevando los
+    // railes: decide el slot pendiente (questionToAsk), no agendar sin Encaja (guard de scheduling), no
+    // repreguntar datos ya sabidos (STRUCTURED_MEMORY), y el guard "qualifying-question-rescue" de mas abajo
+    // rescata la pregunta del guion si el borrador se quedo SIN ninguna pregunta (para no estancar el funnel).
+    // El fallback determinista (generateResponse) sigue cubriendo el turno si OpenAI falla/timeout.
     // Turno de ESPERA (en revision humana o intervencion humana, sin nada que responder ni preguntar): el
     // mensaje de espera lo pone el codigo (variado, sin bucle), no OpenAI — que repetia "lo hablo con mi
     // socio" turno tras turno (fallo real del spot-check de Alex).
@@ -1668,7 +1660,6 @@ export class ConversationEngine {
         : softDeferMessage !== null
           ? deterministicDraftOutput(softDeferMessage)
           : useCanonicalOpenerTemplate ||
-              useDeterministicQuestionTurn ||
               useDeterministicFitAnswer ||
               isAwaitingHoldingTurn ||
               useDeterministicFaceTurn ||
@@ -1800,6 +1791,42 @@ export class ConversationEngine {
       if (corrected !== response) {
         response = corrected;
         draft = { ...draft, response, usedFallback: true, error: "gender-eligibility-guard" };
+      }
+    }
+    // GUARD "no dejar el turno de cualificacion sin pregunta" (PIVOTE Fase 2, Alex 6-jul): al soltar los
+    // turnos de cualificacion al LLM (ya no plantilla fija), si el borrador se queda SIN ninguna pregunta y
+    // el plan tenia una pendiente (questionToAsk), se anade el puente a esa pregunta para NO estancar el
+    // funnel. CLAVE: solo si NO hay ya un '?' en la respuesta, para RESPETAR que el bot resuelva una duda o
+    // entienda una situacion con su propia pregunta (lo que pide Alex) SIN duplicar. El codigo sigue fijando
+    // QUE se pregunta (invariante 1); esto solo rescata si el LLM se olvido de preguntar. SOLO cuando el
+    // turno paso de verdad por el LLM (draftedByLlm): NUNCA en los overrides deterministas que dejan el turno
+    // SIN pregunta a proposito (pausa "me lo pienso", softDefer, pitch, cara, holding, cierre).
+    const draftedByLlm =
+      pauseMessage === null &&
+      softDeferMessage === null &&
+      agencyExplanation === null &&
+      !useCanonicalOpenerTemplate &&
+      !useDeterministicFitAnswer &&
+      !isAwaitingHoldingTurn &&
+      !useDeterministicFaceTurn &&
+      !useDeterministicClosingTurn;
+    if (
+      draftedByLlm &&
+      responsePlan.questionToAsk !== null &&
+      !response.includes("?") &&
+      (projectedCandidate.currentState === "QUALIFYING" ||
+        projectedCandidate.currentState === "NEW_LEAD" ||
+        projectedCandidate.currentState === "WAITING_PROFILE_ACCESS") &&
+      !responsePlan.requiresHumanReview
+    ) {
+      const base = response.trim();
+      const rescued =
+        base.length > 0
+          ? `${base}\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}`
+          : bridgeBackToQuestion(responsePlan.questionToAsk);
+      if (rescued !== response && validateFactualResponse(rescued, responsePlan).valid) {
+        response = rescued;
+        draft = { ...draft, response, usedFallback: true, error: "qualifying-question-rescue" };
       }
     }
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
