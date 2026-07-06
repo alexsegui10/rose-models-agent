@@ -22,8 +22,29 @@ const serviceClaims = [
   { pattern: /publicaciones automaticas/i, label: "publicaciones automaticas" }
 ];
 
+// Propuesta/confirmacion de AGENDAR la llamada: pedir dia/hora, darla por apuntada o comprometer una
+// franja concreta. Anclado para NO cazar el opener ("si encaja agendamos una llamada para contartelo")
+// ni el holding honesto ("te escribo y cuadramos la llamada, no te preocupes" — sin fecha).
+const schedulingProposalPattern =
+  /\bque dia y (?:a que )?hora\b|\bte la dejo apuntada\b|\bla agendamos\b|\bqueda agendada\b|\bagendamos la llamada\b|\bte llamo (?:hoy|manana|el \w+|a las \d)|\bcuadramos la llamada (?:para|el|hoy|manana)\b|\bme va bien\b[^.!?]{0,25}\bllamada\b|\bllamada\b[^.!?]{0,25}\bme va bien\b/;
+
+function normalizeForGuards(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+}
+
 export function validateFactualResponse(response: string, plan: ResponsePlan): FactualValidationResult {
   const reasons: string[] = [];
+
+  // Invariante 4 (ultima linea de defensa): NADIE propone ni confirma agendar la llamada sin el Encaja
+  // de Alex — ni el redactor OpenAI ni una plantilla. Caso real Yesica (5-jul): en plena revision el
+  // redactor pidio dia/hora y remato con "te la dejo apuntada"; Alex tuvo que frenarla a mano desde el
+  // CRM. La llave la da el plan (callSchedulingAuthorized = humanFitDecision APPROVED).
+  if (!plan.callSchedulingAuthorized && schedulingProposalPattern.test(normalizeForGuards(response))) {
+    reasons.push("La respuesta propone o confirma agendar la llamada sin el Encaja de Alex (invariante 4).");
+  }
 
   // Invariante 3 (ultima linea de defensa): un porcentaje SOLO es legitimo si el PLAN lo autorizo este
   // turno (la candidata pidio la cifra exacta -> filterCommercialAnswerFacts deja el 70/30 en el plan) o

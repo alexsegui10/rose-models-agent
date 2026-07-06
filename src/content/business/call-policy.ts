@@ -42,13 +42,20 @@ const entries: KnowledgeEntryInput[] = [
     ],
     // CTA de agenda directa (analisis iteracion 3, taxonomia 6): el Alex real agenda sin coletillas
     // de cobertura ("si vemos que encaja", "2 a 10 minutos"); propone cerrar dia y hora ya mismo.
-    approvedAnswerPoints: ["La llamada es rapida: te llamamos por telefono al numero que nos pases.", "Si me dices un dia y una hora la agendamos."],
+    approvedAnswerPoints: [
+      "La llamada es rapida: te llamamos por telefono al numero que nos pases.",
+      "Si me dices un dia y una hora la agendamos."
+    ],
     prohibitedClaims: [
       "Prometer llamada inmediata.",
       "Recoger documentacion durante la llamada.",
       "Automatizar envio de contrato."
     ],
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_HUMAN_REVIEW", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    // SOLO tras el Encaja de Alex (caso real Yesica 5-jul): con NEW_LEAD/QUALIFYING/WAITING permitidos,
+    // el redactor recibia "si me dices un dia y una hora la agendamos" ANTES de la aprobacion y proponia
+    // la llamada por texto sin el OK ("te la dejo apuntada") — Alex tuvo que frenarla a mano desde el CRM.
+    // La propuesta de llamada la abre SIEMPRE la decision humana (invariante 4), nunca el conocimiento.
+    allowedStates: ["APPROVED", "COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE"],
     tags: ["call", "schedule", "whatsapp", "review"],
     mandatoryNuances: ["No confirmar llamada cerrada antes de aprobacion o disponibilidad."],
     escalationConditions: ["La candidata exige llamada inmediata.", "La candidata plantea asunto sensible para llamada urgente."],

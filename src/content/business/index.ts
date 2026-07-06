@@ -13,7 +13,8 @@ import { faceRequirementPolicyEntries } from "./face-requirement-policy";
 import { geoPrivacyPolicyEntries } from "./geo-privacy-policy";
 import { launchTimelineEntries } from "./launch-timeline";
 import { multiAgencyPolicyEntries } from "./multi-agency-policy";
-import { secondaryTrafficPolicyEntries } from "./secondary-traffic-policy";
+// secondary-traffic-policy ELIMINADA (orden de Alex 6-jul, caso Constanza): Telegram/Twitter/
+// videollamadas/Drive/guiones no deben mencionarse en ningun canal.
 import { selectionProcessFaqEntries } from "./selection-process-faq";
 
 export { activeRevenueSharePolicy } from "./commercial-policy";
@@ -36,6 +37,5 @@ export const businessKnowledgeEntries = [
   ...geoPrivacyPolicyEntries,
   ...launchTimelineEntries,
   ...multiAgencyPolicyEntries,
-  ...secondaryTrafficPolicyEntries,
   ...selectionProcessFaqEntries
 ];

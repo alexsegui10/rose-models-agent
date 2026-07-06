@@ -1717,8 +1717,22 @@ export class ConversationEngine {
     // VACIO o DERIVO al socio sin necesidad, se reescribe DESDE EL PLAN para ATENDER de verdad lo que pregunto,
     // en vez de dejarla colgada o derivar porque si. Solo actua ante esos dos fallos claros (no toca un turno de
     // pregunta normal), asi que no degrada respuestas buenas. La cifra/escaladas siguen gateadas por el plan.
+    // En REVISION, el silencio es INTENCIONAL y el self-check NO lo rellena (revisor 5-jul + pausa
+    // total de Alex 6-jul): (a) tras decir lo del socio, TODO queda en visto hasta el Encaja — el
+    // self-check reescribia el visto con el plan y rompia la pausa; (b) el conocimiento de LLAMADA se
+    // difiere a proposito (agendar sin el OK de Alex, invariante 4) — el self-check lo "rellenaba" con
+    // "si me dices un dia y una hora la agendamos", prometiendo una agenda que luego no se cumple.
+    const intentionalReviewSilence =
+      updatedCandidate.currentState === "WAITING_HUMAN_REVIEW" &&
+      (alreadyAwaitingPartner ||
+        understanding.intent === "REQUESTS_CALL" ||
+        understanding.requestsCall ||
+        responsePlan.knowledgeEntryIds.some((id) => id.startsWith("call-")));
     const planCanAnswer =
-      responsePlan.answerFacts.length > 0 && !responsePlan.requiresHumanReview && !responsePlan.uncoveredQuestion;
+      responsePlan.answerFacts.length > 0 &&
+      !responsePlan.requiresHumanReview &&
+      !responsePlan.uncoveredQuestion &&
+      !intentionalReviewSilence;
     const responseDefersUnnecessarily =
       /\blo (?:hablo|comento|consulto|miro|reviso|veo|confirmo) con mi socio\b|\bdejame que lo hable con mi socio\b|\bprefiero confirmarlo con mi socio\b|\bse lo (?:comento|digo|paso) a mi socio\b/i.test(
         response
@@ -2450,6 +2464,15 @@ function generateResponse(
   }
 
   if (candidate.currentState === "WAITING_HUMAN_REVIEW") {
+    // PAUSA TOTAL tras el socio (decision de Alex 6-jul, ratificada con pregunta explicita): una vez dicho
+    // "lo comento con mi socio", el bot queda EN VISTO con TODO (preguntas incluidas) hasta el Encaja —
+    // ahorro de tokens (la mayoria no cumple el requisito) y cero plantillas de relleno. Las escaladas de
+    // seguridad (menor, contradicciones, inyeccion) saltan ANTES de llegar aqui, y al dar Alex el Encaja
+    // el reproceso lee y contesta lo que ella escribio durante la pausa. Las ramas de debajo solo aplican
+    // al turno en que AUN no se ha dicho lo del socio (responder-primero antes de pausar).
+    if (alreadyAwaitingPartner) {
+      return "";
+    }
     // Defensa P0 (Alex 22-jun): SOLO si la candidata hace una pregunta de % o de contrato estando YA en
     // revision, se le RESPONDE (p.ej. "cuanto me pagan" -> 70/30) en vez de soltar el holding que ignora su
     // pregunta. Acotado a esos dos intents a proposito: cualquier otro mensaje (acuse, info, etc.) mantiene
@@ -2476,35 +2499,45 @@ function generateResponse(
     ) {
       return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
     }
-    // SILENCIO en revision para acuses triviales (Alex, 2-jul, prueba E2E): a un "okeyy perfecto" durante
-    // la espera NO se responde nada (el "Sin prisa..." de relleno sonaba a bot). Al darle Alex "Encaja",
-    // el reproceso ya lee y contesta lo que ella escribio durante la pausa (feature C). Las preguntas de
-    // verdad siguen respondiendose (rama de arriba) y la primera explicacion del "lo comento con mi socio"
-    // se mantiene (que sepa por que se para la conversacion).
-    // Un "?" (o "??") NO es un acuse: es un "contéstame" (re-sonda 4-jul: el "?" de Mayra recibía
-    // SILENCIO porque isTrivialAck lo trataba como puntuación). Cae al holding de abajo, nunca a "".
-    if (alreadyAwaitingPartner && isTrivialAck(inboundMessage) && !inboundMessage.includes("?")) {
-      return "";
+    // REGLA DE ALEX (5-jul): en revision, una PREGUNTA que el bot SABE responder (conocimiento aprobado
+    // en el plan) SE RESPONDE — cualquier tema, no solo %/contrato/privacidad. Lo que NO sabe -> EN VISTO
+    // (silencio, mas abajo), jamas una plantilla de relleno pisando la pregunta. Guardas que mantienen los
+    // holds deliberados: (a) solo turnos-PREGUNTA (un dato/afirmacion no reabre nada); (b) el conocimiento
+    // de LLAMADA/agenda queda excluido (agendar sin el OK de Alex se difiere, invariante 4); (c) la
+    // negociacion/escalada nunca entra (requiresHumanReview) y lo no cubierto tampoco (uncoveredQuestion).
+    const inboundAsksQuestion =
+      /[?¿]/.test(inboundMessage) || understanding.intent === "REQUESTS_INFORMATION" || understanding.intent.startsWith("ASKS_");
+    const planTouchesCall =
+      understanding.intent === "REQUESTS_CALL" ||
+      understanding.requestsCall ||
+      responsePlan.knowledgeEntryIds.some((id) => id.startsWith("call-"));
+    if (
+      inboundAsksQuestion &&
+      !planTouchesCall &&
+      responsePlan.answerFacts.length > 0 &&
+      !responsePlan.requiresHumanReview &&
+      !responsePlan.uncoveredQuestion &&
+      isBusinessAnswerIntent(understanding, responsePlan)
+    ) {
+      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
     }
-    // Despedida durante la revisión (lanzamiento real 3-jul: a un '👍🏻 saludos' se respondió 'muchas
-    // gracias por explicarmelo', absurdo): cierre breve y natural.
-    if (/\b(saludos|un saludo|chau|chao|adios|hasta luego|nos vemos|besos|cuidate|bye)\b/.test(normalizeText(inboundMessage))) {
-      return "Igualmente. Te escribo en cuanto lo hayamos revisado.";
+    // Pide o pregunta por la LLAMADA estando en revision: no se agenda sin el OK de Alex (invariante 4),
+    // pero dejarla en visto seria ignorar la señal mas caliente del funnel. Linea HONESTA con el estado
+    // real, sin prometer agenda ("cuando ella conteste la hora" no hay quien la cumpla — revisor 5-jul).
+    if (planTouchesCall && (inboundAsksQuestion || understanding.intent === "REQUESTS_CALL" || understanding.requestsCall)) {
+      return "En cuanto lo revise con mi socio te escribo y cuadramos la llamada, no te preocupes.";
     }
-    // Coherencia (fallo real: el bot repetia "lo comento con mi socio" en bucle si la candidata seguia
-    // escribiendo): la primera vez se explica; despues se reconoce de forma breve y variada, sin repetir.
-    // La gratitud ('muchas gracias por explicarmelo') SOLO si el turno aportó información de verdad
-    // (3-jul: se agradecía "explicar" a mensajes que no explicaban nada).
+    // Turno de ENTRADA en revision (lo del socio aun no se ha dicho — la pausa total de arriba cubre el
+    // resto): se agradece el dato si lo hubo y se explica la revision. Este es EL momento adecuado de la
+    // plantilla del socio (decision de Alex 5/6-jul); despues de este turno, visto hasta el Encaja.
     const turnProvidedInfo =
       understanding.intent.startsWith("PROVIDES_") ||
       Object.values(understanding.extractedData ?? {}).some((value) => value !== null && value !== undefined && value !== "");
-    return alreadyAwaitingPartner
-      ? "Sin prisa, en cuanto lo vea con mi socio te confirmo. Cualquier cosa que necesites me dices."
-      : turnProvidedInfo
-        ? // "gracias" generico en vez de "por explicarmelo": esto ultimo suena a non-sequitur cuando ella no
-          // explico nada (dio un telefono, dijo "Bien", etc.) — re-sonda 4-jul (Lourdes, silvana).
-          "Perfecto, gracias.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado."
-        : "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
+    return turnProvidedInfo
+      ? // "gracias" generico en vez de "por explicarmelo": esto ultimo suena a non-sequitur cuando ella no
+        // explico nada (dio un telefono, dijo "Bien", etc.) — re-sonda 4-jul (Lourdes, silvana).
+        "Perfecto, gracias.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado."
+      : "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
   }
 
   // Pregunta de ELEGIBILIDAD por la edad ("¿hay posibilidades con 21 años?", "¿sirvo teniendo 23?"): desde
@@ -2582,9 +2615,16 @@ function generateResponse(
       // A0 (jul-2026): con telefono pero guion INCOMPLETO, el planner aun trae pregunta -> se sigue
       // cualificando (no se promete "socio" en bucle). Sin pregunta pendiente, cierre de siempre.
       if (candidate.phone && !responsePlan.questionToAsk) return scheduleHoldingText(candidate, "Perfecto.");
+      // LA LLAVE DEL ENCAJA (Alex 5-jul, caso Yesica): "agendamos una llamada" solo CON el fit aprobado.
+      // Sin el, nada de comprometer agenda: se termina el guion y la revision del socio decide.
+      if (candidate.humanFitDecision === "APPROVED") {
+        return responsePlan.questionToAsk
+          ? `Perfecto, agendamos una llamada y te lo explicamos todo bien.\n\n${responsePlan.questionToAsk}`
+          : "Perfecto, agendamos una llamada y te lo explicamos todo bien.";
+      }
       return responsePlan.questionToAsk
-        ? `Perfecto, agendamos una llamada y te lo explicamos todo bien.\n\n${responsePlan.questionToAsk}`
-        : "Perfecto, agendamos una llamada y te lo explicamos todo bien.";
+        ? `Perfecto, lo de la llamada lo vemos en cuanto acabemos estas preguntas.\n\n${responsePlan.questionToAsk}`
+        : scheduleHoldingText(candidate, "Perfecto.");
     }
     return "Claro, podemos agendar una llamada y te lo explico todo bien.\n\nAntes dime una cosa, que edad tienes?";
   }
@@ -3033,7 +3073,10 @@ function businessResponseFromPlan(responsePlan: ResponsePlan, multiQuestion = fa
   }
 
   if (responsePlan.knowledgeEntryIds.includes("content-boundaries-neutral-question")) {
-    return "¿Hay algun tipo de contenido que no quieras hacer o algun limite que debamos tener en cuenta?";
+    // RESPONDE la duda de limites, no la PREGUNTA (caso real Brenda 5-jul: la palabra "contenido" en su
+    // mensaje disparaba la pregunta de limites en mitad de la cualificacion, sin venir a cuento). La
+    // pregunta de limites pertenece a la llamada (guion v2); aqui solo se explica que son y que se respetan.
+    return "Los limites son sobre el contenido intimo: practicas o escenas que no quieras hacer.\n\nLo que digas que no quieres hacer se respeta siempre, sin pedirte explicaciones.";
   }
 
   // Reconduccion calida de la objecion de cara (peticion de Alex #2: no rechazar de golpe). Se llega
@@ -4457,7 +4500,9 @@ function skippedResult(
     pendingPersonalQuestion: null,
     knowledgeVersions: [],
     revenueSharePolicyVersion: null,
-    hasApprovedNegotiationDecision: false
+    hasApprovedNegotiationDecision: false,
+    // Los resultados "skipped" son deterministas y nunca proponen agenda: sin autorizacion por defecto.
+    callSchedulingAuthorized: false
   };
   return {
     candidate,

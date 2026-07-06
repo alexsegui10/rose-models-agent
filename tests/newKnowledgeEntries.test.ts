@@ -8,7 +8,8 @@ const NEW_ACTIVE_ENTRY_IDS = [
   "geo-privacy-three-layers",
   "face-requirement-mandatory",
   "multi-agency-different-traffic",
-  "services-secondary-traffic",
+  // "services-secondary-traffic" ELIMINADA (orden de Alex 6-jul, caso real Constanza): Telegram/
+  // Twitter/videollamadas/Drive/guiones no se mencionan en ningun canal.
   // Promovidas de DRAFT a ACTIVE el 2026-06-11 con las respuestas confirmadas por Alex:
   "launch-timeline",
   "faq-selection-process",
@@ -70,21 +71,10 @@ describe("new knowledge entries from real conversation synthesis (2026-06-10)", 
     expect(entry?.facts.some((fact) => fact.includes("mismo trafico"))).toBe(true);
   });
 
-  it("retrieves the secondary traffic entry with the four real Drive folders", async () => {
+  it("la ficha de trafico secundario ya NO existe ni se recupera (orden de Alex 6-jul, caso Constanza)", async () => {
     const entries = await retrieveFor("Que haceis con el trafico, usais mas redes aparte de Instagram?");
-
-    const entry = entries.find((candidate) => candidate.id === "services-secondary-traffic");
-    expect(entry).toBeDefined();
-    expect(
-      entry?.approvedAnswerPoints.some(
-        (point) =>
-          point.includes("Fotos Only") &&
-          point.includes("Videos Only") &&
-          point.includes("Fotos Insta") &&
-          point.includes("Videos Insta")
-      )
-    ).toBe(true);
-    expect(entry?.facts.some((fact) => fact.includes("Telegram") && fact.includes("Twitter"))).toBe(true);
+    expect(entries.some((candidate) => candidate.id === "services-secondary-traffic")).toBe(false);
+    expect(businessKnowledgeEntries.some((candidate) => candidate.id === "services-secondary-traffic")).toBe(false);
   });
 
   it("answers the launch timeline with the 30-day figure Alex confirmed", async () => {

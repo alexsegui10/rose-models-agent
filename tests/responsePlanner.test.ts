@@ -80,7 +80,10 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
     expect(question.toLowerCase()).toContain("que movil tienes");
   });
 
-  it("con el guion esencial completo propone la llamada, no pregunta el pais (Alex 15-jun: tras explicar, agendar)", () => {
+  // LA LLAVE DEL ENCAJA (Alex 5-jul, caso real Yesica): la regla del 15-jun ("guion completo -> proponer
+  // la llamada") queda SUPERSEDIDA. Sin humanFitDecision APPROVED, el bot JAMAS propone dia/hora ni pide
+  // el numero; el guion completo desemboca en la revision del socio.
+  it("guion esencial completo SIN Encaja: JAMAS propone dia/hora ni pide telefono (Alex 5-jul)", () => {
     const candidate = candidateWith({
       firstName: "Carla",
       age: 27,
@@ -89,20 +92,39 @@ describe("responsePlanner question slots (orden canonico del guion real)", () =>
       worksWithAnotherAgency: false,
       deviceEligibility: "APPROVED"
     });
-    const question = planFor({ candidate }).questionToAsk ?? "";
-    expect(question.toLowerCase()).toContain("que dia y hora");
-    expect(question.toLowerCase()).not.toContain("pais");
-    expect(question.toLowerCase()).not.toContain("disponibilidad");
+    const question = (planFor({ candidate }).questionToAsk ?? "").toLowerCase();
+    expect(question).not.toContain("que dia y hora");
+    expect(question).not.toContain("whatsapp");
+    // Ni siquiera si ELLA propone una hora: el cierre lo abre el Encaja, no su propuesta.
+    const withTime = planFor({ candidate, inboundMessage: "el lunes por la tarde me viene genial" });
+    expect((withTime.questionToAsk ?? "").toLowerCase()).not.toContain("whatsapp");
   });
 
-  it("si propone una hora con el guion completo, pide directamente el WhatsApp", () => {
+  it("CON el Encaja: guion completo propone la llamada, no pregunta el pais (mecanica del cierre intacta)", () => {
     const candidate = candidateWith({
       firstName: "Carla",
       age: 27,
       isAdultConfirmed: true,
       hasOnlyFans: true,
       worksWithAnotherAgency: false,
-      deviceEligibility: "APPROVED"
+      deviceEligibility: "APPROVED",
+      humanFitDecision: "APPROVED"
+    });
+    const question = planFor({ candidate }).questionToAsk ?? "";
+    expect(question.toLowerCase()).toContain("que dia y hora");
+    expect(question.toLowerCase()).not.toContain("pais");
+    expect(question.toLowerCase()).not.toContain("disponibilidad");
+  });
+
+  it("CON el Encaja: si propone una hora con el guion completo, pide directamente el WhatsApp", () => {
+    const candidate = candidateWith({
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      hasOnlyFans: true,
+      worksWithAnotherAgency: false,
+      deviceEligibility: "APPROVED",
+      humanFitDecision: "APPROVED"
     });
     const plan = planFor({ candidate, inboundMessage: "el lunes por la tarde me viene genial" });
     expect((plan.questionToAsk ?? "").toLowerCase()).toContain("numero de whatsapp");
@@ -167,7 +189,9 @@ describe("responsePlanner opener turn (gate-first: nada de preguntas antes del o
 describe("responsePlanner phone ask in HUMAN_INTERVENTION_REQUIRED (playbook 1.7)", () => {
   // Actualizado 2026-06-12: el test anterior validaba el comportamiento BUGGY (pedir el numero
   // sin dia/hora acordado). El guion real es pitch -> dia/hora -> telefono.
-  it("asks for the day and hour first when an adult confirms the call without proposing a time", () => {
+  // Actualizado 2026-07-06 (la llave del Encaja, caso Yesica): el cierre en HIR exige ademas
+  // humanFitDecision APPROVED — sin el Encaja de Alex JAMAS se propone dia/hora ni se pide el numero.
+  it("SIN Encaja en HIR: confirmar la llamada NO recibe dia/hora ni telefono (Alex 5-jul)", () => {
     const candidate = candidateWith({
       currentState: "HUMAN_INTERVENTION_REQUIRED",
       firstName: "Carla",
@@ -177,17 +201,34 @@ describe("responsePlanner phone ask in HUMAN_INTERVENTION_REQUIRED (playbook 1.7
     const plan = planFor({
       candidate,
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
+      inboundMessage: "Si, me gustaria hacer la llamada manana a las 11"
+    });
+    expect(plan.questionToAsk).toBeNull();
+  });
+
+  it("CON Encaja: asks for the day and hour first when an adult confirms the call without proposing a time", () => {
+    const candidate = candidateWith({
+      currentState: "HUMAN_INTERVENTION_REQUIRED",
+      firstName: "Carla",
+      age: 27,
+      isAdultConfirmed: true,
+      humanFitDecision: "APPROVED"
+    });
+    const plan = planFor({
+      candidate,
+      understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
       inboundMessage: "Si, me gustaria hacer la llamada"
     });
     expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
   });
 
-  it("asks for the phone once the candidate proposes a concrete time while waiting on the socio", () => {
+  it("CON Encaja: asks for the phone once the candidate proposes a concrete time", () => {
     const candidate = candidateWith({
       currentState: "HUMAN_INTERVENTION_REQUIRED",
       firstName: "Carla",
       age: 27,
-      isAdultConfirmed: true
+      isAdultConfirmed: true,
+      humanFitDecision: "APPROVED"
     });
     const plan = planFor({
       candidate,
@@ -254,7 +295,7 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBe("Como te llamas?");
   });
 
-  it("asks for day and hour when the call is requested and the script is complete", () => {
+  it("CON Encaja: asks for day and hour when the call is requested and the script is complete", () => {
     const candidate = candidateWith({
       firstName: "Carla",
       age: 27,
@@ -262,6 +303,7 @@ describe("responsePlanner question gating", () => {
       hasOnlyFans: true,
       worksWithAnotherAgency: false,
       deviceEligibility: "APPROVED",
+      humanFitDecision: "APPROVED",
       country: "Argentina",
       contentAvailability: "Por las tardes"
     });
@@ -274,8 +316,8 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBe("Que dia y hora te viene bien para la llamada?");
   });
 
-  it("asks for the phone as soon as the candidate proposes a concrete day or hour", () => {
-    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+  it("CON Encaja: asks for the phone as soon as the candidate proposes a concrete day or hour", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true, humanFitDecision: "APPROVED" });
     const plan = planFor({
       candidate,
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),
@@ -284,8 +326,8 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBe("Me puedes pasar tu numero de WhatsApp?");
   });
 
-  it("treats a bare time proposal as call confirmation when the agent already proposed the call", () => {
-    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+  it("CON Encaja: treats a bare time proposal as call confirmation when the agent already proposed the call", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true, humanFitDecision: "APPROVED" });
     const plan = planFor({
       candidate,
       understanding: understandingWith({ intent: "OTHER" }),
@@ -322,8 +364,8 @@ describe("responsePlanner question gating", () => {
     }
   });
 
-  it("still treats a real affirmative time ('manana a las 11 si') as a proposal", () => {
-    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+  it("CON Encaja: still treats a real affirmative time ('manana a las 11 si') as a proposal", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true, humanFitDecision: "APPROVED" });
     const plan = planFor({
       candidate,
       understanding: understandingWith({ intent: "OTHER" }),
@@ -336,14 +378,15 @@ describe("responsePlanner question gating", () => {
   // Regresion del stall-loop de la iteracion 3 (r14-t7/t8, r15-t11/t12): con el si a la llamada
   // sobre la mesa, los slots tardios opcionales (pais, disponibilidad) NUNCA bloquean el cierre;
   // se cubren en la propia llamada.
-  it("skips the optional late slots and asks for day and hour once the call is confirmed", () => {
+  it("CON Encaja: skips the optional late slots and asks for day and hour once the call is confirmed", () => {
     const candidate = candidateWith({
       firstName: "Carla",
       age: 27,
       isAdultConfirmed: true,
       hasOnlyFans: true,
       worksWithAnotherAgency: false,
-      deviceEligibility: "APPROVED"
+      deviceEligibility: "APPROVED",
+      humanFitDecision: "APPROVED"
       // pais y disponibilidad ausentes a proposito: no deben preguntarse aqui
     });
     const plan = planFor({
@@ -370,8 +413,8 @@ describe("responsePlanner question gating", () => {
     expect(plan.questionToAsk).toBe("Me puedes contar si has tenido OF alguna vez?");
   });
 
-  it("never asks for the phone more than twice (anti acoso telefonico)", () => {
-    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true });
+  it("CON Encaja: never asks for the phone more than twice (anti acoso telefonico)", () => {
+    const candidate = candidateWith({ firstName: "Carla", age: 27, isAdultConfirmed: true, humanFitDecision: "APPROVED" });
     const plan = planFor({
       candidate,
       understanding: understandingWith({ intent: "REQUESTS_CALL", requestsCall: true }),

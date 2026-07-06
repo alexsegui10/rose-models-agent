@@ -145,7 +145,9 @@ export function getCallDrafter(env: NodeJS.ProcessEnv = process.env): CallUttera
   if (!config.openaiApiKey) return undefined;
   return new OpenAiCallDrafter({
     apiKey: config.openaiApiKey,
-    model: config.writingModel,
+    // Modelo PROPIO de la voz (mini): la subida del texto a gpt-5.4 (Alex 5-jul) NO arrastra a la
+    // llamada, donde la latencia manda (cada turno debe salir en <3.5s o la llamada se siente muerta).
+    model: config.callWritingModel,
     timeoutMs: Math.min(config.timeoutMs, 3500)
   });
 }

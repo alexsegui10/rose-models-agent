@@ -40,23 +40,21 @@ const entries: KnowledgeEntryInput[] = [
     id: "content-model-responsibilities",
     category: "CONTENT_RESPONSIBILITIES",
     title: "Responsabilidades de la modelo",
+    // Drive/guiones/limites FUERA del texto (orden de Alex 6-jul, caso Constanza): son detalles
+    // operativos que se explican en la llamada o despues, jamas en el chat de Instagram.
     facts: [
-      "La modelo crea contenido nuevo.",
-      "La modelo sube contenido a una carpeta compartida de Google Drive.",
-      "La modelo sigue perfiles de referencia para Instagram y guiones para OnlyFans.",
+      "La modelo crea contenido nuevo y se lo envia al equipo.",
       "Los perfiles de referencia se pasan por WhatsApp.",
       "La modelo crea ella misma su cuenta de OnlyFans; si tiene dudas, el equipo la guia.",
-      "El guion de OnlyFans se entrega despues de la llamada, junto al contrato y las guias.",
-      "La modelo comunica sus limites.",
+      "Los detalles operativos completos se explican en la llamada.",
       "La modelo debe responder al equipo en un maximo habitual de 48 horas.",
       "Un retraso aislado no implica rechazo automatico.",
       "Retrasos repetidos requieren revision humana."
     ],
     approvedAnswerPoints: [
-      "Tu parte seria crear contenido, subirlo a Drive, seguir referencias o guiones y decirnos tus limites.",
+      "Tu parte seria crear el contenido y enviarnoslo, nosotros nos encargamos del resto.",
       "Los perfiles de referencia te los pasamos por WhatsApp, tanto para Instagram como para OnlyFans.",
       "La cuenta de OnlyFans la creas tu, es sencillo, y si tienes cualquier duda te vamos guiando.",
-      "El guion de OnlyFans te lo pasamos despues de la llamada, con el contrato y las guias.",
       // Sin SLA corporativo ("responder al equipo en unas 48 horas" era el mensaje mas fuera de voz
       // segun los jueces): misma politica, registro de Alex.
       "Lo unico es no tardar mucho en contestar, un dia o dos como mucho."
@@ -69,7 +67,7 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["No decir que la modelo solo envia contenido.", "Los detalles completos se explican mejor en llamada."],
     escalationConditions: ["Retrasos repetidos.", "Dudas sobre limites o condiciones especiales."],
     allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
-    tags: ["model-responsibilities", "content", "availability", "drive", "whatsapp", "onlyfans"],
+    tags: ["model-responsibilities", "content", "availability", "whatsapp", "onlyfans"],
     requiresHumanReview: false,
     version: "content-model-responsibilities-2026-07-01.1",
     status: "ACTIVE",
@@ -166,7 +164,10 @@ const entries: KnowledgeEntryInput[] = [
     prohibitedClaims: ["Presionar para cambiar limites.", "Entrar en descripciones innecesariamente explicitas por Instagram."],
     mandatoryNuances: ["Registrar limites.", "Si necesita ejemplos, usar categorias profesionales y breves."],
     escalationConditions: ["Detalles explicitos o dudas sensibles."],
-    allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS"],
+    // QUALIFYING FUERA (caso real Brenda 5-jul): la palabra "contenido" en su mensaje surfaceaba esta
+    // entrada y el bot le PREGUNTABA los limites en mitad de la cualificacion, sin venir a cuento. Los
+    // limites se tratan en la llamada (guion v2, 3-jul); en texto solo si ella pregunta tras el Encaja.
+    allowedStates: ["APPROVED", "COLLECTING_CALL_DETAILS"],
     tags: ["boundaries", "limits", "content"],
     requiresHumanReview: false,
     // 2026-07-03 (Alex): definicion clara de "limites" para la llamada ("limite de que?" quedaba deferido).

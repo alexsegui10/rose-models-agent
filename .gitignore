@@ -24,3 +24,8 @@ backups/
 tests/_*.test.ts
 tests/*.out.txt
 .sweep/
+
+# Docs de análisis e input con nombres de candidatas reales (nunca al repo — invariante 5)
+esere.md
+ERRORES_POR_CONVERSACION.md
+INFORME_MEJORAS_5JUL.md

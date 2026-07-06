@@ -112,8 +112,9 @@ describe("Simulacion de auditoria: invariantes en cada turno de muchos casos", (
         // 2) Nunca una promesa de ocultar la cara.
         expect(promisesFaceConcealment(result.response), `promesa de ocultar cara en ${where}`).toBe(false);
 
-        // 3) Respuesta no vacia salvo bloqueo legitimo de automatizacion.
-        if (!result.automationBlocked) {
+        // 3) Respuesta no vacia salvo bloqueo legitimo de automatizacion o la PAUSA TOTAL de revision
+        // (Alex 6-jul): tras decir lo del socio, el visto ("") es deliberado hasta su Encaja.
+        if (!result.automationBlocked && result.candidate.currentState !== "WAITING_HUMAN_REVIEW") {
           expect(result.response.trim().length, `respuesta vacia en ${where}`).toBeGreaterThan(0);
         }
 

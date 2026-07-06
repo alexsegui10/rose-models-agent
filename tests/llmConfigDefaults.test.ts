@@ -6,23 +6,29 @@ function buildEnv(vars: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 describe("getLlmRuntimeConfig", () => {
-  it("usa gpt-5.4-mini como default (gpt-4.1-mini esta deslistado por OpenAI)", () => {
+  it("defaults (decision Alex 5-jul): redaccion de TEXTO en gpt-5.4 completo; comprension y VOZ en mini", () => {
     const config = getLlmRuntimeConfig(buildEnv());
 
+    // Redaccion de texto en el modelo GRANDE: el mini producia respuestas planas ("no esta vivo").
+    expect(config.writingModel).toBe("gpt-5.4");
+    // Comprension en mini (extraccion estructurada + merge determinista; la latencia manda).
     expect(config.understandingModel).toBe("gpt-5.4-mini");
-    expect(config.writingModel).toBe("gpt-5.4-mini");
+    // La LLAMADA de voz se queda en mini: cada turno debe salir en <3.5s o la llamada se siente muerta.
+    expect(config.callWritingModel).toBe("gpt-5.4-mini");
   });
 
   it("respeta los modelos definidos por entorno", () => {
     const config = getLlmRuntimeConfig(
       buildEnv({
         OPENAI_UNDERSTANDING_MODEL: "gpt-5.4-nano",
-        OPENAI_WRITING_MODEL: "gpt-5.4-mini"
+        OPENAI_WRITING_MODEL: "gpt-5.4-mini",
+        OPENAI_CALL_MODEL: "gpt-5.4-nano"
       })
     );
 
     expect(config.understandingModel).toBe("gpt-5.4-nano");
     expect(config.writingModel).toBe("gpt-5.4-mini");
+    expect(config.callWritingModel).toBe("gpt-5.4-nano");
   });
 
   it("cae a DETERMINISTIC si se pide OPENAI sin clave", () => {

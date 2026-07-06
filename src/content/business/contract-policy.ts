@@ -8,7 +8,7 @@ const entries: KnowledgeEntryInput[] = [
     facts: [
       "Las preguntas legales o contractuales no se resuelven en el chat inicial.",
       "Despues de la llamada Alex verifica identidad y mayoria de edad personalmente.",
-      "Alex envia el contrato, gestiona documentacion, crea carpetas de Drive, explica referencias y completa la incorporacion manualmente."
+      "Alex envia el contrato, gestiona documentacion, explica referencias y completa la incorporacion manualmente."
     ],
     approvedAnswerPoints: ["Eso dejame que lo hable con mi socio y te digo."],
     prohibitedClaims: [

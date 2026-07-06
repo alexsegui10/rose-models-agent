@@ -651,7 +651,10 @@ describe("ConversationEngine answers documented knowledge inside HUMAN_INTERVENT
     expect(result.response.toLowerCase()).not.toContain("prefiero revisarlo con mi socio");
   });
 
-  it("asks for the phone when she confirms the call while the socio decision is pending", async () => {
+  it("SIN Encaja: confirmar la llamada en HIR NO pide el telefono ni propone hora (la llave del Encaja, Alex 5-jul)", async () => {
+    // Antes (20-jun) el cierre de llamada corria con el socio pendiente; el caso real Yesica (5-jul)
+    // demostro que eso propone la llamada sin el OK de Alex. Ahora el cierre exige humanFitDecision
+    // APPROVED; sin el, se difiere (el Encaja de Alex reprocesa y propone la llamada el).
     const { engine, seeded } = await seededHirEngine();
 
     const result = await engine.handleIncomingMessage({
@@ -661,7 +664,8 @@ describe("ConversationEngine answers documented knowledge inside HUMAN_INTERVENT
     });
 
     expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
-    expect(result.response.toLowerCase()).toContain("numero de whatsapp");
+    expect(result.response.toLowerCase()).not.toContain("numero de whatsapp");
+    expect(result.response.toLowerCase()).not.toContain("que dia y hora");
   });
 
   it("acknowledges a received phone in HUMAN_INTERVENTION_REQUIRED without the generic filler", async () => {

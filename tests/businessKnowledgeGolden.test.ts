@@ -130,9 +130,11 @@ describe("business knowledge golden tests", () => {
     });
 
     expect(result.candidate.currentState).toBe("QUALIFYING");
-    // El bot responde la parte de la modelo desde el conocimiento oficial: el hecho aprobado de
-    // subir el contenido a Drive forma parte de la respuesta del turno (answerFacts del plan).
-    expect(result.responsePlan.answerFacts.join(" ").toLowerCase()).toContain("drive");
+    // El bot responde la parte de la modelo desde el conocimiento oficial. Drive/guiones/limites ya NO
+    // se mencionan en texto (orden de Alex 6-jul, caso Constanza): su parte es crear y ENVIAR contenido.
+    const facts = result.responsePlan.answerFacts.join(" ").toLowerCase();
+    expect(facts).toContain("contenido");
+    expect(facts).not.toContain("drive");
     expect(result.responsePlan.knowledgeEntryIds).toContain("content-model-responsibilities");
     expect(result.responsePlan.uncoveredQuestion).toBe(false);
   });

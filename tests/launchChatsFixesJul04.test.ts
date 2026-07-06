@@ -367,15 +367,20 @@ describe("revisión humana: despedidas y gratitud con sentido (caso Mayra '👍�
     return { engine, repository, seeded };
   }
 
-  it("'👍🏻 saludos' -> 'Igualmente...', nunca 'muchas gracias por explicármelo'", async () => {
+  it("'👍🏻 saludos' tras el socio -> EN VISTO (pausa total, Alex 6-jul), nunca 'gracias por explicármelo'", async () => {
     const { engine, seeded } = await seedInReview();
+    // Primer turno deja dicha la explicación del socio; la despedida llega DURANTE la pausa.
+    await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: seeded.instagramUsername,
+      message: "vale"
+    });
     const result = await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: seeded.instagramUsername,
       message: "👍🏻 saludos"
     });
-    expect(result.response.toLowerCase()).toContain("igualmente");
-    expect(result.response.toLowerCase()).not.toContain("gracias por explicarmelo");
+    expect(result.response.trim()).toBe("");
   });
 
   it("un mensaje sin información nueva no recibe gratitud sin sentido", async () => {
@@ -388,9 +393,10 @@ describe("revisión humana: despedidas y gratitud con sentido (caso Mayra '👍�
     expect(result.response.toLowerCase()).not.toContain("gracias por explicarmelo");
   });
 
-  it("un '?' suelto durante la revisión NUNCA recibe silencio (es un 'contéstame', no un acuse; caso Mayra)", async () => {
+  it("un '?' suelto durante la revisión queda EN VISTO (regla Alex 5-jul), jamás un 'Okeyy' ni 'Sin prisa'", async () => {
+    // Regla de Alex 5-jul: lo que el bot no sabe responder se deja en visto — sin plantillas de relleno.
+    // (Una pregunta REAL con cobertura sí se responde: ver templateTimingJul05.test.ts.)
     const { engine, seeded } = await seedInReview();
-    // Primer turno: recibe la explicación del socio (queda alreadyAwaitingPartner).
     await engine.handleIncomingMessage({
       candidateId: seeded.id,
       instagramUsername: seeded.instagramUsername,
@@ -401,6 +407,6 @@ describe("revisión humana: despedidas y gratitud con sentido (caso Mayra '👍�
       instagramUsername: seeded.instagramUsername,
       message: "?"
     });
-    expect(result.response.trim().length).toBeGreaterThan(0);
+    expect(result.response.trim()).toBe("");
   });
 });

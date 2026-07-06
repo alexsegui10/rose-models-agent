@@ -221,7 +221,10 @@ export function buildResponsePlan(input: BuildResponsePlanInput): ResponsePlan {
     pendingPersonalQuestion,
     knowledgeVersions: input.knowledgeEntries.map((entry) => entry.version),
     revenueSharePolicyVersion: activeRevenueSharePolicy.version,
-    hasApprovedNegotiationDecision: input.hasApprovedNegotiationDecision ?? false
+    hasApprovedNegotiationDecision: input.hasApprovedNegotiationDecision ?? false,
+    // El Encaja de Alex es LA llave del agendado: sin humanFitDecision APPROVED, el validador factual
+    // tumba cualquier propuesta de dia/hora (invariante 4; caso real Yesica 5-jul).
+    callSchedulingAuthorized: input.candidate.humanFitDecision === "APPROVED"
   });
 }
 
@@ -319,10 +322,16 @@ function questionToAskFor(
     "CALL_COMPLETED"
   ].includes(candidate.currentState);
   if (candidate.phone && (postApprovalState || essentialScriptDone(candidate))) return null;
+  // LA LLAVE DEL ENCAJA (Alex 5-jul, caso real Yesica): el bot JAMAS propone dia/hora ni pide el numero
+  // para la llamada sin humanFitDecision APPROVED. La regla vieja del 15-jun ("guion completo -> proponer
+  // la llamada proactivamente") era ANTERIOR al diseño del Encaja y proponia la llamada en plena
+  // cualificacion; Alex tuvo que frenar a Yesica a mano desde el CRM. El cierre de llamada lo abre SOLO
+  // su decision (el reproceso del Encaja ya propone "Buenas noticias... ¿que dia y hora?").
+  const fitApproved = candidate.humanFitDecision === "APPROVED";
   // En intervencion humana no se cualifica, pero cerrar la llamada (dia/hora y despues el numero)
   // no decide nada de negocio y es obligatorio en el guion real (se le olvido dos veces a Alex).
   if (candidate.currentState === "HUMAN_INTERVENTION_REQUIRED") {
-    if (!adultConfirmed || candidate.phone || !confirmsCall) return null;
+    if (!adultConfirmed || candidate.phone || !confirmsCall || !fitApproved) return null;
     return proposesTime
       ? askWithCap(PHONE_QUESTION, phoneAskPattern, recentAgentMessages)
       : askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
@@ -352,6 +361,11 @@ function questionToAskFor(
       if (postApprovalState || essentialScriptDone(candidate)) return null;
       return nextSlotQuestion(candidate, recentAgentMessages, { skipOptional: true, divertedWithQuestion });
     }
+    // SIN el Encaja de Alex no se cierra llamada aunque ella la pida o proponga hora: se termina el
+    // guion esencial y la revision decide (la llave del Encaja, Alex 5-jul).
+    if (!fitApproved) {
+      return nextSlotQuestion(candidate, recentAgentMessages, { skipOptional: true, divertedWithQuestion });
+    }
     // Dia/hora concreto sobre la mesa: se pide el numero YA y no se reabre la cualificacion
     // (fallo real: "Como te llamas?" justo despues de recibir el telefono mataba el cierre).
     if (proposesTime) return askWithCap(PHONE_QUESTION, phoneAskPattern, recentAgentMessages);
@@ -363,11 +377,11 @@ function questionToAskFor(
     return slotQuestion ?? askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
   }
 
-  // Guion esencial completo (adulta + nombre + OF + movil): el opener prometio "luego agendamos una
-  // llamada", asi que se PROPONE el dia/hora de forma proactiva en vez de preguntar slots opcionales
-  // (pais, disponibilidad), que se cubren en la propia llamada (peticion de Alex 15-jun: tras explicar,
-  // agendar; nada de "de que pais eres?" justo despues del pitch).
-  if (adultConfirmed && essentialScriptDone(candidate)) {
+  // Guion esencial completo (adulta + nombre + OF + movil) Y con el Encaja de Alex: se PROPONE el
+  // dia/hora en vez de preguntar slots opcionales (pais, disponibilidad), que se cubren en la propia
+  // llamada. SIN el Encaja (Alex 5-jul, caso Yesica) el guion completo desemboca en la revision del
+  // socio, jamas en proponer la llamada: la regla vieja del 15-jun queda supersedida.
+  if (adultConfirmed && essentialScriptDone(candidate) && fitApproved) {
     if (proposesTime) return askWithCap(PHONE_QUESTION, phoneAskPattern, recentAgentMessages);
     const scheduled = askWithCap(SCHEDULE_QUESTION, scheduleAskPattern, recentAgentMessages);
     if (scheduled) return scheduled;

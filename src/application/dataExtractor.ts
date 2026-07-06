@@ -275,8 +275,9 @@ const locationKeywords: readonly LocationKeyword[] = [
 
 const locationPattern = new RegExp(`\\b(?:${locationKeywords.map((entry) => entry.keyword).join("|")})\\b`);
 
-// "soy laura" captura nombre; "soy de madrid" / "soy argentina" / "soy modelo" no.
-const explicitNamePattern = /\b(?:me llamo|mi nombre es)\s+([a-zñ]{2,})/;
+// "soy laura" captura nombre; "soy de madrid" / "soy argentina" / "soy modelo" no. Tambien el orden
+// invertido "Yesica es mi nombre" (caso real 5-jul: el fallback lo perdia y repreguntaba en bucle).
+const explicitNamePattern = /\b(?:me llamo|mi nombre es)\s+([a-zñ]{2,})|\b([a-zñ]{2,})\s+es mi nombre\b/;
 // [\s,] tras "soy" para captar la coma tras el saludo ("buenas tardes soy, Vanesa" — caso real 5-jul:
 // la coma rompia el match y el bot repreguntaba el nombre en bucle en el fallback determinista).
 const casualNamePattern = /\bsoy[\s,]+([a-zñ]{3,})\b/;
@@ -311,12 +312,16 @@ const nameStopwords = new Set([
 
 function extractFirstName(normalized: string): string | undefined {
   const explicitMatch = normalized.match(explicitNamePattern);
-  const candidateName = explicitMatch?.[1] ?? normalized.match(casualNamePattern)?.[1];
+  // Grupo 1: "me llamo X / mi nombre es X"; grupo 2: "X es mi nombre" (orden invertido, caso Yesica).
+  const candidateName = explicitMatch?.[1] ?? explicitMatch?.[2] ?? normalized.match(casualNamePattern)?.[1];
   if (!candidateName) return undefined;
   if (!explicitMatch) {
     if (nameStopwords.has(candidateName)) return undefined;
     if (locationKeywords.some((entry) => entry.keyword === candidateName)) return undefined;
   }
+  // Ni el nombre del BOT ni acuses se aceptan jamas como nombre de ella (caso real Melisa 5-jul:
+  // "Hola Alex" la bautizo "Alex" en el fallback — Alex es quien escribe, no ella).
+  if (nameRejectWords.has(candidateName)) return undefined;
   return candidateName.charAt(0).toUpperCase() + candidateName.slice(1);
 }
 
@@ -416,6 +421,8 @@ const nameRejectWords = new Set([
   "claro",
   "gracias",
   "bueno",
+  // El nombre del PROPIO BOT jamas es el de ella ("Hola Alex" bautizaba a Melisa como "Alex", 5-jul).
+  "alex",
   "ok",
   "okey",
   "okay",
@@ -574,16 +581,25 @@ export function extractDeterministicUnderstanding(
     else if (bareYesPattern.test(normalized)) extractedData.worksWithAnotherAgency = true;
   }
 
-  const deviceType = deviceTypeForDescription(normalized);
+  // Menciones NEGADAS de marca ("No es ni iphone ni samsung", "no tengo iphone") se QUITAN antes de
+  // extraer: no son su movil. Caso real Marianel 6-jul: su "No es ni iphone / Ni samsung" (aclarando que
+  // su Nubia no era ninguna de las dos) se extraia como deviceModel "iphone ni samsung" y PISABA la Nubia
+  // real de la ficha. Solo se limpia la frase negada; una afirmacion en el mismo mensaje sobrevive
+  // ("no tengo iphone, tengo un samsung s23" sigue extrayendo el s23).
+  const deviceScrubbed = normalized.replace(
+    /\b(?:no\s+(?:es|tengo|uso)|tampoco(?:\s+es)?|ni)\s+(?:un\s+|una\s+|el\s+|la\s+)?(?:iphone|i\s?phone|ipone|iphon|samsung|sansung|galaxy|galaxi|xiaomi|redmi|motorola|moto|huawei|pixel|oppo|realme)\b/g,
+    " "
+  );
+  const deviceType = deviceTypeForDescription(deviceScrubbed);
   if (deviceType !== "UNKNOWN") extractedData.deviceType = deviceType;
-  const deviceModel = deviceModelForDescription(normalized);
+  const deviceModel = deviceModelForDescription(deviceScrubbed);
   if (deviceModel) extractedData.deviceModel = deviceModel;
   // La elegibilidad solo se clasifica si el mensaje menciona un movil de verdad (marca/tipo/modelo):
   // 'malo'/'viejo'/'roto' en un contexto NO-movil (sobre la persona, "estoy malo y viejo") no debe
   // disparar NOT_ELIGIBLE. Los moviles malos reales SIEMPRE nombran el dispositivo (samsung viejo,
   // redmi antiguo, movil roto), asi que mentionsDevice los cubre.
   const mentionsDevice = deviceType !== "UNKNOWN" || Boolean(deviceModel);
-  let deviceEligibility = mentionsDevice ? deviceEligibilityForDescription(normalized) : "UNKNOWN";
+  let deviceEligibility = mentionsDevice ? deviceEligibilityForDescription(deviceScrubbed) : "UNKNOWN";
   // P1-8 (QA 21-jun): respuesta de mala calidad a la pregunta del movil SIN nombrar el aparato ("uno
   // viejo", "malisimo", "esta roto") -> NO dejarla en UNKNOWN (dead-end/bucle de "Okeyy"). Se clasifica
   // con el texto (viejo/malo/roto -> NOT_ELIGIBLE); si aun asi no se reconoce, PENDING_QUALITY_TEST para
@@ -602,12 +618,12 @@ export function extractDeterministicUnderstanding(
   }
   if (deviceEligibility !== "UNKNOWN") extractedData.deviceEligibility = deviceEligibility;
 
-  if (/\b(iphone|i phone|ios)\b/.test(normalized)) {
+  if (/\b(iphone|i phone|ios)\b/.test(deviceScrubbed)) {
     extractedData.deviceType = "IPHONE";
   }
 
-  if (/\b(android|samsung|xiaomi|huawei|oppo|realme|pixel|galaxy|motorola|moto)\b/.test(normalized)) {
-    extractedData.deviceType = /\b(samsung|galaxy)\b/.test(normalized) ? "SAMSUNG" : "OTHER";
+  if (/\b(android|samsung|xiaomi|huawei|oppo|realme|pixel|galaxy|motorola|moto)\b/.test(deviceScrubbed)) {
+    extractedData.deviceType = /\b(samsung|galaxy)\b/.test(deviceScrubbed) ? "SAMSUNG" : "OTHER";
   }
 
   if (/\b(no tengo iphone|no tengo i phone)\b/.test(normalized)) {

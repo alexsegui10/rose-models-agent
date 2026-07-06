@@ -38,19 +38,16 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
     label: "Cómo trabaja la agencia",
     objective:
       "Explicar el modelo: cuentas de Instagram españolas que generan tráfico, link a tu OnlyFans, equipo de chatters 24/7, monetización y gestión; tú solo mandas contenido.",
-    knowledgeRefs: [
-      "services-agency-management",
-      "content-agency-responsibilities",
-      "geo-privacy-three-layers",
-      "services-secondary-traffic"
-    ]
+    // services-secondary-traffic ELIMINADA (orden de Alex 6-jul): Telegram/Twitter/videollamadas/Drive
+    // no se mencionan en ningun canal.
+    knowledgeRefs: ["services-agency-management", "content-agency-responsibilities", "geo-privacy-three-layers"]
   },
   {
     id: "HER_RESPONSIBILITIES",
     order: 2,
     label: "Qué hace ella",
     objective:
-      "Explicar su parte, CORTA: crear el contenido, subirlo a Drive y responder en plazo (un día o dos). Los límites NO se sacan proactivamente (decisión de Alex 3-jul: van por WhatsApp tras leer el guion; solo se explican si ella los menciona).",
+      "Explicar su parte, CORTA: crear el contenido, enviárnoslo y responder en plazo (un día o dos). Los límites NO se sacan proactivamente (decisión de Alex 3-jul: van por WhatsApp tras leer el guion; solo se explican si ella los menciona).",
     knowledgeRefs: ["content-model-responsibilities"]
   },
   {

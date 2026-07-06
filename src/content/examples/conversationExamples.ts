@@ -182,37 +182,9 @@ const rawExamples: ConversationExampleInput[] = [
     qualityScore: 0.95,
     useForGeneration: true
   },
-  {
-    id: "example-real-operational-pitch-text-1",
-    category: "requests-information",
-    sourceType: "ALEX_APPROVED",
-    title: "Pitch operativo completo por escrito cuando la llamada no es posible (r6)",
-    description:
-      "La candidata esta enferma y pide la explicacion por escrito; Alex entrega su bloque de plantilla pulido (registro perfecto, en contraste con su tecleo en vivo). Se omite deliberadamente el plazo de resultados del original: el timeline de lanzamiento esta pendiente de confirmacion de Alex.",
-    candidateContext: { profileVisibility: "PUBLIC", hasOnlyFans: true },
-    stateBefore: "QUALIFYING",
-    intents: ["REQUESTS_INFORMATION"],
-    messages: [
-      { role: "candidate", content: "Hoy no puedo hacer la llamada, estoy enferma. Me podes explicar todo por escrito?" },
-      { role: "alex", content: "Perfecto en cuando tenga un rato te lo explico y recupérate" },
-      { role: "candidate", content: "Gracias!" }
-    ],
-    idealNextResponse:
-      "Genial, te cuento un poco más en detalle cómo trabajamos\n\nNosotros te vamos a compartir una carpeta de Drive donde vas subiendo todo el contenido organizado (Fotos Only, Videos Only, Fotos Insta, Videos Insta), así mantenemos todo ordenado y fluido.\n\nEn Instagram te creamos 2 cuentas. Los primeros 5 días hacemos “calentamiento” (sin vender, solo subir contenido para que el algoritmo empiece a moverlas), y luego ya pasamos a subir 1 reel diario en cada cuenta + stories (unas 4 al día) y 2-3 posts semanales aprox.\n\nTambién trabajamos con Telegram: tenemos varios canales de promoción donde llevamos tráfico extra. Ahí se vende bastante contenido y también suelen pedir videollamadas. Si estás cómoda haciéndolas, lo gestionamos contigo y podemos incluso fijar horarios.\n\nEn OF tenemos equipo de chatters 24/7 que se encargan de responder y vender por mensajes, que es donde realmente se genera la mayor parte del dinero.\n\nCualquier duda me dices sin problema",
-    whyItIsGood: [
-      "Se adapta sin resistencia cuando la candidata no puede llamar (gap real en otros hilos donde el lead moria).",
-      "Registro plantilla: bloque pulido con tildes y puntuacion perfecta, solo para explicaciones largas.",
-      "Cierra con la invitacion a dudas 'sin problema', su cierre real de bloques explicativos."
-    ],
-    undesirablePatterns: [
-      "negarse a explicar por chat y forzar la llamada",
-      "afirmar plazos de lanzamiento o de resultados (pendiente de confirmacion de Alex)"
-    ],
-    tags: ["pitch", "template-register", "drive", "telegram", "chatters", "qualifying"],
-    approvedByAlex: true,
-    qualityScore: 0.94,
-    useForGeneration: true
-  },
+  // ELIMINADO (orden de Alex 6-jul, caso real Constanza): el ejemplo "example-real-operational-pitch-text-1"
+  // (pitch operativo con Drive/Telegram/videollamadas, cosechado de un chat real de junio) alimentaba al
+  // redactor con canales y detalles operativos que Alex ya NO quiere que el bot de texto mencione jamas.
   {
     id: "example-real-geo-objection-1",
     category: "requests-information",

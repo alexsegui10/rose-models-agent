@@ -52,6 +52,10 @@ const IPHONE_TYPO = "i(?:ph|hp|p|f)o?h?ne?";
 // re-preguntaba en bucle).
 const SAMSUNG_TYPO = "sam?sung|samsun\\b|sansung|samsumg";
 const GALAXY_TYPO = "galax[iy]e?";
+// Marcas de GAMA BAJA (caso real Marianel 5-jul: "Nubia Focus 2 5G" no se reconocía, el bot re-preguntó
+// el móvil DOS veces y Alex tuvo que pausar a mano). Estas marcas no cumplen el requisito de cámara:
+// pausa directa (NOT_ELIGIBLE), igual que un moto e/g o un galaxy A. Con typo de doble letra habitual.
+const BUDGET_BRANDS = "nubia+|tecno|infinix|itel|wiko|blu\\b|umidigi|cubot|doogee|oukitel|ulefone|zte";
 
 // Orden invertido "13 iPhone" (lanzamiento 3-jul: caía al genérico -> falso PENDING con la frase del
 // socio, teniendo un 13 APROBADO). Se normaliza a "iphone 13" antes de evaluar. Solo números de modelo
@@ -90,6 +94,8 @@ export function deviceEligibilityForDescription(description: string): DeviceElig
   // Gate real de Alex: Motorola E32 rechazado ("con ese movil no podemos trabajar"). Las familias
   // moto e/g son gama de entrada; un motorola sin modelo pasa a prueba de calidad.
   if (/\b(?:motorola|moto)\s?[eg]\s?\d{1,2}(?!\d)/.test(normalized)) return "NOT_ELIGIBLE";
+  // Marcas de gama baja (Nubia, Tecno, Infinix...): pausa directa, decision de Alex 6-jul (caso Marianel).
+  if (new RegExp(`\\b(?:${BUDGET_BRANDS})\\b`).test(normalized)) return "NOT_ELIGIBLE";
   // (?!\d) en vez de \b: "iphone 13pro max" pega el sufijo al numero y \b no corta entre "13" y "pro".
   if (new RegExp(`\\b${IPHONE_TYPO}\\s?(1[3-9]|[2-9]\\d)(?!\\d)`).test(normalized)) return "APPROVED";
   // Decision de Alex (2-jul, prueba E2E de lanzamiento): el iPhone 12 es el MINIMO ACEPTADO -> APROBADO
@@ -121,7 +127,12 @@ export function deviceTypeForDescription(description: string): DeviceType {
   const normalized = normalizeDeviceText(description);
   if (new RegExp(`\\b(?:${IPHONE_TYPO}|i phone|ios)\\b`).test(normalized)) return "IPHONE";
   if (new RegExp(`\\b(?:${SAMSUNG_TYPO}|${GALAXY_TYPO})\\b`).test(normalized)) return "SAMSUNG";
-  if (/\b(android|xiaomi|redmi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono|celular)\b/.test(normalized)) return "OTHER";
+  if (
+    new RegExp(
+      `\\b(?:android|xiaomi|redmi|huawei|oppo|realme|pixel|motorola|moto|movil|telefono|celular|${BUDGET_BRANDS})\\b`
+    ).test(normalized)
+  )
+    return "OTHER";
   return "UNKNOWN";
 }
 
@@ -139,7 +150,7 @@ export function deviceModelForDescription(description: string): string | null {
   // desde la marca (hasta ~24 chars) para que Alex SIEMPRE vea en la ficha qué móvil está valorando.
   const brandAnchored = normalized.match(
     new RegExp(
-      `\\b(?:${IPHONE_TYPO}|${SAMSUNG_TYPO}|${GALAXY_TYPO}|xiaomi|redmi|huawei|honor|oppo|realme|pixel|motorola|moto)\\b[a-z0-9 +]{0,20}`
+      `\\b(?:${IPHONE_TYPO}|${SAMSUNG_TYPO}|${GALAXY_TYPO}|xiaomi|redmi|huawei|honor|oppo|realme|pixel|motorola|moto|${BUDGET_BRANDS})\\b[a-z0-9 +]{0,20}`
     )
   );
   return brandAnchored ? brandAnchored[0].replace(/\s+/g, " ").trim() : null;

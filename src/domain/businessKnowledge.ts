@@ -230,7 +230,11 @@ export const ResponsePlanSchema = z.object({
     .default(null),
   knowledgeVersions: z.array(z.string()).default([]),
   revenueSharePolicyVersion: z.string().nullable(),
-  hasApprovedNegotiationDecision: z.boolean().default(false)
+  hasApprovedNegotiationDecision: z.boolean().default(false),
+  // ¿Alex ya dio el "Encaja"? (humanFitDecision APPROVED). Mientras sea false, el validador factual
+  // BLOQUEA cualquier propuesta/confirmación de agendar la llamada (invariante 4 — caso real Yesica
+  // 5-jul: el redactor propuso día/hora y "te la dejo apuntada" en plena revisión, sin OK humano).
+  callSchedulingAuthorized: z.boolean().default(false)
 });
 
 export type ResponsePlan = z.infer<typeof ResponsePlanSchema>;

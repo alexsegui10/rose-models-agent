@@ -104,13 +104,26 @@ describe("Retriever: 'me dais/dame info' es peticion generica, NO negociacion de
     }
   });
 
-  it("una pregunta REAL por la llamada SIGUE surfaceando el conocimiento de la llamada", async () => {
+  it("el conocimiento de la llamada SOLO se sirve tras el Encaja (Alex 5-jul, caso Yesica)", async () => {
     const retriever = new LocalBusinessKnowledgeRetriever();
+    // En QUALIFYING (sin Encaja) las preguntas por la llamada NO reciben el conocimiento de agenda:
+    // el redactor proponia "si me dices un dia y una hora la agendamos" sin el OK de Alex.
     const qualifying = { ...newLead(), currentState: "QUALIFYING" } as Candidate;
     for (const phone of ["la llamada es por whatsapp?", "cuando me vais a llamar?", "me llamais por telefono?"]) {
       const entries = await retriever.retrieve({ candidate: qualifying, intent: "REQUESTS_INFORMATION", question: phone });
-      expect(entries.some((e) => e.tags.includes("call") || e.tags.includes("schedule"))).toBe(true);
+      expect(
+        entries.some((e) => e.id === "call-details-after-review"),
+        phone
+      ).toBe(false);
     }
+    // Con el Encaja dado (COLLECTING_CALL_DETAILS) SI se sirve.
+    const approved = { ...newLead(), currentState: "COLLECTING_CALL_DETAILS", humanFitDecision: "APPROVED" } as Candidate;
+    const entries = await retriever.retrieve({
+      candidate: approved,
+      intent: "REQUESTS_INFORMATION",
+      question: "la llamada es por whatsapp?"
+    });
+    expect(entries.some((e) => e.id === "call-details-after-review")).toBe(true);
   });
 
   it("dudas de ENCAJE por edad ('49 es demasiado?', 'sirvo para esto?') surfacean el perfil objetivo (no se ignoran)", async () => {
