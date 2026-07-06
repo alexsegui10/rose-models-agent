@@ -86,4 +86,32 @@ describe("El bot NUNCA pregunta el pais (todas son de Argentina, Alex 6-jul)", (
     expect(r.response.toLowerCase()).not.toMatch(/de donde sos|de que pais/);
     expect(r.response.trim().length).toBeGreaterThan(0);
   });
+
+  // El origen del "de que pais eres?" era un SLOT del plan (responsePlanner). Ahora isMissing=false: el plan
+  // JAMAS lo pide, ni siquiera como slot tardio, ni en el fallback determinista. Recorre el guion entero.
+  it("el plan NUNCA pide el pais como slot, en ningun turno del guion (determinista, sin pais conocido)", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      businessKnowledgeRetriever: new LocalBusinessKnowledgeRetriever(),
+      exampleRetriever: new LocalExampleRetriever(),
+      automationMode: "AUTOMATIC"
+    });
+    const u = "slot_" + Math.random().toString().slice(2, 6);
+    const guion = [
+      "hola",
+      "me llamo ana",
+      "31",
+      "iphone 14",
+      "si tengo of hace un ano",
+      "no, nunca con agencia",
+      "vale genial",
+      "ok perfecto"
+    ];
+    for (const msg of guion) {
+      const r = await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: msg }] });
+      expect(r.response.toLowerCase(), `turno "${msg}"`).not.toMatch(/de que pais|de donde (?:eres|sos)|pais eres/);
+    }
+  });
 });

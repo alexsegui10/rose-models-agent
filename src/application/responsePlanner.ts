@@ -135,7 +135,10 @@ const qualificationSlots: QualificationSlot[] = [
     id: "country",
     question: "Por cierto, de que pais eres?",
     alreadyAskedPattern: /que pais eres|en que ciudad/,
-    isMissing: (candidate) => !candidate.country && !candidate.city,
+    // Alex 6-jul: TODAS las candidatas son de Argentina, asi que el pais NUNCA se pregunta (molesta y no
+    // aporta; la zona horaria se da por hecho: Argentina). isMissing SIEMPRE false -> el plan jamas lo pide,
+    // ni siquiera como slot tardio (era el origen del "de que pais eres?" que se colaba hasta en el fallback).
+    isMissing: () => false,
     optional: true
   },
   {
