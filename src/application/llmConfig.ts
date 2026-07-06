@@ -16,14 +16,15 @@ export interface LlmRuntimeConfig {
 
 // gpt-4.1-mini fue deslistado por OpenAI (su variante nano se apaga el 23-oct-2026).
 // COMPRENSION en mini a proposito: es extraccion estructurada (rapida y barata) y va fusionada con el
-// extractor determinista; subirla no mejora la voz del bot y si la latencia (Vercel Hobby ~10s/turno).
+// extractor determinista; subirla no mejora la voz del bot y si la latencia. Va antes que la redaccion.
 const defaultUnderstandingModel = "gpt-5.4-mini";
-// REDACCION de texto en gpt-5.4-mini (Alex 6-jul, decision revisada): el gpt-5.4 COMPLETO suena mas
-// natural PERO es lento (~3-5s) y en Vercel HOBBY (turno 8.5s, tope 4s/llamada) se pasa del timeout de
-// forma INTERMITENTE -> cae al fallback determinista robotico "a veces si a veces no", justo lo que Alex
-// odia. En Hobby, mini (rapido, consistente) + menos plantillas es mejor que gpt-5.4 intermitente. El
-// grande queda a UN paso: en Vercel PRO (turno hasta 60s) hacer OPENAI_WRITING_MODEL=gpt-5.4 en el entorno.
-const defaultWritingModel = "gpt-5.4-mini";
+// REDACCION de texto en gpt-5.4 COMPLETO (Alex 6-jul): suena mas natural, empatiza mejor y sostiene el
+// contexto -> es la mayor palanca de "estar vivo", justo lo que Alex pedia. Antes se creia que en Vercel
+// HOBBY el techo por funcion era ~10s y el gpt-5.4 (lento, ~3-5s) se pasaba del timeout -> fallback
+// robotico. FALSO: Hobby permite maxDuration hasta 60s (300s con Fluid Compute). El cuello real era
+// NUESTRO tope interno de 4s (ver timeoutMs abajo) + los presupuestos de rafaga de ~9s del webhook,
+// calibrados para aquel 10s viejo. Subidos ambos, el grande cabe de sobra tambien en Hobby.
+const defaultWritingModel = "gpt-5.4";
 // La LLAMADA de voz se queda en mini: cada turno tiene que salir en <3.5s o la llamada se siente muerta.
 const defaultCallWritingModel = "gpt-5.4-mini";
 
@@ -40,10 +41,11 @@ export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRu
     understandingModel: env.OPENAI_UNDERSTANDING_MODEL?.trim() || defaultUnderstandingModel,
     writingModel: env.OPENAI_WRITING_MODEL?.trim() || defaultWritingModel,
     callWritingModel: env.OPENAI_CALL_MODEL?.trim() || defaultCallWritingModel,
-    // Default 4s / 0 reintentos (jul-2026): en Vercel Hobby el techo real por funcion es ~10s y un turno
-    // hace DOS llamadas a OpenAI (comprension + redaccion); 8s+reintento reventaba el techo y mataba la
-    // lambda ANTES de que el fallback determinista pudiera actuar. Override por env si algun dia hay mas techo.
-    timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 4000),
+    // Default 12s / 0 reintentos (6-jul, corregido): Vercel Hobby permite hasta 60s por funcion (no ~10s
+    // como se creia), asi que el gpt-5.4 de redaccion (~3-8s) cabe con margen. El voz se auto-limita a
+    // 3.5s aparte (openaiCallDrafter) y la comprension-mini es rapida y no gasta este tope; el peor caso
+    // (ambas llamadas colgadas) ~24s sigue bajo los 60s. 0 reintentos: un fallo ya cae al fallback determinista.
+    timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 12000),
     maxRetries: nonNegativeNumber(env.OPENAI_MAX_RETRIES, 0)
   };
 }

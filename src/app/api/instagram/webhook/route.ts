@@ -20,21 +20,22 @@ import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorSt
 import { getQStashConfig } from "@/application/qstashConfig";
 import { scheduleInboundFlush, schedulePrivacyDetection } from "@/infrastructure/integrations/qstashClient";
 
-// postgres.js necesita runtime Node (no Edge). maxDuration: en Hobby el techo real es 10s igualmente.
+// postgres.js necesita runtime Node (no Edge). maxDuration=60: Vercel Hobby permite hasta 60s por funcion.
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // Ritmo de la rafaga (peticion de Alex: que no responda al instante y deje unos segundos entre
-// mensajes). PRESUPUESTO total de pausa por turno: tope para convivir con el limite de 10s del plan
-// gratis (la comprension+redaccion de OpenAI ya consume parte). Ajustable por env si se cambia de plan.
+// mensajes). PRESUPUESTO total de pausa por turno: reparte la pausa "de tecleo" entre los chunks.
+// Ajustable por env. (No es el cuello de botella: el techo real de la funcion en Hobby son 60s.)
 const BURST_DELAY_BUDGET_MS = Number(process.env.INSTAGRAM_BURST_DELAY_BUDGET_MS ?? 4500);
 const BURST_DELAY_PER_MESSAGE_MAX_MS = Number(process.env.INSTAGRAM_BURST_DELAY_MAX_MS ?? 3200);
-// Techo de tiempo por turno: margen de seguridad bajo el limite de ~10s de Vercel Hobby. El presupuesto
-// de pausas se calcula como (este techo - tiempo ya gastado por OpenAI), para no provocar timeouts.
-const TURN_TIME_BUDGET_MS = Number(process.env.INSTAGRAM_TURN_BUDGET_MS ?? 8500);
+// Techo de tiempo por turno: margen holgado bajo los 60s de Vercel Hobby. El presupuesto de pausas se
+// calcula como (este techo - tiempo ya gastado por OpenAI), para que el gpt-5.4 de redaccion (~3-8s)
+// tenga sitio y la rafaga no se trunque. Subido de 8.5s -> 30s el 6-jul al confirmar el techo real de 60s.
+const TURN_TIME_BUDGET_MS = Number(process.env.INSTAGRAM_TURN_BUDGET_MS ?? 30000);
 // Tope DURO: pasado este tiempo desde el inicio del turno, no se envian mas chunks de la rafaga (margen
-// bajo el techo de ~10s de Vercel Hobby). Evita que la lambda muera a mitad de envio.
-const HARD_TURN_DEADLINE_MS = Number(process.env.INSTAGRAM_HARD_DEADLINE_MS ?? 9000);
+// holgado bajo los 60s de Vercel Hobby). Evita que la lambda muera a mitad de envio.
+const HARD_TURN_DEADLINE_MS = Number(process.env.INSTAGRAM_HARD_DEADLINE_MS ?? 32000);
 // Backoff antes de UN reintento de un chunk fallido (transitorio): que un fallo puntual no tire la rafaga.
 const BURST_RETRY_BACKOFF_MS = Number(process.env.INSTAGRAM_BURST_RETRY_BACKOFF_MS ?? 600);
 
@@ -222,7 +223,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         const elapsedMs = Date.now() - turnStartedAt;
         let delayBudgetMs = Math.max(0, Math.min(BURST_DELAY_BUDGET_MS, TURN_TIME_BUDGET_MS - elapsedMs));
         for (let i = 0; i < chunks.length; i += 1) {
-          // Guard DURO de tiempo: si el turno se acerca al techo de ~10s de Vercel, no enviar mas chunks.
+          // Guard DURO de tiempo: si el turno se acerca al techo de 60s de Vercel, no enviar mas chunks.
           // Mejor responder 200 con entrega parcial que dejar que Vercel mate la lambda a mitad de envio.
           if (Date.now() - turnStartedAt > HARD_TURN_DEADLINE_MS) {
             console.warn("[ig-webhook] presupuesto de tiempo casi agotado: se corta la rafaga", {
@@ -233,7 +234,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           }
           // Ritmo natural (peticion de Alex): unos segundos entre mensajes. La pausa va SOLO entre mensajes,
           // NO antes del primero (el 1er mensaje sale ya): asi se gana presupuesto y la rafaga entera entra
-          // bajo el techo de ~10s de Vercel. Se reparte un presupuesto total de pausa; si se agota, los
+          // bajo el techo de 60s de Vercel. Se reparte un presupuesto total de pausa; si se agota, los
           // ultimos salen seguidos en vez de tumbar la funcion.
           if (i > 0 && delayBudgetMs > 0) {
             const wait = Math.min(naturalSendDelayMs(chunks[i]), delayBudgetMs);
@@ -246,7 +247,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           const sendStart = Date.now();
           let sent = await provider.sendTextMessage(message.senderId, chunks[i]);
           // Solo se reintenta si el fallo fue RAPIDO (<3s): un TIMEOUT (~3.5s) pudo haberse entregado igual
-          // en Meta y reintentar duplicaria el mensaje. Y solo si queda margen REAL bajo el techo de ~10s,
+          // en Meta y reintentar duplicaria el mensaje. Y solo si queda margen REAL bajo el techo de 60s,
           // descontando el backoff + el timeout del propio reintento (si no, podria morir la lambda a mitad).
           const failedFast = Date.now() - sendStart < 3000;
           const retryDeadlineMs = HARD_TURN_DEADLINE_MS - BURST_RETRY_BACKOFF_MS - 3500;
