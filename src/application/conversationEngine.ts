@@ -2422,7 +2422,7 @@ function generateResponse(
     understanding.intent !== "REQUESTS_HUMAN"
   ) {
     const tail = responsePlan.questionToAsk ? `\n\n${responsePlan.questionToAsk}` : "";
-    return `Que va, con ${candidate.age} nos encaja. Buscamos sobre todo perfiles maduros, asi que por la edad sin problema.${tail}`;
+    return `Que va, con ${candidate.age} perfecto. Buscamos sobre todo perfiles maduros, asi que por la edad sin problema.${tail}`;
   }
 
   // Candidata YA APROBADA en el cierre de la llamada con su telefono ya dado: se CONFIRMA la llamada (Alex la
