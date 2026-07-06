@@ -18,11 +18,12 @@ export interface LlmRuntimeConfig {
 // COMPRENSION en mini a proposito: es extraccion estructurada (rapida y barata) y va fusionada con el
 // extractor determinista; subirla no mejora la voz del bot y si la latencia (Vercel Hobby ~10s/turno).
 const defaultUnderstandingModel = "gpt-5.4-mini";
-// REDACCION de texto en gpt-5.4 COMPLETO (decision de Alex 5-jul): el mini producia respuestas planas y
-// con poca coherencia de contexto ("no esta vivo"). El grande sostiene mejor el hilo y suena natural.
-// Coste ~3x el mini ($2.5/M in, $15/M out — centimos por conversacion). Si tarda >timeout, cae al
-// fallback determinista (seguro); si se ven muchos fallbacks, subir OPENAI_TIMEOUT_MS o Vercel Pro.
-const defaultWritingModel = "gpt-5.4";
+// REDACCION de texto en gpt-5.4-mini (Alex 6-jul, decision revisada): el gpt-5.4 COMPLETO suena mas
+// natural PERO es lento (~3-5s) y en Vercel HOBBY (turno 8.5s, tope 4s/llamada) se pasa del timeout de
+// forma INTERMITENTE -> cae al fallback determinista robotico "a veces si a veces no", justo lo que Alex
+// odia. En Hobby, mini (rapido, consistente) + menos plantillas es mejor que gpt-5.4 intermitente. El
+// grande queda a UN paso: en Vercel PRO (turno hasta 60s) hacer OPENAI_WRITING_MODEL=gpt-5.4 en el entorno.
+const defaultWritingModel = "gpt-5.4-mini";
 // La LLAMADA de voz se queda en mini: cada turno tiene que salir en <3.5s o la llamada se siente muerta.
 const defaultCallWritingModel = "gpt-5.4-mini";
 
