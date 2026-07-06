@@ -577,7 +577,26 @@ export function extractDeterministicUnderstanding(
       extractedData.hasOnlyFans = true;
   }
   if (extractedData.worksWithAnotherAgency === undefined && agentAskedAgencies) {
-    if (bareNoPattern.test(normalized) || clearNegationPattern.test(normalized)) extractedData.worksWithAnotherAgency = false;
+    // "Si he trabajado / he trabajado / trabaje con otra / estuve en una agencia" es un SI a "has trabajado
+    // con agencias?", AUNQUE venga seguido de una queja ("...pero no tuve la mejor experiencia"). El "no" de
+    // la queja NO debe invertirlo (bug sim 6-jul: Rocio "Si he trabajado y no he tenido la mejor experiencia"
+    // se leia como que NO trabajo -> se la trataba como inexperta y saltaba el pitch en vez de empatizar con
+    // su dolor). "Trabaje sola / por mi cuenta / sin agencia" SIGUE siendo un NO. La negacion explicita de
+    // agencia (no...agencia) tambien gana. Se evalua ANTES que el si/no pelado.
+    const deniedAgency =
+      /\b(?:no|nunca|jamas|ninguna)\b[^.!?\n]{0,30}\bagencias?\b/.test(normalized) ||
+      /\b(?:trabaj\w+ sola|por mi cuenta|sin agencia|yo sola)\b/.test(normalized);
+    // OJO (revisor 6-jul): NO basta con un verbo de trabajo suelto ("trabaje de camarera" a "has trabajado
+    // con agencias?" NO es un si). Se exige el "SI" afirmativo delante del verbo, o el objeto explicito "con
+    // otra/una/... [agencia]", o el verbo junto a "experiencia" (la queja de la mala experiencia con agencia).
+    const affirmedWorking =
+      /\bsi,?\s+(?:he trabajado|trabaje|estuve|he estado|trabajaba)\b|\btrabaj(?:e|o|ando|ado|aba|amos) con (?:otra|una|la|dos|varias|mi|ellos|ellas|esa|esas)\b|\b(?:he trabajado|trabaje|trabajaba)\b[^.!?\n]{0,40}\bexperiencia\b/.test(
+        normalized
+      );
+    if (deniedAgency) extractedData.worksWithAnotherAgency = false;
+    else if (affirmedWorking) extractedData.worksWithAnotherAgency = true;
+    else if (bareNoPattern.test(normalized) || clearNegationPattern.test(normalized))
+      extractedData.worksWithAnotherAgency = false;
     else if (bareYesPattern.test(normalized)) extractedData.worksWithAnotherAgency = true;
   }
 
@@ -756,9 +775,19 @@ export function extractDeterministicUnderstanding(
   // Trabajo SOLA / sin agencia: tambien es respuesta al slot ("trabaje sola", "sin agencia", "por mi cuenta").
   // Los terminos genericos (sola/independiente/freelance) solo cuentan si el agente PREGUNTO por agencias, para
   // no marcar false por "soy autonoma"/"trabajo sola" dichos en otro contexto. Va al final para ganar al positivo.
+  // El termino generico "sola/por mi cuenta/independiente" solo cuenta como "sin agencia" si NO afirmo antes
+  // haber trabajado con una agencia: "si he trabajado... no puedo hacerlo todo sola porque es mucho" es un SI
+  // con un AGOBIO (el "sola" es del trabajo/carga, no de "sin agencia") y no debe invertir a false (bug Rocio
+  // 6-jul: se la marcaba inexperta y saltaba el pitch en vez de empatizar). La negacion explicita "sin agencia"
+  // si gana siempre.
+  const affirmedWorkedWithAgency =
+    /\bsi,?\s+(?:he trabajado|trabaje|estuve|he estado|trabajaba)\b|\btrabaj(?:e|o|ando|ado|aba|amos) con (?:otra|una|la|dos|varias|mi|ellos|ellas|esa|esas)\b|\b(?:he trabajado|trabaje|trabajaba)\b[^.!?\n]{0,40}\bexperiencia\b/.test(
+      normalized
+    );
   if (
     /\bsin (?:ninguna )?agencias?\b/.test(normalized) ||
     (agentAskedAgencies &&
+      !affirmedWorkedWithAgency &&
       /\b(sola|por mi cuenta|por mi propia cuenta|de forma independiente|independiente|freelance|autonoma)\b/.test(normalized))
   )
     extractedData.worksWithAnotherAgency = false;
