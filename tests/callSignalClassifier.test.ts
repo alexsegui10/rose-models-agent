@@ -47,6 +47,30 @@ describe("clasificador de señal de la llamada", () => {
     expect(sigMoney("si, sigue siendo mucho")).toBe("complains-about-share"); // inv. 3: no regala un escalon
   });
 
+  it("insistencia vaga en dinero ('dar un poco mas') sigue la escalera SOLO en negociacion (bug sim voz 7-jul)", () => {
+    // Tras bajar a 65, un "un poco mas" debe contar como seguir insistiendo (queja), no deferir. Decision de
+    // Alex: negociacion progresiva, 60 es el suelo y solo si insiste mucho.
+    expect(sigMoney("no me podeis dar un poco mas?")).toBe("complains-about-share");
+    expect(sigMoney("dame un poco mas")).toBe("complains-about-share");
+    expect(sigMoney("y no podeis dar algo mas?")).toBe("complains-about-share");
+    // Con coletilla de cortesia (habitual por voz): sigue contando como insistencia.
+    expect(sigMoney("dame un poco mas porfa")).toBe("complains-about-share");
+    expect(sigMoney("no me podeis dar un poco mas por favor?")).toBe("complains-about-share");
+    // Pero "mas X" con coletilla NO se cuela (el sustantivo sigue vetando).
+    expect(sigMoney("dame mas ejemplos porfa")).not.toBe("complains-about-share");
+    // NEGATIVOS (NO regalar un escalon: "mas" debe ser el objeto de "dar" SIN sustantivo detras). Estos, con
+    // "mas X", NO son quejas de reparto aunque haya moneyContext (bloqueante del revisor 7-jul):
+    expect(sigMoney("cuentame un poco mas")).not.toBe("complains-about-share"); // pide INFO, no dinero
+    expect(sigMoney("dame mas tiempo")).not.toBe("complains-about-share");
+    expect(sigMoney("dame mas ejemplos")).not.toBe("complains-about-share");
+    expect(sigMoney("me puedes dar mas ejemplos de chicas?")).not.toBe("complains-about-share");
+    expect(sigMoney("dame mas fotos")).not.toBe("complains-about-share");
+    expect(sigMoney("dame mas trabajo")).not.toBe("complains-about-share");
+    expect(sigMoney("me dais mas flexibilidad?")).not.toBe("complains-about-share");
+    expect(sigMoney("dame un dia mas")).not.toBe("complains-about-share");
+    expect(sig("me podeis dar un poco mas?")).not.toBe("complains-about-share"); // fuera de negociacion, no cuenta
+  });
+
   it("desconfianza leve (worried) -> distrust, no hostil", () => {
     expect(sig("¿cómo sé que esto es real?")).toBe("distrust");
     expect(sig("no me fío")).toBe("distrust");
