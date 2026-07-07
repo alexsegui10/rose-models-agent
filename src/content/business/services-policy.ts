@@ -29,9 +29,18 @@ const entries: KnowledgeEntryInput[] = [
       "Prometer resultados concretos.",
       "Afirmar servicios no documentados como fotografia, viajes o contratos externos."
     ],
-    // Respondible tambien en HUMAN_INTERVENTION_REQUIRED: el pitch operativo nunca debe derivarse
-    // al socio (pregunta documentada que mas leads mataba en la evaluacion).
-    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
+    // Respondible tambien en HUMAN_INTERVENTION_REQUIRED y en WAITING_HUMAN_REVIEW: el pitch operativo (como
+    // trabajamos) nunca debe derivarse al socio, ni siquiera mientras el bot espera el Encaja de Alex. Antes,
+    // en WAITING_HUMAN_REVIEW la ficha quedaba gateada y un "y como trabajais?" se contestaba con "eso lo hablo
+    // con mi socio y te digo" (defer de una duda que el bot SI sabe): justo lo que Alex NO quiere (7-jul).
+    allowedStates: [
+      "NEW_LEAD",
+      "QUALIFYING",
+      "APPROVED",
+      "COLLECTING_CALL_DETAILS",
+      "HUMAN_INTERVENTION_REQUIRED",
+      "WAITING_HUMAN_REVIEW"
+    ],
     tags: ["services", "agency", "strategy", "traffic", "monetization"],
     mandatoryNuances: ["No prometer resultados.", "No inventar servicios concretos no documentados."],
     escalationConditions: ["La candidata pide resultados garantizados.", "La candidata pregunta por servicios no documentados."],
