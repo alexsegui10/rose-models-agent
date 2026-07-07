@@ -76,6 +76,19 @@ describe("validador de la redacción de voz", () => {
     expect(earn("Mira, es un tema de constancia; uno nunca sabe, depende de como le metas.")).toBe(true);
   });
 
+  it("turno de HANDOFF (noContactTimePromise): veta prometer CUANDO contacta Alex; deja pasar lo vago", () => {
+    const ho = (t: string) => validateCallUtterance(t, undefined, { noContactTimePromise: true }).valid;
+    // Referencias temporales CONCRETAS de contacto -> fuera (esa promesa la fija Alex, no el bot).
+    expect(ho("Te lo paso a mi socio, te llama manana a las 10 en punto.")).toBe(false);
+    expect(ho("Mi socio te contacta el lunes.")).toBe(false);
+    expect(ho("Se pone en contacto contigo en 20 minutos.")).toBe(false);
+    expect(ho("Te escribe esta tarde.")).toBe(false);
+    // Vago -> pasa (es lo que dicen los fallbacks de handoff).
+    expect(ho("Te paso con mi socio y se pone en contacto contigo enseguida.")).toBe(true);
+    expect(ho("Ya le he avisado y en un ratito se pone el en contacto contigo, tranquila.")).toBe(true);
+    expect(ho("Ahora mismo le digo que se ponga en contacto contigo, vale?")).toBe(true);
+  });
+
   it("rechaza vacío y monólogos demasiado largos", () => {
     expect(ok("")).toBe(false);
     expect(ok("a ".repeat(400))).toBe(false);

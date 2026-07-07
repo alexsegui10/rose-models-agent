@@ -84,6 +84,36 @@ describe("responder de turno de llamada (stateless por replay)", () => {
     expect(res.content).toBe(natural); // la redaccion natural del modelo se dice tal cual
   });
 
+  // HANDOFF soltado al LLM (jul-2026): la salida pasa por el validador. Una promesa de CUANDO (Alex fija el
+  // momento) o una cifra caen al fallback determinista que remite al socio. Nunca va a menos.
+  it("HANDOFF: si el modelo promete una HORA concreta, se descarta y sale el fallback", async () => {
+    const res = await respondToCall({
+      messages: [
+        sys,
+        { role: "assistant", content: "apertura..." },
+        { role: "user", content: "quiero hablar con una persona de verdad" }
+      ],
+      drafter: fixedDrafter("Claro, te paso con mi socio, te llama manana a las 10 en punto.")
+    });
+    expect(res.directiveType).toBe("HANDOFF_TO_ALEX");
+    expect(res.content.toLowerCase()).not.toMatch(/manana|a las 10/);
+    expect(res.content.toLowerCase()).toContain("mi socio");
+  });
+
+  it("HANDOFF: un draft con cifra de reparto se descarta y sale el fallback", async () => {
+    const res = await respondToCall({
+      messages: [
+        sys,
+        { role: "assistant", content: "apertura..." },
+        { role: "user", content: "quiero hablar con una persona de verdad" }
+      ],
+      drafter: fixedDrafter("Vale, mira, te puede dejar el 80% para ti; te paso con mi socio.")
+    });
+    expect(res.directiveType).toBe("HANDOFF_TO_ALEX");
+    expect(res.content).not.toMatch(/80/);
+    expect(res.content.toLowerCase()).toContain("mi socio");
+  });
+
   it("reproduce el estado: varios 'vale' acaban cerrando con el contrato", async () => {
     // Se avanza turno a turno hasta que aparezca el cierre (robusto a la longitud de la agenda; tras el
     // cierre repetido vendría el silencio anti-loro, cubierto en callAntiLoopJul02).

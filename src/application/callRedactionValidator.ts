@@ -41,6 +41,13 @@ export interface CallValidationOptions {
    * (invariante de ingresos intacto; "nunca ir a menos" respecto al texto fijo de antes). Por defecto false.
    */
   noMoneyFigures?: boolean;
+  /**
+   * Turno de HANDOFF (pasar al socio): el bot NO fija CUANDO contactara Alex — esa promesa de tiempo la fija
+   * Alex, no el bot (invariante 4, la decision humana es suya). Con esto en true se veta cualquier referencia
+   * temporal CONCRETA de contacto ("te llama manana a las 10", "el lunes", "en 20 minutos"); las vagas
+   * ("enseguida", "en un ratito", "pronto") pasan. Asi la promesa de tiempo la corta la red, no solo el prompt.
+   */
+  noContactTimePromise?: boolean;
 }
 
 /** Porcentajes (en dígitos) que el bot PUEDE decir: la escalera autorizada y sus complementarios. */
@@ -186,6 +193,18 @@ export function validateCallUtterance(
       /\b(?:un|una|uno|unos|unas)\s+(?:euros?|dolar(?:es)?|pavos?|lucas?|palos?|billetes?|libras?|mangos?)\b/;
     if (/\d/.test(norm) || EARNINGS_NUMERAL_WORDS.test(norm) || wordQuantifiedMoney.test(norm)) {
       return { valid: false, reason: "cifra en turno de ingresos" };
+    }
+  }
+
+  // Turno de HANDOFF: veta prometer CUANDO contactara Alex (referencia temporal CONCRETA). Las vagas
+  // ("enseguida", "en un ratito", "pronto") pasan; las concretas (dia/hora/en N min) caen al fallback.
+  if (options?.noContactTimePromise) {
+    if (
+      /\b(?:manana|pasado manana|hoy|esta (?:tarde|noche|manana)|el (?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)|a las?\s*\d{1,2}|en\s*\d+\s*(?:min\w*|hora|horas|dia|dias)|dentro de\s*\d|en (?:media|una) hora|en un par de (?:horas|dias|minutos))\b/.test(
+        norm
+      )
+    ) {
+      return { valid: false, reason: "promesa de cuando contactara (la fija Alex, no el bot)" };
     }
   }
 

@@ -50,8 +50,10 @@ describe("planificador de redacción de la llamada", () => {
     expect(plan.draftingBrief?.candidateUtterance).toBe("¿y los impuestos?");
   });
 
-  it("handoff / cierre siguen siendo deterministas y dicen lo correcto", () => {
-    expect(planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX" } }).deterministicText).toContain("mi socio");
+  it("cierre con contrato es determinista; handoff lo redacta el modelo con fallback que remite al socio", () => {
+    const handoff = planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX" } });
+    expect(handoff.draftingBrief).toBeDefined(); // handoff ahora se redacta (adapta el tono al motivo)
+    expect(handoff.fallbackText).toContain("mi socio"); // el fallback sigue remitiendo al socio
     expect(planCallUtterance({ directive: { type: "CLOSE_WITH_CONTRACT" } }).deterministicText).toContain("contrato");
   });
 
@@ -133,7 +135,7 @@ describe("planificador de redacción de la llamada", () => {
     const close = planCallUtterance({ directive: { type: "CLOSE_WITH_CONTRACT" } });
     expect(close.deterministicText?.toLowerCase()).toContain("contrato");
     const handoff = planCallUtterance({ directive: { type: "HANDOFF_TO_ALEX", handoffReason: "asked-for-human" } });
-    expect(handoff.deterministicText?.toLowerCase()).toContain("te entiendo");
+    expect(handoff.fallbackText.toLowerCase()).toContain("te entiendo"); // el fallback determinista sigue igual
     const money = planCallUtterance({ directive: { type: "COVER_STAGE", stageId: "MONEY", shareOffer: offer(70, false) } });
     expect(money.fallbackText).toContain("70%");
     expect(money.fallbackText.toLowerCase()).not.toContain("salario");

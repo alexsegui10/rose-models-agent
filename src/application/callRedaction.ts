@@ -255,8 +255,41 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       };
     }
     case "HANDOFF_TO_ALEX": {
-      const text = variantFor(HANDOFF_TEXTS, input.repetitionIndex ?? 0);
-      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+      // Handoff con NATURALIDAD (jul-2026): el redactor adapta el TONO al motivo (pidio persona -> calido;
+      // desconfianza/hostilidad -> sereno y firme; audio malo -> disculpandose; reparto rechazado en el suelo
+      // -> entendiendo, sin ceder). La DECISION de pasar al socio la toma el codigo; el texto fijo es fallback.
+      const reasonTone: Record<string, string> = {
+        "asked-for-human":
+          "Ha pedido hablar con una persona: con calidez, dile que se lo pasas a tu socio y que la contacta enseguida, SIN sonar a que te la quitas de encima.",
+        "suspicion-or-aggression":
+          "Hubo desconfianza fuerte u hostilidad: manten la calma, sereno y firme (sin discutir ni picarte), y dile que tu socio se pone en contacto con ella.",
+        "share-rejected-at-floor":
+          "No le encaja el reparto ni en el suelo: SIN ceder mas ni dar cifras nuevas, dile que eso lo veria mejor con tu socio y que la contacta.",
+        "audio-unintelligible":
+          "Se oye fatal y no os entendeis: discipulate por la linea y dile que tu socio la contacta para poder hablarlo mejor."
+      };
+      const reason = directive.handoffReason ?? "asked-for-human";
+      return {
+        directiveType: directive.type,
+        draftingBrief: {
+          instruction:
+            "Vas a pasar la conversacion a tu socio (Alex, una persona real). " +
+            (reasonTone[reason] ?? reasonTone["asked-for-human"]) +
+            " UNA o dos frases, calido y natural, dejando claro que tu socio se pondra en contacto con ella." +
+            repeatHint(input),
+          groundingFacts: [],
+          prohibitedClaims: [
+            "Prometer CUANDO exactamente la contactara (no des hora ni fecha concreta)",
+            "Dar cifras de dinero o de reparto",
+            "Inventar datos o servicios"
+          ],
+          mandatoryNuances: [],
+          referenceInstagram: false,
+          context: input.context,
+          ...briefExtras(input)
+        },
+        fallbackText: variantFor(HANDOFF_TEXTS, input.repetitionIndex ?? 0)
+      };
     }
     case "CLOSE_WITH_CONTRACT": {
       const text = variantFor(CLOSE_TEXTS, input.repetitionIndex ?? 0);
