@@ -1874,10 +1874,19 @@ export class ConversationEngine {
       !isAwaitingHoldingTurn &&
       !useDeterministicFaceTurn &&
       !useDeterministicClosingTurn;
+    // El borrador YA pregunta algo si lleva "?" O si pide con un imperativo/forma sin signo ("Dime la marca y el
+    // modelo...", "pasame tu of", "necesito saber tu movil"). En ese caso NO se re-adjunta la pregunta del guion
+    // (bug Natalia 7-jul: el LLM ya pidio el movil sin "?" y el rescate lo volvia a preguntar -> el movil salia
+    // 2-3 veces en el mismo turno).
+    const draftAlreadyAsks =
+      response.includes("?") ||
+      /\b(dime|dame|decime|contame|cuentame|pasame|mandame|enviame|indicame|escribeme|comparteme|dinos|cuentanos|necesito saber)\b/.test(
+        normalizeText(response)
+      );
     if (
       draftedByLlm &&
       responsePlan.questionToAsk !== null &&
-      !response.includes("?") &&
+      !draftAlreadyAsks &&
       (projectedCandidate.currentState === "QUALIFYING" ||
         projectedCandidate.currentState === "NEW_LEAD" ||
         projectedCandidate.currentState === "WAITING_PROFILE_ACCESS") &&
@@ -1890,7 +1899,15 @@ export class ConversationEngine {
           : bridgeBackToQuestion(responsePlan.questionToAsk);
       if (rescued !== response && validateFactualResponse(rescued, responsePlan).valid) {
         response = rescued;
-        draft = { ...draft, response, usedFallback: true, error: "qualifying-question-rescue" };
+        // Traza honesta (invariante 6): si el LLM SI redacto (base no vacia) y solo se le anadio la pregunta del
+        // guion, NO es un fallback -> se conserva el usedFallback real del borrador. El badge "sin IA" mentia
+        // cuando la IA si habia escrito (bug Natalia 7-jul). Solo es fallback si el turno quedo SIN texto del LLM.
+        draft = {
+          ...draft,
+          response,
+          usedFallback: base.length === 0 ? true : draft.usedFallback,
+          error: "qualifying-question-rescue"
+        };
       }
     }
     // Guard anti-repeticion verbatim: el Alex real jamas repite un mensaje caracter a caracter.
