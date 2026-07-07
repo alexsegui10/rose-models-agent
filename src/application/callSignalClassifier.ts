@@ -171,6 +171,13 @@ const QUESTION =
 const FOLLOWS_ALONG =
   /^\s*(?:(?:ah+|ahh|pues|bueno|hola+|buenas|holi|hey|oye|mira|mmm+|mm+|eh+|este|em+|uy|si\?)[\s,!¡.]*)*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|me parece (bien|genial|perfecto)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
 
+// Asentimiento a secas que ACABA en "?" (o sin el): "si?", "vale?", "ah si?", "claro?". Es un "si, dime", NO
+// una pregunta. QUESTION lo confundia por el "?" final y el bot defieria algo inexistente a WhatsApp (bug del
+// simulador de voz 7-jul: a un "si?" al descolgar solto "eso te lo confirmo por WhatsApp en cuanto colguemos").
+// Anclado a FIN de cadena: "vale, pero cuanto gano?" NO entra aqui (esa SI es pregunta y la coge QUESTION).
+const BARE_AFFIRMATION =
+  /^\s*(?:(?:ah+|pues|bueno|si+|oye|mira|eh+|mmm+|mm+|holi|hey|hola+|buenas|uy)[\s,!¡.?]*)*(si+|vale|oka?y?|okis|claro|ya|dale|va|correcto|perfecto|genial|bien|guay|aja+|ajam+|sip|entiend\w*)[\s,!¡.?]*$/;
+
 // Confirmación de identidad al descolgar ("sí, soy yo", "con ella habla", "la misma"): es un "sí, sigue",
 // no ruido (jul-2026, barrido de personas: "hola si soy yo" acababa en "¿me lo repites?"). ANCLADA a la
 // frase entera para que "lo hablo con ella" (consultar a alguien) no cuente como asentimiento.
@@ -284,6 +291,9 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // desconocida" y acabe en el absurdo "lo comento con mi socio" (bug jul-2026). Si además hay una
   // pregunta SUSTANTIVA ("tengo 24, ¿cuánto cobraría?"), gana la pregunta. UNDERAGE (14-17) ya cortó antes.
   if (STATES_ADULT_AGE.test(text) && !SUBSTANTIVE_QUESTION.test(text)) return "follows-along";
+  // Asentimiento a secas ("si?", "vale?"): avanzar, NO deferir. ANTES que QUESTION (que casa el "?" final) y
+  // solo si NO hay una pregunta sustantiva encadenada (por si acaso), para no tragarse una pregunta real.
+  if (BARE_AFFIRMATION.test(text) && !SUBSTANTIVE_QUESTION.test(text)) return "follows-along";
   if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
 

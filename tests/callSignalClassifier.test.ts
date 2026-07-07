@@ -31,6 +31,22 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("os quedáis demasiado")).toBe("complains-about-share");
   });
 
+  it("asentimiento a secas con '?' ('si?', 'vale?') -> follows-along, NO deferir (bug sim voz 7-jul)", () => {
+    // A un "si?" al descolgar el bot defieria algo inexistente ("te lo confirmo por WhatsApp"): mal, es "si, dime".
+    expect(sig("si?")).toBe("follows-along");
+    expect(sig("vale?")).toBe("follows-along");
+    expect(sig("ah si?")).toBe("follows-along");
+    expect(sig("claro?")).toBe("follows-along");
+    expect(sig("si si?")).toBe("follows-along");
+    expect(sig("si?")).not.toBe("asks-unknown");
+    // Control: un asentimiento SEGUIDO de una pregunta real NO se traga -> sigue siendo pregunta.
+    expect(sig("vale pero eso como funciona?")).not.toBe("follows-along");
+    expect(sig("si pero de donde sois?")).toBe("asks-identity");
+    // BLINDAJE de los invariantes mas sensibles (el asentimiento delante NO puede pisar seguridad/negociacion):
+    expect(sig("si, tengo 16")).toBe("underage"); // invariante 2: el "si" no tapa la minoria de edad
+    expect(sigMoney("si, sigue siendo mucho")).toBe("complains-about-share"); // inv. 3: no regala un escalon
+  });
+
   it("desconfianza leve (worried) -> distrust, no hostil", () => {
     expect(sig("¿cómo sé que esto es real?")).toBe("distrust");
     expect(sig("no me fío")).toBe("distrust");
