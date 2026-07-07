@@ -89,10 +89,13 @@ describe("clasificador de llamada: más gaps de la batería (jul-2026)", () => {
     expect(classifyCallSignal({ utterance: "como va el tema del dinero" })).not.toBe("follows-along");
   });
 
-  it("GIVE_EARNINGS: honesto y SIN cifras ni promesas (invariante ingresos)", () => {
+  it("GIVE_EARNINGS: lo redacta el modelo (venta) PERO sin cifras ni promesas; el fallback es el suelo honesto", () => {
     const plan = planCallUtterance({ directive: { type: "GIVE_EARNINGS" } });
-    expect(plan.deterministicText).toBe(plan.fallbackText);
-    expect(plan.deterministicText?.toLowerCase()).toContain("depende");
-    expect(plan.deterministicText).not.toMatch(/\d/);
+    // Ahora es draftingBrief (el modelo se adapta a ella) en vez de texto fijo -> "nunca ir a menos": el brief
+    // prohibe cifras/promesas y el fallback (suelo) sigue siendo el texto honesto de siempre.
+    expect(plan.draftingBrief).toBeDefined();
+    expect(plan.draftingBrief!.prohibitedClaims.some((c) => /cifra|cantidad|dinero|ingresos/i.test(c))).toBe(true);
+    expect(plan.fallbackText.toLowerCase()).toContain("depende");
+    expect(plan.fallbackText).not.toMatch(/\d/);
   });
 });

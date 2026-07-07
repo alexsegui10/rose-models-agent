@@ -40,6 +40,42 @@ describe("validador de la redacción de voz", () => {
     expect(ok("Un equipo de chatters lo monetiza las 24 horas.")).toBe(true);
   });
 
+  it("turno de INGRESOS (noMoneyFigures): rechaza CUALQUIER cifra que el LLM pudiera colar vendiendo 'cuánto se gana'", () => {
+    // Huecos del eje de ingresos que se colaban con las reglas normales (revisor 7-jul): numero desnudo,
+    // 'al dia', slang. En un turno de ingresos NINGUN numero es legitimo -> barrera absoluta.
+    const earn = (t: string) => validateCallUtterance(t, undefined, { noMoneyFigures: true }).valid;
+    expect(earn("Hay chicas que ganan entre 1000 y 3000.")).toBe(false);
+    expect(earn("Puedes llegar a 5000.")).toBe(false);
+    expect(earn("Algunas hacen 100 al dia.")).toBe(false);
+    expect(earn("Unos 40 al dia sin problema.")).toBe(false);
+    expect(earn("Unos 50 pavos al dia.")).toBe(false);
+    expect(earn("Se sacan dos mil al mes.")).toBe(false);
+    // Numerales en PALABRAS (decenas/unidades), que las reglas normales no cazaban (revisor 7-jul):
+    expect(earn("Unos cuarenta al dia facil.")).toBe(false);
+    expect(earn("Como cincuenta pavos al dia.")).toBe(false);
+    expect(earn("Unos veinte al dia para empezar.")).toBe(false);
+    expect(earn("Facil setenta al dia.")).toBe(false);
+    expect(earn("Unos ochenta a la semana.")).toBe(false);
+    expect(earn("Como treinta diarios.")).toBe(false);
+    expect(earn("Unas quince lucas al mes.")).toBe(false);
+    // Unidades/adolescentes/veintitantos en palabras (el ultimo sub-hueco): tambien fuera.
+    expect(earn("Como tres al dia.")).toBe(false);
+    expect(earn("Nueve al dia tranquilamente.")).toBe(false);
+    expect(earn("Unos doce al dia.")).toBe(false);
+    expect(earn("Unos dieciocho al dia.")).toBe(false);
+    expect(earn("Veintitres al dia.")).toBe(false);
+    // "un/una + moneda" (la regla general de moneda exige digito): euro y coloquiales AR (pavo/luca/mango).
+    expect(earn("Un euro al dia.")).toBe(false);
+    expect(earn("Una luca al mes.")).toBe(false);
+    expect(earn("Un pavo al dia.")).toBe(false);
+    expect(earn("Unos billetes al dia.")).toBe(false);
+    // La respuesta HONESTA de ingresos (sin numeros) SI vale -> el bot la dice. "un/una/uno" NO son cifra:
+    // no deben tumbar respuestas buenas (son articulo/pronombre), o el candado iria a menos por sobre-estricto.
+    expect(earn("Con sinceridad, depende mucho de ti: de tu constancia y de la calidad del contenido.")).toBe(true);
+    expect(earn("Eso depende de ti; no te voy a prometer una cifra porque seria mentirte.")).toBe(true);
+    expect(earn("Mira, es un tema de constancia; uno nunca sabe, depende de como le metas.")).toBe(true);
+  });
+
   it("rechaza vacío y monólogos demasiado largos", () => {
     expect(ok("")).toBe(false);
     expect(ok("a ".repeat(400))).toBe(false);

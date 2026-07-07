@@ -286,10 +286,29 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
         },
         fallbackText: variantFor(IDENTITY_TEXTS, input.repetitionIndex ?? 0)
       };
-    case "GIVE_EARNINGS": {
-      const text = variantFor(EARNINGS_TEXTS, input.repetitionIndex ?? 0);
-      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
-    }
+    case "GIVE_EARNINGS":
+      // Ingresos con NATURALIDAD (jul-2026): es VENTA, y el redactor lo hace mejor adaptandose a SU estado
+      // (nerviosa, desconfiada, ilusionada) que un texto fijo. HONESTO y SIN cifras ni promesas: el validador
+      // de voz veta cualquier cantidad/promesa, y el fallback es el texto de siempre -> NUNCA va a menos.
+      return {
+        directiveType: directive.type,
+        draftingBrief: {
+          instruction:
+            "Te pregunta cuanto se gana / cuanto va a ganar. Respondele HONESTO y con calidez, adaptandote a como esta ella: deja claro que depende de ELLA (su constancia y la calidad del contenido) y que NO le vas a prometer una cifra porque seria mentirle; transmite confianza sin presionar y retoma la conversacion con suavidad." +
+            repeatHint(input),
+          groundingFacts: [],
+          prohibitedClaims: [
+            "Prometer ingresos o dar CUALQUIER cifra o cantidad de dinero (ni euros, ni rangos, ni ejemplos numericos)",
+            "Garantizar resultados o exito",
+            "Inventar datos o servicios que no esten aprobados"
+          ],
+          mandatoryNuances: ["Depende de ella; sin cifras; sin promesas."],
+          referenceInstagram: false,
+          context: input.context,
+          ...briefExtras(input)
+        },
+        fallbackText: variantFor(EARNINGS_TEXTS, input.repetitionIndex ?? 0)
+      };
     case "GIVE_AGE_POLICY":
       // Requisito de edad: SIEMPRE determinista y SIEMPRE el mismo (invariante 2): ni redactor ni
       // variantes — la firmeza idéntica es deliberada.

@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { respondToCall, type CallChatMessage } from "@/application/callTurnResponder";
 import type { BusinessKnowledgeRetriever } from "@/application/businessKnowledgeRetriever";
+import type { CallUtteranceDrafter } from "@/application/callDrafter";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 
 const sys: CallChatMessage = { role: "system", content: "prompt del agente" };
+
+/** Redactor falso que dice SIEMPRE lo mismo (para probar validador -> fallback). */
+function fixedDrafter(text: string): CallUtteranceDrafter {
+  return { draft: async () => text };
+}
 
 function mockEntry(points: string[]): KnowledgeEntry {
   return {
@@ -53,6 +59,29 @@ describe("responder de turno de llamada (stateless por replay)", () => {
       messages: [sys, { role: "assistant", content: "apertura..." }, { role: "user", content: "vale, cuéntame" }]
     });
     expect(res.directiveType).toBe("COVER_STAGE");
+  });
+
+  // INGRESOS soltado al LLM (jul-2026): si el modelo cuela una CIFRA vendiendo "cuanto se gana", el validador
+  // (noMoneyFigures) la tumba y sale el fallback determinista (sin numeros). "Nunca ir a menos": en el peor
+  // caso, lo mismo que el texto fijo de antes.
+  it("GIVE_EARNINGS: una cifra del modelo se DESCARTA y sale el fallback honesto (sin números)", async () => {
+    const res = await respondToCall({
+      messages: [sys, { role: "assistant", content: "apertura..." }, { role: "user", content: "oye y cuanto se gana con esto?" }],
+      drafter: fixedDrafter("Algunas hacen 100 al dia, y hay chicas que llegan a 3000 al mes.")
+    });
+    expect(res.directiveType).toBe("GIVE_EARNINGS");
+    expect(res.content).not.toMatch(/\d/); // ni un solo numero llega a decirse
+    expect(res.content.toLowerCase()).toContain("depende"); // es el fallback honesto de siempre
+  });
+
+  it("GIVE_EARNINGS: una respuesta del modelo SIN cifras (honesta) SÍ se usa (mejora natural, no va a menos)", async () => {
+    const natural = "Uf, mira, con sinceridad eso depende mucho de ti y de la constancia; prometerte algo seria mentirte.";
+    const res = await respondToCall({
+      messages: [sys, { role: "assistant", content: "apertura..." }, { role: "user", content: "oye y cuanto se gana con esto?" }],
+      drafter: fixedDrafter(natural)
+    });
+    expect(res.directiveType).toBe("GIVE_EARNINGS");
+    expect(res.content).toBe(natural); // la redaccion natural del modelo se dice tal cual
   });
 
   it("reproduce el estado: varios 'vale' acaban cerrando con el contrato", async () => {

@@ -33,6 +33,14 @@ export interface CallValidationOptions {
    * (los textos deterministas de cierre/despedida sí se despiden, obviamente).
    */
   allowFarewell?: boolean;
+  /**
+   * Turno de INGRESOS ("cuanto se gana"): NINGUN numero es legitimo (la respuesta honesta es "depende de ti,
+   * sin cifras"). Con esto en true se rechaza CUALQUIER digito o magnitud de dinero, cerrando los huecos del
+   * eje de ingresos (numero desnudo "entre 1000 y 3000", "30 al dia", "50 pavos", que las reglas normales no
+   * cazan). Asi, al redactar GIVE_EARNINGS con el LLM, una cifra JAMAS se dice -> cae al fallback determinista
+   * (invariante de ingresos intacto; "nunca ir a menos" respecto al texto fijo de antes). Por defecto false.
+   */
+  noMoneyFigures?: boolean;
 }
 
 /** Porcentajes (en dígitos) que el bot PUEDE decir: la escalera autorizada y sus complementarios. */
@@ -64,6 +72,15 @@ const NUMBER_WORDS = new Set([
   "cien",
   "ciento"
 ]);
+
+// Cualquier NUMERAL en palabras, para el candado de INGRESOS (noMoneyFigures). Regex morfologica COMPLETA y
+// autonoma (0-99 + cientos/miles/millon): en un turno de "cuanto se gana" ningun numeral es legitimo (no hay
+// cadencia de contenido ahi), asi que se vetan TODOS -> cualquier cifra tira el draft al fallback. Se EXCLUYEN
+// a proposito "un/uno/una" y "cero": son articulo/pronombre/muletilla ("una cifra", "uno nunca sabe", "cero
+// problema") que romperian respuestas honestas; y "un euro" ya lo caza la regla de moneda de mas abajo. Se hizo
+// autonoma (no reutiliza NUMBER_WORDS) porque ese set es incompleto en unidades/adolescentes (revisor 7-jul).
+const EARNINGS_NUMERAL_WORDS =
+  /\b(?:dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieci(?:seis|siete|ocho|nueve)|veinte|veinti\w+|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien(?:to)?s?|doscientos|trescientos|cuatrocientos|quinientos|seiscientos|setecientos|ochocientos|novecientos|mil(?:es)?|millon(?:es)?)\b/;
 
 const MAX_UTTERANCE_LENGTH = 600;
 
@@ -157,6 +174,19 @@ export function validateCallUtterance(
   // Reparto al 50/50 expresado de otras formas.
   if (/\bfifty\b|\bmitad y mitad\b|\ba medias\b|\bal cincuenta\b|\bcincuenta y cincuenta\b/.test(norm)) {
     return { valid: false, reason: "reparto no autorizado (50/50)" };
+  }
+
+  // Turno de INGRESOS: barrera ABSOLUTA. Ningun numero es legitimo respondiendo "cuanto se gana" -> se rechaza
+  // cualquier digito o magnitud de dinero (cierra "entre 1000 y 3000", "30 al dia", "50 pavos", numero desnudo).
+  if (options?.noMoneyFigures) {
+    // "un/una/unos + moneda" (euro/dolar y coloquiales AR: pavo/luca/palo/billete/mango): la regla general de
+    // moneda de mas abajo exige un DIGITO, asi que "un euro al dia" / "una luca al mes" se colaban. Aqui se veta
+    // sin romper "un tema"/"una cifra"/"uno nunca sabe" (no llevan unidad monetaria detras).
+    const wordQuantifiedMoney =
+      /\b(?:un|una|uno|unos|unas)\s+(?:euros?|dolar(?:es)?|pavos?|lucas?|palos?|billetes?|libras?|mangos?)\b/;
+    if (/\d/.test(norm) || EARNINGS_NUMERAL_WORDS.test(norm) || wordQuantifiedMoney.test(norm)) {
+      return { valid: false, reason: "cifra en turno de ingresos" };
+    }
   }
 
   // Cifras de dinero (con símbolo/moneda) y miles asociados a dinero/tiempo.

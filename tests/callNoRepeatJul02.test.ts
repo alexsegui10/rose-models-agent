@@ -15,13 +15,14 @@ describe("redacción: variantes deterministas por repetición", () => {
     expect(second.deterministicText).not.toBe(third.deterministicText);
   });
 
-  it("GIVE_EARNINGS repetido cambia la formulación y sigue sin cifras ni promesas", () => {
+  it("GIVE_EARNINGS: el fallback (suelo) varía por repetición y sigue sin cifras ni promesas", () => {
     const first = planCallUtterance({ directive: { type: "GIVE_EARNINGS" }, repetitionIndex: 0 });
     const second = planCallUtterance({ directive: { type: "GIVE_EARNINGS" }, repetitionIndex: 1 });
-    expect(first.deterministicText).not.toBe(second.deterministicText);
+    // GIVE_EARNINGS ahora lo redacta el modelo (draftingBrief); la garantia determinista vive en el fallback.
+    expect(first.fallbackText).not.toBe(second.fallbackText);
     for (const plan of [first, second]) {
-      expect(plan.deterministicText!).not.toMatch(/\d/);
-      expect(plan.deterministicText!.toLowerCase()).not.toContain("prometo");
+      expect(plan.fallbackText).not.toMatch(/\d/);
+      expect(plan.fallbackText.toLowerCase()).not.toContain("prometo");
     }
   });
 
