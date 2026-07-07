@@ -78,11 +78,51 @@ const entries: KnowledgeEntryInput[] = [
     ],
     allowedStates: ["QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["of-account", "account-setup", "onboarding", "faq"],
+    // Solo cuando PREGUNTA como/quien abre. Si cuenta que NO PUDO verificar/activar, no recitar el paso a paso
+    // (la deja peor): ahi se la tranquiliza con faq-of-verification-help. Bug real Paula 7-jul.
+    mandatoryNuances: [
+      "Solo explicar el paso a paso si la candidata PREGUNTA como o quien abre la cuenta.",
+      "Si dice que NO pudo verificar/activar/validar su cuenta, no le sueltes 'es facil, la abres tu': tranquilizala con que la agencia la ayuda (faq-of-verification-help)."
+    ],
     requiresHumanReview: false,
     version: "faq-of-account-2026-06-23.1",
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-23"
+  },
+  {
+    // Confirmado por Alex (7-jul-2026, caso real Paula): si a la candidata le cuesta VERIFICAR / VALIDAR /
+    // ACTIVAR / abrir su cuenta de OnlyFans, la agencia la ACOMPAÑA y la ayuda a dejarla lista. En ese momento
+    // NO se entra en el paso a paso tecnico (no es el momento): primero se la tranquiliza. Sin cifras ni promesas
+    // (invariante 3); nunca pedir credenciales ni contraseñas (invariante 5).
+    id: "faq-of-verification-help",
+    category: "FAQ",
+    title: "La agencia ayuda a verificar / activar la cuenta de OnlyFans",
+    facts: [
+      "Si a la candidata le cuesta verificar, validar, activar o dejar lista su cuenta de OnlyFans, la agencia la acompaña y la ayuda con eso.",
+      "En ese momento no se le explica el paso a paso tecnico: primero se la tranquiliza y se le dice que ese tema lo veis vosotros con ella."
+    ],
+    approvedAnswerPoints: [
+      "Tranquila, eso lo vemos nosotros y te ayudamos a dejarla lista.",
+      "No te preocupes por la verificacion, te acompañamos con eso."
+    ],
+    prohibitedClaims: [
+      "Decirle que lo tiene que resolver ella sola porque es facil, justo cuando ha dicho que no pudo.",
+      "Explicarle el paso a paso tecnico de la verificacion en ese momento.",
+      "Pedir las credenciales o la contraseña de su cuenta.",
+      "Prometer ingresos o dar cifras de ganancias."
+    ],
+    allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["of-account", "account-setup", "onboarding", "verification", "reassurance", "faq"],
+    mandatoryNuances: [
+      "No entrar en el paso a paso tecnico en ese momento: solo tranquilizar y ofrecer ayuda.",
+      "Nunca pedir credenciales ni contraseñas."
+    ],
+    requiresHumanReview: false,
+    version: "faq-of-verification-help-2026-07-07.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-07"
   }
 ];
 

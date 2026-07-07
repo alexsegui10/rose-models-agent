@@ -1670,6 +1670,16 @@ export class ConversationEngine {
     if (projectedCandidate.worksWithAnotherAgency !== true && !raisedMultiAgency) {
       suppressedFramings.push(MULTI_AGENCY_FRAMING);
     }
+    // Onboarding de OF (Alex 7-jul, caso Paula): si la candidata cuenta un PROBLEMA para verificar/validar/
+    // activar/abrir su cuenta ("tengo la cuenta abierta pero nunca la pude validar"), NO se le suelta el paso a
+    // paso "la abres tu, es facil, sigues los pasos, enlazas el banco y te verificas" (la ficha faq-who-opens se
+    // surfacea por el boost, pero ahi CONTRADICE lo que acaba de decir: ella dijo que NO pudo). Se suprime ese
+    // encuadre; la tranquilizacion "eso lo vemos nosotros, te ayudamos a dejarla lista" la aporta el prompt / la
+    // ficha de ayuda. El onboarding SIGUE disponible cuando ella PREGUNTA como/quien abre o verifica (no es un
+    // problema): reportsOfSetupProblem solo casa el relato de un fallo, no la pregunta.
+    if (reportsOfSetupProblem(groupedMessage.content)) {
+      suppressedFramings.push(OF_ONBOARDING_FRAMING);
+    }
     const draftKnowledgeEntries =
       suppressedFramings.length === 0
         ? knowledgeEntries
@@ -2983,6 +2993,22 @@ const ADULTS_ONLY_FRAMING = /\bmayores de edad\b|\bsolo podemos valorar perfiles
 // la nada (caso Julia 6-jul: "tengo cuenta solo" -> el bot solto "al tener dos cuentas...").
 const MULTI_AGENCY_FRAMING =
   /\b(dos cuentas|dos agencias|trabj?ar con dos|del mismo trafico|mismo trafico o mercado|conflicto de mercado|trafico espanol las otras)\b/i;
+
+// Encuadre del ONBOARDING de la cuenta de OnlyFans ("la abres tu, es facil, sigues los pasos, enlazas el banco,
+// te verificas"). Correcto cuando ELLA pregunta como/quien abre o verifica; DAÑINO cuando cuenta que no PUDO
+// (bug real Paula 7-jul: dijo "cuenta abierta pero nunca la pude validar" y el bot le solto "la abres tu y es
+// facil"). Las frases son especificas de faq-who-opens / content-responsibilities (colision cero con empatia o
+// con la pregunta del guion, que es lo que queremos conservar al quitar la linea del onboarding).
+const OF_ONBOARDING_FRAMING =
+  /\b(la abres tu|la creas tu|creas la cuenta|sigues los pasos|los pasos que te indican|enlazas (?:tu |una )?(?:cuenta )?(?:de )?banc\w*|te verificas|te vamos guiando)\b/i;
+// ¿La candidata relata un PROBLEMA para dejar lista su cuenta de OF (no un pregunta sobre como se hace)? Señal
+// para NO recitarle el onboarding y, en su lugar, tranquilizarla con que la agencia la ayuda (prompt/ficha). Se
+// exige el relato de un fallo con un verbo de setup (verificar/validar/activar/abrir/crear/usar), no basta "no".
+const ofSetupProblemPattern =
+  /\b(no (?:la |lo |me )?(?:pude|puedo|pudo|logre|consegui|consigo) (?:verificar|validar|activar|abrir|crear)|no (?:se |me )?(?:verifica|valida|activa|deja verificar|deja validar)|nunca (?:la )?(?:pude |logre |consegui )?(?:verificar|validar|activar)|no me (?:deja|verifica|valida)|me da (?:error|problema|fallo)[^.!?\n]{0,20}(?:verificar|validar|verificacion|activar|cuenta|onlyfans|of\b)|tengo (?:un )?problema\w*[^.!?\n]{0,20}(?:verificar|validar|verificacion|activar|cuenta|onlyfans|of\b)|cuenta abierta pero (?:no|nunca)|abierta pero (?:no|nunca)[^.!?\n]{0,15}(?:pude|logre|consegui|verific|valid|activ)|no (?:consigo|logro) (?:verificar|validar|activar))\b/;
+function reportsOfSetupProblem(message: string): boolean {
+  return ofSetupProblemPattern.test(normalizeText(message));
+}
 
 // ¿La candidata MENCIONO la cara/privacidad en este mensaje? Señal para NO recitar la politica de la cara si
 // ella no la saco (la entrada face-requirement-mandatory se surfacea por el boost de su categoria; sin esta
