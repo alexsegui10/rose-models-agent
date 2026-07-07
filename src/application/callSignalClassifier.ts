@@ -56,7 +56,7 @@ const UNDERAGE =
 // peninsular y 3a persona LATAM (son/están). NO incluye formas "preocupadas" ("¿no será estafa?": eso es
 // distrust), que se evalúa después.
 const HOSTILE =
-  /\b(idiota|imbecil|gilipoll\w*|subnormal|cabron|cabrona|payas[oa]|capull\w*|sinverguenza|chorizos?|estafador\w*|timador\w*)\b|(una|que|vaya|menuda|de) mierda|me jode\b|no me jodas|vete a (la mierda|tomar)|(?<!\bsi )(es una|menuda|vaya|menudo) (estafa|timo|fraude|robo|porqueria|verguenza|tomadura de pelo)|(estafa|timo|fraude) de mierda|huele a (estafa|timo|fraude)|(?<!\bsi )(esto|eso) es (una )?(estafa|timo|fraude|ilegal|porqueria|tomadura de pelo)|(sois|son) unos? (estafadores|ladrones|mentirosos|sinverguenzas|rateros|tramposos|chorizos)|(me|nos) (estais|estan) (enganando|timando|estafando|tomando el pelo)|os voy a denunciar|voy a (denunciar|llamar a la policia|llamar a la guardia)|esto es ilegal|hijo de|callate|dejate de (gilipolleces|tonterias|chorradas|cuentos|historias|milongas)/;
+  /\b(idiota|imbecil|gilipoll\w*|subnormal|cabron|cabrona|payas[oa]|capull\w*|sinverguenza|chorizos?|estafador\w*|timador\w*)\b|(una|que|vaya|menuda|de) mierda|me jode\b|no me jodas|vete a (la mierda|tomar)|(?<!\bsi )(es una|menuda|vaya|menudo) (estafa|timo|fraude|robo|porqueria|verguenza|tomadura de pelo)|(estafa|timo|fraude) de mierda|huele a (estafa|timo|fraude)|(?<!\bsi )(esto|eso) es (una )?(estafa|timo|fraude|ilegal|porqueria|tomadura de pelo)|(sois|son) (?:todos? |todas? )?unos? (estafadores|ladrones|mentirosos|sinverguenzas|rateros|tramposos|chorizos)|(me|nos) (estais|estan) (enganando|timando|estafando|tomando el pelo)|os voy a denunciar|voy a (denunciar|llamar a la policia|llamar a la guardia)|esto es ilegal|hijo de|callate|dejate de (gilipolleces|tonterias|chorradas|cuentos|historias|milongas)/;
 
 // Pide hablar con una persona / rechaza la máquina -> handoff. Enfoque por INTENCIÓN (no plantillas
 // rígidas): un REFERENTE humano + un VERBO de "ponme con / que me lo explique / comunícame", o un rechazo
@@ -296,6 +296,18 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (BARE_AFFIRMATION.test(text) && !SUBSTANTIVE_QUESTION.test(text)) return "follows-along";
   if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
+
+  // Menciona que trabaja / esta con OTRA agencia (afirmacion, no pregunta): reconocer y SEGUIR, nunca "no te he
+  // pillado, repite" (bug rev-total 8-jul: "yo ya trabajo con otra agencia" caia en unclear -> ASK_REPEAT,
+  // fingiendo sordera a una frase clara). Va al final: una queja de reparto ("en otra agencia me dan mas") la
+  // caza DIRECT_SHARE_COMPLAINT antes, y una PREGUNTA de multi-agencia ("puedo con las dos?") la caza QUESTION.
+  if (
+    /\b(?:otra agencia|otras agencias|con una agencia|otra empresa|con un manager\b|un representante|otro estudio|otra gente que me lleva)\b/.test(
+      text
+    )
+  ) {
+    return "follows-along";
+  }
 
   // No reconocido (ruido/STT roto / frase no contemplada): se pide que lo repita en vez de asumir un "sí".
   return "unclear";

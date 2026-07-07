@@ -8,6 +8,9 @@ describe("clasificador de señal de la llamada", () => {
   it("agresión / acusación directa -> hostile-or-suspicious", () => {
     expect(sig("esto es una estafa, sois unos ladrones")).toBe("hostile-or-suspicious");
     expect(sig("eres imbécil")).toBe("hostile-or-suspicious");
+    // Con cuantificador en medio ("sois TODOS unos ladrones"): sigue siendo hostil (rev-total 8-jul).
+    expect(sig("que si, sois todos unos ladrones")).toBe("hostile-or-suspicious");
+    expect(sig("sois todas unas estafadoras")).toBe("hostile-or-suspicious");
   });
 
   it("pide hablar con una persona -> wants-human", () => {
@@ -29,6 +32,15 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("el 30% es mucho")).toBe("complains-about-share");
     expect(sig("¿no podéis bajar la comisión?")).toBe("complains-about-share");
     expect(sig("os quedáis demasiado")).toBe("complains-about-share");
+  });
+
+  it("menciona OTRA agencia (afirmacion) -> follows-along, NUNCA 'no te he pillado' (bug rev-total 8-jul)", () => {
+    expect(sig("mira yo ya trabajo con otra agencia ahora mismo")).toBe("follows-along");
+    expect(sig("estoy con otra agencia tambien")).toBe("follows-along");
+    // Pero una QUEJA de reparto via otra agencia sigue siendo queja (no se la traga):
+    expect(sig("en otra agencia me dan mas")).toBe("complains-about-share");
+    // Y una PREGUNTA sobre multi-agencia sigue su camino (no follows-along):
+    expect(sig("puedo estar con dos agencias a la vez?")).not.toBe("follows-along");
   });
 
   it("asentimiento a secas con '?' ('si?', 'vale?') -> follows-along, NO deferir (bug sim voz 7-jul)", () => {
