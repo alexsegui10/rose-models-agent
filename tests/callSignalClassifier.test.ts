@@ -34,6 +34,21 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("os quedáis demasiado")).toBe("complains-about-share");
   });
 
+  it("'es que'/'lo que' (conjuncion) NO se toma como pregunta; una pregunta real SI (bug rev-total 8-jul)", () => {
+    // "es que" es muletilla, no interrogativo -> no defiere. La frase acaba en "dime dime" (seguir).
+    expect(sig("hola si perdona es que estaba con el nino, dime dime")).toBe("follows-along");
+    expect(sig("es que lo deje por mi ex y tal, bueno sigue")).not.toBe("asks-unknown");
+    // Pero una pregunta REAL con "es que" delante sigue siendo pregunta (no se traga):
+    expect(sig("es que no entiendo, que significa el trafico?")).toMatch(/asks-/);
+    expect(sig("ya que estamos, cuanto tardais en lanzar?")).toMatch(/asks-/);
+    // Y una pregunta normal sin "es que" no se ve afectada:
+    expect(sig("y cuando empezariamos exactamente?")).toMatch(/asks-/);
+    // "lo que" NO se neutraliza (es ambiguo): una pregunta con "lo que" sigue detectandose como pregunta,
+    // aun sin "?" (STT) -> NO se pierde (decision consciente: solo se neutralizan conjunciones puras).
+    expect(sig("lo que gano es mio")).toMatch(/asks-/);
+    expect(sig("lo que cobro es en limpio o me quitan algo")).toMatch(/asks-/);
+  });
+
   it("menciona OTRA agencia (afirmacion) -> follows-along, NUNCA 'no te he pillado' (bug rev-total 8-jul)", () => {
     expect(sig("mira yo ya trabajo con otra agencia ahora mismo")).toBe("follows-along");
     expect(sig("estoy con otra agencia tambien")).toBe("follows-along");

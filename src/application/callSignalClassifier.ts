@@ -294,7 +294,14 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // Asentimiento a secas ("si?", "vale?"): avanzar, NO deferir. ANTES que QUESTION (que casa el "?" final) y
   // solo si NO hay una pregunta sustantiva encadenada (por si acaso), para no tragarse una pregunta real.
   if (BARE_AFFIRMATION.test(text) && !SUBSTANTIVE_QUESTION.test(text)) return "follows-along";
-  if (QUESTION.test(text)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
+  // "es que"/"ya que"/"asi que"/"sino que"/"puesto que"/"dado que" son CONJUNCIONES PURAS, NUNCA interrogativas:
+  // no deben disparar QUESTION por llevar "que" (bug rev-total 8-jul: "hola si, es que estaba con el nino, dime
+  // dime" se tomaba como pregunta desconocida y se defiere). Se neutralizan SOLO esas antes de mirar si es
+  // pregunta; cualquier OTRO interrogativo o el "?" final siguen contando. OJO: "lo que" NO se neutraliza a
+  // proposito (es un relativo AMBIGUO que SI puede encabezar una pregunta: "lo que gano es mio?"); se deja como
+  // estaba (lo coge QUESTION -> asks-*), asi el fix del "es que" no introduce falsos negativos con "lo que".
+  const withoutConjunctionThat = text.replace(/\b(?:es|ya|asi|sino|puesto|dado)\s+que\b/g, " ");
+  if (QUESTION.test(withoutConjunctionThat)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
 
   // Menciona que trabaja / esta con OTRA agencia (afirmacion, no pregunta): reconocer y SEGUIR, nunca "no te he
