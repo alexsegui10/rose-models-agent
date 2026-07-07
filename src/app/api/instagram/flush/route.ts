@@ -4,6 +4,7 @@ import { getInstagramConfig } from "@/application/instagramConfig";
 import { getQStashConfig } from "@/application/qstashConfig";
 import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
+import { sendInstagramBurst } from "@/infrastructure/integrations/instagramBurstSender";
 import {
   escalationNotificationFor,
   followRequestNotificationFor,
@@ -28,10 +29,8 @@ export const maxDuration = 60;
 
 const BodySchema = z.object({ senderId: z.string().min(1) });
 
-// Tope de tiempo para enviar la rafaga (margen bajo el techo de ~10s de Vercel).
-const HARD_DEADLINE_MS = 9000;
-
 export async function POST(request: Request): Promise<NextResponse> {
+  const turnStartedAt = Date.now();
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     return NextResponse.json({ error: "flush not configured" }, { status: 503 });
@@ -71,15 +70,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     ) {
       const provider = new GraphApiInstagramMessagingProvider(config);
       const chunks = splitIntoMessageBurst(result.response);
-      const startedAt = Date.now();
-      for (let i = 0; i < chunks.length; i += 1) {
-        if (Date.now() - startedAt > HARD_DEADLINE_MS) break;
-        if (i > 0) {
-          await new Promise((resolve) => setTimeout(resolve, Math.min(700 + chunks[i].trim().length * 28, 2600)));
-        }
-        const sent = await provider.sendTextMessage(senderId, chunks[i]);
-        if (!sent) break;
-      }
+      // Envio en rafaga con el emisor UNICO (mismo que el webhook directo): reparte el presupuesto de pausa y
+      // corta solo cerca del techo de 60s. ANTES aqui habia una copia con deadline 9s + retardo fijo que se
+      // comia las ultimas burbujas del pitch de 6 (bug real Laura 7-jul). turnStartedAt = inicio del POST del
+      // flush (incluye el tiempo de OpenAI dentro de flushPendingInbound), igual que el webhook.
+      await sendInstagramBurst(provider, senderId, chunks, {
+        turnStartedAt,
+        logPrefix: "[ig-flush]"
+      });
     }
 
     // Paridad con el webhook directo (jul-2026, hallazgo agenda-05): si esta rafaga dejo la cita agendada,

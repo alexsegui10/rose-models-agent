@@ -9,6 +9,7 @@ import {
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
+import { sendInstagramBurst } from "@/infrastructure/integrations/instagramBurstSender";
 import {
   escalationNotificationFor,
   followRequestNotificationFor,
@@ -23,31 +24,6 @@ import { scheduleInboundFlush, schedulePrivacyDetection } from "@/infrastructure
 // postgres.js necesita runtime Node (no Edge). maxDuration=60: Vercel Hobby permite hasta 60s por funcion.
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-// Ritmo de la rafaga (peticion de Alex: que no responda al instante y deje unos segundos entre
-// mensajes). PRESUPUESTO total de pausa por turno: reparte la pausa "de tecleo" entre los chunks.
-// Ajustable por env. (No es el cuello de botella: el techo real de la funcion en Hobby son 60s.)
-const BURST_DELAY_BUDGET_MS = Number(process.env.INSTAGRAM_BURST_DELAY_BUDGET_MS ?? 4500);
-const BURST_DELAY_PER_MESSAGE_MAX_MS = Number(process.env.INSTAGRAM_BURST_DELAY_MAX_MS ?? 3200);
-// Techo de tiempo por turno: margen holgado bajo los 60s de Vercel Hobby. El presupuesto de pausas se
-// calcula como (este techo - tiempo ya gastado por OpenAI), para que el gpt-5.4 de redaccion (~3-8s)
-// tenga sitio y la rafaga no se trunque. Subido de 8.5s -> 30s el 6-jul al confirmar el techo real de 60s.
-const TURN_TIME_BUDGET_MS = Number(process.env.INSTAGRAM_TURN_BUDGET_MS ?? 30000);
-// Tope DURO: pasado este tiempo desde el inicio del turno, no se envian mas chunks de la rafaga (margen
-// holgado bajo los 60s de Vercel Hobby). Evita que la lambda muera a mitad de envio.
-const HARD_TURN_DEADLINE_MS = Number(process.env.INSTAGRAM_HARD_DEADLINE_MS ?? 32000);
-// Backoff antes de UN reintento de un chunk fallido (transitorio): que un fallo puntual no tire la rafaga.
-const BURST_RETRY_BACKOFF_MS = Number(process.env.INSTAGRAM_BURST_RETRY_BACKOFF_MS ?? 600);
-
-/** Pausa "humana" antes de un mensaje: base + tiempo de tecleo segun longitud, con tope por mensaje. */
-function naturalSendDelayMs(chunk: string): number {
-  const typingMs = 700 + chunk.trim().length * 28;
-  return Math.min(typingMs, BURST_DELAY_PER_MESSAGE_MAX_MS);
-}
-
-function sleep(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
-}
 
 /**
  * Webhook de Instagram. GET = handshake de verificación de Meta. POST = eventos entrantes: verifica
@@ -218,53 +194,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
       if (result.deliveryStatus === "SENT" && !result.automationBlocked && result.response.trim().length > 0) {
         const chunks = splitIntoMessageBurst(result.response);
-        // Presupuesto de pausa = lo que queda del techo del turno tras descontar el tiempo ya gastado
-        // (sobre todo OpenAI). Si OpenAI tardo mucho, casi no se pausa, en vez de arriesgar el timeout.
-        const elapsedMs = Date.now() - turnStartedAt;
-        let delayBudgetMs = Math.max(0, Math.min(BURST_DELAY_BUDGET_MS, TURN_TIME_BUDGET_MS - elapsedMs));
-        for (let i = 0; i < chunks.length; i += 1) {
-          // Guard DURO de tiempo: si el turno se acerca al techo de 60s de Vercel, no enviar mas chunks.
-          // Mejor responder 200 con entrega parcial que dejar que Vercel mate la lambda a mitad de envio.
-          if (Date.now() - turnStartedAt > HARD_TURN_DEADLINE_MS) {
-            console.warn("[ig-webhook] presupuesto de tiempo casi agotado: se corta la rafaga", {
-              enviados: i,
-              total: chunks.length
-            });
-            break;
-          }
-          // Ritmo natural (peticion de Alex): unos segundos entre mensajes. La pausa va SOLO entre mensajes,
-          // NO antes del primero (el 1er mensaje sale ya): asi se gana presupuesto y la rafaga entera entra
-          // bajo el techo de 60s de Vercel. Se reparte un presupuesto total de pausa; si se agota, los
-          // ultimos salen seguidos en vez de tumbar la funcion.
-          if (i > 0 && delayBudgetMs > 0) {
-            const wait = Math.min(naturalSendDelayMs(chunks[i]), delayBudgetMs);
-            delayBudgetMs -= wait;
-            await sleep(wait);
-          }
-          // Envio con UN reintento corto: un fallo RAPIDO (rechazo de API/red, no entregado) NO debe tirar
-          // toda la rafaga (la candidata se quedaba solo con el 1er mensaje). Si tras el reintento sigue
-          // fallando, ABORTAMOS el resto (no enviar fuera de orden/contexto) con traza de entrega parcial.
-          const sendStart = Date.now();
-          let sent = await provider.sendTextMessage(message.senderId, chunks[i]);
-          // Solo se reintenta si el fallo fue RAPIDO (<3s): un TIMEOUT (~3.5s) pudo haberse entregado igual
-          // en Meta y reintentar duplicaria el mensaje. Y solo si queda margen REAL bajo el techo de 60s,
-          // descontando el backoff + el timeout del propio reintento (si no, podria morir la lambda a mitad).
-          const failedFast = Date.now() - sendStart < 3000;
-          const retryDeadlineMs = HARD_TURN_DEADLINE_MS - BURST_RETRY_BACKOFF_MS - 3500;
-          if (!sent && failedFast && Date.now() - turnStartedAt < retryDeadlineMs) {
-            await sleep(BURST_RETRY_BACKOFF_MS);
-            sent = await provider.sendTextMessage(message.senderId, chunks[i]);
-            console.log("[ig-webhook] reintento de envio", { sent, parte: `${i + 1}/${chunks.length}` });
-          }
-          console.log("[ig-webhook] envio a Instagram", { sent, parte: `${i + 1}/${chunks.length}` });
-          if (!sent) {
-            console.warn("[ig-webhook] entrega PARCIAL: chunk fallido tras reintento, se aborta el resto", {
-              enviados: i,
-              total: chunks.length
-            });
-            break;
-          }
-        }
+        // Envio en rafaga con ritmo humano: emisor UNICO (compartido con el flush del debounce) que reparte el
+        // presupuesto de pausa y corta solo cerca del techo de 60s. Ver instagramBurstSender.ts.
+        await sendInstagramBurst(provider, message.senderId, chunks, {
+          turnStartedAt,
+          logPrefix: "[ig-webhook]"
+        });
       } else {
         console.log("[ig-webhook] NO se envia respuesta", {
           motivo: `delivery=${result.deliveryStatus} blocked=${result.automationBlocked}`
