@@ -6,15 +6,14 @@ function buildEnv(vars: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 describe("getLlmRuntimeConfig", () => {
-  it("defaults (Alex 6-jul): REDACCION en gpt-5.4 grande (cabe en Hobby, 60s); comprension y voz en mini", () => {
+  it("defaults: REDACCION de texto y VOZ en gpt-5.4 grande; comprension en mini", () => {
     const config = getLlmRuntimeConfig(buildEnv());
 
-    // Vercel Hobby permite hasta 60s por funcion (no ~10s): el gpt-5.4 de redaccion (~3-8s) cabe con
-    // margen y es la mayor palanca de "estar vivo". La comprension (extraccion) y la voz (latencia) siguen
-    // en mini a proposito.
+    // Texto en gpt-5.4 (Alex 6-jul) y VOZ tambien en gpt-5.4 (medicion de latencia 7-jul: ~1.4s/turno,
+    // cabe de sobra en la ventana de 3.5s y suena mas natural). La comprension (extraccion) sigue en mini.
     expect(config.writingModel).toBe("gpt-5.4");
     expect(config.understandingModel).toBe("gpt-5.4-mini");
-    expect(config.callWritingModel).toBe("gpt-5.4-mini");
+    expect(config.callWritingModel).toBe("gpt-5.4");
   });
 
   it("timeout por defecto holgado (12s) para que el gpt-5.4 de redaccion no se corte", () => {
@@ -25,8 +24,9 @@ describe("getLlmRuntimeConfig", () => {
   it("se puede bajar la redaccion a mini por entorno (p. ej. para ahorrar o si Hobby diera guerra)", () => {
     const config = getLlmRuntimeConfig(buildEnv({ OPENAI_WRITING_MODEL: "gpt-5.4-mini" }));
     expect(config.writingModel).toBe("gpt-5.4-mini");
-    // La voz y la comprension NO heredan: siguen en mini salvo que se pidan aparte.
-    expect(config.callWritingModel).toBe("gpt-5.4-mini");
+    // La voz NO hereda de OPENAI_WRITING_MODEL: sigue con su default (gpt-5.4) salvo OPENAI_CALL_MODEL.
+    // La comprension sigue en mini.
+    expect(config.callWritingModel).toBe("gpt-5.4");
     expect(config.understandingModel).toBe("gpt-5.4-mini");
   });
 

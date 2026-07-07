@@ -25,8 +25,11 @@ const defaultUnderstandingModel = "gpt-5.4-mini";
 // NUESTRO tope interno de 4s (ver timeoutMs abajo) + los presupuestos de rafaga de ~9s del webhook,
 // calibrados para aquel 10s viejo. Subidos ambos, el grande cabe de sobra tambien en Hobby.
 const defaultWritingModel = "gpt-5.4";
-// La LLAMADA de voz se queda en mini: cada turno tiene que salir en <3.5s o la llamada se siente muerta.
-const defaultCallWritingModel = "gpt-5.4-mini";
+// La LLAMADA de voz sube a gpt-5.4 COMPLETO (medicion 7-jul): el banco de latencia (mini vs gpt-5.4 en turnos
+// reales de llamada) dio gpt-5.4 en ~1.4s de mediana / ~1.6s el peor caso, MUY por debajo del tope de 3.5s por
+// turno, y con una redaccion bastante mas natural y viva. No hizo falta streaming del LLM ni cambiar de
+// proveedor. Overridable por OPENAI_CALL_MODEL; el tope de tiempo por turno es OPENAI_CALL_TIMEOUT_MS (def 3500).
+const defaultCallWritingModel = "gpt-5.4";
 
 export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRuntimeConfig {
   const requestedMode = env.LLM_MODE === "OPENAI" ? "OPENAI" : "DETERMINISTIC";

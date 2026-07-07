@@ -143,11 +143,16 @@ export function getCallDrafter(env: NodeJS.ProcessEnv = process.env): CallUttera
   if (env.CALL_LLM_REDACTION === "off") return undefined;
   const config = getLlmRuntimeConfig(env);
   if (!config.openaiApiKey) return undefined;
+  // Tope de tiempo por turno de VOZ (si tarda mas, cae al fallback determinista). El banco de latencia (7-jul)
+  // midio gpt-5.4 en ~1.4s mediana / ~1.6s peor caso, asi que 3.5s da ~2x de margen. Configurable por
+  // OPENAI_CALL_TIMEOUT_MS por si en produccion se ven fallbacks por picos de latencia.
+  const rawCallTimeout = Number(env.OPENAI_CALL_TIMEOUT_MS);
+  const callTimeoutMs = Number.isFinite(rawCallTimeout) && rawCallTimeout > 0 ? rawCallTimeout : 3500;
   return new OpenAiCallDrafter({
     apiKey: config.openaiApiKey,
-    // Modelo PROPIO de la voz (mini): la subida del texto a gpt-5.4 (Alex 5-jul) NO arrastra a la
-    // llamada, donde la latencia manda (cada turno debe salir en <3.5s o la llamada se siente muerta).
+    // Modelo de la voz: gpt-5.4 COMPLETO (medicion 7-jul: cabe de sobra en la ventana de turno y suena mas
+    // natural). Overridable por OPENAI_CALL_MODEL.
     model: config.callWritingModel,
-    timeoutMs: Math.min(config.timeoutMs, 3500)
+    timeoutMs: callTimeoutMs
   });
 }
