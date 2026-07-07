@@ -169,14 +169,21 @@ const QUESTION =
 // "mmm vale...", "eh bueno dale") — jul-2026, barrido de personas: "hola si" caía en unclear y el bot
 // pedía repetir en el primer turno (sonaba a sordo).
 const FOLLOWS_ALONG =
-  /^\s*(?:(?:ah+|ahh|pues|bueno|hola+|buenas|holi|hey|oye|mira|mmm+|mm+|eh+|este|em+|uy|si\?)[\s,!¡.]*)*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|me parece (bien|genial|perfecto)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
+  /^\s*(?:(?:ah+|ahh|pues|bueno|hola+|buenas|holi|hey|oye|mira|mmm+|mm+|eh+|este|em+|uy|si\?)[\s,!¡.]*)*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|(?<!no )me parece (bien|genial|perfecto|justo|razonable|logico|correcto|estupendo|fenomenal)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
 
 // Asentimiento a secas que ACABA en "?" (o sin el): "si?", "vale?", "ah si?", "claro?". Es un "si, dime", NO
 // una pregunta. QUESTION lo confundia por el "?" final y el bot defieria algo inexistente a WhatsApp (bug del
 // simulador de voz 7-jul: a un "si?" al descolgar solto "eso te lo confirmo por WhatsApp en cuanto colguemos").
 // Anclado a FIN de cadena: "vale, pero cuanto gano?" NO entra aqui (esa SI es pregunta y la coge QUESTION).
 const BARE_AFFIRMATION =
-  /^\s*(?:(?:ah+|pues|bueno|si+|oye|mira|eh+|mmm+|mm+|holi|hey|hola+|buenas|uy)[\s,!¡.?]*)*(si+|vale|oka?y?|okis|claro|ya|dale|va|correcto|perfecto|genial|bien|guay|aja+|ajam+|sip|entiend\w*)[\s,!¡.?]*$/;
+  /^\s*(?:(?:ah+|pues|bueno|si+|oye|mira|eh+|mmm+|mm+|holi|hey|hola+|buenas|uy)[\s,!¡.?]*)*(si+|vale|oka?y?|okis|claro|ya|dale|va|bueno|correcto|perfecto|genial|bien|guay|aja+|ajam+|sip|entiend\w*)[\s,!¡.?]*$/;
+
+// OPINION NEGADA: "no/tampoco/nunca/jamas/ya no ... me parece/gusta/convence/cuadra/encaja/vale/va bien/lo veo".
+// Es un NO, JAMAS un asentimiento. Sin esto, "tampoco me parece justo" caia en FOLLOWS_ALONG (por "me parece
+// justo") y el bot avanzaba/cerraba ignorando la objecion (rev-total 8-jul, roce invariante 3). Cubre negaciones
+// NO adyacentes (tampoco/nunca/ya no) y con coma ("no, me parece justo") que el lookbehind estrecho no pillaba.
+const NEGATED_OPINION =
+  /\b(?:no|tampoco|nunca|jamas|ya no|para nada|en absoluto|nada)\b[,\s][^.?!]{0,20}\b(?:me parece|me gusta|me convence|me cuadra|me encaja|me vale|me va bien|lo veo bien)\b(?!\s+(?:mal|nada mal|tan mal))/;
 
 // Confirmación de identidad al descolgar ("sí, soy yo", "con ella habla", "la misma"): es un "sí, sigue",
 // no ruido (jul-2026, barrido de personas: "hola si soy yo" acababa en "¿me lo repites?"). ANCLADA a la
@@ -294,6 +301,9 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // Asentimiento a secas ("si?", "vale?"): avanzar, NO deferir. ANTES que QUESTION (que casa el "?" final) y
   // solo si NO hay una pregunta sustantiva encadenada (por si acaso), para no tragarse una pregunta real.
   if (BARE_AFFIRMATION.test(text) && !SUBSTANTIVE_QUESTION.test(text)) return "follows-along";
+  // Una opinion NEGADA nunca es asentimiento: en negociacion cuenta como queja de reparto (sigue la escalera);
+  // en general se pide aclarar en vez de avanzar como si aceptara. ANTES de QUESTION y de FOLLOWS_ALONG.
+  if (NEGATED_OPINION.test(text)) return input.moneyContext ? "complains-about-share" : "unclear";
   // "es que"/"ya que"/"asi que"/"sino que"/"puesto que"/"dado que" son CONJUNCIONES PURAS, NUNCA interrogativas:
   // no deben disparar QUESTION por llevar "que" (bug rev-total 8-jul: "hola si, es que estaba con el nino, dime
   // dime" se tomaba como pregunta desconocida y se defiere). Se neutralizan SOLO esas antes de mirar si es

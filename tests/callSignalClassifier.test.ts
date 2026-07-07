@@ -49,6 +49,31 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("lo que cobro es en limpio o me quitan algo")).toMatch(/asks-/);
   });
 
+  it("aceptaciones ('me parece justo') y 'bueno' -> follows-along; negaciones NO (bug rev-total 8-jul)", () => {
+    expect(sig("el reparto me parece justo")).toBe("follows-along");
+    expect(sig("me parece razonable")).toBe("follows-along");
+    expect(sig("bueno")).toBe("follows-along");
+    expect(sig("bueno vale?")).toBe("follows-along"); // no romper la afirmacion con "?"
+    // NEGACIONES: NO se toman como aceptacion. Incluye las NO ADYACENTES (tampoco/nunca/ya no) y con coma,
+    // que un lookbehind estrecho no pillaba (rev-total 8-jul, roce invariante 3).
+    expect(sig("no me parece justo")).not.toBe("follows-along");
+    expect(sig("bueno pero no me convence")).not.toBe("follows-along");
+    expect(sig("tampoco me parece justo")).not.toBe("follows-along");
+    expect(sig("nunca me parece justo")).not.toBe("follows-along");
+    expect(sig("ya no me parece justo")).not.toBe("follows-along");
+    expect(sig("no, me parece justo")).not.toBe("follows-along");
+    // Negacion ENFATICA (para nada / en absoluto): tampoco es aceptacion.
+    expect(sig("para nada me parece justo")).not.toBe("follows-along");
+    expect(sig("en absoluto me parece justo")).not.toBe("follows-along");
+    expect(sigMoney("para nada me parece justo")).toBe("complains-about-share");
+    // En negociacion, una opinion negada del reparto cuenta como queja (sigue la escalera 70-65-60):
+    expect(sigMoney("tampoco me parece justo")).toBe("complains-about-share");
+    expect(sigMoney("no, me parece justo el reparto")).toBe("complains-about-share");
+    // Doble negativo de ACEPTACION ("no me parece mal") NO se marca como queja (excluye "mal").
+    expect(sigMoney("no me parece mal")).not.toBe("complains-about-share");
+    expect(sigMoney("no me parece nada mal")).not.toBe("complains-about-share");
+  });
+
   it("menciona OTRA agencia (afirmacion) -> follows-along, NUNCA 'no te he pillado' (bug rev-total 8-jul)", () => {
     expect(sig("mira yo ya trabajo con otra agencia ahora mismo")).toBe("follows-along");
     expect(sig("estoy con otra agencia tambien")).toBe("follows-along");
