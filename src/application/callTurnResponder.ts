@@ -21,9 +21,17 @@ import { runCallTurn, type CallTurnResult } from "./callBrain";
 import type { CallContext } from "./callContext";
 import type { CallUtteranceDrafter } from "./callDrafter";
 import { extractCallFacts } from "./callFactExtractor";
-import { decideCallDirective, initialCallDirectorState, type CallDirectiveType, type CallDirectorState } from "./callDirector";
+import {
+  decideCallDirective,
+  initialCallDirectorState,
+  type CallCandidateSignal,
+  type CallDirectiveType,
+  type CallDirectorState
+} from "./callDirector";
 import { validateCallUtterance } from "./callRedactionValidator";
 import { classifyCallSignal } from "./callSignalClassifier";
+import { resolveRefinedSignal, type CallUnderstander } from "./callUnderstander";
+import { getCallUnderstander } from "./openaiCallUnderstander";
 import { LocalBusinessKnowledgeRetriever, type BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
 
 export interface CallChatMessage {
@@ -44,6 +52,13 @@ export interface RespondToCallInput {
   /** Redactor de voz (LLM) opcional. Si se inyecta, redacta las etapas explicativas (con validación +
    *  fallback); si no, se usa el guion determinista. Lo conecta el endpoint cuando hay clave/config. */
   drafter?: CallUtteranceDrafter;
+  /**
+   * Capa de COMPRENSIÓN (LLM) opcional: cuando el oído determinista no reconoce una frase REAL (no ruido),
+   * entiende qué quiso decir y la mapea a una intención del guion que NO cambia el estado (responder,
+   * tranquilizar, aclarar, identidad, ingresos, edad, cara). Solo corre en el turno EN VIVO. Ante fallo ->
+   * el turno se queda `unclear` (pedir que repita). Por defecto se resuelve del entorno (clave OpenAI).
+   */
+  understander?: CallUnderstander;
   /**
    * "Buffer words" (jul-2026): se invoca JUSTO ANTES de llamar al redactor LLM (la única parte lenta)
    * con una muletilla corta ("Vale... ") para que el endpoint la emita ya en streaming y el silencio
@@ -70,6 +85,14 @@ const callKnowledgeCandidate = normalizeCandidate({
 
 const defaultRetriever = new LocalBusinessKnowledgeRetriever(businessKnowledgeEntries);
 
+// Entrada de conocimiento de la CARA: cuando la comprensión entiende una duda/vergüenza sobre mostrar la
+// cara ("me da corte", "y si me reconocen"), se responde tranquilizando con ESTOS hechos aprobados (que
+// ya lideran con tranquilización). Si no estuviera, la duda de cara cae a una tranquilización genérica.
+const FACE_KNOWLEDGE_ENTRY =
+  businessKnowledgeEntries.find(
+    (entry) => entry.id === "face-requirement-mandatory" && entry.status === "ACTIVE" && entry.approvedByAlex
+  ) ?? null;
+
 // Muletillas por directiva para tapar la latencia del redactor (elegidas para no chocar con los arranques
 // típicos del fallback de cada directiva). La elipsis + espacio final es el formato que la plataforma de
 // voz pronuncia con pausa natural sin distorsión. ROTAN por turno (jul-2026: en la simulación el "A ver..."
@@ -92,6 +115,22 @@ function draftBufferWord(directive: CallDirectiveType, turnIndex: number): strin
 /** Ruido de ASR/línea: vacío o solo puntuación ("...", "…"). Compartido por el atajo en vivo y el replay. */
 function isNoiseUtterance(utterance: string): boolean {
   return utterance.trim().length === 0 || /^[\s.·…,;:!?-]*$/.test(utterance);
+}
+
+const SPANISH_VOWEL = /[aeiouáéíóúü]/;
+/**
+ * Audio INININTELIGIBLE (no solo puntuación): STT roto tipo "krzt mmm", "sht brr" — fragmentos SIN vocales,
+ * que no son lenguaje real. Se distingue del ruido puro (isNoiseUtterance) y de una frase REAL no reconocida
+ * ("y si me reconocen"): una frase real tiene al menos un token con vocal. Se usa para decidir qué es "audio
+ * roto" (no se manda a comprensión y SÍ acumula la racha de handoff a una persona a los 3 intentos) frente a
+ * "lenguaje real que el oído no listó" (se manda a comprensión / se entiende, no cuenta como audio roto). Sin
+ * esto, la comprensión neutralizaría el escalado por audio roto (riesgo del revisor jul-2026).
+ */
+function isUnintelligibleUtterance(utterance: string): boolean {
+  if (isNoiseUtterance(utterance)) return true;
+  const tokens = utterance.toLowerCase().match(/[a-záéíóúüñ]+/g);
+  if (!tokens || tokens.length === 0) return true;
+  return tokens.every((token) => !SPANISH_VOWEL.test(token));
 }
 
 export async function respondToCall(input: RespondToCallInput): Promise<CallResponderResult> {
@@ -156,6 +195,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
 
   const replayRetriever = input.retriever ?? defaultRetriever;
   const answerEnabled = input.answerFromKnowledge !== false;
+  // Comprensión (LLM) para lo que el oído determinista no reconoce: inyectable en tests; por defecto del
+  // entorno (undefined si no hay clave -> comportamiento determinista de siempre). Solo se usa EN VIVO.
+  const understander = input.understander ?? getCallUnderstander();
 
   if (botHasSpoken) {
     // Consume el primer turno del bot y reproduce los turnos previos de la candidata para reconstruir el
@@ -192,6 +234,24 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
         moneyContext,
         lastBotUtterance: botBefore[i]
       });
+      // Reconstrucción consistente con la comprensión EN VIVO (replay-safe): si hay comprensión disponible,
+      // una frase REAL que el oído no reconoció (unclear no-ruido) se ENTENDIÓ en su momento como una señal
+      // que NO cambia el estado (responder/tranquilizar/...). Aquí NO se re-llama al LLM (sería lento en la
+      // reproducción); se reproduce solo su EFECTO en el estado: reinicia las rachas (unclear/repetición) y
+      // no toca guion/cierre/negociación. Sin esto, la reproducción contaría esos turnos como "audio roto" y
+      // podría disparar un handoff fantasma que en vivo nunca ocurrió. El ruido real sí sigue acumulando.
+      if (
+        signal === "unclear" &&
+        understander &&
+        !isUnintelligibleUtterance(userUtterances[i]) &&
+        !state.closed &&
+        !state.handedOff
+      ) {
+        if (state.unclearStreak !== 0 || state.repeatRequestStreak !== 0) {
+          state = { ...state, unclearStreak: 0, repeatRequestStreak: 0 };
+        }
+        continue;
+      }
       const decision = decideCallDirective({ state, signal });
       directiveRepeats[decision.directive.type] = (directiveRepeats[decision.directive.type] ?? 0) + 1;
       state = decision.nextState;
@@ -220,15 +280,54 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     return { content: "", signal: "unclear", directiveType: "STAY_SILENT" };
   }
 
+  // SEÑAL DEL TURNO EN VIVO. El oído determinista PRIMERO (rápido y seguro: edad/%/legal se resuelven aquí).
+  // Si NO reconoce una frase REAL (unclear que no es ruido) y hay comprensión disponible fuera de estado
+  // terminal, se le pide al modelo que ENTIENDA qué quiso decir y la mapee a una intención que NO cambia el
+  // estado (responder/tranquilizar/aclarar/identidad/ingresos/edad/cara). Si no hay comprensión o el modelo
+  // no lo entiende, el turno se queda `unclear` (pedir que repita): fallback determinista (invariante 6).
+  let liveSignal: CallCandidateSignal | undefined = botHasSpoken ? undefined : "none";
+  let liveCoveringEntries = coveringEntries;
+  if (botHasSpoken) {
+    const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
+    let signal = classifyCallSignal({
+      utterance: lastUtterance,
+      isCoveredQuestion: coveringEntries.length > 0,
+      moneyContext,
+      lastBotUtterance
+    });
+    if (signal === "unclear" && understander && !isUnintelligibleUtterance(lastUtterance) && !terminalBeforeTurn) {
+      const intent = await understander.understand({ utterance: lastUtterance, lastBotUtterance, context: input.context });
+      const resolution = resolveRefinedSignal(intent);
+      if (resolution.kind === "signal") {
+        signal = resolution.signal;
+      } else if (resolution.kind === "question") {
+        // El modelo entiende que es una pregunta de negocio: cubierta -> responder; no cubierta -> deferir
+        // a Alex por WhatsApp. La COBERTURA la decide el recuperador determinista, no el modelo.
+        signal = coveringEntries.length > 0 ? "asks-covered" : "asks-unknown";
+      } else if (resolution.kind === "face-concern") {
+        // Duda/vergüenza sobre la cara: tranquilizar con el conocimiento de la cara (que ya lidera con la
+        // tranquilización). Si por lo que sea no está la entrada, tranquilización genérica (distrust).
+        if (FACE_KNOWLEDGE_ENTRY) {
+          liveCoveringEntries = [FACE_KNOWLEDGE_ENTRY];
+          signal = "asks-covered";
+        } else {
+          signal = "distrust";
+        }
+      }
+      // kind "none": el modelo no lo entendió con seguridad -> se queda `unclear` (pedir que repita).
+    }
+    liveSignal = signal;
+  }
+
   const result = runCallTurn({
     state,
     utterance: lastUtterance,
     candidateName: input.candidateName ?? input.context?.candidateName,
     recorded: input.recorded,
     context: input.context,
-    // En el turno de apertura (el bot aún no habló) el bot INICIA: señal "none" (no "unclear" por vacío).
-    signal: botHasSpoken ? undefined : "none",
-    resolveQuestion: () => coveringEntries,
+    // Señal ya resuelta arriba (oído determinista + comprensión). En apertura (el bot aún no habló): "none".
+    signal: liveSignal,
+    resolveQuestion: () => liveCoveringEntries,
     // Memoria de la llamada (jul-2026): lo que ELLA ya dijo en cualquier turno (extractor determinista),
     // para que el redactor no re-pregunte y pueda referenciarlo. No decide nada (solo informa).
     callFacts: extractCallFacts(userUtterances),
