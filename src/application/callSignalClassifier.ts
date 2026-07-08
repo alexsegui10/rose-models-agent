@@ -115,7 +115,7 @@ const DIRECT_SHARE_COMPLAINT =
 // Pregunta de INGRESOS ("¿cuánto se gana?", "¿cuánto voy a ganar?", "¿se gana bien?"): respuesta HONESTA
 // (depende de ti, SIN cifras ni promesas), no se defiere. Se evalúa antes que QUESTION.
 const ASKS_EARNINGS =
-  /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|cobro|cobraria|cobrare|voy a cobrar|me llevo|me llevaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b/;
+  /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|cobro|cobraria|cobrare|voy a cobrar|me llevo|me llevaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b|\bgarp[ao]\w*\b/;
 
 // Quiere terminar / colgar -> cerrar con contrato. Incluye despedidas sueltas ("chau chau", "bye"):
 // tras el cierre deben llevar a la despedida/silencio, no a repetir el discurso (barrido jul-2026).
@@ -129,7 +129,7 @@ const CONFORMITY =
 // Muletillas de "continúa" ("¿y?", "¿y qué más?", "sigue", "cuenta", "y luego"): NO son preguntas a
 // deferir, son "dale, avanza". Se evalúan ANTES que QUESTION para que no se interpreten como duda.
 const CONTINUATION =
-  /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuentame\b/;
+  /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuentame\b|como viene la mano/;
 
 // Pregunta de IDENTIDAD ("¿quién eres?", "¿de dónde llamas?", "¿de qué agencia?", "¿cómo te llamas?"): NO se
 // defiere; el bot dice quién es. Incluye preguntas personales al bot ("¿cuántos años tienes?"): deferirlas a
@@ -185,6 +185,13 @@ const BARE_AFFIRMATION =
 const NEGATED_OPINION =
   /\b(?:no|tampoco|nunca|jamas|ya no|para nada|en absoluto|nada)\b[,\s][^.?!]{0,20}\b(?:me parece|me gusta|me convence|me cuadra|me encaja|me vale|me va bien|lo veo bien)\b(?!\s+(?:mal|nada mal|tan mal))/;
 
+// CONCESION + OBJECION ("yes-but"): un token de aceptacion (ya/vale/si/bueno/claro...) SEGUIDO de "pero" o
+// "aunque" NO es un asentimiento, es la antesala de una objecion ("ya pero mi novio...", "vale pero no se
+// si tendre tiempo"). Sin esto casaba FOLLOWS_ALONG por el token inicial y el bot avanzaba. Se evalua tras
+// QUESTION (asi "vale pero cuanto gano?" sigue siendo pregunta) y NEGATED_OPINION.
+const YES_BUT =
+  /^\s*(?:(?:ah+|pues|bueno|mira|oye|mmm+|eh+|este|em+)[\s,]*)*(?:ya|vale|si+|claro|okay?|oka|okis|va|bueno|dale|de acuerdo|entiendo)\b[\s,]*(?:pero|aunque)\b/;
+
 // Confirmación de identidad al descolgar ("sí, soy yo", "con ella habla", "la misma"): es un "sí, sigue",
 // no ruido (jul-2026, barrido de personas: "hola si soy yo" acababa en "¿me lo repites?"). ANCLADA a la
 // frase entera para que "lo hablo con ella" (consultar a alguien) no cuente como asentimiento.
@@ -213,8 +220,11 @@ const PERSONAL_TO_BOT =
 // Pide que el BOT repita ("¿qué decías?", "no te escuché", "se corta, repite"): repetir lo último dicho,
 // NUNCA deferir a WhatsApp ni pedirle a ELLA que repita (jul-2026, barrido: acababa en el absurdo
 // "eso te lo confirmo por WhatsApp" cuando ella solo pedía que repitiera).
+// El "que" pelado usa \?? (opcional, espejo del "como"): el STT suele omitir el signo, y un "que" solo es
+// "¿que? no te oi", NO una pregunta de negocio a deferir (bug sweep 8-jul). Recap con gerundio ("que (me)
+// estabas contando/diciendo/explicando") tambien es pedir que repita, no una pregunta desconocida.
 const ASKS_BOT_REPEAT =
-  /\bque (?:decias|dijiste|has dicho|estabas diciendo|me contabas)\b|\bme lo (?:repites|puedes repetir|repetis|repite)\b|\brepite(?:melo|me)?\b|\bno te (?:escuche|escucho|oigo|oi|he oido|entendi bien)\b|\bse (?:corto|ha cortado|entrecorta|escucha entrecortado)\b|^\s*¿?\s*como\s*\??\s*$|^\s*¿?\s*que\s*\?+\s*$/;
+  /\bque (?:(?:me )?estabas (?:diciendo|contando|explicando)|(?:me )?decias|dijiste|has dicho|me contabas|contabas)\b|\bme lo (?:repites|puedes repetir|repetis|repite)\b|\brepite(?:melo|me)?\b|\bno te (?:escuche|escucho|oigo|oi|he oido|entendi bien)\b|\bse (?:corto|ha cortado|entrecorta|escucha entrecortado)\b|^\s*¿?\s*como\s*\??\s*$|^\s*¿?\s*que\s*\??\s*$/;
 
 // ACLARACIÓN de lo que el bot ACABA de decir (3-jul, llamada real de Alex: "¿qué significa se liquida?"
 // y "¿límite de qué?" acababan en el absurdo "te lo confirmo por WhatsApp"). Dos formas:
@@ -312,6 +322,12 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // estaba (lo coge QUESTION -> asks-*), asi el fix del "es que" no introduce falsos negativos con "lo que".
   const withoutConjunctionThat = text.replace(/\b(?:es|ya|asi|sino|puesto|dado)\s+que\b/g, " ");
   if (QUESTION.test(withoutConjunctionThat)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
+  // "ya pero..."/"vale pero..."/"bueno pero..." = CONCESION + OBJECION (yes-but): el token de aceptacion va
+  // seguido de un CONTRASTE, asi que NO es asentimiento. Sin esto, "ya pero mi novio no se si lo va a llevar
+  // bien" casaba FOLLOWS_ALONG por el "ya" inicial -> follows-along -> el bot AVANZABA atropellando la
+  // objecion (sweep 8-jul). Cae a unclear -> la comprension lo entiende como duda y tranquiliza. OJO: va
+  // DESPUES de QUESTION (para que "vale pero cuanto gano?" siga siendo pregunta) y de NEGATED_OPINION.
+  if (YES_BUT.test(text)) return "unclear";
   if (FOLLOWS_ALONG.test(text)) return "follows-along";
 
   // Menciona que trabaja / esta con OTRA agencia (afirmacion, no pregunta): reconocer y SEGUIR, nunca "no te he
