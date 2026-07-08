@@ -31,6 +31,7 @@ export type CallUnderstoodIntent =
   | "age-policy" // requisito de edad -> respuesta determinista (solo 18+)
   | "clarification" // no entendió una palabra/parte de lo que el BOT acaba de decir -> reformular en simple
   | "face-concern" // duda / vergüenza / reparo sobre mostrar la CARA -> tranquilizar con el conocimiento de la cara
+  | "time-concern" // duda de TIEMPO / disponibilidad ("trabajo y no sé si tendré tiempo") -> responder el tiempo real
   | "none"; // no se entiende con seguridad -> se queda como unclear (pedir que repita)
 
 export interface CallUnderstandRequest {
@@ -58,6 +59,7 @@ export const CALL_UNDERSTOOD_INTENTS: readonly CallUnderstoodIntent[] = [
   "age-policy",
   "clarification",
   "face-concern",
+  "time-concern",
   "none"
 ] as const;
 
@@ -80,6 +82,7 @@ export type RefinedSignalResolution =
   | { kind: "signal"; signal: CallCandidateSignal }
   | { kind: "question" } // el responder mira si el conocimiento la cubre (asks-covered) o no (asks-unknown)
   | { kind: "face-concern" } // el responder tranquiliza con la entrada de la cara (asks-covered forzado)
+  | { kind: "time-concern" } // el responder responde con la entrada del tiempo de dedicación (asks-covered forzado)
   | { kind: "none" }; // no se entendió -> se queda unclear
 
 /**
@@ -92,6 +95,8 @@ export function resolveRefinedSignal(intent: CallUnderstoodIntent | null): Refin
       return { kind: "question" };
     case "face-concern":
       return { kind: "face-concern" };
+    case "time-concern":
+      return { kind: "time-concern" };
     case "distrust":
       return { kind: "signal", signal: "distrust" };
     case "identity":

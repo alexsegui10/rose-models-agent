@@ -82,6 +82,9 @@ export function buildUnderstandPrompt(request: CallUnderstandRequest): string {
   lines.push(
     "- face-concern: duda, vergüenza o reparo sobre mostrar la CARA ('me da corte', 'soy tímida', 'y si me reconocen', 'no quiero salir de cara')."
   );
+  lines.push(
+    "- time-concern: duda sobre el TIEMPO o la disponibilidad para hacerlo ('trabajo y no sé si tendré tiempo', 'estudio', 'tengo hijos y poco tiempo', 'cuánto hay que dedicarle al día'). NO es la cara ni desconfianza de estafa."
+  );
   lines.push("- none: no se entiende con seguridad, es ruido, o no encaja en nada de lo anterior.");
   if (request.lastBotUtterance && request.lastBotUtterance.trim().length > 0) {
     lines.push(`LO ÚLTIMO QUE DIJISTE TÚ (el bot): «${sanitize(request.lastBotUtterance)}»`);

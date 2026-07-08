@@ -93,6 +93,14 @@ const FACE_KNOWLEDGE_ENTRY =
     (entry) => entry.id === "face-requirement-mandatory" && entry.status === "ACTIVE" && entry.approvedByAlex
   ) ?? null;
 
+// Entrada del TIEMPO de dedicación: cuando la comprensión entiende una duda de disponibilidad ("trabajo y
+// no sé si tendré tiempo"), se responde con ESTOS hechos aprobados (no jornada completa, unas horas al día,
+// compaginable) en vez de una tranquilización genérica anti-estafa (decisión de Alex 8-jul).
+const TIME_KNOWLEDGE_ENTRY =
+  businessKnowledgeEntries.find(
+    (entry) => entry.id === "content-time-commitment" && entry.status === "ACTIVE" && entry.approvedByAlex
+  ) ?? null;
+
 // Muletillas por directiva para tapar la latencia del redactor (elegidas para no chocar con los arranques
 // típicos del fallback de cada directiva). La elipsis + espacio final es el formato que la plataforma de
 // voz pronuncia con pausa natural sin distorsión. ROTAN por turno (jul-2026: en la simulación el "A ver..."
@@ -309,6 +317,15 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
         // tranquilización). Si por lo que sea no está la entrada, tranquilización genérica (distrust).
         if (FACE_KNOWLEDGE_ENTRY) {
           liveCoveringEntries = [FACE_KNOWLEDGE_ENTRY];
+          signal = "asks-covered";
+        } else {
+          signal = "distrust";
+        }
+      } else if (resolution.kind === "time-concern") {
+        // Duda de tiempo/disponibilidad: responder con el conocimiento del tiempo (no jornada completa, unas
+        // horas al día, compaginable) en vez de una tranquilización genérica. Si falta la entrada, distrust.
+        if (TIME_KNOWLEDGE_ENTRY) {
+          liveCoveringEntries = [TIME_KNOWLEDGE_ENTRY];
           signal = "asks-covered";
         } else {
           signal = "distrust";

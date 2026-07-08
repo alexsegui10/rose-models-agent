@@ -205,6 +205,20 @@ const IDENTITY_CONFIRM =
 const ASKS_SHARE_FIGURE =
   /\bcuanto (?:os|se|te) (?:llevais|llevas|lleva|llevan|quedais|quedas|queda|quedan|cobrais|cobran)\b|\bque (?:porcentaje|comision)\b|\bcomo (?:es|era|va|iba|funciona|queda) (?:el|lo del) reparto\b|\bel reparto como (?:es|era|va|iba|queda)\b|\bcual (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\bcuanto (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b/;
 
+// Pregunta VAGA por el DINERO (no la cifra exacta ni una queja): "y del dinero como va la cosa", "el pago
+// como funciona", "y el dinero?" (DECISION de Alex 8-jul: presentar el reparto, que es la etapa MONEY del
+// guion; asks-share-figure -> si MONEY no se cubrio, la presenta; si ya, repite la cifra autorizada). Va
+// DESPUES de las quejas (SHARE/COMPLAINT/FOLLOWUP) y de asks-earnings-por-orden: no lleva "es/poco" como
+// gatillo (para no tragarse "el dinero es poco", que es queja). Solo verbos de "como va/funciona".
+// ESTRICTO (dos rondas de fuga cazadas por el revisor 8-jul): "¿cómo va el dinero?" (pregunta -> presentar
+// reparto) es indistinguible en superficie de "el dinero como va bien, no me importa" (conformidad -> NO
+// presentar) salvo por lo que va DESPUES del verbo. En vez de una lista negra de coletillas evaluativas
+// (bien/genial/no me importa/...), que seria whack-a-mole, se ANCLA a FIN de frase: tras "como va/funciona"
+// solo se admite un relleno NEUTRO (la cosa/esto/eso/el tema) o el final; cualquier cola evaluativa deja
+// texto antes del $ y NO casa. Asi una afirmacion conforme nunca dispara el 70/30 (invariante 3).
+const ASKS_MONEY_MODEL =
+  /\b(?:el dinero|del dinero|lo del dinero|el pago|del pago|el cobro|la plata)\s+como (?:va|funciona|marcha|se reparte|se maneja)(?:\s+(?:la cosa|esto|eso|el tema))?\s*\??\s*$|^\s*(?:y\s+|oye\s+|pero\s+|bueno\s+)?¿?\s*como (?:va|funciona|marcha|se reparte|se maneja)\s+(?:el dinero|lo del dinero|el pago|el cobro|la plata)\s*\??\s*$|^\s*¿?\s*y\s+(?:el dinero|el pago|lo del dinero|la plata|el cobro)\s*\??\s*$/;
+
 // Pregunta si es un ROBOT/IA ("¿eres un robot?", "¿hablo con una máquina?"): se responde con IDENTIDAD
 // (soy Alex, el de Rose Models), sin afirmar ni negar ser humano (el validador veta "soy una persona").
 // El RECHAZO a la máquina ("no quiero hablar con un robot") lo caza antes REJECT_MACHINE (wants-human).
@@ -245,6 +259,9 @@ function isClarificationOfLastUtterance(text: string, lastBotUtterance?: string)
   if (CLARIFY_NO_TERM.test(text)) return true;
   const lastBot = normalize(lastBotUtterance ?? "");
   if (lastBot.length === 0) return false;
+  // "y eso pa/para que?" retrospectivo: pregunta el para-qué de lo que el bot ACABA de decir -> aclarar (no
+  // deferir a WhatsApp algo que él mismo narró). Solo si hay una última frase del bot que aclarar (guard).
+  if (/^\s*¿?\s*(?:y\s+)?(?:eso|esto)?\s*(?:pa|para)\s+que\b/.test(text)) return true;
   for (const pattern of CLARIFY_WITH_TERM) {
     const match = pattern.exec(text);
     if (match?.[1]) {
@@ -289,6 +306,9 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // Pregunta la CIFRA del reparto (sin quejarse: las quejas ya se evaluaron antes) -> responderla (inv. 3
   // reactivo), nunca deferir. Antes que QUESTION/earnings ("cuánto os lleváis" contiene "cuanto").
   if (ASKS_SHARE_FIGURE.test(text)) return "asks-share-figure";
+  // Pregunta VAGA por el dinero -> presentar el reparto (misma señal; el director presenta MONEY si falta o
+  // repite la cifra vigente). Tras las quejas; antes que earnings/QUESTION. Decisión de Alex 8-jul.
+  if (ASKS_MONEY_MODEL.test(text)) return "asks-share-figure";
   // "¿Eres un robot?" -> identidad (sin mentir), antes que QUESTION.
   if (BOT_CHECK.test(text)) return "asks-identity";
   // Pregunta personal/broma al bot -> identidad con gracia (no "mi socio"), antes que QUESTION.
