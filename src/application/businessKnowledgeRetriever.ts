@@ -331,6 +331,25 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     /\bchatters?\b/.test(message)
   )
     tags.push("services", "agency", "agency-responsibilities", "instagram", "operations");
+  // ¿Quién GESTIONA/lleva/maneja el Instagram/la cuenta? (barrido 8-jul: "y eso quién lo gestiona" se
+  // defería como desconocido siendo que lo gestiona la AGENCIA). Se surfacea servicios/operaciones. Guardado:
+  // un verbo de gestión + un término de cuenta/IG y SIN dinero (para no pisar el control de pagos, que escala).
+  if (
+    /\b(?:gestiona|gestionan|gestionais|lleva|llevan|llevais|maneja|manejan|manejais|administra|administran|administrais|se encarga|se encargan|controla|controlais)\b/.test(
+      message
+    ) &&
+    /\b(?:instagram|insta|cuenta|cuentas|perfil|perfiles|redes|la pagina)\b/.test(message) &&
+    !/\b(?:dinero|pago|pagos|plata|cobro|reparto|porcentaje|comision)\b/.test(message) &&
+    // NO cuando declara OTRA agencia ("otra agencia ya gestiona mi cuenta"): eso lo lidera la entrada de
+    // multi-agencia, no la de servicios (evita un desplazamiento de ranking que noto el revisor 8-jul).
+    !/\b(?:otra agencia|otras agencias|otro estudio|otra empresa|otro manager|otro representante)\b/.test(message) &&
+    // NO es una PETICION DE PRUEBAS ("enseñame/muestrame las cuentas que llevais para ver resultados"): esas
+    // ESCALAN a revision humana (podrian exponer cuentas de otras clientas), no se responden como servicios.
+    !/\b(?:ensena\w*|ensename|muestr\w*|mostr\w*|ver|veas|envi\w*|mand\w*|pasa\w*|pasame|resultados?|ejemplos?|pruebas?)\b/.test(
+      message
+    )
+  )
+    tags.push("services", "agency", "agency-responsibilities", "instagram", "operations");
   // Ubicación de la agencia ("¿dónde estáis?", "¿de dónde sois?"): perfil de agencia (española).
   if (
     /\b(donde (?:estais|estan|esta la agencia|trabajais)|de donde (?:sois|son)|ubicad\w*|ubicacion de la agencia)\b/.test(message)
