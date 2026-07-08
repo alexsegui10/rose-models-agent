@@ -589,8 +589,12 @@ export function extractDeterministicUnderstanding(
     // OJO (revisor 6-jul): NO basta con un verbo de trabajo suelto ("trabaje de camarera" a "has trabajado
     // con agencias?" NO es un si). Se exige el "SI" afirmativo delante del verbo, o el objeto explicito "con
     // otra/una/... [agencia]", o el verbo junto a "experiencia" (la queja de la mala experiencia con agencia).
+    // "tuve/tenia (una mala) experiencia con una agencia" es un SI (bug real Tania 8-jul: "tuve" no estaba y
+    // se re-preguntaba + el guion no se completaba). Solo cuenta en el contexto de la pregunta de agencias
+    // (agentAskedAgencies, arriba) y la NEGACION (deniedAgency) se evalua ANTES, asi "no tuve experiencia con
+    // agencias" sigue siendo NO. Exige "experiencia" o "agencia" cerca -> "tuve un mal dia" no cuenta.
     const affirmedWorking =
-      /\bsi,?\s+(?:he trabajado|trabaje|estuve|he estado|trabajaba)\b|\btrabaj(?:e|o|ando|ado|aba|amos) con (?:otra|una|la|dos|varias|mi|ellos|ellas|esa|esas)\b|\b(?:he trabajado|trabaje|trabajaba)\b[^.!?\n]{0,40}\bexperiencia\b/.test(
+      /\bsi,?\s+(?:he trabajado|trabaje|estuve|he estado|trabajaba)\b|\btrabaj(?:e|o|ando|ado|aba|amos) con (?:otra|una|la|dos|varias|mi|ellos|ellas|esa|esas)\b|\b(?:he trabajado|trabaje|trabajaba)\b[^.!?\n]{0,40}\bexperiencia\b|\b(?:tuve|tenia|he tenido|tuvimos|teniamos)\b[^.!?\n]{0,40}\b(?:experiencia|agencias?)\b/.test(
         normalized
       );
     if (deniedAgency) extractedData.worksWithAnotherAgency = false;
