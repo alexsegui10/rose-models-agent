@@ -54,6 +54,10 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("me parece razonable")).toBe("follows-along");
     expect(sig("bueno")).toBe("follows-along");
     expect(sig("bueno vale?")).toBe("follows-along"); // no romper la afirmacion con "?"
+    // "listo" (asentimiento argentino comun) caia en "no te he pillado" (rev-total ronda 4):
+    expect(sig("listo")).toBe("follows-along");
+    // Control: "obvio que no" NO debe ser follows-along (por eso NO se anadio "obvio" suelto).
+    expect(sig("obvio que no")).not.toBe("follows-along");
     // NEGACIONES: NO se toman como aceptacion. Incluye las NO ADYACENTES (tampoco/nunca/ya no) y con coma,
     // que un lookbehind estrecho no pillaba (rev-total 8-jul, roce invariante 3).
     expect(sig("no me parece justo")).not.toBe("follows-along");

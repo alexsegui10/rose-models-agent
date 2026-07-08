@@ -169,14 +169,14 @@ const QUESTION =
 // "mmm vale...", "eh bueno dale") — jul-2026, barrido de personas: "hola si" caía en unclear y el bot
 // pedía repetir en el primer turno (sonaba a sordo).
 const FOLLOWS_ALONG =
-  /^\s*(?:(?:ah+|ahh|pues|bueno|hola+|buenas|holi|hey|oye|mira|mmm+|mm+|eh+|este|em+|uy|si\?)[\s,!¡.]*)*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va)\b|(?<!no )me parece (bien|genial|perfecto|justo|razonable|logico|correcto|estupendo|fenomenal)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
+  /^\s*(?:(?:ah+|ahh|pues|bueno|hola+|buenas|holi|hey|oye|mira|mmm+|mm+|eh+|este|em+|uy|si\?)[\s,!¡.]*)*(vale|oka?y?|okis|si+|claro|perfecto|genial|de acuerdo|entiend\w*|aja+|aha+|ajam+|ajan+|mjm+|ahem|ujum+|ya|correcto|bien|guay|venga|estupendo|fenomenal|por supuesto|sip|dale|va|listo)\b|(?<!no )me parece (bien|genial|perfecto|justo|razonable|logico|correcto|estupendo|fenomenal)|suena bien|me gusta|adelante|cuentame|dime|sigue|esta bien|me vale/;
 
 // Asentimiento a secas que ACABA en "?" (o sin el): "si?", "vale?", "ah si?", "claro?". Es un "si, dime", NO
 // una pregunta. QUESTION lo confundia por el "?" final y el bot defieria algo inexistente a WhatsApp (bug del
 // simulador de voz 7-jul: a un "si?" al descolgar solto "eso te lo confirmo por WhatsApp en cuanto colguemos").
 // Anclado a FIN de cadena: "vale, pero cuanto gano?" NO entra aqui (esa SI es pregunta y la coge QUESTION).
 const BARE_AFFIRMATION =
-  /^\s*(?:(?:ah+|pues|bueno|si+|oye|mira|eh+|mmm+|mm+|holi|hey|hola+|buenas|uy)[\s,!¡.?]*)*(si+|vale|oka?y?|okis|claro|ya|dale|va|bueno|correcto|perfecto|genial|bien|guay|aja+|ajam+|sip|entiend\w*)[\s,!¡.?]*$/;
+  /^\s*(?:(?:ah+|pues|bueno|si+|oye|mira|eh+|mmm+|mm+|holi|hey|hola+|buenas|uy)[\s,!¡.?]*)*(si+|vale|oka?y?|okis|claro|ya|dale|va|bueno|listo|correcto|perfecto|genial|bien|guay|aja+|ajam+|sip|entiend\w*)[\s,!¡.?]*$/;
 
 // OPINION NEGADA: "no/tampoco/nunca/jamas/ya no ... me parece/gusta/convence/cuadra/encaja/vale/va bien/lo veo".
 // Es un NO, JAMAS un asentimiento. Sin esto, "tampoco me parece justo" caia en FOLLOWS_ALONG (por "me parece
