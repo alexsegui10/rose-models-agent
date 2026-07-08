@@ -22,6 +22,7 @@ import { classifyCallSignal } from "./callSignalClassifier";
 import { planCallUtterance, type CallUtterancePlan } from "./callRedaction";
 
 const DISTRUST_KNOWLEDGE_ID = "objection-distrust";
+const FACE_KNOWLEDGE_ID = "face-requirement-mandatory";
 
 export interface CallTurnResult {
   signal: CallCandidateSignal;
@@ -108,6 +109,9 @@ function knowledgeForDirective(
       return coveringEntries;
     case "REASSURE":
       return knowledgeByIds([DISTRUST_KNOWLEDGE_ID]);
+    case "RECONDUCT_FACE":
+      // Reconducción de la cara: se apoya en el conocimiento aprobado de la cara (lidera con tranquilización).
+      return knowledgeByIds([FACE_KNOWLEDGE_ID]);
     case "CLARIFY_LAST_UTTERANCE": {
       // Aclarar lo recién dicho: los hechos de la ETAPA que se estaba explicando + lo que cubra el
       // recuperador (p. ej. la entrada de la liquidación si preguntó por esa palabra).

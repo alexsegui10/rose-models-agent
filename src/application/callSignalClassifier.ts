@@ -103,6 +103,25 @@ const WANTS_TO_THINK =
 const NOT_INTERESTED =
   /(no me interesa|no me interesan|no gracias|no, gracias|no quiero seguir|no me convence nada|mejor lo dejamos|paso de esto|paso,? gracias|no es para mi|no me llama|no quiero hacerlo|prefiero dejarlo|no me apetece)/;
 
+// RECHAZO EN FIRME de la cara (Increment 2, 8-jul): tema de cara/anonimato + una negativa EXPLICITA. La
+// simple VERGUENZA ("me da corte/verguenza") NO entra aquí: es DUDA y se tranquiliza (la coge la comprensión
+// o QUESTION -> conocimiento de la cara). El director reconduce a la 1ª y cierra si INSISTE. "anonim" por sí
+// solo cuenta (buscar anonimato = negarse a la cara). Comparte los patrones de fondo con el bot de texto.
+const FACE_TOPIC = /\b(?:cara|rostro|anonim)\b|\b(?:mostrarme|ensenarme|salir en|aparecer en)\b/;
+const FACE_FIRM_REFUSAL_SIGNAL =
+  /\bno(?:\s+\w+){0,2}\s+quiero\b|\bno pienso\b|\bno voy a\b|\bprefiero no\b|\bsigo sin\b|\bme niego\b|\bno la (?:muestro|enseno)\b|\bno (?:enseno|ensenar|mostrar|muestro)\b|\bno (?:quiero )?(?:salir|dar la cara)\b|\bno aparecer\b|\bque no se me vea\b|\bocultar\b|\btapar(?:me|la)?\b|\bdifuminar\b|\bpixelar\b|\bsin (?:mostrar|ensenar)\s+(?:la\s+|mi\s+)?cara\b|\bsin (?:la )?cara\b/;
+// DUDA/verguenza de la cara (NO rechazo firme): "me da corte/verguenza", "soy timida". Red determinista para
+// tranquilizar (RECONDUCT_FACE sin contar hacia el cierre) por si la comprensión no lo caza. Va DESPUÉS de
+// FACE_FIRM_REFUSAL (una frase con negativa explícita gana) y no cierra nunca.
+const FACE_SHYNESS_SIGNAL =
+  /\bme da (?:mucho |mucha |un poco de |algo de )?(?:corte|verguenza|cosa|palo|apuro|reparo|pudor|no se que)\b|\bme corta\b|\bque (?:corte|verguenza)\b|\bsoy (?:muy |un poco |media )?timid[ao]\b|\btimidez\b/;
+// DUDA DE PRIVACIDAD/RECONOCIMIENTO ("y si me reconoce alguien", "que me vea mi familia", "en mi pueblo").
+// Va tambien a face-doubt -> RECONDUCT_FACE DETERMINISTA: asi el LLM NO redacta la respuesta a un miedo de
+// reconocimiento (donde soltaria "tranquila, nadie te reconoce" = promesa de anonimato). Cierra el punto de
+// entrada del leak que cazo el revisor. La cara es imprescindible; la reconduccion tranquiliza sin prometer.
+const FACE_RECOGNITION_SIGNAL =
+  /\bme recono[cz]\w*\b|\bque me vean?\b|\bme vea\s+\w+|\bme vean\s+\w+|\bgente (?:conocida|que me conoce|que conozco)\b|\bconocid[oa]s me\b|\b(?:de|en) mi (?:zona|pueblo|ciudad|barrio|entorno|trabajo)\b|\bque no me (?:vea|vean|reconozca|reconozcan)\b|\bmi ex\b|\bse enteren?\s+(?:en |mis |mi |la gente|de esto)\b/;
+
 // Quejas INEQUÍVOCAS del reparto que valen SIN contexto de dinero (no dependen de moneyContext ni de un
 // término "30/70"): "mitad y mitad", "50/50", "quiero más para mí", "en otra agencia me dan el 50".
 // Solo lo INEQUÍVOCO va sin contexto de dinero. "más para mí" se quitó de aquí (pillaba "más para mí GUSTO"
@@ -292,6 +311,23 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (DIRECT_SHARE_COMPLAINT.test(text)) return "complains-about-share";
   // Queja de seguimiento durante la negociación (frase dirigida al dinero, sin repetir "reparto").
   if (input.moneyContext && FOLLOWUP_SHARE_COMPLAINT.test(text)) return "complains-about-share";
+  // Rechazo EN FIRME de la cara / anonimato: antes que DISTRUST/NOT_INTERESTED/QUESTION (una duda de cara
+  // "me da corte" NO entra aquí: no lleva señal de negativa explícita, así que se tranquiliza como duda).
+  // "anonim" cuenta como rechazo SOLO si ella QUIERE anonimato; NO si lo NIEGA ("no busco nada anonimo", que
+  // es una ACEPTACIÓN de dar la cara) ni si PREGUNTA por el proceso ("¿esto es anonimo?" acaba en "?") — sin
+  // esto cerraba a candidatas válidas (riesgo del revisor 8-jul). La negativa de la cara la sigue cazando
+  // FACE_FIRM_REFUSAL_SIGNAL aparte.
+  const wantsAnonymity =
+    /\banonim/.test(text) &&
+    !/\?\s*$/.test(text) &&
+    !/\bno\s+(?:busco|necesito|quiero|me importa|preciso|pido|hace falta)\b/.test(text);
+  if ((FACE_TOPIC.test(text) && FACE_FIRM_REFUSAL_SIGNAL.test(text)) || wantsAnonymity) return "face-refusal";
+  // Duda/verguenza sobre la cara (sin negativa explícita): tranquilizar, NUNCA cerrar. Red determinista por
+  // si la comprensión no lo caza (el sim vio "me da verguenza lo de la cara" caer en ASK_REPEAT).
+  if (FACE_TOPIC.test(text) && FACE_SHYNESS_SIGNAL.test(text)) return "face-doubt";
+  // Miedo de reconocimiento/privacidad -> tambien face-doubt (RECONDUCT_FACE determinista): el LLM no redacta
+  // la respuesta, asi no promete "nadie te reconoce" (leak del revisor). Va antes que DISTRUST/QUESTION.
+  if (FACE_RECOGNITION_SIGNAL.test(text)) return "face-doubt";
   if (DISTRUST.test(text)) return "distrust";
   if (WANTS_TO_THINK.test(text)) return "wants-to-think";
   if (NOT_INTERESTED.test(text)) return "not-interested";

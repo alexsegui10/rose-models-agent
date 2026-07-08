@@ -156,6 +156,20 @@ const CLOSE_RESCHEDULE_TEXTS = [
   "Tranquila, sin problema, te pillo en mal momento. Te escribo por Instagram y buscamos otro hueco que te venga bien, ¿vale? ¡Hablamos!",
   "Eso, tranquila: ahora te escribo por Instagram y lo movemos a otro día. ¡Hablamos!"
 ] as const;
+// Reconducción de la cara (1ª negativa en firme): tranquilizar e insistir con tacto, SIN cerrar ni ofrecer
+// anonimato. Fallback si no hay conocimiento recuperado o el LLM falla (las afirmaciones salen del
+// conocimiento aprobado de la cara; el guard de VOZ `validateCallUtterance` -> `promisesFaceConcealment`
+// veta cualquier promesa de ocultar/difuminar la cara o anonimato en la salida redactada).
+const RECONDUCT_FACE_TEXTS = [
+  "A muchas al principio les da un poco de corte, es de lo más normal. Pero la cara es justo lo que da confianza al cliente y trae el tráfico, por eso es imprescindible, y nosotros te acompañamos para que lo lleves con naturalidad. ¿Seguimos?",
+  "Te entiendo, de verdad, pero es que la cara es imprescindible para que esto funcione, y estamos contigo en todo el proceso. ¿Le damos una oportunidad?"
+] as const;
+// Rechazo educado por negarse EN FIRME a la cara (tras reconducir). Cierre con la PUERTA ABIERTA (script
+// aprobado de Alex, condensado para voz). NO valoraciones personales; el rechazo se limita a la política.
+const CLOSE_FACE_REJECTED_TEXTS = [
+  "Te entiendo, de verdad. Pero mostrar la cara es nuestra manera de trabajar, así que lamentablemente no podríamos seguir adelante. Espero que te vaya genial, y si algún día te lo replanteas, aquí nos tienes. Un saludo.",
+  "Nada, lo entiendo. Es que sin la cara no podemos trabajar, es nuestra forma de hacerlo. Te deseo lo mejor, y si cambias de idea, aquí estamos. Un saludo."
+] as const;
 // Corte seguro por minoría de edad (invariante 2): cierre educado y definitivo, sin valoraciones
 // personales. La variante de repetición mantiene EXACTAMENTE la misma firmeza (no se suaviza).
 const CLOSE_UNDERAGE_TEXTS = [
@@ -466,6 +480,20 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
         referenceInstagram: false,
         emptyFallback: variantFor(REASSURE_FALLBACK_TEXTS, input.repetitionIndex ?? 0)
       });
+    case "RECONDUCT_FACE": {
+      // 1ª negativa a la cara: tranquilizar e insistir con TACTO, SIN cerrar (Alex: "hay que intentarlo").
+      // DETERMINISTA a proposito (defensa en profundidad): es el turno donde ella MAS presiona sobre la cara,
+      // justo donde un LLM podria alucinar una salida de anonimato/difuminar. Con texto fijo aprobado NO hay
+      // superficie de fuga; el validador de voz (promisesFaceConcealment) queda como red para el resto de
+      // turnos redactados. Se pierde algo de naturalidad en este turno a cambio de garantizar el invariante.
+      const text = variantFor(RECONDUCT_FACE_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
+    case "CLOSE_FACE_REJECTED": {
+      // Rechazo educado y cierre (determinista, nunca LLM): la política es innegociable, la puerta queda abierta.
+      const text = variantFor(CLOSE_FACE_REJECTED_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
     case "COVER_STAGE":
     default:
       return planCoverStage(input);

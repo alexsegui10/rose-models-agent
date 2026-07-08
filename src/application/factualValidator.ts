@@ -1,5 +1,6 @@
 import { activeRevenueSharePolicy } from "@/content/business";
 import type { ResponsePlan } from "@/domain/businessKnowledge";
+import { promisesFaceConcealment } from "./faceConcealment";
 
 export interface FactualValidationResult {
   valid: boolean;
@@ -144,31 +145,5 @@ function facePolicyInPlay(plan: ResponsePlan): boolean {
   );
 }
 
-/**
- * Detecta una promesa de ocultar la cara o trabajar en anonimato, sea cual sea la formulacion exacta
- * del modelo: "para que no salga tu cara", "sin mostrar la cara", "difuminamos tu cara", "anonimato".
- */
-function promisesFaceConcealment(response: string): boolean {
-  const normalized = response
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
-
-  if (/\banonimat[oa]\b/.test(normalized)) return true;
-  if (
-    /\b(difumin|pixel|tap(?:ar|amos)|recort|oscurec|borr(?:ar|amos)|ocult(?:ar|amos))\w*\b[^.!?]{0,30}\bcara\b/.test(normalized)
-  ) {
-    return true;
-  }
-  if (/\bcara\b[^.!?]{0,30}\b(difumin|pixel|tapad|recortad|oscurecid|borrad|ocult)\w*/.test(normalized)) return true;
-  // Promesas de que la cara no aparece / no se ve / no hace falta mostrarla.
-  if (/\b(no\s+(?:saldra|sale|salga|aparece|aparecera|se\s+ve|se\s+vera))\b[^.!?]{0,20}\bcara\b/.test(normalized)) return true;
-  if (/\bcara\b[^.!?]{0,20}\bno\s+(?:saldra|sale|salga|aparece|aparecera|se\s+ve|se\s+vera)\b/.test(normalized)) return true;
-  if (/\bsin\s+(?:mostrar|ensenar|que\s+se\s+vea)\b[^.!?]{0,15}\bcara\b/.test(normalized)) return true;
-  // Formulaciones largas con "sin que (aparezca|salga|se vea) ... la cara" ("sin que aparezca de
-  // manera evidente la cara"): el ocultamiento y "cara" pueden ir separados por varias palabras.
-  if (/\bsin\s+que\s+(?:aparezca|aparezcan|salga|salgan|se\s+vea|se\s+vean)\b[^.!?]{0,40}\bcara\b/.test(normalized)) return true;
-  if (/\bno\s+(?:hace\s+falta|necesitas|tienes\s+que)\s+(?:mostrar|ensenar)\b[^.!?]{0,15}\bcara\b/.test(normalized)) return true;
-
-  return false;
-}
+// La deteccion de promesas de ocultar la cara vive en `faceConcealment.ts` (compartida con la ruta de VOZ
+// `callRedactionValidator`, para que NO diverjan). Aqui solo se consume.

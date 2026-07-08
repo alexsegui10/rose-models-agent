@@ -85,14 +85,6 @@ const callKnowledgeCandidate = normalizeCandidate({
 
 const defaultRetriever = new LocalBusinessKnowledgeRetriever(businessKnowledgeEntries);
 
-// Entrada de conocimiento de la CARA: cuando la comprensión entiende una duda/vergüenza sobre mostrar la
-// cara ("me da corte", "y si me reconocen"), se responde tranquilizando con ESTOS hechos aprobados (que
-// ya lideran con tranquilización). Si no estuviera, la duda de cara cae a una tranquilización genérica.
-const FACE_KNOWLEDGE_ENTRY =
-  businessKnowledgeEntries.find(
-    (entry) => entry.id === "face-requirement-mandatory" && entry.status === "ACTIVE" && entry.approvedByAlex
-  ) ?? null;
-
 // Entrada del TIEMPO de dedicación: cuando la comprensión entiende una duda de disponibilidad ("trabajo y
 // no sé si tendré tiempo"), se responde con ESTOS hechos aprobados (no jornada completa, unas horas al día,
 // compaginable) en vez de una tranquilización genérica anti-estafa (decisión de Alex 8-jul).
@@ -313,14 +305,11 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
         // a Alex por WhatsApp. La COBERTURA la decide el recuperador determinista, no el modelo.
         signal = coveringEntries.length > 0 ? "asks-covered" : "asks-unknown";
       } else if (resolution.kind === "face-concern") {
-        // Duda/vergüenza sobre la cara: tranquilizar con el conocimiento de la cara (que ya lidera con la
-        // tranquilización). Si por lo que sea no está la entrada, tranquilización genérica (distrust).
-        if (FACE_KNOWLEDGE_ENTRY) {
-          liveCoveringEntries = [FACE_KNOWLEDGE_ENTRY];
-          signal = "asks-covered";
-        } else {
-          signal = "distrust";
-        }
+        // Duda/vergüenza sobre la cara entendida por el modelo: se tranquiliza de forma DETERMINISTA
+        // (face-doubt -> RECONDUCT_FACE, texto fijo aprobado), NO con un turno redactado por el LLM. Así el
+        // LLM NUNCA redacta sobre la cara (defensa en profundidad del invariante DURO: la cara es
+        // innegociable); el guard `promisesFaceConcealment` queda como red para el resto de turnos.
+        signal = "face-doubt";
       } else if (resolution.kind === "time-concern") {
         // Duda de tiempo/disponibilidad: responder con el conocimiento del tiempo (no jornada completa, unas
         // horas al día, compaginable) en vez de una tranquilización genérica. Si falta la entrada, distrust.

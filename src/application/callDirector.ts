@@ -40,6 +40,8 @@ export type CallCandidateSignal =
   | "wants-to-think" // quiere pensarlo/consultarlo ("me lo tengo que pensar") -> cierre cálido sin contrato
   | "unclear" // ruido / no se entiende -> pedir que lo repita (no asumir asentimiento)
   | "underage" // declara ser menor de edad -> corte seguro inmediato (invariante 2 en la voz)
+  | "face-refusal" // se niega EN FIRME a mostrar la cara / quiere anonimato -> reconducir y, si insiste, cerrar
+  | "face-doubt" // DUDA/verguenza sobre la cara ("me da corte") -> tranquilizar con tacto, NUNCA cerrar
   | "wants-to-end"; // quiere terminar -> cerrar con contrato
 
 export type CallDirectiveType =
@@ -63,7 +65,9 @@ export type CallDirectiveType =
   | "STAY_SILENT" // no decir nada (anti-loro: el cierre/handoff ya se repitió una vez)
   | "GIVE_SHARE_FIGURE" // re-decir la cifra AUTORIZADA vigente del reparto (respuesta reactiva, inv. 3)
   | "REPEAT_LAST_UTTERANCE" // repetir lo último que dijo el bot (ella no lo oyó)
-  | "CLARIFY_LAST_UTTERANCE"; // explicar en simple lo que el bot acaba de decir (no lo entendió)
+  | "CLARIFY_LAST_UTTERANCE" // explicar en simple lo que el bot acaba de decir (no lo entendió)
+  | "RECONDUCT_FACE" // 1ª negativa a la cara: tranquilizar con el conocimiento de la cara e insistir con tacto
+  | "CLOSE_FACE_REJECTED"; // se niega EN FIRME tras reconducir: rechazo educado y cierre (puerta abierta)
 
 export type CallHandoffReason =
   | "asked-for-human"
@@ -90,10 +94,13 @@ export interface CallDirectorState {
   repeatRequestStreak: number;
   handedOff: boolean;
   handoffReason?: CallHandoffReason;
+  /** Negativas EN FIRME a mostrar la cara ya vistas: a la 1ª se reconduce, a la 2ª se cierra (invariante:
+   * la cara es imprescindible, pero nunca se cierra de golpe — se tranquiliza e insiste primero). */
+  faceObjectionCount: number;
   /** true tras cualquier cierre: es pegajoso (no reabre guion ni negociación). */
   closed: boolean;
   /** Qué cierre se dio, para repetirlo si la candidata sigue hablando tras cerrar. */
-  closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT" | "CLOSE_RESCHEDULE" | "CLOSE_UNDERAGE";
+  closeDirective?: "CLOSE_WITH_CONTRACT" | "CLOSE_SOFT" | "CLOSE_RESCHEDULE" | "CLOSE_UNDERAGE" | "CLOSE_FACE_REJECTED";
   /**
    * Veces que ya se REPITIÓ el mensaje terminal (cierre o handoff) tras darlo (jul-2026, anti-loro con
    * habla real: la simulación repetía el contrato en bucle a cada "dale"). Tope 1: después, silencio.
@@ -128,6 +135,7 @@ export function initialCallDirectorState(): CallDirectorState {
     shareDefended: false,
     unclearStreak: 0,
     repeatRequestStreak: 0,
+    faceObjectionCount: 0,
     handedOff: false,
     closed: false,
     terminalRepeats: 0,
@@ -266,6 +274,20 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       // Quiere pensarlo: mismo trato que un cierre cálido (sin contrato, puerta abierta), nunca DEFER ni
       // "¿me lo repites?". Alex puede hacer seguimiento luego. No se fuerza el contrato a quien duda.
       return closeSoft(s);
+    case "face-refusal":
+      // Se niega EN FIRME a mostrar la cara / quiere anonimato. La cara es imprescindible, PERO nunca se
+      // cierra de golpe (Alex: "hay que intentarlo"): a la 1ª se RECONDUCE (tranquiliza con el conocimiento
+      // de la cara e insiste con tacto); si INSISTE tras haber reconducido, rechazo educado y cierre con la
+      // puerta abierta. Determinista y pegajoso (el cierre no lo decide el LLM — invariante 1).
+      if (s.faceObjectionCount >= 1) {
+        return closeFaceRejected({ ...s, faceObjectionCount: s.faceObjectionCount + 1 });
+      }
+      return { directive: { type: "RECONDUCT_FACE" }, nextState: { ...s, faceObjectionCount: s.faceObjectionCount + 1 } };
+    case "face-doubt":
+      // DUDA/verguenza de la cara (no un rechazo en firme): se tranquiliza con el conocimiento de la cara e
+      // insiste con tacto, pero NUNCA cuenta hacia el cierre ni cierra (Alex: "no queremos que lo deje nunca
+      // por una duda"). Es la red determinista por si la comprensión no lo cazó.
+      return { directive: { type: "RECONDUCT_FACE" }, nextState: s };
     case "asks-unknown":
       return { directive: { type: "DEFER_TO_PARTNER" }, nextState: s };
     case "asks-covered":
@@ -386,6 +408,17 @@ function closeSoft(state: CallDirectorState): CallTurnDecision {
   return {
     directive: { type: "CLOSE_SOFT" },
     nextState: { ...state, closed: true, closeDirective: "CLOSE_SOFT" }
+  };
+}
+
+// Rechazo educado por negarse EN FIRME a la cara (tras reconducir). Cierre pegajoso, puerta abierta. El
+// texto del rechazo YA incluye la despedida, así que se marca goodbyeSaid: una coletilla posterior no
+// re-suelta el rechazo (iría a silencio); la SEGURIDAD (hostil/pide persona) y una pregunta REAL siguen
+// atendiéndose en el bloque de cierre antes del silencio.
+function closeFaceRejected(state: CallDirectorState): CallTurnDecision {
+  return {
+    directive: { type: "CLOSE_FACE_REJECTED" },
+    nextState: { ...state, closed: true, closeDirective: "CLOSE_FACE_REJECTED", goodbyeSaid: true }
   };
 }
 

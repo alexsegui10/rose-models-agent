@@ -71,10 +71,11 @@ describe("comprensión de la llamada: mapea intenciones a directivas que NO camb
     expect(res.directiveType).toBe("GIVE_AGE_POLICY");
   });
 
-  it("face-concern -> responde con el conocimiento de la CARA (tranquiliza, no finge mala línea)", async () => {
+  it("face-concern -> reconduce la cara de forma DETERMINISTA (no finge mala línea; el LLM no redacta la cara)", async () => {
     const res = await liveTurn("face-concern", "es que me da corte todo esto la verdad");
-    expect(res.directiveType).toBe("ANSWER_FROM_KNOWLEDGE");
-    // Sin redactor, el fallback son los puntos aprobados de la cara (lideran con tranquilización).
+    // Defensa en profundidad (invariante DURO): la comprensión de una duda de cara va a RECONDUCT_FACE
+    // (texto fijo aprobado), NO a un turno redactado por el LLM. El texto tranquiliza (corte/imprescindible).
+    expect(res.directiveType).toBe("RECONDUCT_FACE");
     expect(res.content.toLowerCase()).toContain("corte");
     expect(res.content.toLowerCase()).toContain("imprescindible");
   });

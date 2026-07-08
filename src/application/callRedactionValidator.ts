@@ -12,6 +12,7 @@
  */
 
 import type { CallDraftingBrief } from "./callRedaction";
+import { promisesFaceConcealment } from "./faceConcealment";
 
 export interface CallValidationResult {
   valid: boolean;
@@ -105,6 +106,15 @@ export function validateCallUtterance(
   if (trimmed.length > MAX_UTTERANCE_LENGTH) return { valid: false, reason: "demasiado largo para un turno de voz" };
 
   const norm = normalize(trimmed);
+
+  // La CARA es un requisito DURO: ningún turno de voz puede prometer anonimato / difuminar / tapar / "sin
+  // mostrar la cara" (mismo guard que la ruta de texto, compartido en faceConcealment.ts). SIEMPRE activo:
+  // es justo en el turno de reconducir la cara (RECONDUCT_FACE, redactado por LLM) donde el modelo podría
+  // alucinar una salida de anonimato — el prompt lo desaconseja pero la RED lo garantiza (bloqueante revisor
+  // 8-jul: la voz no tenía este guard, solo el texto). Una reafirmación ("la cara es imprescindible") pasa.
+  if (promisesFaceConcealment(trimmed)) {
+    return { valid: false, reason: "promete ocultar/difuminar la cara o anonimato (la cara es imprescindible)" };
+  }
 
   // El bot JAMÁS afirma ser humano ni niega ser una IA (barrido jul-2026: "¿eres un robot?" acabó en
   // "Soy una persona, tranquila"). Se rechaza en cualquier draft; el fallback de identidad no miente.
