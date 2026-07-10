@@ -23,8 +23,9 @@ describe("A. 'si/ya/vale/bueno + PERO' = concesion+objecion (yes-but), NUNCA ase
     });
   }
 
-  it("un asentimiento normal SIGUE siendo follows-along (no romper)", () => {
-    expect(sig("ya vale, cuentame")).toBe("follows-along");
+  it("un asentimiento normal SIGUE avanzando (no romper)", () => {
+    // "cuentame" es asks-more desde 10-jul (misma conducta a media llamada: avanzar).
+    expect(sig("ya vale, cuentame")).toBe("asks-more");
     expect(sig("si claro, dale")).toBe("follows-along");
     expect(sig("vale perfecto")).toBe("follows-along");
   });
@@ -55,7 +56,7 @@ describe("C. Slang AR de ingresos -> asks-earnings (candidatas argentinas)", () 
     });
   }
 
-  it("'como viene la mano' -> seguir/continuar (no deferir a WhatsApp)", () => {
-    expect(sig("che y esto como viene la mano")).toBe("follows-along");
+  it("'como viene la mano' -> seguir/continuar (asks-more; no deferir a WhatsApp)", () => {
+    expect(sig("che y esto como viene la mano")).toBe("asks-more");
   });
 });

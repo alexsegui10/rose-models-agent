@@ -33,9 +33,11 @@ describe("clasificador de llamada: gaps del simulador (jul-2026)", () => {
     expect(classifyCallSignal({ utterance: "¿cómo abro la cuenta de OnlyFans?" })).toBe("asks-unknown");
   });
 
-  it("'cuéntame' sigue siendo asentimiento (no se rompió al arreglar 'cuenta')", () => {
-    expect(classifyCallSignal({ utterance: "cuéntame" })).toBe("follows-along");
-    expect(classifyCallSignal({ utterance: "vale, cuéntame" })).toBe("follows-along");
+  it("'cuéntame' sigue avanzando (asks-more desde 10-jul; no se rompió al arreglar 'cuenta')", () => {
+    // asks-more = misma conducta que follows-along a media llamada (avanzar agenda); tras el cierre
+    // responde el remate una vez en vez de silencio.
+    expect(classifyCallSignal({ utterance: "cuéntame" })).toBe("asks-more");
+    expect(classifyCallSignal({ utterance: "vale, cuéntame" })).toBe("asks-more");
   });
 });
 

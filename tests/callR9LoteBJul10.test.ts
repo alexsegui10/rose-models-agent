@@ -159,4 +159,27 @@ describe("B5. El cierre NO se repite tras un asentimiento puro ('dale') — sile
     expect(decideCallDirective({ state, signal: "hostile-or-suspicious" }).directive.type).toBe("HANDOFF_TO_ALEX");
     expect(decideCallDirective({ state, signal: "wants-to-end" }).directive.type).toBe("SAY_GOODBYE");
   });
+
+  it("'¿y que mas me tienes que contar?' tras el cierre NO es silencio: repite el remate una vez", () => {
+    // (Re-sim R9) "¿que mas?" es una PREGUNTA de continuacion (asks-more), no un ack: tras cerrar se
+    // responde con el cierre-resumen ("nada mas por mi parte...") UNA vez y luego silencio.
+    const state = closedState();
+    const first = decideCallDirective({ state, signal: "asks-more" });
+    expect(first.directive.type).toBe("CLOSE_WITH_CONTRACT");
+    const second = decideCallDirective({ state: first.nextState, signal: "asks-more" });
+    expect(second.directive.type).toBe("STAY_SILENT");
+  });
+
+  it("'¿y que mas?' A MEDIA llamada sigue avanzando la agenda (como siempre)", () => {
+    const opened = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
+    const d = decideCallDirective({ state: opened, signal: "asks-more" });
+    expect(d.directive.type).toBe("COVER_STAGE");
+  });
+
+  it("clasificador: 'y que mas me tienes que contar?' -> asks-more", async () => {
+    const { classifyCallSignal: classify } = await import("@/application/callSignalClassifier");
+    expect(classify({ utterance: "y que mas me tienes que contar?" })).toBe("asks-more");
+    expect(classify({ utterance: "¿y que mas?" })).toBe("asks-more");
+    expect(classify({ utterance: "sigue, cuentame" })).toBe("asks-more");
+  });
 });

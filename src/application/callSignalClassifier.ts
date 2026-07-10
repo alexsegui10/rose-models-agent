@@ -360,7 +360,10 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // ENCADENADO a una pregunta real ("solo tengo media hora, ¿cuanto se gana?"), la pregunta gana.
   if (TIME_NOTICE.test(text) && !STRONG_QUESTION.test(text)) return "follows-along";
   if (CONFORMITY.test(text)) return "follows-along";
-  if (CONTINUATION.test(text)) return "follows-along";
+  // "¿y qué más?" / "sigue, cuéntame" es pedir MÁS (asks-more): a media llamada avanza la agenda igual que
+  // un asentimiento, pero tras el CIERRE no es un ack — se responde el remate ("nada más por mi parte...")
+  // una vez en lugar de silencio (fleco de la re-sim R9: "¿y qué más me tienes que contar?" quedaba mudo).
+  if (CONTINUATION.test(text)) return "asks-more";
   // Aclaración de lo que el bot ACABA de decir ("¿qué significa se liquida?", "¿límite de qué?"): se
   // reformula en simple, jamás "mi socio". Antes que repeat/QUESTION (todas contienen "que").
   if (isClarificationOfLastUtterance(text, input.lastBotUtterance)) return "asks-clarification";

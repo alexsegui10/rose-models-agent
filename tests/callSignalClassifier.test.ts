@@ -146,9 +146,11 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("¿y los impuestos?")).toBe("asks-unknown");
   });
 
-  it("asentimiento -> follows-along", () => {
+  it("asentimiento -> follows-along; 'cuéntame' -> asks-more (misma conducta: avanzar)", () => {
     expect(sig("vale, perfecto")).toBe("follows-along");
-    expect(sig("sí, cuéntame")).toBe("follows-along");
+    // "cuéntame" pide MÁS (asks-more desde 10-jul): a media llamada avanza igual que un asentimiento;
+    // tras el cierre responde el remate ("nada más por mi parte...") en vez de quedarse en silencio.
+    expect(sig("sí, cuéntame")).toBe("asks-more");
   });
 
   it("vacío / silencio -> unclear (no se asume asentimiento)", () => {
@@ -234,11 +236,13 @@ describe("clasificador: robustez (auditoría)", () => {
     expect(sig("lo que tú veas")).toBe("follows-along");
   });
 
-  it("muletillas de 'continúa' (¿y?, ¿qué más?, sigue) avanzan, no se defieren", () => {
-    expect(sig("¿y?")).toBe("follows-along");
-    expect(sig("¿y qué más?")).toBe("follows-along");
-    expect(sig("¿qué más?")).toBe("follows-along");
-    expect(sig("sigue, sigue")).toBe("follows-along");
-    expect(sig("vale, ¿y luego?")).toBe("follows-along");
+  it("muletillas de 'continúa' (¿y?, ¿qué más?, sigue) avanzan (asks-more), no se defieren", () => {
+    // asks-more (10-jul): misma conducta que follows-along a media llamada (avanzar agenda), pero tras el
+    // cierre responde el remate una vez en vez de silencio ("¿y qué más me tienes que contar?" quedaba mudo).
+    expect(sig("¿y?")).toBe("asks-more");
+    expect(sig("¿y qué más?")).toBe("asks-more");
+    expect(sig("¿qué más?")).toBe("asks-more");
+    expect(sig("sigue, sigue")).toBe("asks-more");
+    expect(sig("vale, ¿y luego?")).toBe("asks-more");
   });
 });

@@ -24,6 +24,7 @@ import {
 export type CallCandidateSignal =
   | "none" // arranque / nada relevante: el bot lleva el guion
   | "follows-along" // asiente / ok / sigue: avanzar agenda
+  | "asks-more" // "¿y qué más?" / "sigue, cuéntame": avanzar agenda; tras el cierre NO es un ack (se responde el remate)
   | "asks-covered" // pregunta algo que el conocimiento cubre
   | "asks-unknown" // pregunta fuera de cobertura -> deferir a Alex ("mi socio")
   | "asks-identity" // pregunta quién es / de qué agencia -> el bot dice quién es (no defiere)
@@ -349,6 +350,7 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       return closeWithContract(s);
     }
     case "follows-along":
+    case "asks-more":
     case "none":
     default:
       return advanceAgenda(s);
