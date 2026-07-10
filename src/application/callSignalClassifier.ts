@@ -141,6 +141,22 @@ const ASKS_EARNINGS =
 const WANTS_TO_END =
   /(te dejo|te tengo que dejar|tengo que (irme|colgar|dejarlo|dejarte)|hablamos (luego|mas tarde|otro dia|en otro momento|manana)|ahora no puedo|no es buen momento|me tengo que ir|tengo prisa|me pillas (mal|liada)|adios|hasta luego|me voy|cuelgo|\bcha[ou]+\b|\bbye\b|\bnos vemos\b)/;
 
+// AVISO DE TIEMPO ("te aviso que solo tengo una hora", "tengo poco tiempo"): NO es pregunta ni querer
+// colgar — es "sigue, pero rapido". Antes caia en QUESTION (por el "que") -> defer absurdo a WhatsApp
+// (sweep R9 10-jul). Va DESPUES de WANTS_TO_END: "tengo prisa, hablamos luego" sigue reagendando.
+const TIME_NOTICE =
+  /\b(?:te aviso|aviso)\b(?!\s+con\s+(?:tiempo|antelacion))[^.!?]{0,35}\b(?:horas?|ratos?|tiempo|minutos?)\b|\bsolo tengo (?:una hora|media hora|un rato|un ratito|\d+\s*minutos?)\b|\btengo poco tiempo\b|\b(?:luego|despues|en un rato|enseguida) (?:entro|me voy|tengo que ir)\w*/;
+// Interrogativo FUERTE o "?": si el aviso de tiempo viene ENCADENADO a una pregunta real ("solo tengo media
+// hora, ¿cuanto se gana?"), la pregunta gana (revisor R9: el aviso se la tragaba). "que"/"como" pelados no
+// cuentan (son conjuncion en el propio aviso: "te aviso QUE solo tengo una hora").
+const STRONG_QUESTION = /\b(?:cuant[oa]s?|cual|cuales|quien|donde|por\s?que|para\s?que)\b|\?\s*$/;
+
+// Declaracion del ESTADO de su OnlyFans: "no tengo onlyfans", "nunca tuve of", "si tengo pero abandonado",
+// "lo tengo abandonado". Es un DATO (el extractor de hechos lo registra), no ruido ni objecion: asentir y
+// seguir. Las PREGUNTAS de OF ("¿necesito tener onlyfans?") las caza QUESTION antes.
+const OF_STATUS_STATEMENT =
+  /\b(?:no\s+|nunca\s+(?:he\s+)?|si\s+)?(?:teng[oa]|tuve|tenido)\b[^.!?]{0,25}\b(?:onlyfans|only\s?fans|of)\b|\b(?:onlyfans|only\s?fans|of)\b[^.!?]{0,25}\babandonad\w*|\bsi tengo pero\b[^.!?]{0,30}\babandonad\w*|\btengo\b[^.!?]{0,12}\babandonad\w*/;
+
 // Conformidad que el detector de preguntas confundiría ("como tu digas"). Se evalúa ANTES que QUESTION.
 const CONFORMITY =
   /(como tu (digas|veas|quieras)|como veas|lo que (tu )?(digas|veas|quieras|sea)|me parece que si|me da igual|tu mandas)/;
@@ -155,7 +171,7 @@ const CONTINUATION =
 // "mi socio" no tiene sentido (bug jul-2026); se responden con identidad/simpatía. El lookahead (?!\s+que)
 // evita confundir "¿cuántos años tienes que tener?" (eso es política de edad). Se evalúa ANTES que QUESTION.
 const ASKS_IDENTITY =
-  /\bquien (eres|es|habla|sois|son|me llama|llama)\b|\bde donde (llamas|llamais|me llamas|es esto|sois|llaman|eres)\b|\bde que (agencia|empresa|parte)\b|\bpara quien (trabajas|trabajais|es esto)\b|\bque agencia\b|\bcomo te llamas\b|\bde parte de quien\b|\bcuantos anos (?:tienes|tenes|tiene usted)\b(?!\s+que)|\bque edad (?:tienes|tenes|tiene usted)\b(?!\s+que)/;
+  /\bquien (eres|es|habla|sois|son|me llama|llama)\b|\bde donde (llamas|llamais|me llamas|es esto|sois|llaman|eres)\b|\bde que (agencia|empresa|parte)\b|\bpara quien (trabajas|trabajais|es esto)\b|\bque agencia\b|\bcomo te llama(?:s|bas)\b|\b(?:cual|como) (?:es|era) tu nombre\b|\bme repites tu nombre\b|\bde parte de quien\b|\bcuantos anos (?:tienes|tenes|tiene usted)\b(?!\s+que)|\bque edad (?:tienes|tenes|tiene usted)\b(?!\s+que)/;
 
 // Pregunta de POLÍTICA DE EDAD ("¿a partir de qué edad?", "¿hay edad mínima?", "¿qué edad hay que tener?"):
 // se responde DETERMINISTA (solo mayores de 18, requisito innegociable), NUNCA se defiere a "mi socio"
@@ -332,6 +348,10 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (WANTS_TO_THINK.test(text)) return "wants-to-think";
   if (NOT_INTERESTED.test(text)) return "not-interested";
   if (WANTS_TO_END.test(text)) return "wants-to-end";
+  // Aviso de TIEMPO ("solo tengo una hora"): seguir (rapido), no defer ni cerrar. DESPUES de WANTS_TO_END
+  // ("tengo prisa, hablamos luego" sigue reagendando) y ANTES de QUESTION (lleva "que" y deferia). Si viene
+  // ENCADENADO a una pregunta real ("solo tengo media hora, ¿cuanto se gana?"), la pregunta gana.
+  if (TIME_NOTICE.test(text) && !STRONG_QUESTION.test(text)) return "follows-along";
   if (CONFORMITY.test(text)) return "follows-along";
   if (CONTINUATION.test(text)) return "follows-along";
   // Aclaración de lo que el bot ACABA de decir ("¿qué significa se liquida?", "¿límite de qué?"): se
@@ -378,6 +398,19 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // estaba (lo coge QUESTION -> asks-*), asi el fix del "es que" no introduce falsos negativos con "lo que".
   const withoutConjunctionThat = text.replace(/\b(?:es|ya|asi|sino|puesto|dado)\s+que\b/g, " ");
   if (QUESTION.test(withoutConjunctionThat)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
+  // Declaracion del ESTADO de su OnlyFans ("no tengo onlyfans", "si tengo pero abandonado", "lo tengo
+  // abandonado"): es INFORMACION, no ruido -> asentir y seguir (el redactor la reconoce; el extractor de
+  // hechos la recuerda). Sweep R9 10-jul: caia en unclear -> "no te pillo" x2 fingiendo sordera. Va ANTES
+  // de YES_BUT ("si tengo PERO abandonado" es dato, no objecion) y DESPUES de QUESTION (una pregunta gana).
+  // Si el dato viene con NEGATIVA a futuro ("y no pienso hacerme uno") o DUDA ("tengo mis reservas"), NO se
+  // aplana como asentimiento (revisor R9): cae a la comprension, que la entiende como duda/objecion.
+  if (
+    OF_STATUS_STATEMENT.test(text) &&
+    !/\b(?:no pienso|no voy a|no quiero|ni loca|ni de broma)\b/.test(text) &&
+    !/\b(?:reservas|dudas?|miedo|reparos?)\b/.test(text)
+  ) {
+    return "follows-along";
+  }
   // "ya pero..."/"vale pero..."/"bueno pero..." = CONCESION + OBJECION (yes-but): el token de aceptacion va
   // seguido de un CONTRASTE, asi que NO es asentimiento. Sin esto, "ya pero mi novio no se si lo va a llevar
   // bien" casaba FOLLOWS_ALONG por el "ya" inicial -> follows-along -> el bot AVANZABA atropellando la

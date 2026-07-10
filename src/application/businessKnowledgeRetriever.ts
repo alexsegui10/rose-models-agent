@@ -331,6 +331,22 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     /\bchatters?\b/.test(message)
   )
     tags.push("services", "agency", "agency-responsibilities", "instagram", "operations");
+  // ¿De qué OS ENCARGÁIS? / ¿Qué HARÍAIS por mí? / ¿Qué hacéis vosotros? (sweep R9 10-jul: LA pregunta de
+  // venta — el pitch operativo — se defería a WhatsApp x2 hasta que la candidata protestaba "ya me lo
+  // dijiste"). Fraseo en 2ª persona/condicional hacia la AGENCIA -> servicios/operaciones. Mismos guards
+  // que la regla de gestión: sin dinero (control de pagos escala) y sin petición de pruebas.
+  if (
+    (/\b(?:de que |que )?(?:os|se) encarg\w+\b/.test(message) ||
+      /\bque (?:hariais|harian|haceis|hacen|hace la agencia|pone la agencia)\b/.test(message) ||
+      /\bvuestra parte\b|\bvuestro trabajo\b/.test(message)) &&
+    // cobr\w* cubre "cobros/cobrar" (revisor R9: "os encargais de los cobros" es tesoreria -> escala, no servicios).
+    !/\b(?:dinero|pago|pagos|plata|cobr\w*|reparto|porcentaje|comision)\b/.test(message) &&
+    // demostrar/demuestr: "que haceis para DEMOSTRAR que no es estafa" es desconfianza/escalado, no servicios.
+    !/\b(?:ensena\w*|ensename|muestr\w*|mostr\w*|ver|veas|envi\w*|mand\w*|pasa\w*|pasame|resultados?|ejemplos?|pruebas?|demostrar|demuestr\w*)\b/.test(
+      message
+    )
+  )
+    tags.push("services", "agency", "agency-responsibilities", "operations");
   // ¿Quién GESTIONA/lleva/maneja el Instagram/la cuenta? (barrido 8-jul: "y eso quién lo gestiona" se
   // defería como desconocido siendo que lo gestiona la AGENCIA). Se surfacea servicios/operaciones. Guardado:
   // un verbo de gestión + un término de cuenta/IG y SIN dinero (para no pisar el control de pagos, que escala).

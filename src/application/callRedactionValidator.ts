@@ -49,6 +49,13 @@ export interface CallValidationOptions {
    * ("enseguida", "en un ratito", "pronto") pasan. Asi la promesa de tiempo la corta la red, no solo el prompt.
    */
   noContactTimePromise?: boolean;
+  /**
+   * Turno de DEFER (no sabemos la respuesta): el draft NO puede EMPEZAR con "Sí"/"No" — ante una pregunta
+   * polar eso equivale a RESPONDERLA y contradice el defer en el mismo turno ("No, tranquila... eso prefiero
+   * confirmártelo" dejaba en el aire a una madre preguntando por sus hijos — sweep R9 10-jul). Con esto en
+   * true, una partícula polar inicial tira el draft al fallback (que arranca con "Mira/Pues", neutro).
+   */
+  noPolarOpener?: boolean;
 }
 
 /** Porcentajes (en dígitos) que el bot PUEDE decir: la escalera autorizada y sus complementarios. */
@@ -203,6 +210,14 @@ export function validateCallUtterance(
       /\b(?:un|una|uno|unos|unas)\s+(?:euros?|dolar(?:es)?|pavos?|lucas?|palos?|billetes?|libras?|mangos?)\b/;
     if (/\d/.test(norm) || EARNINGS_NUMERAL_WORDS.test(norm) || wordQuantifiedMoney.test(norm)) {
       return { valid: false, reason: "cifra en turno de ingresos" };
+    }
+  }
+
+  // Turno de DEFER: no puede EMPEZAR con "Sí"/"No" (responderia la pregunta que esta difiriendo). Sobre el
+  // texto NORMALIZADO (sin acentos): "Sí," con tilde rompe el \b de la regex cruda.
+  if (options?.noPolarOpener) {
+    if (/^\s*¡?¿?\s*(?:si|no)\b/.test(norm)) {
+      return { valid: false, reason: "empieza con Sí/No en un turno de defer (contradice el defer)" };
     }
   }
 

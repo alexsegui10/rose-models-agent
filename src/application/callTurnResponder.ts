@@ -325,6 +325,18 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     liveSignal = signal;
   }
 
+  // ANTI-DISCO-RAYADO del "no te pillo" (sweep R9 10-jul): con la comprensión activa, el replay SALTA los
+  // turnos unclear-reales (no cuentan en directiveRepeats), así que dos ASK_REPEAT consecutivos salían con
+  // el MISMO texto ("no te he pillado bien" x2, fingiendo sordera en bucle). El transcript es la fuente de
+  // verdad: se cuentan los ASK_REPEAT que el bot YA DIJO (sus variantes son fijas) y se usa como suelo del
+  // índice de repetición — la 2ª vez sale otra formulación. Determinista y replay-safe (solo lee mensajes).
+  const askRepeatAlreadySaid = input.messages.filter(
+    (m) => m.role === "assistant" && /no te he pillado bien|se oye entrecortado|cobertura.{0,4}fatal/i.test(m.content ?? "")
+  ).length;
+  if (askRepeatAlreadySaid > (directiveRepeats.ASK_REPEAT ?? 0)) {
+    directiveRepeats.ASK_REPEAT = askRepeatAlreadySaid;
+  }
+
   const result = runCallTurn({
     state,
     utterance: lastUtterance,
@@ -369,6 +381,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // Turno de HANDOFF: el bot no promete CUANDO contactara Alex (eso lo fija Alex). La red veta dia/hora
     // concretos; sin esto solo lo cubria el prompt del brief.
     const noContactTimePromise = result.directive.type === "HANDOFF_TO_ALEX";
+    // Turno de DEFER: no puede EMPEZAR con "Sí/No" — ante una pregunta polar eso la RESPONDE y contradice
+    // el defer en el mismo turno ("No, tranquila... eso lo confirmo" — sweep R9 10-jul).
+    const noPolarOpener = result.directive.type === "DEFER_TO_PARTNER";
     // Emojis fuera del canal de VOZ (3-jul): el redactor a veces cuela un 😄 y el TTS lo lee raro o lo
     // ignora con pausa; se eliminan del texto hablado (el humor va en las palabras).
     const spokenDraft = draft
@@ -381,7 +396,8 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
         allowAuthorizedShare: allowShare,
         allowFarewell: false,
         noMoneyFigures,
-        noContactTimePromise
+        noContactTimePromise,
+        noPolarOpener
       }).valid
     ) {
       content = spokenDraft;

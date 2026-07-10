@@ -259,7 +259,10 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
             "No tienes la respuesta segura a lo que acaba de decir. NO respondas su pregunta ni afirmes NINGÚN dato nuevo: si es una duda del negocio, dile con naturalidad que eso prefieres confirmarlo y se lo mandas por WhatsApp en cuanto colguéis; si es una pregunta personal o de charla, sal del paso con simpatía (sin inventar datos personales) y retoma la conversación con suavidad." +
             repeatHint(input),
           groundingFacts: [],
-          prohibitedClaims: ["Cualquier dato, servicio o cifra de la agencia que no esté en los hechos aprobados"],
+          prohibitedClaims: [
+            "Cualquier dato, servicio o cifra de la agencia que no esté en los hechos aprobados",
+            "Empezar la frase con 'Sí' o 'No': estarías respondiendo justo la pregunta que estás difiriendo"
+          ],
           mandatoryNuances: [],
           referenceInstagram: false,
           context: input.context,
