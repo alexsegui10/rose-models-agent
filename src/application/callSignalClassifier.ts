@@ -72,13 +72,20 @@ const REJECT_MACHINE =
 // (70/65/60/35/40) para que "70 es mucho" / "solo un 30 para mi" cuenten como queja del reparto.
 const SHARE_TERMS =
   /(\b(30|35|40|60|65|70)\b|treinta|treinta y cinco|cuarenta|sesenta|sesenta y cinco|setenta|comision|reparto|porcentaje|quedais|quedan|os queda|se queda|os llevais|se llevan|se lleva|os quedais|quedaros|quedarse|para la agencia|para vosotros|para ustedes|me queda(is)?|vuestra parte|su parte)/;
-// Términos de queja completos (con el término de reparto, basta uno de cada).
+// Términos de queja completos (con el término de reparto, basta uno de cada). OJO: "car[oa]" es de PRECIO
+// ("es caro", "sale cara"); el lookbehind excluye el HOMOGRAFO "la/mi/tu cara" (rostro) — sin él, "vale
+// 70/30, ¿y la cara qué?" contaba como QUEJA de reparto y el redactor improvisaba política de cara (R9).
 const COMPLAINT_TERMS =
-  /(mucho|demasiad[oa]|car[oa]|carisim|abusiv|es un robo|un robo|injust|no es justo|muy poco|poco para mi|\bpoc[oa]\b|poquit|bajad|bajar|bajais|bajarlo|podeis bajar|reducir|menos|no me sale|no me compensa|no me convence|no me cuadra|no me parece justo|es un palo|un disparate|barbarid|excesiv|exager|un monton|monton)/;
+  /(mucho|demasiad[oa]|(?<!\b(?:la|las|mi|tu|su|una|esa|esta|de|vuestra|vuestras)\s)car[oa]s?\b|carisim|abusiv|es un robo|un robo|injust|no es justo|muy poco|poco para mi|\bpoc[oa]\b|poquit|bajad|bajar|bajais|bajarlo|podeis bajar|reducir|menos|no me sale|no me compensa|no me convence|no me cuadra|no me parece justo|es un palo|un disparate|barbarid|excesiv|exager|un monton|monton)/;
 // Queja de SEGUIMIENTO en negociación: SOLO frases dirigidas al dinero (no términos sueltos como
 // "mucho"/"reducir" que podrían referirse al contenido/ritmo y regalarían un escalón sin queja real).
 const FOLLOWUP_SHARE_COMPLAINT =
-  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|\b(?:dar|dame|darme|darnos|dais|deis|dan|das)\b(?:me|nos|le)?\s*(?:un poco|algo)?\s*mas\b(?:\s+(?:porfa|porfi|porfis|por favor|please|plis|eh|anda))?(?!\s*\w)|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:muy )?(?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico|poc[oa]|poquit[oa])|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)/;
+  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|\b(?:dar|dame|darme|darnos|dais|deis|dan|das)\b(?:me|nos|le)?\s*(?:un poco|algo)?\s*mas\b(?:\s+(?:porfa|porfi|porfis|por favor|please|plis|eh|anda))?(?!\s*\w)|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:muy )?(?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico|poc[oa]|poquit[oa])|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)|\b(?:no\s+)?(?:me\s+|nos\s+)?(?:lo\s+|la\s+)?(?:podeis|puedes|podes|pueden|puede|podrias|podriais|podrian)\s+mejorar(?:me|lo|la)?(?:\s+(?:eso|esto|el reparto|el porcentaje|la oferta|las condiciones|mi parte))?(?:\s+(?:un poco|algo))?\s*\??\s*$|\b(?:me\s+)?mejoras?\s+(?:el reparto|el porcentaje|la oferta|las condiciones|mi parte)\b/;
+// (R9 10-jul, endurecido tras NO-APTO del revisor) "mejorar" solo cuenta como queja en forma de PETICION
+// dirigida a la agencia: "¿(no) (me lo) podeis/puedes mejorar (eso|el porcentaje...)?" anclada a fin de
+// frase, o "me mejoras la oferta". Un COMPROMISO de ELLA ("voy a mejorar", "se que tengo que mejorar",
+// "prometo mejorar") JAMAS cuenta (regalaba el 65 sin queja real — misma familia que "dame mas X"). SOLO
+// en moneyContext (gate del FOLLOWUP); "podeis mejorar las fotos" tampoco (objeto no-dinero rompe el ancla).
 
 // Desconfianza LEVE (worried) -> tranquilizar y seguir. Incluye sospecha HIPOTÉTICA ("y si es una
 // estafa?"), que NO es agresión: por eso HOSTILE excluye las formas precedidas de "si".
@@ -238,7 +245,7 @@ const IDENTITY_CONFIRM =
 // escalón vigente), JAMÁS se defiere (jul-2026, barrido: "¿cuánto os lleváis?" acababa en "te lo mando por
 // WhatsApp", evasivo). Solo formas en 2ª/3ª persona (la agencia); "¿cuánto gano YO?" sigue siendo earnings.
 const ASKS_SHARE_FIGURE =
-  /\bcuanto (?:os|se|te) (?:llevais|llevas|lleva|llevan|quedais|quedas|queda|quedan|cobrais|cobran)\b|\bque (?:porcentaje|comision)\b|\bcomo (?:es|era|va|iba|funciona|queda) (?:el|lo del) reparto\b|\bel reparto como (?:es|era|va|iba|queda)\b|\bcual (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\bcuanto (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b/;
+  /\bcuanto (?:os|se|te) (?:llevais|llevas|lleva|llevan|quedais|quedas|queda|quedan|cobrais|cobran)\b|\bcuanto cobr(?:ais|as|an)\b(?!\s+(?:las|los|una|un|otras)\b)|\bque (?:porcentaje|comision)\b|\bcomo (?:es|era|va|iba|funciona|queda) (?:el|lo del) reparto\b|\bel reparto como (?:es|era|va|iba|queda)\b|\bcual (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\bcuanto (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b/;
 
 // Pregunta VAGA por el DINERO (no la cifra exacta ni una queja): "y del dinero como va la cosa", "el pago
 // como funciona", "y el dinero?" (DECISION de Alex 8-jul: presentar el reparto, que es la etapa MONEY del
@@ -252,7 +259,7 @@ const ASKS_SHARE_FIGURE =
 // solo se admite un relleno NEUTRO (la cosa/esto/eso/el tema) o el final; cualquier cola evaluativa deja
 // texto antes del $ y NO casa. Asi una afirmacion conforme nunca dispara el 70/30 (invariante 3).
 const ASKS_MONEY_MODEL =
-  /\b(?:el dinero|del dinero|lo del dinero|el pago|del pago|el cobro|la plata)\s+como (?:va|funciona|marcha|se reparte|se maneja)(?:\s+(?:la cosa|esto|eso|el tema))?\s*\??\s*$|^\s*(?:y\s+|oye\s+|pero\s+|bueno\s+)?¿?\s*como (?:va|funciona|marcha|se reparte|se maneja)\s+(?:el dinero|lo del dinero|el pago|el cobro|la plata)\s*\??\s*$|^\s*¿?\s*y\s+(?:el dinero|el pago|lo del dinero|la plata|el cobro)\s*\??\s*$/;
+  /\b(?:el dinero|del dinero|lo del dinero|el pago|del pago|el cobro|la plata)\s+como (?:va|funciona|marcha|se reparte|se maneja)(?:\s+(?:la cosa|esto|eso|el tema))?\s*\??\s*$|^\s*(?:y\s+|oye\s+|pero\s+|bueno\s+)?¿?\s*como (?:va|funciona|marcha|se reparte|se maneja)\s+(?:el dinero|lo del dinero|el pago|el cobro|la plata)\s*\??\s*$|^\s*¿?\s*y\s+(?:el dinero|el pago|lo del dinero|la plata|el cobro|el reparto|el porcentaje|la comision)\s*\??\s*$/;
 
 // Pregunta si es un ROBOT/IA ("¿eres un robot?", "¿hablo con una máquina?"): se responde con IDENTIDAD
 // (soy Alex, el de Rose Models), sin afirmar ni negar ser humano (el validador veta "soy una persona").

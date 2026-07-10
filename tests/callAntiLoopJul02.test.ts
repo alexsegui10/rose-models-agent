@@ -33,23 +33,27 @@ function closedState(): CallDirectorState {
   return state;
 }
 
-describe("director: el cierre se repite UNA vez y después silencio", () => {
-  it("closed + follows-along -> repite el cierre; el segundo y siguientes -> STAY_SILENT", () => {
+describe("director: tras el cierre, un ACK calla y un 'no lo oí' repite UNA vez (R9 10-jul)", () => {
+  it("closed + follows-along ('dale') -> STAY_SILENT; unclear -> repite el cierre UNA vez y luego silencio", () => {
     const state = closedState();
-    const first = decideCallDirective({ state, signal: "follows-along" });
+    // Asentimiento puro: ACK del cierre -> silencio (re-soltar el contrato sonaba a disco rayado, R9).
+    expect(decideCallDirective({ state, signal: "follows-along" }).directive.type).toBe("STAY_SILENT");
+    // No lo oyó de verdad: se conserva la repetición ÚNICA de jul-02.
+    const first = decideCallDirective({ state, signal: "unclear" });
     expect(first.directive.type).toBe("CLOSE_WITH_CONTRACT");
-    const second = decideCallDirective({ state: first.nextState, signal: "follows-along" });
+    const second = decideCallDirective({ state: first.nextState, signal: "unclear" });
     expect(second.directive.type).toBe("STAY_SILENT");
     const third = decideCallDirective({ state: second.nextState, signal: "none" });
     expect(third.directive.type).toBe("STAY_SILENT");
   });
 
-  it("el cierre cálido (CLOSE_SOFT) también se capa: una repetición y silencio", () => {
+  it("el cierre cálido (CLOSE_SOFT) igual: ack -> silencio; unclear -> una repetición y silencio", () => {
     const opened = decideCallDirective({ state: initialCallDirectorState(), signal: "none" }).nextState;
     const closed = decideCallDirective({ state: opened, signal: "not-interested" }).nextState;
-    const first = decideCallDirective({ state: closed, signal: "follows-along" });
+    expect(decideCallDirective({ state: closed, signal: "follows-along" }).directive.type).toBe("STAY_SILENT");
+    const first = decideCallDirective({ state: closed, signal: "unclear" });
     expect(first.directive.type).toBe("CLOSE_SOFT");
-    const second = decideCallDirective({ state: first.nextState, signal: "follows-along" });
+    const second = decideCallDirective({ state: first.nextState, signal: "unclear" });
     expect(second.directive.type).toBe("STAY_SILENT");
   });
 
@@ -60,10 +64,12 @@ describe("director: el cierre se repite UNA vez y después silencio", () => {
     expect(decideCallDirective({ state, signal: "asks-identity" }).directive.type).toBe("GIVE_IDENTITY");
     expect(decideCallDirective({ state, signal: "asks-age-policy" }).directive.type).toBe("GIVE_AGE_POLICY");
     expect(decideCallDirective({ state, signal: "distrust" }).directive.type).toBe("REASSURE");
-    // Ninguna reabre el guion: closed sigue true y no gasta la repetición del cierre.
+    // Ninguna reabre el guion: closed sigue true y no gasta la repetición del cierre (que ahora solo
+    // dispara un `unclear` — el ack posterior calla, R9 10-jul).
     const after = decideCallDirective({ state, signal: "asks-covered" }).nextState;
     expect(after.closed).toBe(true);
-    expect(decideCallDirective({ state: after, signal: "follows-along" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
+    expect(decideCallDirective({ state: after, signal: "follows-along" }).directive.type).toBe("STAY_SILENT");
+    expect(decideCallDirective({ state: after, signal: "unclear" }).directive.type).toBe("CLOSE_WITH_CONTRACT");
   });
 
   it("queja del reparto tras el cierre -> DEFER (sin cifra, sin reabrir negociación) — invariante 3", () => {
@@ -161,7 +167,7 @@ describe("INVARIANTE 2 tras el corte por menor: el corte ES el corte (B1 del rev
 });
 
 describe("replay consistente con el atajo de ruido en vivo (R1/R2 del revisor)", () => {
-  it("un '...' intercalado tras el cierre NO gasta la repetición: el siguiente 'dale' repite el cierre", async () => {
+  it("un '...' intercalado tras el cierre: silencio; y un 'dale' posterior TAMBIÉN calla (ack, R9 10-jul)", async () => {
     const messages: CallChatMessage[] = [
       { role: "system", content: "p" },
       { role: "assistant", content: "apertura..." }
@@ -182,11 +188,12 @@ describe("replay consistente con el atajo de ruido en vivo (R1/R2 del revisor)",
     expect(noise.directiveType).toBe("STAY_SILENT");
     messages.push({ role: "assistant", content: "(silencio)" });
 
-    // La PRIMERA frase real tras el cierre sigue teniendo su repetición (el ruido no la consumió).
+    // Un "dale, perfecto" tras el cierre es un ACK: silencio (antes re-soltaba el contrato entero —
+    // disco rayado del sweep R9). La repetición única queda reservada a un `unclear` real.
     messages.push({ role: "user", content: "dale, perfecto" });
-    const repeat = await respondToCall({ messages: [...messages] });
-    expect(repeat.directiveType).toBe("CLOSE_WITH_CONTRACT");
-    expect(repeat.content.toLowerCase()).toContain("contrato");
+    const ack = await respondToCall({ messages: [...messages] });
+    expect(ack.directiveType).toBe("STAY_SILENT");
+    expect(ack.content).toBe("");
   });
 });
 

@@ -33,10 +33,11 @@ describe("director de la llamada", () => {
     expect(covered).toContain("MONEY");
     // BOUNDARIES fuera de la agenda proactiva (Alex 3-jul): los limites van reactivos + WhatsApp.
     expect(covered).not.toContain("BOUNDARIES" as never);
-    // Se cierra con el contrato y, si ella sigue asintiendo, se repite UNA vez y después silencio
-    // (anti-loro jul-2026; el detalle en callAntiLoopJul02).
+    // Se cierra con el contrato UNA sola vez: un asentimiento posterior ("dale") es un ACK del cierre,
+    // no "no lo oí" -> SILENCIO (sweep R9 10-jul, sustituye al "repetir una vez" de jul-02 para el ack;
+    // un `unclear` sí conserva la repetición única — detalle en callAntiLoopJul02/callR9LoteBJul10).
     const closes = directives.filter((d) => d.type === "CLOSE_WITH_CONTRACT").length;
-    expect(closes).toBe(2);
+    expect(closes).toBe(1);
     expect(directives[directives.length - 1].type).toBe("STAY_SILENT");
   });
 
@@ -140,8 +141,10 @@ describe("director de la llamada", () => {
     const decision = decideCallDirective({ state, signal: "not-interested" });
     expect(decision.directive.type).toBe("CLOSE_SOFT");
     expect(decision.nextState.closed).toBe(true);
-    // Pegajoso: si sigue hablando, repite el cierre cálido (NO el del contrato).
-    expect(decideCallDirective({ state: decision.nextState, signal: "follows-along" }).directive.type).toBe("CLOSE_SOFT");
+    // Pegajoso: un asentimiento posterior NO re-suelta el cierre (silencio, sweep R9 10-jul); y si de
+    // verdad no lo oyó (unclear), el cierre cálido SÍ se repite una vez (no el del contrato).
+    expect(decideCallDirective({ state: decision.nextState, signal: "follows-along" }).directive.type).toBe("STAY_SILENT");
+    expect(decideCallDirective({ state: decision.nextState, signal: "unclear" }).directive.type).toBe("CLOSE_SOFT");
   });
 
   it("no se entiende (unclear) -> pedir que repita, sin avanzar la agenda", () => {

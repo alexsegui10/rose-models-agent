@@ -232,6 +232,13 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
           nextState: { ...state, goodbyeSaid: true }
         };
       }
+      // Un ASENTIMIENTO puro tras el cierre ("dale", "vale", "perfecto") es un ACK del cierre, no "no lo
+      // oí": re-soltarle el contrato entero sonaba a disco rayado (sweep R9 10-jul, decisión deliberada que
+      // sustituye al "repetir una vez" de jul-02 PARA ESTE caso). Silencio; el colgado lo pone la
+      // plataforma. Un `unclear` (de verdad no lo oyó) SÍ conserva la repetición única de abajo.
+      if (signal === "follows-along" || signal === "none") {
+        return { directive: { type: "STAY_SILENT" }, nextState: state };
+      }
     }
     // Tras la despedida ya dada, cualquier coletilla ("chau chau", "vale") es SILENCIO: re-soltar el
     // cierre a quien se está despidiendo era el último loro que quedaba (barrido jul-2026).
