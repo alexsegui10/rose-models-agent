@@ -175,6 +175,61 @@ const entries: KnowledgeEntryInput[] = [
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-07-03"
+  },
+  {
+    // Decision de Alex (10-jul, sweep R9): la EDICION la hace la agencia; ella manda el material en crudo.
+    // Antes "¿las fotos las edito yo o vosotros?" se respondia con un volcado de calendario que no contestaba.
+    id: "content-editing-by-agency",
+    category: "CONTENT_RESPONSIBILITIES",
+    title: "La edicion del contenido la hace la agencia",
+    facts: [
+      "La edicion y el retoque del contenido los hace la agencia.",
+      "La candidata envia el material en crudo (fotos y videos tal cual los graba)."
+    ],
+    approvedAnswerPoints: [
+      "De la edicion nos encargamos nosotros: tu nos mandas el material en crudo y nuestro equipo lo deja listo.",
+      "No necesitas saber editar ni tener programas de edicion."
+    ],
+    prohibitedClaims: [
+      "Pedirle que aprenda edicion o que compre programas.",
+      "Prometer retoques que alteren su fisico de forma enganosa."
+    ],
+    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["editing", "production", "content"],
+    requiresHumanReview: false,
+    version: "content-editing-by-agency-2026-07-10.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-10"
+  },
+  {
+    // Decision de Alex (10-jul, sweep R9): ante "¿mis hijos no salen en nada, no?" el NO es ROTUNDO e
+    // inmediato (antes se deferia a WhatsApp con un "No, tranquila... lo confirmo" que dejaba la duda
+    // abierta a una madre). Compliance: menores JAMAS en ningun contenido.
+    id: "content-only-her-no-minors",
+    category: "CONTENT_RESPONSIBILITIES",
+    title: "En el contenido aparece solo ella: menores y terceros JAMAS",
+    facts: [
+      "En el contenido aparece UNICAMENTE la candidata.",
+      "Menores JAMAS aparecen en ningun contenido, bajo ninguna circunstancia.",
+      "Terceros (pareja, familia, amigos) no aparecen en el contenido."
+    ],
+    approvedAnswerPoints: [
+      "No, jamas: en el contenido apareces solo tu.",
+      "Menores nunca aparecen en nada, eso es sagrado e innegociable."
+    ],
+    prohibitedClaims: [
+      "Dejar la respuesta en el aire o deferirla: el NO es rotundo e inmediato.",
+      "Sugerir que terceros o menores podrian aparecer en algun caso."
+    ],
+    mandatoryNuances: ["La respuesta sobre menores es un NO categorico inmediato; jamas se defiere ni se matiza."],
+    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["minors-content", "only-her", "content", "safety"],
+    requiresHumanReview: false,
+    version: "content-only-her-no-minors-2026-07-10.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-10"
   }
 ];
 

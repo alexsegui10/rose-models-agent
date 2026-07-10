@@ -97,6 +97,32 @@ const entries: KnowledgeEntryInput[] = [
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-06-20"
+  },
+  {
+    // Decision de Alex (10-jul, sweep R9): un OF previo abandonado/sin usar NO es problema y se responde al
+    // momento (antes se deferia a WhatsApp y la candidata quedaba sin respuesta a un dato clave suyo).
+    id: "onlyfans-existing-or-abandoned",
+    category: "CANDIDATE_REQUIREMENTS",
+    title: "OnlyFans previo abandonado o sin usar: sin problema",
+    facts: [
+      "Tener un OnlyFans previo abandonado o sin usar no es ningun problema: se retoma y lo trabaja el equipo.",
+      "Conocer ya la plataforma es una ventaja para empezar."
+    ],
+    approvedAnswerPoints: [
+      "Sin problema, es de lo mas normal: lo retomamos y lo trabajamos nosotros con el equipo.",
+      "Que ya conozcas la plataforma ayuda, vas con ventaja."
+    ],
+    prohibitedClaims: [
+      "Prometer resultados concretos por tener una cuenta previa.",
+      "Pedir credenciales o contrasenas de la cuenta por chat."
+    ],
+    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["onlyfans", "existing-account", "eligibility"],
+    requiresHumanReview: false,
+    version: "onlyfans-existing-or-abandoned-2026-07-10.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-10"
   }
 ];
 

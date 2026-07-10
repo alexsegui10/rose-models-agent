@@ -166,7 +166,26 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("model-responsibilities", "content");
-  if (/\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message))
+  // PREGUNTA DE MENORES/TERCEROS EN EL CONTENIDO ("¿mis hijos salen en las fotos?"), en AMBOS ordenes
+  // (sujeto→verbo y verbo→sujeto: "¿salen mis hijos...?", "¿van a salir mis nenes...?" — inversion que cazo
+  // el revisor del Lote C). Compartida por el guard del calendario y la regla de menores para que no
+  // diverjan: si es pregunta de menores, el NO rotundo lidera; si solo MENCIONA hijos sin verbo de
+  // aparecer ("tengo dos hijos, ¿cuantas fotos al dia?"), el calendario responde con normalidad.
+  const MINORS_SUBJECT = "(?:mis?\\s+)?(?:hijos?|hijas?|nenes?|nenas?|ninos?|ninas?|bebes?|familia|pareja|novio|marido)";
+  const APPEAR_VERB = "(?:salen?|salgan?|saldran?|saldria|van?\\s+a\\s+salir|salir|aparec\\w*)";
+  const minorsAppearQuestion =
+    new RegExp(`\\b${MINORS_SUBJECT}\\b[^.!?]{0,30}\\b${APPEAR_VERB}\\b`).test(message) ||
+    new RegExp(`\\b${APPEAR_VERB}\\b[^.!?]{0,30}\\b${MINORS_SUBJECT}\\b`).test(message) ||
+    /\bsolo salgo yo\b|\bsale alguien mas\b|\baparece alguien mas\b/.test(message);
+  // Guard de EDICION y de MENORES (Lote C 10-jul): "¿las fotos las edito yo o vosotros?" pregunta por la
+  // EDICION y "¿mis hijos salen en las fotos?" por los MENORES — sin los guards, los tags de calendario
+  // enterraban esas respuestas y se contestaba un volcado de dias/reels (R9-3; el de menores era el peor:
+  // a una madre se le respondia "2 o 3 fotos diarias" en vez del NO rotundo — bloqueante del revisor).
+  if (
+    /\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message) &&
+    !/\bedit\w*|\bedicion\b|\bretoc\w*|\bretoques?\b/.test(message) &&
+    !minorsAppearQuestion
+  )
     tags.push("production", "reels", "photos", "warmup");
   // Tiempo de dedicacion / compaginar / media jornada: se responde SOLO si pregunta (decision de Alex):
   // "con unas horas al dia es suficiente, lo importante es cumplir el contenido".
@@ -331,6 +350,32 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     /\bchatters?\b/.test(message)
   )
     tags.push("services", "agency", "agency-responsibilities", "instagram", "operations");
+  // (Lote C sweep R9, decisiones de Alex 10-jul) Cuatro respuestas directas nuevas:
+  // OF previo abandonado/sin usar ("tengo of pero abandonado, ¿cuenta igual?") -> sin problema, se retoma.
+  if (
+    // Anclado a OF/cuenta (revisor Lote C): "mi INSTAGRAM lo tengo parado" no es el OF abandonado.
+    /\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\babandonad\w*|\babandonad\w*\b[^.!?]{0,25}\b(?:of|onlyfans|cuenta)\b|\b(?:el of|el onlyfans|la cuenta)\b[^.!?]{0,15}\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b|\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b(?=[^.!?]{0,20}\b(?:of|onlyfans|cuenta)\b)|\bcuenta (?:vieja|parada|muerta|abandonada)\b|\b(?:of|onlyfans)\b[^.!?]{0,20}\b(?:parad[oa]|muert[oa]|sin usar|sin tocar)\b/.test(
+      message
+    )
+  )
+    tags.push("onlyfans", "existing-account", "eligibility");
+  // ¿Quién EDITA las fotos/los vídeos? -> la agencia (ella manda el material en crudo). "retoc*" ANCLADO a
+  // contenido (revisor Lote C: "me he retocado los labios" es cirugia estetica, no edicion).
+  if (
+    /\bedit(?:o|as|a|ais|an|ar|arlo|arla|arlas|amos)?\b[^.!?]{0,25}\b(?:fotos?|videos?|contenido|material|yo|vosotros|ustedes)\b|\b(?:fotos?|videos?|contenido|material)\b[^.!?]{0,25}\b(?:edit\w*|edicion|retoc\w*|retoques?)\b|\b(?:edicion|retoques?)\b[^.!?]{0,25}\b(?:fotos?|videos?|contenido|material|haceis|hacemos|vosotros|ustedes|quien)\b|\bquien (?:edita|hace la edicion)\b|\bla edicion\b/.test(
+      message
+    )
+  )
+    tags.push("editing", "production", "content");
+  // ¿Oficina física o todo online? -> 100% online.
+  if (/\boficina\b|\bpresencial\w*\b|\bvuestra sede\b|\b(?:es|todo|sois|trabajais) online\b/.test(message))
+    tags.push("location", "online", "agency");
+  // ¿Mis HIJOS/terceros salen en el contenido? -> NO rotundo (solo ella; menores JAMAS). Usa la MISMA
+  // deteccion `minorsAppearQuestion` que el guard del calendario (ambos ordenes, ver arriba). La OBJECION
+  // de pareja ("mi novio no (me) deja/quiere que salga") NO entra (revisor Lote C): eso es una preocupacion
+  // de pareja hacia ELLA, no la pregunta de quien aparece.
+  if (minorsAppearQuestion && !/\bno (?:me\s+|le\s+)?(?:quiere|gusta|deja|permite|dejaria)\b/.test(message))
+    tags.push("minors-content", "only-her", "content", "safety");
   // ¿De qué OS ENCARGÁIS? / ¿Qué HARÍAIS por mí? / ¿Qué hacéis vosotros? (sweep R9 10-jul: LA pregunta de
   // venta — el pitch operativo — se defería a WhatsApp x2 hasta que la candidata protestaba "ya me lo
   // dijiste"). Fraseo en 2ª persona/condicional hacia la AGENCIA -> servicios/operaciones. Mismos guards
