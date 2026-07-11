@@ -140,6 +140,11 @@ export const CandidateSchema = z.object({
   humanVerifiedProfileAccess: z.boolean().default(false),
   humanProfileReviewStatus: HumanProfileReviewStatusSchema.default("NOT_REVIEWED"),
   humanFitDecision: HumanFitDecisionSchema.default("PENDING"),
+  // ATRIBUCION POR ANUNCIO (11-jul): de que anuncio de Instagram vino (referral del webhook de Meta en
+  // los DMs click-to-message). Primer anuncio gana (no se sobreescribe). Solo datos: no afecta al flujo.
+  adId: z.string().optional(),
+  adTitle: z.string().optional(),
+  adReferralJson: z.string().optional(),
   hasOnlyFans: z.boolean().optional(),
   worksWithAnotherAgency: z.boolean().optional(),
   experienceDescription: z.string().optional(),

@@ -140,6 +140,37 @@ export class ConversationEngine {
   }
 
   /**
+   * ATRIBUCIÓN POR ANUNCIO (11-jul, plan de ads): guarda en la ficha de qué anuncio de Instagram vino la
+   * candidata (referral de Meta en los DMs click-to-message). SOLO datos para medir calidad por anuncio en
+   * el CRM: no toca la conversación, ni el estado, ni el flujo (invariante 1 intacto). El PRIMER anuncio
+   * gana: una atribución posterior no sobreescribe (la métrica es "qué anuncio la trajo"). Sin adId ni
+   * referral crudo es un no-op (no crea candidatas fantasma).
+   */
+  async recordAdAttribution(input: {
+    instagramUsername: string;
+    adId?: string;
+    adTitle?: string;
+    referralJson?: string;
+  }): Promise<void> {
+    if (!input.adId && !input.referralJson) return;
+    const candidate = await this.loadOrCreateCandidate({ instagramUsername: input.instagramUsername });
+    // PRIMER ANUNCIO gana: un adId real ya guardado nunca se sobreescribe. Pero un referral de solo-link
+    // (ig.me, sin ad_id) NO ocupa el hueco del anuncio (riesgo del revisor 11-jul): si luego llega un
+    // anuncio REAL, lo completa; y un ref-only posterior no pisa lo que ya haya.
+    if (candidate.adId) return;
+    if (!input.adId && candidate.adReferralJson) return;
+    await this.dependencies.repository.saveCandidate(
+      normalizeCandidate({
+        ...candidate,
+        adId: input.adId,
+        adTitle: input.adTitle ?? candidate.adTitle,
+        adReferralJson: input.referralJson ?? candidate.adReferralJson,
+        updatedAt: new Date()
+      })
+    );
+  }
+
+  /**
    * Decision humana explicita desde el CRM (invariante 4: las salidas de revision SOLO las decide
    * Alex). Aplica la decision, registra la transicion y, al APROBAR, propone la llamada de forma
    * proactiva (peticion de Alex #5) y reanuda la automatizacion. Una decision que no admite la

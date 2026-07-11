@@ -111,17 +111,56 @@ export async function POST(request: Request): Promise<NextResponse> {
   // responden como UN turno (groupMessagesForTurn los une dentro de handleIncomingTurn), no uno a uno,
   // para que el bot no conteste a cada linea por separado. (La espera ~Ns para "dejarla terminar" entre
   // payloads distintos es la fase con cola/QStash, aparte.)
-  const groupedBySender = new Map<string, { senderId: string; text: string; messageId?: string }>();
+  const groupedBySender = new Map<
+    string,
+    { senderId: string; text: string; messageId?: string; adReferral?: (typeof inbound)[number]["adReferral"] }
+  >();
   for (const m of inbound) {
     const prev = groupedBySender.get(m.senderId);
     if (prev) {
       prev.text = `${prev.text}\n${m.text}`.trim();
       prev.messageId = [prev.messageId, m.messageId].filter(Boolean).join("|") || undefined;
+      prev.adReferral = prev.adReferral ?? m.adReferral;
     } else {
-      groupedBySender.set(m.senderId, { senderId: m.senderId, text: m.text, messageId: m.messageId });
+      groupedBySender.set(m.senderId, {
+        senderId: m.senderId,
+        text: m.text,
+        messageId: m.messageId,
+        adReferral: m.adReferral
+      });
     }
   }
   const groupedInbound = [...groupedBySender.values()];
+
+  // ¿Quien es PRIMER CONTACTO? Se calcula ANTES de la atribucion (bloqueante del revisor 11-jul): la
+  // atribucion crea la ficha si no existe, y sin este orden `wasNewContact` salia false para TODA candidata
+  // de anuncio -> se perdia la deteccion de privada/publica y el aviso a Alex justo para los leads de pago.
+  const newContacts = new Set<string>();
+  for (const message of groupedInbound) {
+    if (!(await getSimulatorRepository().findCandidateByInstagram(message.senderId))) {
+      newContacts.add(message.senderId);
+    }
+  }
+
+  // ATRIBUCION POR ANUNCIO (11-jul): si el mensaje nacio de un anuncio (referral de Meta), se guarda en la
+  // ficha ANTES de procesar el turno (vale para el camino directo y para el debounce). Best-effort: un fallo
+  // aqui JAMAS rompe el turno (la atribucion es dato de marketing, no de conversacion).
+  for (const message of groupedInbound) {
+    if (!message.adReferral) continue;
+    try {
+      await engine.recordAdAttribution({
+        instagramUsername: message.senderId,
+        adId: message.adReferral.adId,
+        adTitle: message.adReferral.adTitle,
+        referralJson: message.adReferral.raw
+      });
+      console.log("[ig-webhook] atribucion de anuncio guardada", { adId: message.adReferral.adId ?? "(ref)" });
+    } catch (error) {
+      console.warn("[ig-webhook] atribucion de anuncio fallida (se ignora)", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
 
   // DEBOUNCE entrante (QStash + INBOUND_DEBOUNCE=on): en vez de responder al instante, se GUARDA el mensaje
   // EN ESPERA y se programa una llamada de vuelta a +Ns; cuando ella deja de escribir, el flush responde a
@@ -167,9 +206,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   for (const message of groupedInbound) {
     try {
-      // ¿Primer contacto? (la candidata no existia aun). Si lo es, tras enviar el saludo dispararemos la
-      // deteccion de privada/publica EN SEGUNDO PLANO (Apify es lento; no debe bloquear la entrega).
-      const wasNewContact = !(await getSimulatorRepository().findCandidateByInstagram(message.senderId));
+      // ¿Primer contacto? (la candidata no existia aun ANTES de la atribucion por anuncio — el Set se
+      // calculo arriba a proposito). Si lo es, tras enviar el saludo dispararemos la deteccion de
+      // privada/publica EN SEGUNDO PLANO (Apify es lento; no debe bloquear la entrega).
+      const wasNewContact = newContacts.has(message.senderId);
       const result = await engine.handleIncomingTurn({
         // El IGSID es la clave de la conversación (Instagram no da el @username en el webhook).
         instagramUsername: message.senderId,

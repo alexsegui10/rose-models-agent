@@ -131,6 +131,10 @@ export const candidates = pgTable("candidates", {
   callTimePreference: text("call_time_preference"),
   // Intentos de llamada disparados (incrementa noteCallAttempt al iniciar la llamada, no al recibir el
   // resultado): gobierna el reintento diferido.
+  // Atribucion por anuncio (11-jul): de que anuncio de Instagram vino (referral del webhook de Meta).
+  adId: text("ad_id"),
+  adTitle: text("ad_title"),
+  adReferralJson: text("ad_referral_json"),
   callAttempts: integer("call_attempts").notNull().default(0),
   // Resultado de la ultima llamada (documento completo: duracion, % negociado, resumen, transcripcion).
   lastCall: jsonb("last_call").$type<CallRecord>(),

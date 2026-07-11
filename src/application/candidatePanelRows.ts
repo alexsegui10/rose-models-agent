@@ -22,6 +22,8 @@ export function buildCandidatePanelRows(currentCandidate: Candidate | null): Arr
     ["Bloqueos onboarding", formatOnboardingBlockers(currentCandidate.onboardingBlockers)],
     ["OnlyFans", booleanValue(currentCandidate.hasOnlyFans)],
     ["Otra agencia", booleanValue(currentCandidate.worksWithAnotherAgency)],
+    // Atribucion por anuncio (11-jul): de que anuncio de Instagram vino (titulo si lo hay; si no, el id).
+    ["Anuncio de origen", currentCandidate.adTitle ?? currentCandidate.adId ?? "-"],
     ["Revision humana", currentCandidate.humanReviewStatus]
   ];
 }

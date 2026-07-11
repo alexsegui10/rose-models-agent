@@ -9,12 +9,29 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * procesa un evento sin verificar la firma (cualquiera podría hacer POST al endpoint público).
  */
 
+export interface InstagramAdReferral {
+  /** id del anuncio de Meta del que nació la conversación (click-to-message). */
+  adId?: string;
+  /** Título del anuncio (ads_context_data.ad_title), para verificación humana en el CRM. */
+  adTitle?: string;
+  /** ref del link (ig.me), si lo hay. */
+  ref?: string;
+  /** JSON crudo del referral (auditoría/diagnóstico). */
+  raw: string;
+}
+
 export interface InstagramInboundMessage {
   /** IGSID: id del usuario con ámbito de la app (NO el @username). Es la clave de la conversación. */
   senderId: string;
   text: string;
   /** mid del mensaje de Instagram: sirve de id externo para idempotencia (no procesar dos veces). */
   messageId?: string;
+  /**
+   * ATRIBUCIÓN POR ANUNCIO (11-jul): Meta adjunta `referral` al primer mensaje cuando la conversación
+   * nace de un anuncio (message.referral) o de un link ig.me (event.referral). Solo datos: el motor lo
+   * guarda en la ficha para medir calidad por anuncio; jamás altera la conversación.
+   */
+  adReferral?: InstagramAdReferral;
 }
 
 /** Handshake de verificación del webhook (GET): Meta manda hub.mode/hub.verify_token/hub.challenge. */
@@ -91,11 +108,32 @@ export function parseInstagramWebhookEvent(body: unknown): InstagramInboundMessa
       messages.push({
         senderId,
         text,
-        messageId: typeof message.mid === "string" ? message.mid : undefined
+        messageId: typeof message.mid === "string" ? message.mid : undefined,
+        adReferral: parseAdReferral(message.referral ?? event.referral)
       });
     }
   }
   return messages;
+}
+
+/**
+ * Parsea el `referral` de Meta (anuncio click-to-message o link ig.me) a nuestra atribución. Best-effort:
+ * cualquier forma inesperada devuelve undefined (jamás rompe el parseo del mensaje).
+ */
+function parseAdReferral(referral: unknown): InstagramAdReferral | undefined {
+  if (!isRecord(referral)) return undefined;
+  const adId = typeof referral.ad_id === "string" && referral.ad_id ? referral.ad_id : undefined;
+  const ref = typeof referral.ref === "string" && referral.ref ? referral.ref : undefined;
+  const ads = isRecord(referral.ads_context_data) ? referral.ads_context_data : null;
+  const adTitle = ads && typeof ads.ad_title === "string" && ads.ad_title ? ads.ad_title : undefined;
+  if (!adId && !ref) return undefined;
+  let raw = "";
+  try {
+    raw = JSON.stringify(referral);
+  } catch {
+    raw = "";
+  }
+  return { adId, adTitle, ref, raw };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

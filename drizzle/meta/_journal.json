@@ -50,6 +50,13 @@
       "when": 1782202711898,
       "tag": "0006_demonic_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783795768476,
+      "tag": "0007_modern_ronan",
+      "breakpoints": true
     }
   ]
 }
