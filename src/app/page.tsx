@@ -298,6 +298,13 @@ export default function Home() {
     }
   }, [candidates, drawerCandidate]);
 
+  // Contador de pendientes en el titulo de la pestana del navegador: "(3) Rose Models Agent" cuando hay
+  // candidatas esperando TU decision, para no perderlas aunque el CRM no este en primer plano. Solo presentacion.
+  useEffect(() => {
+    const waiting = candidates.filter(needsHumanDecision).length;
+    document.title = waiting > 0 ? `(${waiting}) Rose Models Agent` : "Rose Models Agent";
+  }, [candidates]);
+
   // Resuelve foto/@usuario/enlace de las candidatas reales (IGSID) una sola vez cada una. El ref evita
   // refetch y bucles de dependencia; el fallo es silencioso (la tarjeta cae al avatar de inicial).
   useEffect(() => {
