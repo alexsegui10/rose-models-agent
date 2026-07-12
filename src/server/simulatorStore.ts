@@ -6,6 +6,7 @@ import { InMemoryImportedConversationRepository } from "@/application/conversati
 import { InMemoryEvaluationRepository } from "@/application/evaluationRunner";
 import { createLlmProviders } from "@/application/llmFactory";
 import { InMemoryConversationFeedbackRepository } from "@/application/responseFeedback";
+import { isDatabaseUnavailableError } from "@/application/transientErrors";
 import { getDb } from "@/infrastructure/db/client";
 import {
   createDebouncedPersister,
@@ -136,39 +137,9 @@ function buildJsonRepositories(): SimulatorRepositories {
 // Modo postgres con fallback determinista al modo json en el PRIMER uso
 // ---------------------------------------------------------------------------
 
-// Códigos que indican "no se pudo hablar con el servidor" (socket de Node, timeouts de
-// postgres.js, autenticación/BD inexistente del servidor). Un error de datos (p. ej. 23505
-// unique_violation) NUNCA dispara el fallback: debe propagarse.
-const CONNECTION_ERROR_CODES = new Set([
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ENOTFOUND",
-  "EHOSTUNREACH",
-  "ETIMEDOUT",
-  "EPIPE",
-  "CONNECT_TIMEOUT",
-  "CONNECTION_CLOSED",
-  "CONNECTION_ENDED",
-  "CONNECTION_DESTROYED",
-  "28000",
-  "28P01",
-  "3D000",
-  "57P03"
-]);
-
-function isConnectionError(error: unknown, depth = 0): boolean {
-  if (depth > 10 || typeof error !== "object" || error === null) {
-    return false;
-  }
-  const candidate = error as { code?: unknown; cause?: unknown };
-  if (typeof candidate.code === "string" && CONNECTION_ERROR_CODES.has(candidate.code)) {
-    return true;
-  }
-  if (error instanceof AggregateError && error.errors.some((inner) => isConnectionError(inner, depth + 1))) {
-    return true;
-  }
-  return isConnectionError(candidate.cause, depth + 1);
-}
+// El clasificador de "no se pudo hablar con la BD -> caer a memoria" vive ahora en
+// application/transientErrors.ts (isDatabaseUnavailableError), junto al del webhook, para que no vuelvan a
+// divergir. Un error de datos (p. ej. 23505 unique_violation) NO entra ahi: se propaga.
 
 function isPromiseLike(value: unknown): value is Promise<unknown> {
   return (
@@ -254,7 +225,12 @@ function withJsonFallback<T extends object>(
             // Neon, conmutar en silencio divergiria el estado de las candidatas entre instancias (idempotencia
             // rota, datos que aparecen/desaparecen). Mejor FALLAR RUIDOSO: se propaga el 5xx y Meta reintenta
             // el webhook cuando Neon vuelva. El fallback efimero solo se permite en local/dev. (Auditoria 16-jun.)
-            if (ALLOW_EPHEMERAL_FALLBACK && !controller.hasSucceeded && !controller.failedOver && isConnectionError(error)) {
+            if (
+              ALLOW_EPHEMERAL_FALLBACK &&
+              !controller.hasSucceeded &&
+              !controller.failedOver &&
+              isDatabaseUnavailableError(error)
+            ) {
               controller.failOver(error);
               return callRepositoryMethod(select(controller.ensureFallback()), property, args);
             }

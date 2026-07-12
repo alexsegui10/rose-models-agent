@@ -20,6 +20,7 @@ import {
 import { fetchInstagramProfile, instagramProfileUrl } from "@/infrastructure/integrations/instagramProfileProvider";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { getQStashConfig } from "@/application/qstashConfig";
+import { isRetriableTransientError } from "@/application/transientErrors";
 import { scheduleInboundFlush, schedulePrivacyDetection } from "@/infrastructure/integrations/qstashClient";
 
 // postgres.js necesita runtime Node (no Edge). maxDuration=60: Vercel Hobby permite hasta 60s por funcion.
@@ -197,7 +198,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         // abajo y el mensaje de la candidata se perdia en silencio sin respuesta.
         console.error("[ig-webhook] error al bufferizar (debounce) -> 503 para reintento", {
           message: error instanceof Error ? error.message : String(error),
-          transient: isLikelyTransientError(error)
+          transient: isRetriableTransientError(error)
         });
         return new NextResponse("Processing error, please retry", { status: 503 });
       }
@@ -293,7 +294,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       // cuando el servicio vuelva (la idempotencia por mid evita duplicar lo ya procesado). Asi no se
       // pierde el mensaje de una candidata por un fallo pasajero. Un error NO transitorio (bug logico)
       // se traga con 200 para no provocar reintentos en bucle que Meta podria penalizar.
-      if (isLikelyTransientError(error)) {
+      if (isRetriableTransientError(error)) {
         console.warn("[ig-webhook] error transitorio -> 503 para que Meta reintente");
         return new NextResponse("Transient processing error, please retry", { status: 503 });
       }
@@ -303,42 +304,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   return NextResponse.json({ ok: true });
 }
 
-// Codigos/senales de error TRANSITORIO (no se pudo hablar con la BD/red): justifican un 5xx para que
-// Meta reintente. Un error de datos o de logica NO entra aqui (no debe reintentarse en bucle).
-const TRANSIENT_ERROR_CODES = new Set([
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ENOTFOUND",
-  "EHOSTUNREACH",
-  "ETIMEDOUT",
-  "EPIPE",
-  "CONNECT_TIMEOUT",
-  "CONNECTION_CLOSED",
-  "CONNECTION_ENDED",
-  "CONNECTION_DESTROYED",
-  "57P03",
-  "08006",
-  "08001",
-  "08004"
-]);
-
-function isLikelyTransientError(error: unknown, depth = 0): boolean {
-  if (depth > 8 || typeof error !== "object" || error === null) return false;
-  const candidate = error as { code?: unknown; message?: unknown; cause?: unknown };
-  if (typeof candidate.code === "string" && TRANSIENT_ERROR_CODES.has(candidate.code)) return true;
-  if (
-    typeof candidate.message === "string" &&
-    /(econn|etimedout|connect_timeout|connection|fetch failed|socket|terminat|too many connections|timeout)/i.test(
-      candidate.message
-    )
-  ) {
-    return true;
-  }
-  if (error instanceof AggregateError && error.errors.some((inner) => isLikelyTransientError(inner, depth + 1))) {
-    return true;
-  }
-  return isLikelyTransientError(candidate.cause, depth + 1);
-}
+// El clasificador de error transitorio (¿reintenta Meta?) vive ahora en application/transientErrors.ts, junto
+// al del store, para que no vuelvan a divergir. Aqui se usa isRetriableTransientError (ver import arriba).
 
 /** Solo estructura (no contenido), para diagnosticar sin filtrar datos personales. */
 function describeObject(parsed: unknown): string {
