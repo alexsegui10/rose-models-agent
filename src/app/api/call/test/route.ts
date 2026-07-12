@@ -2,18 +2,26 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 import { getElevenLabsOutboundConfig, startOutboundSipCall } from "@/infrastructure/integrations/elevenLabsOutbound";
+import { sameOriginAllowed } from "@/application/sameOrigin";
 
 export const runtime = "nodejs";
 
 /**
  * LLAMADA DE PRUEBA: dispara una llamada saliente por teléfono (SIP/Zadarma) al numero que Alex teclea, SIN tener que simular
  * toda la conversacion ni crear una candidata real. Util para probar la voz una y otra vez. Usa una candidata
- * SINTETICA (no se guarda en el repositorio). Detras del Basic Auth del CRM (solo Alex; no esta en MACHINE_PATHS),
- * y exige las claves de ElevenLabs (si faltan -> 503, asi Alex sabe que tiene que configurarlas).
+ * SINTETICA (no se guarda en el repositorio). Exige las claves de ElevenLabs (si faltan -> 503, asi Alex sabe
+ * que tiene que configurarlas).
+ *
+ * SEGURIDAD (jul-2026): tras quitar el candado global de contraseña, este endpoint dispara llamadas de PAGO a
+ * cualquier numero. Guardia "mismo origen": solo se acepta desde la propia web del CRM, para que un desconocido
+ * no pueda usar el sistema como rele de llamadas (coste + acoso a terceros). No añade fricción a Alex.
  */
 const BodySchema = z.object({ phone: z.string().min(6) });
 
 export async function POST(request: Request) {
+  if (!sameOriginAllowed(request.headers.get("origin"), request.headers.get("host"))) {
+    return NextResponse.json({ error: "Origen no permitido." }, { status: 403 });
+  }
   let body: unknown;
   try {
     body = await request.json();

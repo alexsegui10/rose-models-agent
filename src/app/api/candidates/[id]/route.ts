@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSimulatorRepository } from "@/server/simulatorStore";
+import { sameOriginAllowed } from "@/application/sameOrigin";
 
 /**
  * DELETE /api/candidates/[id] — borra UNA candidata concreta (incluidas las reales de Instagram) y, en
@@ -11,10 +12,14 @@ import { getSimulatorRepository } from "@/server/simulatorStore";
  * no-op en ambos backends), para que un doble click o una carrera con el refresco del CRM no muestre un
  * falso error en una pantalla destructiva.
  *
- * Proteccion: el Basic Auth del middleware cubre esta ruta (no esta en MACHINE_PATHS). En produccion
- * (Postgres/Neon) el borrado es REAL e IRREVERSIBLE; el CRM pide confirmacion antes de llamar aqui.
+ * SEGURIDAD (jul-2026): tras quitar el candado global de contraseña, este borrado REAL e IRREVERSIBLE queda
+ * tras la guardia "mismo origen" (solo desde la propia web del CRM), para que un desconocido no pueda borrar
+ * fichas de candidatas. El CRM pide confirmacion antes de llamar aqui.
  */
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!sameOriginAllowed(request.headers.get("origin"), request.headers.get("host"))) {
+    return NextResponse.json({ error: "Origen no permitido." }, { status: 403 });
+  }
   const { id } = await params;
   if (!id || typeof id !== "string") {
     return NextResponse.json({ error: "Id de candidata invalido." }, { status: 400 });

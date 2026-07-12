@@ -4,9 +4,13 @@ import { getConversationAudio } from "@/infrastructure/integrations/elevenLabsCo
 
 /**
  * Proxy de la GRABACION de una llamada de ElevenLabs. Lo consume el <audio> de la ficha de la candidata.
- * La clave xi-api-key se queda SIEMPRE en el servidor (nunca llega al navegador). Protegido por el Basic
- * Auth del middleware (SITE_PASSWORD): esta ruta NO esta en MACHINE_PATHS, asi que solo Alex (con la
- * contrasena de la web) puede acceder a las grabaciones (datos personales de las candidatas).
+ * La clave xi-api-key se queda SIEMPRE en el servidor (nunca llega al navegador).
+ *
+ * OJO (jul-2026): al quitar el candado global de contraseña, esta ruta quedó ABIERTA — cualquiera con la
+ * URL de una grabacion (que incluye el conversationId) podria descargarla. No se pone guardia "mismo origen"
+ * porque el <audio> la carga como recurso y el navegador no siempre manda Origin en GET de media (romperia
+ * la reproduccion). Es datos personales de las candidatas: si se quiere volver a proteger, la via es el
+ * candado de contraseña "recordar 30 dias" (o restringir por sesion). Pendiente de decision de Alex.
  */
 export const runtime = "nodejs";
 
