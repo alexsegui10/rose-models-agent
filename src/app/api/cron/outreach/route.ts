@@ -23,6 +23,9 @@ import { getSimulatorRepository } from "@/server/simulatorStore";
  */
 
 export const runtime = "nodejs";
+// Techo de tiempo explicito: con volumen real el barrido de re-enganche puede tardar; sin esto Vercel podria
+// matar la lambda a mitad (~10s por defecto). No cambia ninguna logica, solo sube el limite.
+export const maxDuration = 60;
 
 // Inactividad minima para considerar el re-enganche (~20h). El planner reafirma sus propias ventanas.
 const IDLE_THRESHOLD_MS = 20 * 60 * 60 * 1000;

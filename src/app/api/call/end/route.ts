@@ -28,6 +28,9 @@ import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotif
  */
 
 export const runtime = "nodejs";
+// Techo de tiempo explicito (fin de llamada: guarda grabacion/resultado, avisa, reagenda): evita que Vercel
+// corte a mitad. Solo sube el limite, no cambia logica.
+export const maxDuration = 60;
 
 const EndCallSchema = z
   .object({
