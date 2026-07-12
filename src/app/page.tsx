@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
+import { classifyDelivery, type SentToCandidate } from "@/application/deliveryNotice";
 import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, ringColorVar, stateColorVar, stateLabel } from "@/application/crmView";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
@@ -630,17 +631,23 @@ export default function Home() {
     const data = (await response.json()) as {
       candidate: Candidate;
       proposedMessage: string | null;
-      sentToCandidate?: string | null;
+      sentToCandidate?: SentToCandidate | null;
       deliveryError?: boolean;
     };
     if (decision === "APPROVE") {
-      const delivered = data.sentToCandidate && !data.deliveryError;
+      // No mentir sobre la ENTREGA (jul-2026): "le escribió" solo si el mensaje llegó DE VERDAD a un canal
+      // real. sentToCandidate es un objeto { delivered, channel }: un { delivered:false } NO es entrega
+      // (bug antiguo: lo contaba por ser truthy). channel "none" = candidata del simulador (sin envío real).
+      const verdict = classifyDelivery(data.sentToCandidate, data.deliveryError);
+      const msg = data.proposedMessage?.replace(/\n+/g, " ");
       setCrmNotice(
-        data.proposedMessage
-          ? delivered
-            ? `Aprobada @${candidate.instagramUsername}. El bot le escribió: "${data.proposedMessage.replace(/\n+/g, " ")}"`
-            : `Aprobada @${candidate.instagramUsername}. ⚠️ El mensaje NO llegó a Instagram (pendiente): "${data.proposedMessage.replace(/\n+/g, " ")}"`
-          : `@${candidate.instagramUsername} no estaba en revision: sin cambios.`
+        !msg
+          ? `@${candidate.instagramUsername} no estaba en revision: sin cambios.`
+          : verdict === "delivered"
+            ? `Aprobada @${candidate.instagramUsername}. El bot le escribió: "${msg}"`
+            : verdict === "simulator"
+              ? `Aprobada @${candidate.instagramUsername} (simulación). El bot respondería: "${msg}"`
+              : `Aprobada @${candidate.instagramUsername}. ⚠️ El mensaje NO llegó a Instagram (pendiente): "${msg}"`
       );
     } else {
       setCrmNotice(`@${candidate.instagramUsername} marcada como rechazada.`);
@@ -863,7 +870,7 @@ export default function Home() {
     const data = (await response.json()) as {
       candidate: Candidate;
       proposedMessage: string | null;
-      sentToCandidate?: string | null;
+      sentToCandidate?: SentToCandidate | null;
       deliveryError?: boolean;
       blockedReason?: string | null;
     };
@@ -898,14 +905,17 @@ export default function Home() {
         `Sin cambios para @${candidate.instagramUsername}: esa acción no aplica en su estado actual (${stateLabel(candidate.currentState)}).`
       );
     } else if (data.proposedMessage) {
-      // No mentir sobre la ENTREGA (jul-2026): "escribió" solo si de verdad se envió a la candidata. Si el
-      // envío falló (deliveryError) o no salió (sentToCandidate null), se avisa de que quedó SIN enviar.
-      const delivered = data.sentToCandidate && !data.deliveryError;
+      // No mentir sobre la ENTREGA (jul-2026): "escribió" solo si de verdad llegó a un canal REAL de la
+      // candidata. sentToCandidate es un objeto { delivered, channel }: { delivered:false } NO es entrega
+      // (bug antiguo: lo contaba por ser truthy); channel "none" es candidata del simulador (sin envío externo).
+      const verdict = classifyDelivery(data.sentToCandidate, data.deliveryError);
       const msg = data.proposedMessage.replace(/\n+/g, " ");
       setCrmNotice(
-        delivered
+        verdict === "delivered"
           ? `${labels[action]} El bot escribió: "${msg}"`
-          : `${labels[action]} ⚠️ La respuesta NO llegó a enviarse a Instagram (queda pendiente): "${msg}"`
+          : verdict === "simulator"
+            ? `${labels[action]} (simulación) El bot respondería: "${msg}"`
+            : `${labels[action]} ⚠️ La respuesta NO llegó a enviarse a Instagram (queda pendiente): "${msg}"`
       );
     } else {
       setCrmNotice(labels[action]);
