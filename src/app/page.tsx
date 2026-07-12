@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
 import { classifyDelivery, type SentToCandidate } from "@/application/deliveryNotice";
 import { AdsView } from "@/app/components/AdsView";
+import { candidatesToCsv, csvFileName } from "@/application/candidatesToCsv";
 import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, ringColorVar, stateColorVar, stateLabel } from "@/application/crmView";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
@@ -622,6 +623,19 @@ export default function Home() {
       setDrawerCandidate(pausedCandidate);
     }
     await refreshCandidates();
+  }
+
+  // Export CSV (contingencia: si Meta suspende la cuenta de IG, esta es la copia con telefono+estado). Genera
+  // el archivo en el navegador desde la lista ya cargada; el BOM ﻿ hace que Excel abra bien los acentos.
+  function exportCandidatesCsv() {
+    const csv = candidatesToCsv(candidates);
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = csvFileName(new Date().toISOString());
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   async function applyHumanDecision(candidate: Candidate, decision: "APPROVE" | "REJECT") {
@@ -1992,14 +2006,25 @@ export default function Home() {
                   <strong style={{ color: "var(--warn)" }}>ámbar</strong> ⚠️ en el avatar.
                 </p>
               </div>
-              <button
-                className="crm2-btn crm2-btn--ghost"
-                type="button"
-                onClick={() => void seedDemo()}
-                title="Añade candidatas de ejemplo para ver el CRM lleno (idempotente; no toca las reales)"
-              >
-                Cargar demo
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  className="crm2-btn crm2-btn--ghost"
+                  type="button"
+                  onClick={exportCandidatesCsv}
+                  disabled={candidates.length === 0}
+                  title="Descarga todas las candidatas en un archivo CSV (copia de seguridad con teléfono, estado y anuncio)"
+                >
+                  Exportar CSV
+                </button>
+                <button
+                  className="crm2-btn crm2-btn--ghost"
+                  type="button"
+                  onClick={() => void seedDemo()}
+                  title="Añade candidatas de ejemplo para ver el CRM lleno (idempotente; no toca las reales)"
+                >
+                  Cargar demo
+                </button>
+              </div>
             </div>
           </div>
           {crmNotice ? <p className="status-bar">{crmNotice}</p> : null}
