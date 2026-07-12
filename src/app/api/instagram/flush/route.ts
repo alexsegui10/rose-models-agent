@@ -6,6 +6,7 @@ import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import { sendInstagramBurst } from "@/infrastructure/integrations/instagramBurstSender";
 import {
+  deliveryFailureNotificationFor,
   escalationNotificationFor,
   followRequestNotificationFor,
   getOperatorNotifier
@@ -74,10 +75,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       // corta solo cerca del techo de 60s. ANTES aqui habia una copia con deadline 9s + retardo fijo que se
       // comia las ultimas burbujas del pitch de 6 (bug real Laura 7-jul). turnStartedAt = inicio del POST del
       // flush (incluye el tiempo de OpenAI dentro de flushPendingInbound), igual que el webhook.
-      await sendInstagramBurst(provider, senderId, chunks, {
+      const burst = await sendInstagramBurst(provider, senderId, chunks, {
         turnStartedAt,
         logPrefix: "[ig-flush]"
       });
+      // Verdad de entrega (jul-2026): mismo aviso que el webhook directo. Si la rafaga no salio (0 de N) o
+      // salio a medias, avisar a Alex (antes invisible). Best-effort: notify() nunca lanza.
+      const deliveryFailure = deliveryFailureNotificationFor(burst, senderId);
+      if (deliveryFailure) await getOperatorNotifier().notify(deliveryFailure);
     }
 
     // Paridad con el webhook directo (jul-2026, hallazgo agenda-05): si esta rafaga dejo la cita agendada,

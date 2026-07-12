@@ -6,7 +6,14 @@ import type { Candidate, HumanReviewReason, StateTransition } from "@/domain/can
  * cuando hace falta. Secretos en `.env.local`; si no está configurado, el aviso es un no-op silencioso
  * y NUNCA tumba el turno (el procesamiento del mensaje es lo primero).
  */
-export type OperatorNotificationKind = "escalation" | "blocked" | "error" | "stop-request" | "follow-request" | "call-watchdog";
+export type OperatorNotificationKind =
+  | "escalation"
+  | "blocked"
+  | "error"
+  | "stop-request"
+  | "follow-request"
+  | "call-watchdog"
+  | "delivery-failed";
 
 // isStopRequest vive ahora en domain (funcion pura) para que la compartan infra y application sin cruzar
 // capas; se re-exporta aqui para no romper los imports existentes (webhook).
@@ -105,8 +112,41 @@ export function followRequestNotificationFor(
   };
 }
 
+/**
+ * Decide (PURO, testeable) si hay que avisar a Alex de que la respuesta del bot NO llegó (o llegó a medias)
+ * a Instagram, a partir del resultado de la ráfaga (`sendInstagramBurst`). Hoy esos fallos son invisibles:
+ * el emisor nunca lanza (solo `console.warn`, que Vercel Hobby borra en ~1h). Casos: 0 de N salió (Instagram
+ * la rechazó: ventana de 24h, token caducado, rate limit) o entrega PARCIAL (truncated). Si salieron todas o
+ * no había nada que enviar, no avisa. Devuelve la notificación o null.
+ */
+export function deliveryFailureNotificationFor(
+  result: { sent: number; total: number; truncated: boolean },
+  conversationId: string
+): OperatorNotification | null {
+  if (result.total === 0) return null;
+  if (result.sent === 0) {
+    return {
+      kind: "delivery-failed",
+      conversationId,
+      detail: `No salió ninguna de las ${result.total} burbujas (Instagram pudo rechazarlas: ventana de 24h, token caducado o límite de envío).`
+    };
+  }
+  if (result.truncated) {
+    return {
+      kind: "delivery-failed",
+      conversationId,
+      detail: `Entrega PARCIAL: salieron ${result.sent} de ${result.total} burbujas; el resto no.`
+    };
+  }
+  return null;
+}
+
 /** Mensaje corto y escaneable para el operador. Mínimo de datos (solo lo necesario para actuar). */
 export function formatOperatorMessage(notification: OperatorNotification): string {
+  if (notification.kind === "delivery-failed") {
+    const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
+    return `Rose Models 📵 No se pudo entregar la respuesta del bot a la candidata.${who}${notification.detail ? `\n${notification.detail}` : ""}\nEscríbele tú desde Instagram si es importante.`;
+  }
   if (notification.kind === "follow-request") {
     const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";
     const profile = notification.profileUrl ? `\nPerfil: ${notification.profileUrl}` : "";

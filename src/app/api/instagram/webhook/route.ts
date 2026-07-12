@@ -11,6 +11,7 @@ import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import { sendInstagramBurst } from "@/infrastructure/integrations/instagramBurstSender";
 import {
+  deliveryFailureNotificationFor,
   escalationNotificationFor,
   followRequestNotificationFor,
   getOperatorNotifier,
@@ -236,10 +237,15 @@ export async function POST(request: Request): Promise<NextResponse> {
         const chunks = splitIntoMessageBurst(result.response);
         // Envio en rafaga con ritmo humano: emisor UNICO (compartido con el flush del debounce) que reparte el
         // presupuesto de pausa y corta solo cerca del techo de 60s. Ver instagramBurstSender.ts.
-        await sendInstagramBurst(provider, message.senderId, chunks, {
+        const burst = await sendInstagramBurst(provider, message.senderId, chunks, {
           turnStartedAt,
           logPrefix: "[ig-webhook]"
         });
+        // Verdad de entrega (jul-2026): si Instagram rechazo la rafaga (0 de N) o solo salio parte, avisar a
+        // Alex — antes era invisible (el emisor nunca lanza; el console.warn se pierde en Vercel Hobby ~1h).
+        // Best-effort: notify() nunca lanza y jamas rompe el turno (el mensaje ya se guardo en el motor).
+        const deliveryFailure = deliveryFailureNotificationFor(burst, message.senderId);
+        if (deliveryFailure) await notifier.notify(deliveryFailure);
       } else {
         console.log("[ig-webhook] NO se envia respuesta", {
           motivo: `delivery=${result.deliveryStatus} blocked=${result.automationBlocked}`

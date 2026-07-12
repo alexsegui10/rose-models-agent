@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CallMeBotWhatsAppNotifier,
   NoopOperatorNotifier,
+  deliveryFailureNotificationFor,
   escalationNotificationFor,
   formatOperatorMessage,
   getOperatorNotifier,
@@ -50,6 +51,28 @@ describe("operatorNotifier", () => {
     const msg = formatOperatorMessage({ kind: "stop-request", conversationId: "u1", profileUrl: "https://instagram.com/ana" });
     expect(msg).toContain("no la contactes");
     expect(msg).toContain("https://instagram.com/ana");
+  });
+
+  it("delivery-failed: avisa si NO salio ninguna burbuja (0 de N)", () => {
+    const n = deliveryFailureNotificationFor({ sent: 0, total: 3, truncated: true }, "igsid_1");
+    expect(n?.kind).toBe("delivery-failed");
+    expect(n?.conversationId).toBe("igsid_1");
+    expect(n?.detail).toContain("3");
+    const msg = formatOperatorMessage(n!);
+    expect(msg.toLowerCase()).toContain("entregar");
+    expect(msg).toContain("igsid_1");
+  });
+
+  it("delivery-failed: avisa de entrega PARCIAL (salieron algunas, no todas)", () => {
+    const n = deliveryFailureNotificationFor({ sent: 1, total: 4, truncated: true }, "igsid_2");
+    expect(n?.kind).toBe("delivery-failed");
+    expect(n?.detail).toContain("1");
+    expect(n?.detail).toContain("4");
+  });
+
+  it("delivery-failed: NO avisa cuando salieron todas, ni cuando no habia nada que enviar", () => {
+    expect(deliveryFailureNotificationFor({ sent: 3, total: 3, truncated: false }, "u")).toBeNull();
+    expect(deliveryFailureNotificationFor({ sent: 0, total: 0, truncated: false }, "u")).toBeNull();
   });
 
   it("factory: Noop sin claves, CallMeBot con claves", () => {
