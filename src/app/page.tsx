@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
 import { classifyDelivery, type SentToCandidate } from "@/application/deliveryNotice";
+import { AdsView } from "@/app/components/AdsView";
 import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, ringColorVar, stateColorVar, stateLabel } from "@/application/crmView";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
@@ -91,7 +92,7 @@ type SimulatorStatus = {
   writingModel: string;
 };
 
-type SimulatorTab = "DASHBOARD" | "CHAT" | "CRM" | "LLAMADAS";
+type SimulatorTab = "DASHBOARD" | "CHAT" | "CRM" | "LLAMADAS" | "ANUNCIOS";
 
 type AdvanceAction =
   | "PROFILE_FIT"
@@ -258,7 +259,14 @@ export default function Home() {
   // Solo activo en el CRM o con la ficha abierta, que es donde importa ver los cambios en vivo.
   useEffect(() => {
     if (!livePolling) return;
-    if (activeTab !== "CRM" && activeTab !== "DASHBOARD" && activeTab !== "LLAMADAS" && !drawerCandidate) return;
+    if (
+      activeTab !== "CRM" &&
+      activeTab !== "DASHBOARD" &&
+      activeTab !== "LLAMADAS" &&
+      activeTab !== "ANUNCIOS" &&
+      !drawerCandidate
+    )
+      return;
     const interval = setInterval(() => {
       if (loading) return;
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
@@ -987,6 +995,13 @@ export default function Home() {
             Llamadas
           </button>
           <button
+            className={activeTab === "ANUNCIOS" ? "tab-button active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveTab("ANUNCIOS")}
+          >
+            Anuncios
+          </button>
+          <button
             className={activeTab === "CHAT" ? "tab-button active" : "tab-button"}
             type="button"
             onClick={() => setActiveTab("CHAT")}
@@ -1525,6 +1540,8 @@ export default function Home() {
             );
           })()
         : null}
+
+      {activeTab === "ANUNCIOS" ? <AdsView candidates={candidates} /> : null}
 
       {activeTab === "CHAT" ? (
         <section className="panel">
