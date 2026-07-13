@@ -345,9 +345,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(1100px 560px at 12% -8%, rgba(var(--accent-rgb), 0.14), transparent 58%),
-    radial-gradient(900px 520px at 102% 4%, rgba(var(--accent-rgb), 0.07), transparent 55%),
-    var(--background);
+    radial-gradient(1200px 820px at 82% -12%, rgba(var(--accent-rgb), 0.13), transparent 58%),
+    radial-gradient(980px 720px at 6% 112%, rgba(214, 178, 124, 0.08), transparent 56%),
+    linear-gradient(155deg, var(--bg1) 0%, var(--bg2) 55%, var(--bg3) 100%);
   background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-jost), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

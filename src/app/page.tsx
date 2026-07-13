@@ -94,6 +94,8 @@ type SimulatorStatus = {
 };
 
 type SimulatorTab = "DASHBOARD" | "CHAT" | "CRM" | "LLAMADAS" | "ANUNCIOS";
+type AccentKey = "rose" | "green" | "blue" | "violet" | "gold";
+const ACCENT_KEYS: readonly AccentKey[] = ["rose", "green", "blue", "violet", "gold"];
 
 type AdvanceAction =
   | "PROFILE_FIT"
@@ -180,6 +182,8 @@ function statePillStyle(state: Candidate["currentState"]): { color: string; back
 export default function Home() {
   const [activeTab, setActiveTab] = useState<SimulatorTab>("DASHBOARD");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  // Acento conmutable de la maqueta (5 colores). Escribe html[data-accent]; persiste junto al modo.
+  const [accent, setAccent] = useState<AccentKey>("rose");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [modalInput, setModalInput] = useState("");
   // Ficha de candidata (drawer lateral): se abre al hacer clic en una tarjeta del CRM.
@@ -239,12 +243,77 @@ export default function Home() {
   const [sendError, setSendError] = useState<string | null>(null);
   const showDevelopmentPanel = process.env.NODE_ENV !== "production";
 
-  // Tema claro/oscuro: inicializa desde localStorage y aplica el atributo en <html>.
+  // Tema claro/oscuro + acento: inicializa desde localStorage y aplica los atributos en <html>. Tolerante al
+  // formato antiguo (string "dark"/"light") y al nuevo de la maqueta (JSON {mode,accent}).
   useEffect(() => {
     const saved = window.localStorage.getItem("rm-theme");
-    const initial = saved === "light" || saved === "dark" ? saved : "dark";
-    setTheme(initial);
-    document.documentElement.dataset.theme = initial;
+    let mode: "dark" | "light" = "dark";
+    let acc: AccentKey = "rose";
+    if (saved === "light" || saved === "dark") {
+      mode = saved;
+    } else if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as { mode?: unknown; accent?: unknown };
+        if (parsed.mode === "light" || parsed.mode === "dark") mode = parsed.mode;
+        if (typeof parsed.accent === "string" && ACCENT_KEYS.includes(parsed.accent as AccentKey)) {
+          acc = parsed.accent as AccentKey;
+        }
+      } catch {
+        /* formato desconocido: valores por defecto */
+      }
+    }
+    setTheme(mode);
+    setAccent(acc);
+    const root = document.documentElement;
+    root.dataset.theme = mode;
+    root.dataset.mode = mode;
+    root.dataset.accent = acc;
+  }, []);
+
+  // Runtime de la maqueta de Alex: brillo que SIGUE al cursor (dos capas con lag 0.04 y 0.075) + ripple al
+  // hacer clic. Solo en punteros finos (ratón/trackpad) para no gastar batería en el iPhone. Best-effort.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia("(pointer: fine)").matches) return;
+    const a = document.getElementById("rm-glow-a");
+    const b = document.getElementById("rm-glow-b");
+    if (!a || !b) return;
+    let mx = window.innerWidth / 2;
+    let my = window.innerHeight / 2;
+    let ax = mx;
+    let ay = my;
+    let bx = mx;
+    let by = my;
+    let raf = 0;
+    const onMove = (e: MouseEvent) => {
+      mx = e.clientX;
+      my = e.clientY;
+    };
+    const tick = () => {
+      ax += (mx - ax) * 0.04;
+      ay += (my - ay) * 0.04;
+      bx += (mx - bx) * 0.075;
+      by += (my - by) * 0.075;
+      a.style.transform = `translate(${ax.toFixed(1)}px, ${ay.toFixed(1)}px)`;
+      b.style.transform = `translate(${bx.toFixed(1)}px, ${by.toFixed(1)}px)`;
+      raf = requestAnimationFrame(tick);
+    };
+    const onClick = (e: MouseEvent) => {
+      const root = document.getElementById("rm-root");
+      if (!root) return;
+      const size = 18;
+      const span = document.createElement("span");
+      span.style.cssText = `position:fixed;left:${e.clientX - size / 2}px;top:${e.clientY - size / 2}px;width:${size}px;height:${size}px;border-radius:50%;background:radial-gradient(circle,rgba(var(--accent-rgb),.7),rgba(var(--accent-rgb),0) 70%);pointer-events:none;z-index:9999;animation:rippleFx .6s ease-out forwards`;
+      root.appendChild(span);
+      window.setTimeout(() => span.remove(), 620);
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+    window.addEventListener("click", onClick, true);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("click", onClick, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -987,7 +1056,92 @@ export default function Home() {
   }
 
   return (
-    <div className="app-frame">
+    <div className="app-frame" id="rm-root">
+      {/* Fondo ambiental de la maqueta (verbatim): dos blobs a la deriva + grano + viñeta. position:fixed,
+          pointer-events:none, detrás del contenido. */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          width: 640,
+          height: 640,
+          left: "8%",
+          top: "-14%",
+          borderRadius: "50%",
+          background: "radial-gradient(circle,rgba(var(--accent-rgb),.16),transparent 66%)",
+          filter: "blur(46px)",
+          pointerEvents: "none",
+          zIndex: 0,
+          animation: "bloomDrift 26s ease-in-out infinite"
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          width: 560,
+          height: 560,
+          right: "2%",
+          bottom: "-16%",
+          borderRadius: "50%",
+          background: "radial-gradient(circle,rgba(185,139,201,.12),transparent 66%)",
+          filter: "blur(50px)",
+          pointerEvents: "none",
+          zIndex: 0,
+          animation: "bloomDrift2 32s ease-in-out infinite"
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+          opacity: 0.5,
+          backgroundImage: "radial-gradient(rgba(var(--line-rgb),.02) 1px,transparent 1px)",
+          backgroundSize: "4px 4px"
+        }}
+      />
+      {/* Brillo que sigue al cursor (dos capas, mix-blend screen). Los mueve el efecto glow/ripple. */}
+      <div
+        id="rm-glow-a"
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: 540,
+          height: 540,
+          margin: "-270px 0 0 -270px",
+          borderRadius: "50%",
+          pointerEvents: "none",
+          zIndex: 2,
+          background: "radial-gradient(circle,rgba(var(--accent-rgb),.24),rgba(var(--accent-rgb),0) 66%)",
+          filter: "blur(42px)",
+          mixBlendMode: "screen",
+          willChange: "transform"
+        }}
+      />
+      <div
+        id="rm-glow-b"
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: 360,
+          height: 360,
+          margin: "-180px 0 0 -180px",
+          borderRadius: "50%",
+          pointerEvents: "none",
+          zIndex: 2,
+          background: "radial-gradient(circle,rgba(220,182,132,.20),rgba(220,182,132,0) 64%)",
+          filter: "blur(34px)",
+          mixBlendMode: "screen",
+          willChange: "transform"
+        }}
+      />
       <header className="top-bar">
         <div>
           <h1>Rose Models Agent</h1>
