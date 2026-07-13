@@ -7,6 +7,7 @@ import { getInstagramConfig } from "@/application/instagramConfig";
 import { getSimulatorEngine, getSimulatorRepository } from "@/server/simulatorStore";
 import { bearerMatches } from "@/server/bearerAuth";
 import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
+import { enqueueInstantOutreach } from "@/server/scheduleInstantOutreach";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
 import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 
@@ -308,6 +309,19 @@ export async function POST(request: Request) {
       // Best-effort: si QStash falla, la candidata queda reprogramada pero sin auto-marcador encolado
       // (Alex puede llamar a mano). Se loguea para observabilidad (sin secretos).
       console.warn("[call-end] no se pudo re-encolar el reintento", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  // Reagendado INSTANTANEO: si se agotaron los 3 intentos (ultimo no-contesta), en vez de esperar al cron
+  // diario, encolamos via QStash (delay corto) el reagendado por IG. Best-effort. La condicion transitions>0
+  // asegura que NO se dispara con un webhook DUPLICADO (recordCallOutcome devuelve transitions:[] al repetir).
+  if (result.shouldRetryCall === false && result.transitions.length > 0 && result.candidate.currentState === "CALL_NO_ANSWER") {
+    try {
+      await enqueueInstantOutreach({ candidate: result.candidate, origin: new URL(request.url).origin, nowMs: Date.now() });
+    } catch (error) {
+      console.warn("[call-end] no se pudo encolar el reagendado instantaneo", {
         message: error instanceof Error ? error.message : String(error)
       });
     }

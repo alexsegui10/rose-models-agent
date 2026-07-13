@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { recoverStuckCalls } from "@/application/callWatchdog";
 import { getInstagramConfig } from "@/application/instagramConfig";
-import { planOutreach, REENGAGE_TRIGGER, RESCHEDULE_TRIGGER } from "@/application/outreachPlanner";
 import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
-import { createTransition } from "@/domain/stateMachine";
 import type { Candidate } from "@/domain/candidate";
 import { GraphApiInstagramMessagingProvider } from "@/infrastructure/integrations/instagramMessagingProvider";
-import type { CandidateRepository } from "@/infrastructure/repositories/types";
 import { bearerMatches } from "@/server/bearerAuth";
+import { processOutreachForCandidate } from "@/server/outreachDelivery";
 import { enqueueCallDispatchIfScheduled } from "@/server/scheduleCallDispatch";
 import { getSimulatorRepository } from "@/server/simulatorStore";
 
@@ -92,33 +90,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   for (const candidate of batch) {
     try {
       const recentMessages = await repository.listMessages(candidate.id);
-      const plan = planOutreach({ candidate, recentMessages, now });
-      if (!plan) continue;
+      const result = await processOutreachForCandidate({ repository, provider, candidate, recentMessages, now });
 
-      const trigger = plan.kind === "reschedule" ? RESCHEDULE_TRIGGER : REENGAGE_TRIGGER;
-      const sent = await provider.sendTextMessage(candidate.instagramUsername, plan.message, {
-        humanAgentTag: plan.humanAgentTag
-      });
-      if (!sent) {
-        console.warn("[cron-outreach] envio rechazado/no enviado", { candidateId: candidate.id, kind: plan.kind });
+      if (result === "skipped") continue;
+      if (result === "failed") {
+        failed += 1;
+        console.warn("[cron-outreach] envio rechazado/no enviado", { candidateId: candidate.id });
         continue;
       }
-
-      // Mensaje de agente con traza HONESTA: lo redacto codigo determinista, no la IA (invariante 6).
-      await repository.addMessage({
-        id: crypto.randomUUID(),
-        candidateId: candidate.id,
-        role: "agent",
-        author: "AI_AGENT",
-        content: plan.message,
-        createdAt: new Date(),
-        metadata: { provider: "deterministic", trigger, proactive: true, humanAgentTag: plan.humanAgentTag }
-      });
-
-      await applyOutcome(repository, candidate, plan, now);
-
-      if (plan.kind === "reschedule") rescheduled += 1;
-      else if (plan.markCold) cooled += 1;
+      if (result === "rescheduled") rescheduled += 1;
+      else if (result === "cooled") cooled += 1;
       else reengaged += 1;
     } catch (error) {
       // Una candidata que falle (BD/red) no debe abortar el resto del barrido.
@@ -144,38 +125,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     failed,
     watchdogRecovered
   });
-}
-
-/**
- * Aplica el efecto de estado del plan: reschedule -> transicion a COLLECTING_CALL_DETAILS; markCold ->
- * deja una NOTA COLD_NO_RESPONSE SIN cambiar a estado terminal (no se cierra a malas). El toque 1 de
- * re-enganche no cambia estado (solo se envia el mensaje, ya persistido arriba).
- */
-async function applyOutcome(
-  repository: CandidateRepository,
-  candidate: Candidate,
-  plan: ReturnType<typeof planOutreach>,
-  now: Date
-): Promise<void> {
-  if (!plan) return;
-
-  if (plan.transitionTo && plan.transitionTo !== candidate.currentState) {
-    const transition = createTransition({
-      candidate,
-      toState: plan.transitionTo,
-      trigger: RESCHEDULE_TRIGGER,
-      reason: "Re-enganche: reabrir el agendado tras 3 llamadas sin respuesta."
-    });
-    await repository.saveCandidate({ ...candidate, currentState: plan.transitionTo, updatedAt: now });
-    await repository.addTransition(transition);
-    return;
-  }
-
-  if (plan.markCold) {
-    // Frio: NO cerrar. Solo dejar constancia para que Alex lo vea en el CRM.
-    const note = `COLD_NO_RESPONSE: sin respuesta tras 2 toques de re-enganche (${now.toISOString()}).`;
-    await repository.saveCandidate({ ...candidate, notes: [...candidate.notes, note], updatedAt: now });
-  }
 }
 
 function errorName(error: unknown): string {

@@ -105,6 +105,57 @@ export async function schedulePrivacyDetection(args: {
  * asi NUNCA se llama dos veces a una persona por una re-entrega (mejor perder un disparo —el reintento por
  * no-answer o el boton manual lo cubren— que llamar dos veces). Best-effort: devuelve false si falla, no lanza.
  */
+/**
+ * REAGENDADO INSTANTANEO: programa con QStash (delay corto) una llamada a nuestro endpoint de reagendado
+ * (/api/call/reschedule-now) para UNA candidata que agoto los 3 intentos sin respuesta, en vez de esperar al
+ * cron diario. MIRROR de scheduleCallDispatch: mismo patron de auth (reenvia el bearer CRON_SECRET) y
+ * AT-MOST-ONCE (Upstash-Retries: 0). La Deduplication-Id por candidata evita que dos webhooks de fin
+ * (re-entrega o duplicado) encolen dos reagendados; el propio endpoint es idempotente ademas por trigger.
+ * Best-effort: devuelve false si falla o no esta configurado, nunca lanza.
+ */
+export async function scheduleInstantOutreach(args: {
+  config: QStashConfig;
+  /** URL absoluta del endpoint de reagendado (p. ej. https://dominio/api/call/reschedule-now). */
+  rescheduleUrl: string;
+  /** Secreto bearer que QStash reenviara al endpoint para autenticarlo (reutilizamos CRON_SECRET). */
+  secret: string;
+  candidateId: string;
+  delaySeconds: number;
+  fetchImpl?: typeof fetch;
+}): Promise<boolean> {
+  const { config, rescheduleUrl, secret, candidateId, delaySeconds } = args;
+  const fetchImpl = args.fetchImpl ?? fetch;
+  if (!config.token || !secret) return false;
+
+  const base = config.url.replace(/\/+$/, "");
+  const url = `${base}/v2/publish/${rescheduleUrl}`;
+  try {
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json",
+        "Upstash-Delay": `${Math.max(1, Math.round(delaySeconds))}s`,
+        "Upstash-Forward-Authorization": `Bearer ${secret}`,
+        "Upstash-Deduplication-Id": `instant-reschedule-${candidateId}`,
+        // AT-MOST-ONCE: no reintentar la entrega -> como mucho un reagendado por candidata (el cron diario y
+        // el propio historial —trigger RESCHEDULE_CALL— cubren cualquier disparo perdido, sin doble mensaje).
+        "Upstash-Retries": "0"
+      },
+      body: JSON.stringify({ candidateId }),
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!response.ok) {
+      console.warn("[qstash] publish (instant-reschedule) rechazado", { status: response.status });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn("[qstash] error al publicar (instant-reschedule)", { error: error instanceof Error ? error.name : "unknown" });
+    return false;
+  }
+}
+
 export async function scheduleCallDispatch(args: {
   config: QStashConfig;
   /** URL absoluta de nuestro endpoint de disparo (p. ej. https://dominio/api/call/dispatch). */
