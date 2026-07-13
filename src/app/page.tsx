@@ -2298,178 +2298,135 @@ export default function Home() {
               return item.scheduledCallSlot ? "Agendada" : "—";
             };
             return (
-              <section className="panel">
-                <div className="calls2-head">
-                  <h2 className="calls2-title">Llamadas</h2>
-                  <p className="calls2-subtitle">
-                    El bot de voz llama a las candidatas aprobadas, negocia el reparto y te pasa las que lo necesitan.
-                  </p>
-                </div>
-
-                {/* Llamada de PRUEBA: probar la voz llamando a tu propio numero, sin simular la conversacion. */}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    margin: "0 0 1rem",
-                    padding: "0.6rem 0.8rem",
-                    borderRadius: "8px",
-                    border: "1px solid var(--border)",
-                    background: "var(--surface, var(--bg))"
-                  }}
-                >
-                  <span className="muted">📞 Probar la voz llamando a tu número:</span>
-                  <input
-                    type="tel"
-                    placeholder="+34 6XX XXX XXX"
-                    value={testCallPhone}
-                    onChange={(event) => setTestCallPhone(event.target.value)}
-                    style={{
-                      padding: "0.4rem 0.6rem",
-                      borderRadius: "6px",
-                      border: "1px solid var(--border)",
-                      background: "var(--bg)",
-                      color: "var(--text)",
-                      minWidth: "180px"
-                    }}
-                  />
-                  <button
-                    className="crm2-btn crm2-btn--teal"
-                    type="button"
-                    disabled={testCallBusy}
-                    onClick={() => void doTestCall()}
-                  >
-                    {testCallBusy ? "Llamando…" : "Llamar de prueba"}
-                  </button>
-                  {testCallResult ? (
-                    <span style={{ width: "100%", fontSize: "0.9rem", color: "var(--text)" }}>{testCallResult}</span>
-                  ) : null}
-                </div>
-
-                <div className="calls2-kpis">
-                  {kpis.map((kpi) => (
-                    <div className="calls2-kpi" key={kpi.label}>
-                      <div className="calls2-kpi-label">{kpi.label}</div>
-                      <div className="calls2-kpi-value" style={{ color: `var(${kpi.colorVar})` }}>
-                        {kpi.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="calls2-stack">
-                  <div className="calls2-list">
-                    {callList.length === 0 ? (
-                      <div className="calls2-empty">
-                        <div className="calls2-empty-icon">📞</div>
-                        <div className="calls2-empty-text">Aún no hay llamadas. Aprueba candidatas y agéndalas.</div>
-                      </div>
-                    ) : (
-                      callList.map((item) => (
-                        <div key={item.id} className="calls2-card" onClick={() => void openDrawer(item)}>
-                          <div className="calls2-card-top">
-                            <span className="calls2-avatar" style={{ background: `var(${ringColorVar(item)})` }}>
-                              {(item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase()}
-                            </span>
-                            <div className="calls2-id">
-                              <div className="calls2-name-row">
-                                <span className="calls2-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</span>
-                                <span className="calls2-username">@{item.instagramUsername}</span>
-                              </div>
-                              <div className="calls2-slot">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <circle cx="12" cy="12" r="9" />
-                                  <path d="M12 7v5l3 2" />
-                                </svg>
-                                {callCardSlotText(item)}
-                              </div>
-                            </div>
-                            <div className="calls2-status-wrap">
-                              <span className="calls2-status" style={statePillStyle(item.currentState)}>
-                                {stateLabel(item.currentState)}
-                              </span>
-                              {item.currentState === "CALL_IN_PROGRESS" ? (
-                                <div className="calls2-live">
-                                  <span className="calls2-live-dot" />
-                                  en directo
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          <div className="calls2-metrics">
-                            <div className="calls2-metric calls2-metric--dur">
-                              <div className="calls2-metric-label">Duración</div>
-                              <div className="calls2-metric-value">{fmtDur(item.lastCall?.durationSec)}</div>
-                            </div>
-                            <div className="calls2-metric calls2-metric--split">
-                              <div className="calls2-metric-label">Reparto</div>
-                              <div className="calls2-metric-value">
-                                {item.lastCall?.negotiatedModelShare != null ? `${item.lastCall.negotiatedModelShare}%` : "—"}
-                              </div>
-                            </div>
-                            <div className="calls2-metric calls2-metric--result">
-                              <div className="calls2-metric-label">Resultado</div>
-                              <div className="calls2-metric-value">{resultText(item)}</div>
-                            </div>
-                          </div>
-
-                          <div className="calls2-actions" onClick={(event) => event.stopPropagation()}>
-                            <button className="calls2-btn calls2-btn--ghost" type="button" onClick={() => void openDrawer(item)}>
-                              Ver ficha
-                            </button>
-                          </div>
+              <div style={{ position: "relative", zIndex: 5, maxWidth: 1320, margin: "0 auto", padding: "34px 30px 80px", animation: "scrZoom .5s cubic-bezier(.16,1,.3,1) both" }}>
+                {(() => {
+                  const pending = callList.filter(
+                    (item) => item.currentState === "CALL_IN_PROGRESS" || item.currentState === "CALL_SCHEDULED" || (!item.lastCall && Boolean(item.scheduledCallSlot))
+                  );
+                  const history = callList.filter((item) => item.lastCall != null);
+                  const initialOf = (item: Candidate) => (item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase();
+                  const pill = (item: Candidate) =>
+                    ({ fontFamily: "var(--font-jost)", fontSize: 9.5, padding: "4px 11px", borderRadius: 20, background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 14%, transparent)`, color: `var(${stateColorVar(item.currentState)})`, letterSpacing: ".08em", textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0 }) as React.CSSProperties;
+                  return (
+                    <>
+                      <div style={{ marginBottom: 26 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 12 }}>
+                          <span style={{ width: 28, height: 1, background: "linear-gradient(90deg,#B98BC9,transparent)" }} />
+                          <span style={{ fontFamily: "var(--font-jost)", fontSize: 11, letterSpacing: ".32em", color: "#B98BC9", textTransform: "uppercase" }}>Agenda de screenings</span>
                         </div>
-                      ))
-                    )}
-                  </div>
+                        <h1 style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 40, margin: 0, color: "var(--text)" }}>Llamadas</h1>
+                        <p style={{ color: "var(--text2)", fontSize: 15, fontWeight: 300, margin: "10px 0 0", maxWidth: 560 }}>El bot de voz llama a las aprobadas, negocia el reparto y te pasa las que lo necesitan.</p>
+                      </div>
 
-                  <div className="calls2-panel-col">
-                    <div className="calls2-panel">
-                      <h3 className="calls2-panel-title">Resultados de llamadas</h3>
-                      <div className="calls2-outcomes">
-                        {outcomes.map((outcome) => (
-                          <div className="calls2-outcome" key={outcome.label}>
-                            <span className="calls2-outcome-label">{outcome.label}</span>
-                            <div className="calls2-bar-track">
-                              <div
-                                className="calls2-bar-fill"
-                                style={{
-                                  width: `${Math.round((outcome.count / outcomeMax) * 100)}%`,
-                                  background: `var(${outcome.colorVar})`
-                                }}
-                              />
-                            </div>
-                            <span className="calls2-outcome-count">{outcome.count}</span>
+                      {/* Llamada de PRUEBA: probar la voz llamando a tu propio número. */}
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", margin: "0 0 22px", padding: "14px 18px", borderRadius: 16, border: "1px solid rgba(185,139,201,.24)", background: "rgba(185,139,201,.06)" }}>
+                        <span style={{ fontFamily: "var(--font-jost)", fontSize: 13, color: "var(--text2)" }}>📞 Probar la voz llamando a tu número:</span>
+                        <input type="tel" placeholder="+34 6XX XXX XXX" value={testCallPhone} onChange={(event) => setTestCallPhone(event.target.value)} style={{ padding: "8px 12px", borderRadius: 20, border: "1px solid rgba(var(--line-rgb),.14)", background: "rgba(var(--s3),.6)", color: "var(--text)", minWidth: 180, fontFamily: "var(--font-jost)", fontSize: 13, outline: "none" }} />
+                        <button type="button" disabled={testCallBusy} onClick={() => void doTestCall()} style={{ padding: "9px 18px", borderRadius: 20, border: "none", cursor: testCallBusy ? "wait" : "pointer", background: "linear-gradient(135deg,#B98BC9,#9A6DB4)", color: "#1c1020", fontFamily: "var(--font-jost)", fontWeight: 600, fontSize: 12.5 }}>{testCallBusy ? "Llamando…" : "Llamar de prueba"}</button>
+                        {testCallResult ? <span style={{ width: "100%", fontSize: 13, color: "var(--text2)", fontWeight: 300 }}>{testCallResult}</span> : null}
+                      </div>
+
+                      {/* KPIs */}
+                      <div data-m="kpis" style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 14, marginBottom: 30 }}>
+                        {kpis.map((kpi, i) => (
+                          <div key={kpi.label} style={{ animation: `popIn .5s ${0.04 * i}s both`, borderRadius: 14, padding: "16px 14px", background: "rgba(var(--s1),.6)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
+                            <div style={{ fontFamily: "var(--font-jost)", fontSize: 10, letterSpacing: ".14em", color: "#A99098", textTransform: "uppercase" }}>{kpi.label}</div>
+                            <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 30, lineHeight: 1, marginTop: 10, color: `var(${kpi.colorVar})` }}>{kpi.value}</div>
                           </div>
                         ))}
                       </div>
-                    </div>
 
-                    <div className="calls2-panel">
-                      <div className="calls2-panel-headrow">
-                        <h3 className="calls2-panel-title">Duración media</h3>
-                        <span className="calls2-avgdur-value">{fmtDur(avgDurSec)}</span>
+                      {/* HOY */}
+                      <div style={{ fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".14em", textTransform: "uppercase", color: "#B98BC9", marginBottom: 15 }}>
+                        Hoy <span style={{ color: "var(--text3)", fontWeight: 300, letterSpacing: ".02em", textTransform: "none" }}>· {pending.length} en agenda</span>
                       </div>
-                      <div className="calls2-spark-caption">
-                        {durations.length > 0
-                          ? `media de ${durations.length} llamada(s) registrada(s)`
-                          : "sin llamadas registradas"}
-                      </div>
-                    </div>
+                      {pending.length === 0 ? (
+                        <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300, marginBottom: 34 }}>Sin llamadas en agenda. Aprueba candidatas y agéndalas desde el CRM.</div>
+                      ) : (
+                        <div data-m="calls2" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16, marginBottom: 34 }}>
+                          {pending.map((item) => (
+                            <div key={item.id} onClick={() => void openDrawer(item)} style={{ borderRadius: 17, padding: 20, background: "rgba(var(--s1),.66)", border: "1px solid rgba(var(--line-rgb),.06)", transition: ".3s", animation: "popIn .5s both", cursor: "pointer" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 15 }}>
+                                <div style={{ width: 46, height: 46, borderRadius: "50%", background: `var(${ringColorVar(item)})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 17, color: "var(--accent-contrast)", flexShrink: 0 }}>{initialOf(item)}</div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 500, fontSize: 16.5, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
+                                  <div style={{ fontFamily: "var(--font-jost)", fontSize: 11.5, color: "var(--text3)", fontWeight: 300 }}>{callCardSlotText(item)}</div>
+                                </div>
+                                <span style={pill(item)}>{stateLabel(item.currentState)}</span>
+                                {item.currentState === "CALL_IN_PROGRESS" ? (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-jost)", fontSize: 10, color: "#B98BC9" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#B98BC9", animation: "softPulse 1.4s ease-in-out infinite" }} />en directo</span>
+                                ) : null}
+                              </div>
+                              <div onClick={(event) => event.stopPropagation()} style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                                <button type="button" onClick={() => void openDrawer(item)} style={{ flex: 1, padding: 11, border: "none", cursor: "pointer", borderRadius: 22, background: "linear-gradient(135deg,#B98BC9,#9A6DB4)", color: "#1c1020", fontFamily: "var(--font-jost)", fontWeight: 600, fontSize: 12.5, letterSpacing: ".03em" }}>☎ Ver / llamar</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
-                    <div className="calls2-panel">
-                      <div className="calls2-panel-headrow">
-                        <h3 className="calls2-panel-title">Reparto medio negociado</h3>
-                        <span className="calls2-avgdur-value">{avgShare != null ? `${avgShare}%` : "—"}</span>
-                      </div>
-                      <div className="calls2-spark-caption">% medio para la modelo en las llamadas hechas</div>
-                    </div>
-                  </div>
-                </div>
-              </section>
+                      {/* HISTORIAL */}
+                      <div style={{ fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text3)", marginBottom: 15 }}>Historial</div>
+                      {history.length === 0 ? (
+                        <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300 }}>Sin llamadas registradas todavía.</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                          {history.map((item) => {
+                            const hasDetail = Boolean(item.lastCall?.summary) || (item.lastCall?.transcript?.length ?? 0) > 0 || Boolean(item.lastCallConversationId);
+                            return (
+                              <div key={item.id} style={{ padding: "15px 18px", borderRadius: 15, background: "rgba(var(--s2),.55)", border: "1px solid rgba(var(--line-rgb),.05)" }}>
+                                <div onClick={() => void openDrawer(item)} style={{ display: "flex", alignItems: "center", gap: 15, cursor: "pointer" }}>
+                                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: `var(${ringColorVar(item)})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 15, color: "var(--accent-contrast)", flexShrink: 0 }}>{initialOf(item)}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 500, fontSize: 15, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
+                                    <div style={{ fontFamily: "var(--font-jost)", fontSize: 11, color: "var(--text3)", fontWeight: 300 }}>{callCardSlotText(item)} · Reparto {item.lastCall?.negotiatedModelShare != null ? `${item.lastCall.negotiatedModelShare}%` : "—"}</div>
+                                  </div>
+                                  <span style={pill(item)}>{stateLabel(item.currentState)}</span>
+                                </div>
+                                {hasDetail ? (
+                                  <>
+                                    {item.lastCall?.summary ? (
+                                      <div style={{ marginTop: 14, padding: "13px 15px", borderRadius: 12, background: "rgba(214,178,124,.07)", border: "1px solid rgba(214,178,124,.18)" }}>
+                                        <div style={{ fontFamily: "var(--font-jost)", fontSize: 9.5, letterSpacing: ".16em", textTransform: "uppercase", color: "#D6B27C", marginBottom: 6 }}>Resumen</div>
+                                        <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.5, fontWeight: 300 }}>{item.lastCall.summary}</div>
+                                      </div>
+                                    ) : null}
+                                    {item.lastCallConversationId ? (
+                                      <div style={{ display: "flex", alignItems: "center", gap: 13, marginTop: 11, padding: "10px 14px", borderRadius: 12, background: "rgba(var(--line-rgb),.03)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
+                                        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 3, height: 28 }}>
+                                          {Array.from({ length: 22 }).map((_, i) => (
+                                            <span key={i} style={{ flex: 1, height: `${8 + ((i * 7) % 20)}px`, background: "rgba(185,139,201,.5)", borderRadius: 2, transformOrigin: "center", animation: `wave ${1 + (i % 5) * 0.2}s ${(i % 7) * 0.1}s ease-in-out infinite` }} />
+                                          ))}
+                                        </div>
+                                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                                        <audio controls preload="none" src={`/api/call/${item.lastCallConversationId}/audio`} style={{ height: 30, maxWidth: 200 }} />
+                                        <span style={{ fontFamily: "var(--font-jost)", fontSize: 12, color: "var(--text3)", flexShrink: 0 }}>{fmtDur(item.lastCall?.durationSec)}</span>
+                                      </div>
+                                    ) : null}
+                                    {(item.lastCall?.transcript?.length ?? 0) > 0 ? (
+                                      <details style={{ marginTop: 11 }}>
+                                        <summary style={{ cursor: "pointer", color: "#B98BC9", fontFamily: "var(--font-jost)", fontSize: 12.5, fontWeight: 500 }}>Ver transcripción</summary>
+                                        <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px", borderRadius: 12, background: "rgba(var(--s3),.5)", border: "1px solid rgba(var(--line-rgb),.05)" }}>
+                                          {(item.lastCall?.transcript ?? []).map((turn, ti) => (
+                                            <div key={ti}>
+                                              <span style={{ fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 11, color: turn.role === "agent" ? "var(--accent)" : "#B98BC9", textTransform: "uppercase", letterSpacing: ".08em" }}>{turn.role === "agent" ? "Rose" : "Candidata"}</span>
+                                              <div style={{ fontSize: 13.5, color: "var(--text2)", fontWeight: 300, marginTop: 2, lineHeight: 1.45 }}>{turn.content}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </details>
+                                    ) : null}
+                                  </>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
             );
           })()
         : null}
