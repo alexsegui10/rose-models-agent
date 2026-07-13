@@ -2604,10 +2604,9 @@ button {
   [data-m="board5"] [data-stage] {
     display: none !important;
   }
-  [data-m="board5"][data-filter="nuevas"] [data-stage="nuevas"],
   [data-m="board5"][data-filter="cualificando"] [data-stage="cualificando"],
+  [data-m="board5"][data-filter="decision"] [data-stage="decision"],
   [data-m="board5"][data-filter="agenda"] [data-stage="agenda"],
-  [data-m="board5"][data-filter="llamadas"] [data-stage="llamadas"],
   [data-m="board5"][data-filter="cerradas"] [data-stage="cerradas"] {
     display: block !important;
   }

@@ -5,7 +5,16 @@ import { buildCandidatePanelRows } from "@/application/candidatePanelRows";
 import { classifyDelivery, type SentToCandidate } from "@/application/deliveryNotice";
 import { AdsView } from "@/app/components/AdsView";
 import { candidatesToCsv, csvFileName } from "@/application/candidatesToCsv";
-import { CRM_COLUMNS, crmColumnOf, needsHumanDecision, ringColorVar, stateColorVar, stateLabel } from "@/application/crmView";
+import {
+  computeFitScore,
+  CRM_COLUMNS,
+  crmColumnOf,
+  isTopPick,
+  needsHumanDecision,
+  ringColorVar,
+  stateColorVar,
+  stateLabel
+} from "@/application/crmView";
 import type { Candidate, ConversationMessage, ProfileVisibility, StateTransition } from "@/domain/candidate";
 import { splitIntoMessageBurst } from "@/domain/conversationBurst";
 import type { ConversationFeedbackStatus, StyleEvaluation } from "@/domain/styleEvaluation";
@@ -196,7 +205,8 @@ export default function Home() {
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [drawerReply, setDrawerReply] = useState("");
   // Auto-refresco ("en vivo"): refresca el tablero/ficha cada pocos segundos. Alex puede pausarlo.
-  const [livePolling, setLivePolling] = useState(true);
+  // Refresco en vivo del tablero (5s). Siempre activo (la maqueta no lleva el conmutador "En vivo").
+  const [livePolling] = useState(true);
   const [runtimeStatus, setRuntimeStatus] = useState<SimulatorStatus | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   // Perfil de Instagram (foto + @usuario + enlace) resuelto por IGSID via la Graph API, para enriquecer
@@ -275,11 +285,10 @@ export default function Home() {
     root.dataset.accent = acc;
   }, []);
 
-  // Intro splash: se muestra UNA vez (primera visita). Auto-oculta a los ~3.4s (2.5s + 0.7s de introOut).
+  // Intro splash: se muestra CADA vez que se entra a la web (Alex lo pidio asi). Auto-oculta a los
+  // ~3.4s (2.5s + 0.7s de introOut); se puede saltar con un clic.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (window.localStorage.getItem("rm-intro-seen")) return;
-    window.localStorage.setItem("rm-intro-seen", "1");
     setShowIntro(true);
     const t = window.setTimeout(() => setShowIntro(false), 3400);
     return () => window.clearTimeout(t);
@@ -3340,24 +3349,6 @@ export default function Home() {
               >
                 Exportar CSV
               </button>
-              <button
-                type="button"
-                onClick={() => void seedDemo()}
-                title="Añade candidatas de ejemplo (no toca las reales)"
-                style={{
-                  padding: "10px 16px",
-                  borderRadius: 22,
-                  background: "rgba(var(--s1),.6)",
-                  border: "1px solid rgba(var(--line-rgb),.08)",
-                  color: "var(--text2)",
-                  fontFamily: "var(--font-jost)",
-                  fontWeight: 500,
-                  fontSize: 12.5,
-                  cursor: "pointer"
-                }}
-              >
-                Cargar demo
-              </button>
             </div>
           </div>
           {crmNotice ? (
@@ -3430,31 +3421,6 @@ export default function Home() {
                       (item.firstName ? item.firstName.toLowerCase().includes(query) : false)
                   )
                 : candidates;
-              const attentionStates: Candidate["currentState"][] = [
-                "PROFILE_READY_FOR_REVIEW",
-                "WAITING_HUMAN_REVIEW",
-                "HUMAN_INTERVENTION_REQUIRED"
-              ];
-              const attentionCount = candidates.filter((item) => attentionStates.includes(item.currentState)).length;
-              const activeCount = candidates.filter(
-                (item) =>
-                  !item.manualControlActive &&
-                  !item.automationPaused &&
-                  item.currentState !== "REJECTED" &&
-                  item.currentState !== "CLOSED"
-              ).length;
-              const chipStyle = {
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                padding: "10px 15px",
-                borderRadius: 22,
-                background: "rgba(var(--s1),.6)",
-                border: "1px solid rgba(var(--line-rgb),.08)",
-                fontFamily: "var(--font-jost)",
-                fontWeight: 500,
-                fontSize: 12.5
-              } as React.CSSProperties;
               return (
                 <>
                   <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}>
@@ -3479,7 +3445,7 @@ export default function Home() {
                       </span>
                       <input
                         type="search"
-                        placeholder="Buscar por nombre o @usuario…"
+                        placeholder="Buscar candidata…"
                         value={crmSearch}
                         onChange={(event) => setCrmSearch(event.target.value)}
                         style={{
@@ -3493,59 +3459,21 @@ export default function Home() {
                         }}
                       />
                     </div>
-                    <div style={{ ...chipStyle, borderColor: "rgba(214,178,124,.35)" }}>
-                      <span style={{ color: "#D6B27C" }}>⚠️</span>
-                      <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 16, color: "#D6B27C" }}>
-                        {attentionCount}
-                      </span>
-                      <span style={{ color: "var(--text3)", fontWeight: 300 }}>te esperan</span>
-                    </div>
-                    <div style={chipStyle}>
-                      <span style={{ color: "var(--accent)" }}>⚡</span>
-                      <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 16, color: "var(--text)" }}>
-                        {activeCount}
-                      </span>
-                      <span style={{ color: "var(--text3)", fontWeight: 300 }}>activas</span>
-                    </div>
-                    <div style={chipStyle}>
-                      <span style={{ color: "var(--text3)" }}>👥</span>
-                      <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 16, color: "var(--text)" }}>
-                        {candidates.length}
-                      </span>
-                      <span style={{ color: "var(--text3)", fontWeight: 300 }}>total</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setLivePolling((value) => !value)}
-                      title={livePolling ? "Actualizando en vivo. Clic para pausar." : "Pausado. Clic para reanudar."}
+                    <span
                       style={{
-                        ...chipStyle,
-                        cursor: "pointer",
-                        color: livePolling ? "var(--accent)" : "var(--text3)",
-                        borderColor: livePolling ? "rgba(var(--accent-rgb),.35)" : "rgba(var(--line-rgb),.08)"
+                        padding: "10px 16px",
+                        borderRadius: 22,
+                        background: "rgba(var(--accent-rgb),.1)",
+                        border: "1px solid rgba(var(--accent-rgb),.28)",
+                        color: "var(--accent)",
+                        fontFamily: "var(--font-jost)",
+                        fontWeight: 500,
+                        fontSize: 12.5,
+                        letterSpacing: ".03em"
                       }}
                     >
-                      <span
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: "50%",
-                          background: livePolling ? "var(--accent)" : "var(--text3)",
-                          animation: livePolling ? "softPulse 2s ease-in-out infinite" : "none"
-                        }}
-                      />
-                      {livePolling ? "En vivo" : "Pausado"}
-                    </button>
-                    {candidates.some((item) => !/^\d{5,}$/.test(item.instagramUsername)) ? (
-                      <button
-                        type="button"
-                        onClick={() => clearTest()}
-                        title="Borra las candidatas de prueba (las reales no se tocan)"
-                        style={{ ...chipStyle, cursor: "pointer", color: "var(--text3)" }}
-                      >
-                        🗑️ Limpiar pruebas
-                      </button>
-                    ) : null}
+                      Pulsa una tarjeta → ficha · chat · llamadas
+                    </span>
                   </div>
                   <div data-m="crmfilter" style={{ display: "none", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
                     {CRM_COLUMNS.map((phase) => {
@@ -3578,7 +3506,7 @@ export default function Home() {
                   <div
                     data-m="board5"
                     data-filter={crmMobileFilter}
-                    style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 16, alignItems: "start" }}
+                    style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 16, alignItems: "start" }}
                   >
                     {CRM_COLUMNS.map((phase) => {
                       const cards = visible
@@ -3653,18 +3581,26 @@ export default function Home() {
                                 const followerCount = typeof profile?.followerCount === "number" ? profile.followerCount : null;
                                 const ringVar = ringColorVar(candidate);
                                 const pillVar = stateColorVar(candidate.currentState);
+                                // Nota FIT honesta (determinista, de datos reales) + top pick — como la maqueta.
+                                const fitScore = computeFitScore(candidate, followerCount);
+                                const topPick = isTopPick(fitScore);
+                                const scoreColor =
+                                  fitScore >= 80
+                                    ? "#8FB99F"
+                                    : fitScore >= 60
+                                      ? "var(--accent)"
+                                      : fitScore >= 40
+                                        ? "#D6B27C"
+                                        : "var(--text3)";
+                                // Tags de la maqueta: ciudad · seguidores · edad.
                                 const tags: string[] = [];
-                                if (candidate.age) tags.push(`${candidate.age} años`);
-                                if (typeof candidate.hasOnlyFans === "boolean")
-                                  tags.push(candidate.hasOnlyFans ? "OF: sí" : "OF: no");
-                                if (candidate.deviceModel) tags.push(candidate.deviceModel);
-                                if (candidate.country || candidate.city)
-                                  tags.push((candidate.country || candidate.city) as string);
+                                if (candidate.city || candidate.country)
+                                  tags.push((candidate.city || candidate.country) as string);
                                 if (followerCount !== null)
                                   tags.push(
-                                    followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg` : `${followerCount} seg`
+                                    followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg.` : `${followerCount} seg.`
                                   );
-                                if (candidate.phone) tags.push("📱");
+                                if (candidate.age) tags.push(`${candidate.age} años`);
                                 const iconBtn = {
                                   width: 32,
                                   height: 32,
@@ -3820,96 +3756,62 @@ export default function Home() {
                                             </div>
                                           ) : null}
                                         </div>
-                                        <span
-                                          style={{
-                                            flexShrink: 0,
-                                            fontFamily: "var(--font-jost)",
-                                            fontSize: 9.5,
-                                            padding: "4px 10px",
-                                            borderRadius: 20,
-                                            color: `var(${pillVar})`,
-                                            background: `color-mix(in srgb, var(${pillVar}) 12%, transparent)`,
-                                            border: `1px solid color-mix(in srgb, var(${pillVar}) 33%, transparent)`,
-                                            letterSpacing: ".06em",
-                                            textTransform: "uppercase",
-                                            whiteSpace: "nowrap"
-                                          }}
-                                        >
-                                          {stateLabel(candidate.currentState)}
-                                        </span>
-                                      </div>
-                                      {awaitingDecision && candidate.humanReviewReason ? (
                                         <div
+                                          title={`Nota FIT ${fitScore}/100 (edad, seguidores, OnlyFans, móvil)`}
                                           style={{
-                                            marginTop: 11,
-                                            display: "inline-flex",
+                                            display: "flex",
+                                            flexDirection: "column",
                                             alignItems: "center",
-                                            gap: 7,
-                                            padding: "4px 10px",
-                                            borderRadius: 20,
-                                            background: "rgba(214,178,124,.12)",
-                                            border: "1px solid rgba(214,178,124,.3)",
-                                            fontFamily: "var(--font-jost)",
-                                            fontSize: 10.5,
-                                            color: "#D6B27C"
+                                            justifyContent: "center",
+                                            width: 40,
+                                            height: 40,
+                                            borderRadius: "50%",
+                                            border: `1.5px solid ${scoreColor}`,
+                                            flexShrink: 0
                                           }}
                                         >
-                                          ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
+                                          <div
+                                            style={{
+                                              fontFamily: "var(--font-bodoni)",
+                                              fontWeight: 600,
+                                              fontSize: 15,
+                                              color: scoreColor,
+                                              lineHeight: 1
+                                            }}
+                                          >
+                                            {fitScore}
+                                          </div>
+                                          <div
+                                            style={{
+                                              fontFamily: "var(--font-jost)",
+                                              fontSize: 6.5,
+                                              color: scoreColor,
+                                              letterSpacing: ".12em",
+                                              opacity: 0.75
+                                            }}
+                                          >
+                                            FIT
+                                          </div>
                                         </div>
-                                      ) : null}
-                                      {profile?.followsBusiness === true || profile?.isPrivate != null ? (
-                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 11 }}>
-                                          {profile?.followsBusiness === true ? (
-                                            <span
-                                              title="Te sigue: puedes ver su perfil aunque sea privado"
-                                              style={{
-                                                fontFamily: "var(--font-jost)",
-                                                fontSize: 10.5,
-                                                color: "var(--info)",
-                                                padding: "3px 10px",
-                                                borderRadius: 20,
-                                                background: "color-mix(in srgb, var(--info) 12%, transparent)",
-                                                border: "1px solid color-mix(in srgb, var(--info) 33%, transparent)"
-                                              }}
-                                            >
-                                              ✓ Te sigue
-                                            </span>
-                                          ) : null}
-                                          {profile?.isPrivate === true ? (
-                                            <span
-                                              title="Cuenta privada: mándale tú la solicitud de seguimiento"
-                                              style={{
-                                                fontFamily: "var(--font-jost)",
-                                                fontSize: 10.5,
-                                                color: "var(--text3)",
-                                                padding: "3px 10px",
-                                                borderRadius: 20,
-                                                background: "rgba(var(--line-rgb),.04)",
-                                                border: "1px solid rgba(var(--line-rgb),.05)"
-                                              }}
-                                            >
-                                              🔒 Privada
-                                            </span>
-                                          ) : profile?.isPrivate === false ? (
-                                            <span
-                                              title="Cuenta pública: puedes ver su perfil directamente"
-                                              style={{
-                                                fontFamily: "var(--font-jost)",
-                                                fontSize: 10.5,
-                                                color: "var(--text3)",
-                                                padding: "3px 10px",
-                                                borderRadius: 20,
-                                                background: "rgba(var(--line-rgb),.04)",
-                                                border: "1px solid rgba(var(--line-rgb),.05)"
-                                              }}
-                                            >
-                                              🌐 Pública
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                      ) : null}
-                                      {tags.length > 0 ? (
+                                      </div>
+                                      {tags.length > 0 || topPick ? (
                                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 13 }}>
+                                          {topPick ? (
+                                            <span
+                                              style={{
+                                                fontFamily: "var(--font-jost)",
+                                                fontSize: 10.5,
+                                                fontWeight: 600,
+                                                color: "#3a2a12",
+                                                padding: "3px 10px",
+                                                borderRadius: 20,
+                                                background: "linear-gradient(135deg,#E9C79B,#D6B27C)",
+                                                letterSpacing: ".03em"
+                                              }}
+                                            >
+                                              ★ Top pick
+                                            </span>
+                                          ) : null}
                                           {tags.map((tag, index) => (
                                             <span
                                               key={index}
@@ -4030,44 +3932,6 @@ export default function Home() {
                                             Confirmar llamada
                                           </button>
                                         ) : null}
-                                        {!closed && !awaitingProfileReview && !awaitingDecision ? (
-                                          <>
-                                            {candidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
-                                              <span
-                                                style={{
-                                                  display: "inline-flex",
-                                                  alignItems: "center",
-                                                  height: 33,
-                                                  padding: "0 12px",
-                                                  borderRadius: 20,
-                                                  background: "rgba(143,185,159,.1)",
-                                                  color: "#8FB99F",
-                                                  fontFamily: "var(--font-jost)",
-                                                  fontWeight: 600,
-                                                  fontSize: 11.5
-                                                }}
-                                              >
-                                                ✓ Revisado y OK
-                                              </span>
-                                            ) : (
-                                              <button
-                                                type="button"
-                                                title="Marca el perfil como revisado y OK"
-                                                onClick={() => void advanceStage(candidate, "PROFILE_OK")}
-                                                style={decBtn("rgba(143,185,159,.12)", "rgba(143,185,159,.4)", "#8FB99F")}
-                                              >
-                                                👍 Encaja
-                                              </button>
-                                            )}
-                                            <button
-                                              type="button"
-                                              onClick={() => void advanceStage(candidate, "REJECT")}
-                                              style={decBtn("rgba(208,106,106,.1)", "rgba(208,106,106,.38)", "#D06A6A")}
-                                            >
-                                              ✕ Rechazar
-                                            </button>
-                                          </>
-                                        ) : null}
                                       </div>
                                       <div
                                         onClick={(event) => event.stopPropagation()}
@@ -4082,16 +3946,19 @@ export default function Home() {
                                       >
                                         <button
                                           type="button"
-                                          title="Responder a mano (pausa el bot)"
-                                          onClick={() => void sendManualReply(candidate)}
+                                          title="Abrir chat"
+                                          onClick={() => void openDrawer(candidate)}
                                           style={iconBtn}
                                         >
                                           ✉
                                         </button>
                                         <button
                                           type="button"
-                                          title="Llamar / ver llamadas"
-                                          onClick={() => void openDrawer(candidate)}
+                                          title="Ver llamadas"
+                                          onClick={() => {
+                                            void openDrawer(candidate);
+                                            setDrawerTab("llamada");
+                                          }}
                                           style={iconBtn}
                                         >
                                           ☎
@@ -4109,8 +3976,8 @@ export default function Home() {
                                         <div style={{ flex: 1 }} />
                                         <button
                                           type="button"
-                                          title="Eliminar (confirmación en la ficha)"
-                                          onClick={() => void openDrawer(candidate)}
+                                          title="Eliminar candidata"
+                                          onClick={() => deleteCandidate(candidate)}
                                           style={{ ...iconBtn, color: "var(--text3)" }}
                                         >
                                           <svg

@@ -1,9 +1,9 @@
 import type { Candidate, CandidateState } from "@/domain/candidate";
 
 /**
- * Capa de presentacion PURA del CRM (sin I/O): etiqueta, columna del Kanban, color por estado y
- * color del anillo del avatar. Replica el diseno de la maqueta: 5 columnas; las candidatas que
- * esperan decision humana caen en "cualificando" y se distinguen por el ANILLO AMBAR del avatar.
+ * Capa de presentacion PURA del CRM (sin I/O): etiqueta, columna del Kanban, color por estado, color
+ * del anillo del avatar y nota FIT. Replica la maqueta de Alex: 4 columnas (Cualificando, Tu decision,
+ * Agenda, Cerradas); las que esperan tu decision tienen su propia columna "decision" (anillo AMBAR).
  * Los `Record<CandidateState, ...>` obligan a mapear los 15 estados reales (si se anade uno y no se
  * mapea aqui, falla el typecheck): asi ninguna candidata desaparece del tablero.
  */
@@ -53,23 +53,24 @@ export function stateColorVar(state: CandidateState): string {
   return STATE_COLOR_VAR[state];
 }
 
-export type CrmColumnId = "nuevas" | "cualificando" | "agenda" | "llamadas" | "cerradas";
+export type CrmColumnId = "cualificando" | "decision" | "agenda" | "cerradas";
 
 const STATE_COLUMN: Record<CandidateState, CrmColumnId> = {
-  NEW_LEAD: "nuevas",
-  WAITING_PROFILE_ACCESS: "nuevas",
+  NEW_LEAD: "cualificando",
+  WAITING_PROFILE_ACCESS: "cualificando",
   QUALIFYING: "cualificando",
-  // Las que esperan decision humana caen en "cualificando" (se marcan con anillo ambar).
-  PROFILE_READY_FOR_REVIEW: "cualificando",
-  WAITING_HUMAN_REVIEW: "cualificando",
-  HUMAN_INTERVENTION_REQUIRED: "cualificando",
+  // Las que esperan TU decision van a su propia columna "decision" (Tu decision) — la maqueta de Alex.
+  PROFILE_READY_FOR_REVIEW: "decision",
+  WAITING_HUMAN_REVIEW: "decision",
+  HUMAN_INTERVENTION_REQUIRED: "decision",
   APPROVED: "agenda",
   COLLECTING_CALL_DETAILS: "agenda",
   READY_TO_SCHEDULE: "agenda",
   CALL_SCHEDULED: "agenda",
-  CALL_IN_PROGRESS: "llamadas",
-  CALL_COMPLETED: "llamadas",
-  CALL_NO_ANSWER: "llamadas",
+  // La actividad de llamada vive en "agenda" (ya no hay columna "llamadas" en la maqueta de 4).
+  CALL_IN_PROGRESS: "agenda",
+  CALL_COMPLETED: "agenda",
+  CALL_NO_ANSWER: "agenda",
   REJECTED: "cerradas",
   CLOSED: "cerradas"
 };
@@ -87,12 +88,11 @@ export interface CrmColumn {
   emptyText: string;
 }
 
-// Las 5 columnas del Kanban, en orden, como en la maqueta.
+// Las 4 columnas del Kanban, en orden, como en la maqueta de Alex.
 export const CRM_COLUMNS: CrmColumn[] = [
-  { id: "nuevas", title: "Nuevas", colorVar: "--faint", emptyIcon: "📭", emptyText: "Sin candidatas nuevas." },
   { id: "cualificando", title: "Cualificando", colorVar: "--accent", emptyIcon: "💬", emptyText: "Nadie cualificando ahora." },
+  { id: "decision", title: "Tu decisión", colorVar: "--warn", emptyIcon: "🎯", emptyText: "Nada pendiente de tu decisión." },
   { id: "agenda", title: "Agenda", colorVar: "--info", emptyIcon: "📅", emptyText: "Sin llamadas por agendar." },
-  { id: "llamadas", title: "Llamadas", colorVar: "--purple", emptyIcon: "📞", emptyText: "Sin actividad de llamadas." },
   { id: "cerradas", title: "Cerradas", colorVar: "--faint", emptyIcon: "📁", emptyText: "Sin candidatas cerradas." }
 ];
 
@@ -106,12 +106,48 @@ export function needsHumanDecision(candidate: Candidate): boolean {
 }
 
 const COLUMN_RING_VAR: Record<CrmColumnId, string> = {
-  nuevas: "--muted",
   cualificando: "--accent",
+  decision: "--warn",
   agenda: "--info",
-  llamadas: "--purple",
   cerradas: "--faint"
 };
+
+/**
+ * Nota FIT (0-99) HONESTA y determinista: NO es un juicio del modelo, es una heuristica transparente
+ * sobre 4 senales reales que ya tenemos (Alex aprobo estos factores): edad en rango, seguidores,
+ * experiencia en OnlyFans y movil apto. `followerCount` viene del perfil de Instagram (no de
+ * Candidate), por eso se pasa aparte. Devuelve 0 si no hay ninguna senal.
+ */
+export function computeFitScore(candidate: Candidate, followerCount: number | null): number {
+  let score = 0;
+  // Edad en el rango objetivo (Argentina ~30-50, con margen).
+  if (typeof candidate.age === "number") {
+    score += candidate.age >= 28 && candidate.age <= 52 ? 25 : 12;
+  }
+  // Alcance (mas seguidores = mejor lead).
+  if (followerCount != null) {
+    if (followerCount >= 50000) score += 25;
+    else if (followerCount >= 10000) score += 20;
+    else if (followerCount >= 3000) score += 14;
+    else if (followerCount >= 1000) score += 8;
+    else score += 4;
+  }
+  // Experiencia en OnlyFans.
+  if (candidate.hasOnlyFans === true) score += 25;
+  else if (candidate.hasOnlyFans === false) score += 8;
+  // Movil apto para grabar.
+  if (candidate.phone) {
+    score += candidate.deviceEligibility === "APPROVED" ? 25 : candidate.deviceEligibility === "PENDING_QUALITY_TEST" ? 15 : 10;
+  } else if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
+    score += 5;
+  }
+  return Math.min(99, Math.max(0, Math.round(score)));
+}
+
+/** "Top pick": nota alta (senal fuerte en varias dimensiones). */
+export function isTopPick(score: number): boolean {
+  return score >= 80;
+}
 
 /**
  * Color (nombre de var CSS) del anillo del avatar en el tablero: AMBAR si espera decision humana
