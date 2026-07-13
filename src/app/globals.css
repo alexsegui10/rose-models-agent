@@ -491,20 +491,22 @@ button {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: var(--scrim);
+  background: rgba(8, 4, 7, 0.72);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
   display: flex;
   justify-content: flex-end;
-  animation: scrimIn 0.15s ease;
+  animation: overlayIn 0.28s ease both;
 }
 .drawer {
-  width: min(560px, 100%);
+  width: min(524px, 94vw);
   height: 100%;
-  background: var(--panel);
-  border-left: 1px solid var(--line);
-  box-shadow: var(--shadow-lg);
+  background: linear-gradient(165deg, var(--panel1, var(--panel)), var(--panel2, var(--panel-2)));
+  border-left: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: -24px 0 70px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
-  animation: drawerIn 0.2s ease;
+  animation: drawerIn 0.34s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 .drawer-header {
   display: flex;
@@ -520,30 +522,36 @@ button {
   align-items: center;
 }
 .drawer-avatar {
-  width: 46px;
-  height: 46px;
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
   color: var(--accent-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 18px;
+  font-family: var(--font-bodoni), Georgia, serif;
+  font-weight: 600;
+  font-size: 24px;
   border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
 }
 .drawer-name {
-  margin: 0 0 4px;
-  font-size: 17px;
+  margin: 0 0 5px;
+  font-family: var(--font-bodoni), Georgia, serif;
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 0.01em;
 }
 .drawer-state-pill {
-  font-size: 11px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  color: var(--muted);
-  background: var(--panel-2);
-  border: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
   border-radius: var(--r-pill);
-  padding: 2px 8px;
+  padding: 2px 9px;
 }
 .drawer-close {
   background: var(--panel-2);
@@ -597,19 +605,24 @@ button {
 .drawer-field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
+  padding: 11px 13px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
 }
 .drawer-field-label {
-  font-size: 11px;
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--faint);
 }
 .drawer-field-value {
   color: var(--text);
   word-break: break-word;
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 500;
 }
 .drawer-block {
   margin-top: 16px;
@@ -1825,9 +1838,9 @@ button {
   color: var(--danger);
 }
 .btn-xs {
-  min-height: 30px;
-  padding: 0 11px;
-  border-radius: 8px;
+  min-height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--line);
@@ -1836,10 +1849,12 @@ button {
   transition:
     background 0.13s ease,
     border-color 0.13s ease,
-    color 0.13s ease;
+    color 0.13s ease,
+    transform 0.13s ease;
 }
 .btn-xs:hover {
-  background: #1f2b36;
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
   color: var(--text);
 }
 .btn-xs.accent {
