@@ -184,6 +184,8 @@ export default function Home() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   // Acento conmutable de la maqueta (5 colores). Escribe html[data-accent]; persiste junto al modo.
   const [accent, setAccent] = useState<AccentKey>("rose");
+  // Intro splash (pétalos) SOLO en la primera visita (decisión de Alex: no en cada recarga).
+  const [showIntro, setShowIntro] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [modalInput, setModalInput] = useState("");
   // Ficha de candidata (drawer lateral): se abre al hacer clic en una tarjeta del CRM.
@@ -268,6 +270,16 @@ export default function Home() {
     root.dataset.theme = mode;
     root.dataset.mode = mode;
     root.dataset.accent = acc;
+  }, []);
+
+  // Intro splash: se muestra UNA vez (primera visita). Auto-oculta a los ~3.4s (2.5s + 0.7s de introOut).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem("rm-intro-seen")) return;
+    window.localStorage.setItem("rm-intro-seen", "1");
+    setShowIntro(true);
+    const t = window.setTimeout(() => setShowIntro(false), 3400);
+    return () => window.clearTimeout(t);
   }, []);
 
   // Runtime de la maqueta de Alex: brillo que SIGUE al cursor (dos capas con lag 0.04 y 0.075) + ripple al
@@ -1142,6 +1154,184 @@ export default function Home() {
           willChange: "transform"
         }}
       />
+      {/* ===== INTRO SPLASH (reproducción FIEL: pétalos + monograma + wordmark). Solo primera visita. ===== */}
+      {showIntro ? (
+        <div
+          onClick={() => setShowIntro(false)}
+          style={
+            {
+              position: "fixed",
+              inset: 0,
+              zIndex: 100,
+              transformOrigin: "center",
+              "--text": "#F7F0EF",
+              "--text2": "#E4B7C1",
+              "--text3": "#8f7f86",
+              "--line-rgb": "255,255,255",
+              background: "radial-gradient(1000px 720px at 50% 42%,#1d1017,#0b0609 72%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              overflow: "hidden",
+              animation: "introOut .7s 2.5s forwards"
+            } as React.CSSProperties
+          }
+        >
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+            {(
+              [
+                { l: "9%", s: 13, g: "a", d: 3.2, dl: 0.05 },
+                { l: "19%", s: 9, g: "gold", d: 3.8, dl: 0.5 },
+                { l: "28%", s: 15, g: "violet", d: 2.9, dl: 0.9 },
+                { l: "38%", s: 11, g: "a", d: 3.5, dl: 0.2 },
+                { l: "47%", s: 8, g: "gold", d: 4.1, dl: 1.2 },
+                { l: "56%", s: 14, g: "a", d: 3.1, dl: 0.7 },
+                { l: "65%", s: 10, g: "violet", d: 3.7, dl: 0.35 },
+                { l: "74%", s: 12, g: "a", d: 3.3, dl: 1 },
+                { l: "83%", s: 9, g: "gold", d: 4, dl: 0.15 },
+                { l: "91%", s: 13, g: "violet", d: 3, dl: 0.85 }
+              ] as const
+            ).map((p, i) => (
+              <span
+                key={i}
+                style={{
+                  position: "absolute",
+                  top: -40,
+                  left: p.l,
+                  width: p.s,
+                  height: p.s,
+                  borderRadius: "0 100% 0 100%",
+                  background:
+                    p.g === "a"
+                      ? "linear-gradient(135deg,var(--accent),var(--accent3))"
+                      : p.g === "gold"
+                        ? "linear-gradient(135deg,#E9C79B,#C99B62)"
+                        : "linear-gradient(135deg,#B98BC9,#8A5FA6)",
+                  opacity: 0,
+                  animation: `petalFall ${p.d}s ${p.dl}s ease-in infinite`
+                }}
+              />
+            ))}
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              width: 340,
+              height: 340,
+              borderRadius: "50%",
+              background: "radial-gradient(circle,rgba(var(--accent-rgb),.5),transparent 64%)",
+              animation: "introBloom 2.2s .15s ease-out forwards"
+            }}
+          />
+          <div
+            style={{
+              position: "relative",
+              width: 110,
+              height: 110,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 30,
+              animation: "introMono 1.1s cubic-bezier(.2,.9,.3,1) both"
+            }}
+          >
+            <svg width="110" height="110" viewBox="0 0 100 100" style={{ position: "absolute", inset: 0 }}>
+              <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(var(--accent-rgb),.18)" strokeWidth="1" />
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeDasharray="283"
+                style={{
+                  animation: "drawRing 1.5s .3s ease-out both",
+                  transform: "rotate(-90deg)",
+                  transformOrigin: "center",
+                  filter: "drop-shadow(0 0 5px rgba(var(--accent-rgb),.6))"
+                }}
+              />
+            </svg>
+            <div
+              style={{
+                width: 84,
+                height: 84,
+                borderRadius: "50%",
+                background: "linear-gradient(140deg,var(--accent),var(--accent3))",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 12px 44px rgba(200,90,120,.55)"
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 700, color: "#fff", fontSize: 42, lineHeight: 1 }}>
+                R
+              </span>
+            </div>
+          </div>
+          <div
+            data-m="introword"
+            style={
+              {
+                fontFamily: "var(--font-bodoni)",
+                fontWeight: 600,
+                fontSize: 40,
+                letterSpacing: ".16em",
+                background: "linear-gradient(100deg,var(--text) 25%,#E9C79B 45%,var(--accent) 55%,var(--text) 75%)",
+                backgroundSize: "200% auto",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                color: "transparent",
+                animation: "introWord 1s .45s both,shimmerText 2.6s .5s linear infinite"
+              } as React.CSSProperties
+            }
+          >
+            ROSE&nbsp;MODELS
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-jost)",
+              fontWeight: 300,
+              fontSize: 12,
+              color: "#C99AA6",
+              marginTop: 14,
+              textTransform: "uppercase",
+              animation: "introSub 1.1s .85s both"
+            }}
+          >
+            Management
+          </div>
+          <div
+            style={{
+              width: 130,
+              height: 1,
+              background: "linear-gradient(90deg,transparent,var(--accent),transparent)",
+              marginTop: 26,
+              animation: "introLine 1s 1.05s both"
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 36,
+              fontFamily: "var(--font-jost)",
+              fontSize: 11,
+              color: "#6f5f66",
+              letterSpacing: ".14em",
+              textTransform: "uppercase",
+              animation: "introWord 1s 1.7s both"
+            }}
+          >
+            Pulsa para entrar
+          </div>
+        </div>
+      ) : null}
+
       {/* ===== CABECERA (reproducción FIEL de la maqueta) ===== */}
       <header
         style={{
@@ -1406,6 +1596,87 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* ===== BOTTOM NAV (móvil) — reproducción FIEL. Oculta en desktop, visible en móvil por data-m. ===== */}
+      <nav
+        data-m="botnav"
+        style={{
+          display: "none",
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 35,
+          height: 64,
+          padding: "6px 6px calc(6px + env(safe-area-inset-bottom))",
+          background: "linear-gradient(0deg,rgba(var(--s2),.98),rgba(var(--s2),.86))",
+          backdropFilter: "blur(16px)",
+          borderTop: "1px solid rgba(var(--line-rgb),.12)",
+          alignItems: "stretch",
+          justifyContent: "space-around"
+        }}
+      >
+        {(
+          [
+            { key: "DASHBOARD", label: "Resumen", icon: "◈", size: 19 },
+            { key: "CRM", label: "CRM", icon: "▦", size: 19 },
+            { key: "LLAMADAS", label: "Llamadas", icon: "☎", size: 18 },
+            { key: "CHAT", label: "Mensajes", icon: "✉", size: 17 }
+          ] as const
+        ).map((t) => {
+          const active = activeTab === t.key;
+          const pending = t.key === "CHAT" ? candidates.filter(needsHumanDecision).length : 0;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setActiveTab(t.key)}
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: active ? "var(--accent)" : "var(--text3)",
+                fontFamily: "var(--font-jost)",
+                fontSize: 10,
+                letterSpacing: ".03em",
+                transition: ".2s",
+                position: "relative"
+              }}
+            >
+              <span style={{ fontSize: t.size, lineHeight: 1 }}>{t.icon}</span>
+              {t.label}
+              {pending > 0 ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -2,
+                    right: "calc(50% - 22px)",
+                    minWidth: 16,
+                    height: 16,
+                    padding: "0 4px",
+                    borderRadius: 8,
+                    background: "var(--accent)",
+                    color: "var(--accent-contrast)",
+                    fontWeight: 600,
+                    fontSize: 9,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  {pending}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </nav>
 
       {activeTab === "DASHBOARD"
         ? (() => {
