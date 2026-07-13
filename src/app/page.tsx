@@ -1748,137 +1748,134 @@ export default function Home() {
             const initialOf = (item: Candidate): string =>
               (item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase();
             return (
-              <section className="panel">
-                <div className="dash2-head">
-                  <div>
-                    <h2 className="dash2-greeting">Buenas, Alex 👋</h2>
-                    <p className="dash2-subtitle">Esto es lo que pasa en tu embudo ahora mismo.</p>
+              <div style={{ position: "relative", zIndex: 5, maxWidth: 1320, margin: "0 auto", padding: "34px 30px 80px" }}>
+                <div style={{ animation: "scrRise .55s cubic-bezier(.16,1,.3,1) both" }}>
+                  {/* HERO */}
+                  <div data-m="hero" style={{ display: "grid", gridTemplateColumns: "1fr 372px", gap: 22, marginBottom: 26 }}>
+                    <div style={{ animation: "fadeUp .7s both" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 16 }}>
+                        <span style={{ width: 28, height: 1, background: "linear-gradient(90deg,var(--accent),transparent)" }} />
+                        <span style={{ fontFamily: "var(--font-jost)", fontSize: 11, letterSpacing: ".34em", color: "var(--accent)", textTransform: "uppercase" }}>
+                          Panel de control
+                        </span>
+                      </div>
+                      <h1 style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 52, lineHeight: 1.02, margin: 0, letterSpacing: "-.01em", color: "var(--text)" }}>
+                        Buenas, <span style={{ fontStyle: "italic", color: "var(--accent)" }}>Alex</span>
+                      </h1>
+                      <p style={{ color: "var(--text2)", fontSize: 16, lineHeight: 1.5, margin: "14px 0 0", maxWidth: 540, fontWeight: 300 }}>
+                        Esto es lo que ocurre en tu embudo ahora mismo. Rose trabaja <span style={{ color: "#D6B27C" }}>día y noche</span> captando y
+                        cualificando talento por ti.
+                      </p>
+                    </div>
+                    <div
+                      onClick={() => (total === 0 ? void seedDemo() : setActiveTab("CRM"))}
+                      style={{
+                        animation: "fadeUp .7s .08s both",
+                        position: "relative",
+                        overflow: "hidden",
+                        borderRadius: 18,
+                        padding: 24,
+                        background: "linear-gradient(150deg,rgba(var(--accent-rgb),.14),rgba(185,139,201,.06))",
+                        border: "1px solid rgba(var(--accent-rgb),.24)",
+                        cursor: "pointer",
+                        transition: ".3s"
+                      }}
+                    >
+                      <div style={{ position: "absolute", top: 0, bottom: 0, width: "40%", background: "linear-gradient(105deg,transparent,rgba(var(--line-rgb),.1),transparent)", animation: "sheen 6s ease-in-out infinite" }} />
+                      <div style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, letterSpacing: ".28em", color: "var(--accent)", textTransform: "uppercase" }}>Acción sugerida</div>
+                      <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 30, margin: "12px 0 4px", color: "var(--text)" }}>
+                        {total === 0 ? "Cargar demo" : `${pendingList.length} ${pendingList.length === 1 ? "decisión" : "decisiones"}`}
+                      </div>
+                      <div style={{ color: "var(--text2)", fontSize: 14, fontWeight: 300 }}>
+                        {total === 0 ? "añade candidatas de ejemplo para ver el panel" : "te esperan para aprobar o descartar"}
+                      </div>
+                      <div style={{ marginTop: 18, display: "inline-flex", alignItems: "center", gap: 9, fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".06em", color: "var(--accent)" }}>
+                        {total === 0 ? "Cargar ahora" : "Revisar ahora"} <span style={{ fontSize: 15 }}>→</span>
+                      </div>
+                    </div>
                   </div>
-                  {total === 0 ? (
-                    <button className="dash2-waiting-btn" type="button" onClick={() => void seedDemo()}>
-                      Cargar candidatas de demo
-                    </button>
-                  ) : (
-                    <button className="dash2-waiting-btn" type="button" onClick={() => setActiveTab("CRM")}>
-                      ⚠️ {pendingList.length} {pendingList.length === 1 ? "espera" : "esperan"} tu decisión
-                    </button>
-                  )}
-                </div>
 
-                <div className="dash2-kpi-row">
-                  {(
-                    [
-                      { label: "Te esperan", value: pendingList.length, colorVar: "--warn", icon: "⚠️" },
-                      { label: "Activas", value: active, colorVar: "--accent", icon: "⚡" },
-                      { label: "Llamadas hoy", value: todayCalls.length, colorVar: "--purple", icon: "📞" },
-                      { label: "Total candidatas", value: total, colorVar: "--info", icon: "👥" }
-                    ] as { label: string; value: number; colorVar: string; icon: string }[]
-                  ).map((kpi) => (
-                    <div className="dash2-kpi" key={kpi.label}>
+                  {/* KPIs */}
+                  <div data-m="kpis" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 18, marginBottom: 26 }}>
+                    {(
+                      [
+                        { label: "Te esperan", value: pendingList.length, color: "var(--accent)", sub: "decisiones pendientes", delay: 0.05, bar: "var(--accent)", bd: 0.2 },
+                        { label: "Activas", value: active, color: "#D6B27C", sub: "en el embudo", delay: 0.12, bar: "#D6B27C", bd: 0.28 },
+                        { label: "Llamadas hoy", value: todayCalls.length, color: "#B98BC9", sub: "agendadas", delay: 0.19, bar: "#B98BC9", bd: 0.36 },
+                        { label: "Total talento", value: total, color: "var(--text2)", sub: "en base de datos", delay: 0.26, bar: "#A9B4C4", bd: 0.44 }
+                      ] as const
+                    ).map((k) => (
                       <div
-                        className="dash2-kpi-glow"
-                        style={{
-                          background: `radial-gradient(120px 80px at 90% 0, color-mix(in srgb, var(${kpi.colorVar}) 16%, transparent), transparent)`
-                        }}
-                      />
-                      <div className="dash2-kpi-top">
-                        <span className="dash2-kpi-label">{kpi.label}</span>
-                        <span
-                          className="dash2-kpi-icon"
-                          style={{
-                            background: `color-mix(in srgb, var(${kpi.colorVar}) 16%, transparent)`,
-                            color: `var(${kpi.colorVar})`
-                          }}
-                        >
-                          {kpi.icon}
-                        </span>
+                        key={k.label}
+                        style={{ animation: `popIn .55s ${k.delay}s both`, position: "relative", overflow: "hidden", borderRadius: 16, padding: 22, background: "rgba(var(--s1),.6)", border: "1px solid rgba(var(--line-rgb),.06)", transition: ".3s" }}
+                      >
+                        <div style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, letterSpacing: ".2em", color: "#A99098", textTransform: "uppercase" }}>{k.label}</div>
+                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 52, lineHeight: 1, marginTop: 14, color: k.color }}>{k.value}</div>
+                        <div style={{ color: "var(--text3)", fontSize: 12.5, marginTop: 8, fontWeight: 300 }}>{k.sub}</div>
+                        <div style={{ position: "absolute", left: 0, bottom: 0, height: 2, width: "100%", background: `linear-gradient(90deg,${k.bar},transparent)`, transformOrigin: "left", animation: `barGrow 1s ${k.bd}s both` }} />
                       </div>
-                      <div className="dash2-kpi-valrow">
-                        <span className="dash2-kpi-value" style={{ color: `var(${kpi.colorVar})` }}>
-                          {kpi.value}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
 
-                <div className="dash2-stack">
-                  <div className="dash2-card">
-                    <div className="dash2-card-head">
-                      <h3 className="dash2-card-title">Embudo de candidatas</h3>
-                      <span className="dash2-card-meta">{total} en total</span>
+                  {/* EMBUDO */}
+                  <div style={{ animation: "fadeUp .7s .2s both", borderRadius: 18, padding: 26, background: "rgba(var(--s2),.5)", border: "1px solid rgba(var(--line-rgb),.06)", marginBottom: 26 }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22 }}>
+                      <div>
+                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 23, color: "var(--text)" }}>Embudo de talento</div>
+                        <div style={{ fontFamily: "var(--font-jost)", fontSize: 12.5, color: "var(--text3)", marginTop: 4, fontWeight: 300 }}>{total} candidatas · flujo en tiempo real</div>
+                      </div>
+                      <button type="button" onClick={() => setActiveTab("CRM")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".05em", color: "var(--accent)" }}>
+                        Abrir CRM →
+                      </button>
                     </div>
-                    <div className="dash2-funnel-list">
+                    <div data-m="funnel" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
                       {funnel.map((phase) => (
                         <div
                           key={phase.label}
-                          className="dash2-funnel-row"
                           onClick={() => setActiveTab(phase.label === "Llamadas" ? "LLAMADAS" : "CRM")}
+                          style={{ cursor: "pointer", borderRadius: 14, padding: "18px 16px", background: "rgba(var(--s3),.55)", border: "1px solid rgba(var(--line-rgb),.05)", transition: ".3s", position: "relative", overflow: "hidden" }}
                         >
-                          <span className="dash2-funnel-label">{phase.label}</span>
-                          <div className="dash2-funnel-track">
-                            <div
-                              className="dash2-funnel-bar"
-                              style={{
-                                width: `${Math.round((phase.count / funnelMax) * 100)}%`,
-                                background: `linear-gradient(90deg, var(${phase.colorVar}), color-mix(in srgb, var(${phase.colorVar}) 60%, transparent))`,
-                                boxShadow: `0 0 16px color-mix(in srgb, var(${phase.colorVar}) 33%, transparent)`
-                              }}
-                            />
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: `var(${phase.colorVar})` }} />
+                            <span style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, letterSpacing: ".1em", color: "#A99098", textTransform: "uppercase", fontWeight: 400 }}>{phase.label}</span>
                           </div>
-                          <span className="dash2-funnel-count">{phase.count}</span>
+                          <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 38, lineHeight: 1, color: `var(${phase.colorVar})` }}>{phase.count}</div>
+                          <div style={{ marginTop: 14, height: 3, borderRadius: 4, background: "rgba(var(--line-rgb),.06)", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${Math.round((phase.count / funnelMax) * 100)}%`, background: `var(${phase.colorVar})`, borderRadius: 4, transformOrigin: "left", animation: "barGrow 1.1s .3s both" }} />
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <div className="dash2-conv">
-                      <div className="dash2-conv-cell">
-                        <div className="dash2-conv-label">Activas</div>
-                        <div className="dash2-conv-value">{pct(active)}</div>
-                      </div>
-                      <div className="dash2-conv-cell">
-                        <div className="dash2-conv-label">En llamadas</div>
-                        <div className="dash2-conv-value">{pct(llamadasCount)}</div>
-                      </div>
-                      <div className="dash2-conv-cell">
-                        <div className="dash2-conv-label">Cerradas</div>
-                        <div className="dash2-conv-value">{pct(cerradasCount)}</div>
-                      </div>
-                    </div>
                   </div>
 
-                  <div className="dash2-right">
-                    <div className="dash2-card dash2-card--pad18">
-                      <div className="dash2-card-head">
-                        <h3 className="dash2-card-title">Llamadas de hoy</h3>
-                        <button className="dash2-link-btn" type="button" onClick={() => setActiveTab("LLAMADAS")}>
+                  {/* SPLIT: llamadas de hoy + actividad */}
+                  <div data-m="split" style={{ display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 22 }}>
+                    <div style={{ animation: "fadeUp .7s .28s both", borderRadius: 18, padding: 24, background: "rgba(var(--s2),.5)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 19, color: "var(--text)" }}>Llamadas de hoy</div>
+                        <button type="button" onClick={() => setActiveTab("LLAMADAS")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 12.5, letterSpacing: ".04em", color: "#B98BC9" }}>
                           Ver todas →
                         </button>
                       </div>
-                      <div className="dash2-calls-list">
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {todayCalls.length === 0 ? (
-                          <div className="dash2-empty">Sin llamadas para hoy.</div>
+                          <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300, padding: "8px 2px" }}>Sin llamadas para hoy.</div>
                         ) : (
                           todayCalls.map((item) => (
-                            <div key={item.id} className="dash2-call" onClick={() => void openDrawer(item)}>
-                              <span className="dash2-avatar" style={{ background: `var(${ringColorVar(item)})` }}>
+                            <div
+                              key={item.id}
+                              onClick={() => void openDrawer(item)}
+                              style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderRadius: 12, background: "rgba(var(--s3),.5)", border: "1px solid rgba(var(--line-rgb),.05)", transition: ".25s", cursor: "pointer" }}
+                            >
+                              <div style={{ width: 36, height: 36, borderRadius: "50%", background: `var(${ringColorVar(item)})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 13, color: "var(--accent-contrast)" }}>
                                 {initialOf(item)}
-                              </span>
-                              <div className="dash2-call-body">
-                                <div className="dash2-call-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
-                                <div className="dash2-call-slot">{callCardSlotText(item)}</div>
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 500, fontSize: 14.5, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
+                                <div style={{ fontFamily: "var(--font-jost)", fontSize: 11, color: "var(--text3)", fontWeight: 300 }}>{callCardSlotText(item)}</div>
                               </div>
                               <span
-                                style={{
-                                  flex: "none",
-                                  fontSize: 10.5,
-                                  fontWeight: 700,
-                                  padding: "3px 9px",
-                                  borderRadius: 999,
-                                  whiteSpace: "nowrap",
-                                  color: `var(${stateColorVar(item.currentState)})`,
-                                  background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 12%, transparent)`,
-                                  border: `1px solid color-mix(in srgb, var(${stateColorVar(item.currentState)}) 33%, transparent)`
-                                }}
+                                style={{ fontFamily: "var(--font-jost)", fontSize: 9.5, padding: "4px 11px", borderRadius: 20, background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 14%, transparent)`, color: `var(${stateColorVar(item.currentState)})`, letterSpacing: ".08em", textTransform: "uppercase", whiteSpace: "nowrap" }}
                               >
                                 {stateLabel(item.currentState)}
                               </span>
@@ -1888,35 +1885,23 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="dash2-card dash2-card--pad18">
-                      <h3 className="dash2-activity-title">Actividad reciente</h3>
+                    <div style={{ animation: "fadeUp .7s .34s both", borderRadius: 18, padding: 24, background: "rgba(var(--s2),.5)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
+                      <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 19, marginBottom: 16, color: "var(--text)" }}>Actividad reciente</div>
                       {recent.length === 0 ? (
-                        <div className="dash2-empty">Sin actividad todavía.</div>
+                        <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300 }}>Sin actividad todavía.</div>
                       ) : (
-                        <div className="dash2-activity-list">
+                        <div style={{ display: "flex", flexDirection: "column" }}>
                           {recent.map((item, index) => (
-                            <div
-                              key={item.id}
-                              className="dash2-act-row"
-                              onClick={() => void openDrawer(item)}
-                              style={{ cursor: "pointer" }}
-                            >
-                              <div className="dash2-act-rail">
-                                <span
-                                  className="dash2-act-dot"
-                                  style={{
-                                    background: `var(${stateColorVar(item.currentState)})`,
-                                    boxShadow: `0 0 8px color-mix(in srgb, var(${stateColorVar(item.currentState)}) 60%, transparent)`
-                                  }}
-                                />
-                                {index < recent.length - 1 ? <span className="dash2-act-line" /> : null}
+                            <div key={item.id} onClick={() => void openDrawer(item)} style={{ display: "flex", gap: 14, padding: "10px 2px", cursor: "pointer" }}>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 4 }}>
+                                <span style={{ width: 9, height: 9, borderRadius: "50%", background: `var(${stateColorVar(item.currentState)})`, flexShrink: 0 }} />
+                                {index < recent.length - 1 ? <span style={{ width: 1, flex: 1, background: "rgba(var(--line-rgb),.08)", marginTop: 5 }} /> : null}
                               </div>
-                              <div className="dash2-act-body">
-                                <div className="dash2-act-text">
-                                  <strong>{item.firstName?.trim() || `@${item.instagramUsername}`}</strong> ·{" "}
-                                  {stateLabel(item.currentState)}
+                              <div style={{ flex: 1, paddingBottom: 8 }}>
+                                <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.4, fontWeight: 300 }}>
+                                  <strong style={{ fontWeight: 500, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</strong> · {stateLabel(item.currentState)}
                                 </div>
-                                <div className="dash2-act-time">{relTime(item.lastMessageAt)}</div>
+                                <div style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, color: "var(--text3)", marginTop: 3 }}>{relTime(item.lastMessageAt)}</div>
                               </div>
                             </div>
                           ))}
@@ -1925,34 +1910,7 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-
-                {pendingList.length > 0 ? (
-                  <div className="dash2-pending-card">
-                    <div className="dash2-pending-head">
-                      <span className="dash2-pending-badge">⚠️</span>
-                      <h3 className="dash2-card-title">Pendientes de tu decisión</h3>
-                    </div>
-                    <div className="dash2-pending-grid">
-                      {pendingList.map((item) => (
-                        <div key={item.id} className="dash2-pending-item" onClick={() => void openDrawer(item)}>
-                          <span className="dash2-pending-avatar" style={{ background: `var(${ringColorVar(item)})` }}>
-                            {initialOf(item)}
-                          </span>
-                          <div className="dash2-pending-body">
-                            <div className="dash2-pending-name">{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
-                            <div className="dash2-pending-reason">
-                              {item.humanReviewReason
-                                ? (REVIEW_REASON_LABELS[item.humanReviewReason] ?? item.humanReviewReason)
-                                : stateLabel(item.currentState)}
-                            </div>
-                          </div>
-                          <span className="dash2-pending-arrow">→</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </section>
+              </div>
             );
           })()
         : null}
