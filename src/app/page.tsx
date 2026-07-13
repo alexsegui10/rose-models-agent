@@ -218,6 +218,9 @@ export default function Home() {
   const fetchedProfileIds = useRef<Set<string>>(new Set());
   const [crmNotice, setCrmNotice] = useState<string | null>(null);
   const [crmSearch, setCrmSearch] = useState("");
+  // Movil: el CRM enseña una etapa a la vez (filtro) y Mensajes alterna lista/chat.
+  const [crmMobileFilter, setCrmMobileFilter] = useState("cualificando");
+  const [msgView, setMsgView] = useState<"list" | "chat">("list");
   const [testCallPhone, setTestCallPhone] = useState("");
   const [testCallBusy, setTestCallBusy] = useState(false);
   const [testCallResult, setTestCallResult] = useState<string | null>(null);
@@ -2298,67 +2301,296 @@ export default function Home() {
               return item.scheduledCallSlot ? "Agendada" : "—";
             };
             return (
-              <div style={{ position: "relative", zIndex: 5, maxWidth: 1320, margin: "0 auto", padding: "34px 30px 80px", animation: "scrZoom .5s cubic-bezier(.16,1,.3,1) both" }}>
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 5,
+                  maxWidth: 1320,
+                  margin: "0 auto",
+                  padding: "34px 30px 80px",
+                  animation: "scrZoom .5s cubic-bezier(.16,1,.3,1) both"
+                }}
+              >
                 {(() => {
                   const pending = callList.filter(
-                    (item) => item.currentState === "CALL_IN_PROGRESS" || item.currentState === "CALL_SCHEDULED" || (!item.lastCall && Boolean(item.scheduledCallSlot))
+                    (item) =>
+                      item.currentState === "CALL_IN_PROGRESS" ||
+                      item.currentState === "CALL_SCHEDULED" ||
+                      (!item.lastCall && Boolean(item.scheduledCallSlot))
                   );
                   const history = callList.filter((item) => item.lastCall != null);
-                  const initialOf = (item: Candidate) => (item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase();
+                  const initialOf = (item: Candidate) =>
+                    (item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase();
                   const pill = (item: Candidate) =>
-                    ({ fontFamily: "var(--font-jost)", fontSize: 9.5, padding: "4px 11px", borderRadius: 20, background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 14%, transparent)`, color: `var(${stateColorVar(item.currentState)})`, letterSpacing: ".08em", textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0 }) as React.CSSProperties;
+                    ({
+                      fontFamily: "var(--font-jost)",
+                      fontSize: 9.5,
+                      padding: "4px 11px",
+                      borderRadius: 20,
+                      background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 14%, transparent)`,
+                      color: `var(${stateColorVar(item.currentState)})`,
+                      letterSpacing: ".08em",
+                      textTransform: "uppercase",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0
+                    }) as React.CSSProperties;
                   return (
                     <>
                       <div style={{ marginBottom: 26 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 12 }}>
                           <span style={{ width: 28, height: 1, background: "linear-gradient(90deg,#B98BC9,transparent)" }} />
-                          <span style={{ fontFamily: "var(--font-jost)", fontSize: 11, letterSpacing: ".32em", color: "#B98BC9", textTransform: "uppercase" }}>Agenda de screenings</span>
+                          <span
+                            style={{
+                              fontFamily: "var(--font-jost)",
+                              fontSize: 11,
+                              letterSpacing: ".32em",
+                              color: "#B98BC9",
+                              textTransform: "uppercase"
+                            }}
+                          >
+                            Agenda de screenings
+                          </span>
                         </div>
-                        <h1 style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 40, margin: 0, color: "var(--text)" }}>Llamadas</h1>
-                        <p style={{ color: "var(--text2)", fontSize: 15, fontWeight: 300, margin: "10px 0 0", maxWidth: 560 }}>El bot de voz llama a las aprobadas, negocia el reparto y te pasa las que lo necesitan.</p>
+                        <h1
+                          style={{
+                            fontFamily: "var(--font-bodoni)",
+                            fontWeight: 600,
+                            fontSize: 40,
+                            margin: 0,
+                            color: "var(--text)"
+                          }}
+                        >
+                          Llamadas
+                        </h1>
+                        <p style={{ color: "var(--text2)", fontSize: 15, fontWeight: 300, margin: "10px 0 0", maxWidth: 560 }}>
+                          El bot de voz llama a las aprobadas, negocia el reparto y te pasa las que lo necesitan.
+                        </p>
                       </div>
 
                       {/* Llamada de PRUEBA: probar la voz llamando a tu propio número. */}
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", margin: "0 0 22px", padding: "14px 18px", borderRadius: 16, border: "1px solid rgba(185,139,201,.24)", background: "rgba(185,139,201,.06)" }}>
-                        <span style={{ fontFamily: "var(--font-jost)", fontSize: 13, color: "var(--text2)" }}>📞 Probar la voz llamando a tu número:</span>
-                        <input type="tel" placeholder="+34 6XX XXX XXX" value={testCallPhone} onChange={(event) => setTestCallPhone(event.target.value)} style={{ padding: "8px 12px", borderRadius: 20, border: "1px solid rgba(var(--line-rgb),.14)", background: "rgba(var(--s3),.6)", color: "var(--text)", minWidth: 180, fontFamily: "var(--font-jost)", fontSize: 13, outline: "none" }} />
-                        <button type="button" disabled={testCallBusy} onClick={() => void doTestCall()} style={{ padding: "9px 18px", borderRadius: 20, border: "none", cursor: testCallBusy ? "wait" : "pointer", background: "linear-gradient(135deg,#B98BC9,#9A6DB4)", color: "#1c1020", fontFamily: "var(--font-jost)", fontWeight: 600, fontSize: 12.5 }}>{testCallBusy ? "Llamando…" : "Llamar de prueba"}</button>
-                        {testCallResult ? <span style={{ width: "100%", fontSize: 13, color: "var(--text2)", fontWeight: 300 }}>{testCallResult}</span> : null}
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          margin: "0 0 22px",
+                          padding: "14px 18px",
+                          borderRadius: 16,
+                          border: "1px solid rgba(185,139,201,.24)",
+                          background: "rgba(185,139,201,.06)"
+                        }}
+                      >
+                        <span style={{ fontFamily: "var(--font-jost)", fontSize: 13, color: "var(--text2)" }}>
+                          📞 Probar la voz llamando a tu número:
+                        </span>
+                        <input
+                          type="tel"
+                          placeholder="+34 6XX XXX XXX"
+                          value={testCallPhone}
+                          onChange={(event) => setTestCallPhone(event.target.value)}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: 20,
+                            border: "1px solid rgba(var(--line-rgb),.14)",
+                            background: "rgba(var(--s3),.6)",
+                            color: "var(--text)",
+                            minWidth: 180,
+                            fontFamily: "var(--font-jost)",
+                            fontSize: 13,
+                            outline: "none"
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={testCallBusy}
+                          onClick={() => void doTestCall()}
+                          style={{
+                            padding: "9px 18px",
+                            borderRadius: 20,
+                            border: "none",
+                            cursor: testCallBusy ? "wait" : "pointer",
+                            background: "linear-gradient(135deg,#B98BC9,#9A6DB4)",
+                            color: "#1c1020",
+                            fontFamily: "var(--font-jost)",
+                            fontWeight: 600,
+                            fontSize: 12.5
+                          }}
+                        >
+                          {testCallBusy ? "Llamando…" : "Llamar de prueba"}
+                        </button>
+                        {testCallResult ? (
+                          <span style={{ width: "100%", fontSize: 13, color: "var(--text2)", fontWeight: 300 }}>
+                            {testCallResult}
+                          </span>
+                        ) : null}
                       </div>
 
                       {/* KPIs */}
-                      <div data-m="kpis" style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 14, marginBottom: 30 }}>
+                      <div
+                        data-m="kpis"
+                        style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 14, marginBottom: 30 }}
+                      >
                         {kpis.map((kpi, i) => (
-                          <div key={kpi.label} style={{ animation: `popIn .5s ${0.04 * i}s both`, borderRadius: 14, padding: "16px 14px", background: "rgba(var(--s1),.6)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
-                            <div style={{ fontFamily: "var(--font-jost)", fontSize: 10, letterSpacing: ".14em", color: "#A99098", textTransform: "uppercase" }}>{kpi.label}</div>
-                            <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 30, lineHeight: 1, marginTop: 10, color: `var(${kpi.colorVar})` }}>{kpi.value}</div>
+                          <div
+                            key={kpi.label}
+                            style={{
+                              animation: `popIn .5s ${0.04 * i}s both`,
+                              borderRadius: 14,
+                              padding: "16px 14px",
+                              background: "rgba(var(--s1),.6)",
+                              border: "1px solid rgba(var(--line-rgb),.06)"
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontSize: 10,
+                                letterSpacing: ".14em",
+                                color: "#A99098",
+                                textTransform: "uppercase"
+                              }}
+                            >
+                              {kpi.label}
+                            </div>
+                            <div
+                              style={{
+                                fontFamily: "var(--font-bodoni)",
+                                fontWeight: 600,
+                                fontSize: 30,
+                                lineHeight: 1,
+                                marginTop: 10,
+                                color: `var(${kpi.colorVar})`
+                              }}
+                            >
+                              {kpi.value}
+                            </div>
                           </div>
                         ))}
                       </div>
 
                       {/* HOY */}
-                      <div style={{ fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".14em", textTransform: "uppercase", color: "#B98BC9", marginBottom: 15 }}>
-                        Hoy <span style={{ color: "var(--text3)", fontWeight: 300, letterSpacing: ".02em", textTransform: "none" }}>· {pending.length} en agenda</span>
+                      <div
+                        style={{
+                          fontFamily: "var(--font-jost)",
+                          fontWeight: 500,
+                          fontSize: 13,
+                          letterSpacing: ".14em",
+                          textTransform: "uppercase",
+                          color: "#B98BC9",
+                          marginBottom: 15
+                        }}
+                      >
+                        Hoy{" "}
+                        <span style={{ color: "var(--text3)", fontWeight: 300, letterSpacing: ".02em", textTransform: "none" }}>
+                          · {pending.length} en agenda
+                        </span>
                       </div>
                       {pending.length === 0 ? (
-                        <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300, marginBottom: 34 }}>Sin llamadas en agenda. Aprueba candidatas y agéndalas desde el CRM.</div>
+                        <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300, marginBottom: 34 }}>
+                          Sin llamadas en agenda. Aprueba candidatas y agéndalas desde el CRM.
+                        </div>
                       ) : (
-                        <div data-m="calls2" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16, marginBottom: 34 }}>
+                        <div
+                          data-m="calls2"
+                          style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16, marginBottom: 34 }}
+                        >
                           {pending.map((item) => (
-                            <div key={item.id} onClick={() => void openDrawer(item)} style={{ borderRadius: 17, padding: 20, background: "rgba(var(--s1),.66)", border: "1px solid rgba(var(--line-rgb),.06)", transition: ".3s", animation: "popIn .5s both", cursor: "pointer" }}>
+                            <div
+                              key={item.id}
+                              onClick={() => void openDrawer(item)}
+                              style={{
+                                borderRadius: 17,
+                                padding: 20,
+                                background: "rgba(var(--s1),.66)",
+                                border: "1px solid rgba(var(--line-rgb),.06)",
+                                transition: ".3s",
+                                animation: "popIn .5s both",
+                                cursor: "pointer"
+                              }}
+                            >
                               <div style={{ display: "flex", alignItems: "center", gap: 15 }}>
-                                <div style={{ width: 46, height: 46, borderRadius: "50%", background: `var(${ringColorVar(item)})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 17, color: "var(--accent-contrast)", flexShrink: 0 }}>{initialOf(item)}</div>
+                                <div
+                                  style={{
+                                    width: 46,
+                                    height: 46,
+                                    borderRadius: "50%",
+                                    background: `var(${ringColorVar(item)})`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontFamily: "var(--font-bodoni)",
+                                    fontWeight: 600,
+                                    fontSize: 17,
+                                    color: "var(--accent-contrast)",
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {initialOf(item)}
+                                </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontWeight: 500, fontSize: 16.5, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
-                                  <div style={{ fontFamily: "var(--font-jost)", fontSize: 11.5, color: "var(--text3)", fontWeight: 300 }}>{callCardSlotText(item)}</div>
+                                  <div style={{ fontWeight: 500, fontSize: 16.5, color: "var(--text)" }}>
+                                    {item.firstName?.trim() || `@${item.instagramUsername}`}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontFamily: "var(--font-jost)",
+                                      fontSize: 11.5,
+                                      color: "var(--text3)",
+                                      fontWeight: 300
+                                    }}
+                                  >
+                                    {callCardSlotText(item)}
+                                  </div>
                                 </div>
                                 <span style={pill(item)}>{stateLabel(item.currentState)}</span>
                                 {item.currentState === "CALL_IN_PROGRESS" ? (
-                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--font-jost)", fontSize: 10, color: "#B98BC9" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#B98BC9", animation: "softPulse 1.4s ease-in-out infinite" }} />en directo</span>
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 5,
+                                      fontFamily: "var(--font-jost)",
+                                      fontSize: 10,
+                                      color: "#B98BC9"
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        width: 6,
+                                        height: 6,
+                                        borderRadius: "50%",
+                                        background: "#B98BC9",
+                                        animation: "softPulse 1.4s ease-in-out infinite"
+                                      }}
+                                    />
+                                    en directo
+                                  </span>
                                 ) : null}
                               </div>
-                              <div onClick={(event) => event.stopPropagation()} style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                                <button type="button" onClick={() => void openDrawer(item)} style={{ flex: 1, padding: 11, border: "none", cursor: "pointer", borderRadius: 22, background: "linear-gradient(135deg,#B98BC9,#9A6DB4)", color: "#1c1020", fontFamily: "var(--font-jost)", fontWeight: 600, fontSize: 12.5, letterSpacing: ".03em" }}>☎ Ver / llamar</button>
+                              <div
+                                onClick={(event) => event.stopPropagation()}
+                                style={{ display: "flex", gap: 10, marginTop: 16 }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => void openDrawer(item)}
+                                  style={{
+                                    flex: 1,
+                                    padding: 11,
+                                    border: "none",
+                                    cursor: "pointer",
+                                    borderRadius: 22,
+                                    background: "linear-gradient(135deg,#B98BC9,#9A6DB4)",
+                                    color: "#1c1020",
+                                    fontFamily: "var(--font-jost)",
+                                    fontWeight: 600,
+                                    fontSize: 12.5,
+                                    letterSpacing: ".03em"
+                                  }}
+                                >
+                                  ☎ Ver / llamar
+                                </button>
                               </div>
                             </div>
                           ))}
@@ -2366,51 +2598,208 @@ export default function Home() {
                       )}
 
                       {/* HISTORIAL */}
-                      <div style={{ fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text3)", marginBottom: 15 }}>Historial</div>
+                      <div
+                        style={{
+                          fontFamily: "var(--font-jost)",
+                          fontWeight: 500,
+                          fontSize: 13,
+                          letterSpacing: ".14em",
+                          textTransform: "uppercase",
+                          color: "var(--text3)",
+                          marginBottom: 15
+                        }}
+                      >
+                        Historial
+                      </div>
                       {history.length === 0 ? (
-                        <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300 }}>Sin llamadas registradas todavía.</div>
+                        <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300 }}>
+                          Sin llamadas registradas todavía.
+                        </div>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
                           {history.map((item) => {
-                            const hasDetail = Boolean(item.lastCall?.summary) || (item.lastCall?.transcript?.length ?? 0) > 0 || Boolean(item.lastCallConversationId);
+                            const hasDetail =
+                              Boolean(item.lastCall?.summary) ||
+                              (item.lastCall?.transcript?.length ?? 0) > 0 ||
+                              Boolean(item.lastCallConversationId);
                             return (
-                              <div key={item.id} style={{ padding: "15px 18px", borderRadius: 15, background: "rgba(var(--s2),.55)", border: "1px solid rgba(var(--line-rgb),.05)" }}>
-                                <div onClick={() => void openDrawer(item)} style={{ display: "flex", alignItems: "center", gap: 15, cursor: "pointer" }}>
-                                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: `var(${ringColorVar(item)})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 15, color: "var(--accent-contrast)", flexShrink: 0 }}>{initialOf(item)}</div>
+                              <div
+                                key={item.id}
+                                style={{
+                                  padding: "15px 18px",
+                                  borderRadius: 15,
+                                  background: "rgba(var(--s2),.55)",
+                                  border: "1px solid rgba(var(--line-rgb),.05)"
+                                }}
+                              >
+                                <div
+                                  onClick={() => void openDrawer(item)}
+                                  style={{ display: "flex", alignItems: "center", gap: 15, cursor: "pointer" }}
+                                >
+                                  <div
+                                    style={{
+                                      width: 40,
+                                      height: 40,
+                                      borderRadius: "50%",
+                                      background: `var(${ringColorVar(item)})`,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontFamily: "var(--font-bodoni)",
+                                      fontWeight: 600,
+                                      fontSize: 15,
+                                      color: "var(--accent-contrast)",
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    {initialOf(item)}
+                                  </div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 500, fontSize: 15, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
-                                    <div style={{ fontFamily: "var(--font-jost)", fontSize: 11, color: "var(--text3)", fontWeight: 300 }}>{callCardSlotText(item)} · Reparto {item.lastCall?.negotiatedModelShare != null ? `${item.lastCall.negotiatedModelShare}%` : "—"}</div>
+                                    <div style={{ fontWeight: 500, fontSize: 15, color: "var(--text)" }}>
+                                      {item.firstName?.trim() || `@${item.instagramUsername}`}
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontFamily: "var(--font-jost)",
+                                        fontSize: 11,
+                                        color: "var(--text3)",
+                                        fontWeight: 300
+                                      }}
+                                    >
+                                      {callCardSlotText(item)} · Reparto{" "}
+                                      {item.lastCall?.negotiatedModelShare != null
+                                        ? `${item.lastCall.negotiatedModelShare}%`
+                                        : "—"}
+                                    </div>
                                   </div>
                                   <span style={pill(item)}>{stateLabel(item.currentState)}</span>
                                 </div>
                                 {hasDetail ? (
                                   <>
                                     {item.lastCall?.summary ? (
-                                      <div style={{ marginTop: 14, padding: "13px 15px", borderRadius: 12, background: "rgba(214,178,124,.07)", border: "1px solid rgba(214,178,124,.18)" }}>
-                                        <div style={{ fontFamily: "var(--font-jost)", fontSize: 9.5, letterSpacing: ".16em", textTransform: "uppercase", color: "#D6B27C", marginBottom: 6 }}>Resumen</div>
-                                        <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.5, fontWeight: 300 }}>{item.lastCall.summary}</div>
+                                      <div
+                                        style={{
+                                          marginTop: 14,
+                                          padding: "13px 15px",
+                                          borderRadius: 12,
+                                          background: "rgba(214,178,124,.07)",
+                                          border: "1px solid rgba(214,178,124,.18)"
+                                        }}
+                                      >
+                                        <div
+                                          style={{
+                                            fontFamily: "var(--font-jost)",
+                                            fontSize: 9.5,
+                                            letterSpacing: ".16em",
+                                            textTransform: "uppercase",
+                                            color: "#D6B27C",
+                                            marginBottom: 6
+                                          }}
+                                        >
+                                          Resumen
+                                        </div>
+                                        <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.5, fontWeight: 300 }}>
+                                          {item.lastCall.summary}
+                                        </div>
                                       </div>
                                     ) : null}
                                     {item.lastCallConversationId ? (
-                                      <div style={{ display: "flex", alignItems: "center", gap: 13, marginTop: 11, padding: "10px 14px", borderRadius: 12, background: "rgba(var(--line-rgb),.03)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 13,
+                                          marginTop: 11,
+                                          padding: "10px 14px",
+                                          borderRadius: 12,
+                                          background: "rgba(var(--line-rgb),.03)",
+                                          border: "1px solid rgba(var(--line-rgb),.06)"
+                                        }}
+                                      >
                                         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 3, height: 28 }}>
                                           {Array.from({ length: 22 }).map((_, i) => (
-                                            <span key={i} style={{ flex: 1, height: `${8 + ((i * 7) % 20)}px`, background: "rgba(185,139,201,.5)", borderRadius: 2, transformOrigin: "center", animation: `wave ${1 + (i % 5) * 0.2}s ${(i % 7) * 0.1}s ease-in-out infinite` }} />
+                                            <span
+                                              key={i}
+                                              style={{
+                                                flex: 1,
+                                                height: `${8 + ((i * 7) % 20)}px`,
+                                                background: "rgba(185,139,201,.5)",
+                                                borderRadius: 2,
+                                                transformOrigin: "center",
+                                                animation: `wave ${1 + (i % 5) * 0.2}s ${(i % 7) * 0.1}s ease-in-out infinite`
+                                              }}
+                                            />
                                           ))}
                                         </div>
                                         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                                        <audio controls preload="none" src={`/api/call/${item.lastCallConversationId}/audio`} style={{ height: 30, maxWidth: 200 }} />
-                                        <span style={{ fontFamily: "var(--font-jost)", fontSize: 12, color: "var(--text3)", flexShrink: 0 }}>{fmtDur(item.lastCall?.durationSec)}</span>
+                                        <audio
+                                          controls
+                                          preload="none"
+                                          src={`/api/call/${item.lastCallConversationId}/audio`}
+                                          style={{ height: 30, maxWidth: 200 }}
+                                        />
+                                        <span
+                                          style={{
+                                            fontFamily: "var(--font-jost)",
+                                            fontSize: 12,
+                                            color: "var(--text3)",
+                                            flexShrink: 0
+                                          }}
+                                        >
+                                          {fmtDur(item.lastCall?.durationSec)}
+                                        </span>
                                       </div>
                                     ) : null}
                                     {(item.lastCall?.transcript?.length ?? 0) > 0 ? (
                                       <details style={{ marginTop: 11 }}>
-                                        <summary style={{ cursor: "pointer", color: "#B98BC9", fontFamily: "var(--font-jost)", fontSize: 12.5, fontWeight: 500 }}>Ver transcripción</summary>
-                                        <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px", borderRadius: 12, background: "rgba(var(--s3),.5)", border: "1px solid rgba(var(--line-rgb),.05)" }}>
+                                        <summary
+                                          style={{
+                                            cursor: "pointer",
+                                            color: "#B98BC9",
+                                            fontFamily: "var(--font-jost)",
+                                            fontSize: 12.5,
+                                            fontWeight: 500
+                                          }}
+                                        >
+                                          Ver transcripción
+                                        </summary>
+                                        <div
+                                          style={{
+                                            marginTop: 9,
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: 10,
+                                            padding: "14px 16px",
+                                            borderRadius: 12,
+                                            background: "rgba(var(--s3),.5)",
+                                            border: "1px solid rgba(var(--line-rgb),.05)"
+                                          }}
+                                        >
                                           {(item.lastCall?.transcript ?? []).map((turn, ti) => (
                                             <div key={ti}>
-                                              <span style={{ fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 11, color: turn.role === "agent" ? "var(--accent)" : "#B98BC9", textTransform: "uppercase", letterSpacing: ".08em" }}>{turn.role === "agent" ? "Rose" : "Candidata"}</span>
-                                              <div style={{ fontSize: 13.5, color: "var(--text2)", fontWeight: 300, marginTop: 2, lineHeight: 1.45 }}>{turn.content}</div>
+                                              <span
+                                                style={{
+                                                  fontFamily: "var(--font-jost)",
+                                                  fontWeight: 500,
+                                                  fontSize: 11,
+                                                  color: turn.role === "agent" ? "var(--accent)" : "#B98BC9",
+                                                  textTransform: "uppercase",
+                                                  letterSpacing: ".08em"
+                                                }}
+                                              >
+                                                {turn.role === "agent" ? "Rose" : "Candidata"}
+                                              </span>
+                                              <div
+                                                style={{
+                                                  fontSize: 13.5,
+                                                  color: "var(--text2)",
+                                                  fontWeight: 300,
+                                                  marginTop: 2,
+                                                  lineHeight: 1.45
+                                                }}
+                                              >
+                                                {turn.content}
+                                              </div>
                                             </div>
                                           ))}
                                         </div>
@@ -2442,8 +2831,8 @@ export default function Home() {
               <strong>tu mensaje se envía a su Instagram</strong> y el bot se pausa (tomas el control).
             </p>
           </header>
-          <div className="chat2-grid">
-            <div className="chat2-panel chat2-left">
+          <div className="chat2-grid" data-m="msg" data-msgview={msgView}>
+            <div className="chat2-panel chat2-left" data-pane="list">
               <div className="chat2-left-title">Candidatas</div>
               <div style={{ display: "flex", gap: 4, padding: "4px 8px 8px" }}>
                 {(["instagram", "whatsapp"] as const).map((ch) => (
@@ -2499,7 +2888,10 @@ export default function Home() {
                         type="button"
                         className="chat2-cand"
                         data-selected={selectedCandidate?.id === candidate.id}
-                        onClick={() => void loadChatCandidate(candidate)}
+                        onClick={() => {
+                          setMsgView("chat");
+                          void loadChatCandidate(candidate);
+                        }}
                       >
                         <span className="chat2-cand-avatar" style={{ background: `var(${ringColorVar(candidate)})` }}>
                           {candProfile?.profilePicUrl ? (
@@ -2527,8 +2919,31 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="chat2-panel">
+            <div className="chat2-panel" data-pane="chat">
               <div className="chat2-center-head">
+                <button
+                  type="button"
+                  data-m="msgback"
+                  aria-label="Volver a la lista"
+                  onClick={() => setMsgView("list")}
+                  style={{
+                    display: "none",
+                    width: 36,
+                    height: 36,
+                    flexShrink: 0,
+                    marginRight: 4,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid rgba(var(--line-rgb),.12)",
+                    background: "rgba(var(--line-rgb),.04)",
+                    borderRadius: "50%",
+                    color: "var(--text2)",
+                    cursor: "pointer",
+                    fontSize: 19
+                  }}
+                >
+                  ‹
+                </button>
                 <div className="chat2-center-peer">
                   <span
                     className="chat2-peer-avatar"
@@ -2630,7 +3045,7 @@ export default function Home() {
               </form>
             </div>
 
-            <div className="chat2-panel">
+            <div className="chat2-panel" data-pane="chat">
               <div className="chat2-review-head">
                 <span className="chat2-review-title">Revisión de Alex</span>
                 {currentCandidate ? (
@@ -3133,7 +3548,39 @@ export default function Home() {
                     ) : null}
                   </div>
                   <div
+                    data-m="crmfilter"
+                    style={{ display: "none", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}
+                  >
+                    {CRM_COLUMNS.map((phase) => {
+                      const on = crmMobileFilter === phase.id;
+                      return (
+                        <button
+                          key={phase.id}
+                          type="button"
+                          onClick={() => setCrmMobileFilter(phase.id)}
+                          style={{
+                            flexShrink: 0,
+                            padding: "8px 14px",
+                            borderRadius: 22,
+                            cursor: "pointer",
+                            fontFamily: "var(--font-jost)",
+                            fontWeight: 500,
+                            fontSize: 12.5,
+                            whiteSpace: "nowrap",
+                            border: `1px solid ${on ? `var(${phase.colorVar})` : "rgba(var(--line-rgb),.12)"}`,
+                            background: on ? `color-mix(in srgb, var(${phase.colorVar}) 16%, transparent)` : "transparent",
+                            color: on ? `var(${phase.colorVar})` : "var(--text3)",
+                            transition: ".2s"
+                          }}
+                        >
+                          {phase.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div
                     data-m="board5"
+                    data-filter={crmMobileFilter}
                     style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 16, alignItems: "start" }}
                   >
                     {CRM_COLUMNS.map((phase) => {
@@ -3141,7 +3588,7 @@ export default function Home() {
                         .filter((item) => crmColumnOf(item.currentState) === phase.id)
                         .sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt));
                       return (
-                        <div key={phase.id} style={{ minWidth: 0 }}>
+                        <div key={phase.id} data-stage={phase.id} style={{ minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 4px 14px" }}>
                             <span style={{ width: 8, height: 8, borderRadius: "50%", background: `var(${phase.colorVar})` }} />
                             <span
@@ -3723,377 +4170,965 @@ export default function Home() {
         </div>
       ) : null}
 
-      {drawerCandidate ? (
-        <div className="drawer-scrim" role="presentation" onClick={closeDrawer}>
-          <aside
-            className="drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Ficha de candidata"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="drawer-header">
-              <div className="drawer-id">
-                <span className="drawer-avatar">
-                  {(drawerCandidate.firstName?.trim() || drawerCandidate.instagramUsername || "?").charAt(0).toUpperCase()}
-                </span>
-                <div>
-                  <h3 className="drawer-name">{drawerCandidate.firstName?.trim() || `@${drawerCandidate.instagramUsername}`}</h3>
-                  <span className="drawer-state-pill">{stateLabel(drawerCandidate.currentState)}</span>
-                  {drawerCandidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
-                    <span className="drawer-reviewed">✓ Revisado por ti</span>
-                  ) : null}
-                </div>
-              </div>
-              <button type="button" className="drawer-close" aria-label="Cerrar ficha" onClick={closeDrawer}>
-                ✕
-              </button>
-            </header>
-
-            <nav className="drawer-tabs">
-              <button
-                type="button"
-                className={drawerTab === "conversacion" ? "drawer-tab active" : "drawer-tab"}
-                onClick={() => setDrawerTab("conversacion")}
-              >
-                Conversación
-              </button>
-              <button
-                type="button"
-                className={drawerTab === "ficha" ? "drawer-tab active" : "drawer-tab"}
-                onClick={() => setDrawerTab("ficha")}
-              >
-                Ficha
-              </button>
-              <button
-                type="button"
-                className={drawerTab === "llamada" ? "drawer-tab active" : "drawer-tab"}
-                onClick={() => setDrawerTab("llamada")}
-              >
-                Llamada
-              </button>
-            </nav>
-
-            <div className="drawer-body">
-              {drawerTab === "conversacion" ? (
-                drawerLoading ? (
-                  <p className="muted">Cargando conversación…</p>
-                ) : drawerMessages.length === 0 ? (
-                  <p className="muted">Sin mensajes todavía.</p>
-                ) : (
-                  <div className="drawer-conversation">
-                    {drawerMessages.map((item) => (
-                      <div className={`message ${item.role}`} key={item.id}>
-                        {item.content}
-                      </div>
-                    ))}
-                  </div>
-                )
-              ) : null}
-
-              {drawerTab === "ficha" ? (
-                <div className="drawer-ficha">
-                  <div className="drawer-fields">
-                    {buildCandidatePanelRows(drawerCandidate).map(([label, value]) => (
-                      <div className="drawer-field" key={label}>
-                        <span className="drawer-field-label">{label}</span>
-                        <span className="drawer-field-value">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {drawerCandidate.objections && drawerCandidate.objections.length > 0 ? (
-                    <div className="drawer-block">
-                      <span className="drawer-field-label">Objeciones</span>
-                      <div className="drawer-chips">
-                        {drawerCandidate.objections.map((objection, index) => (
-                          <span className="drawer-chip danger" key={index}>
-                            {objection}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {drawerCandidate.conversationSummary ? (
-                    <div className="drawer-block">
-                      <span className="drawer-field-label">📝 Resumen</span>
-                      <p className="drawer-text">{drawerCandidate.conversationSummary}</p>
-                    </div>
-                  ) : null}
-                  {drawerCandidate.notes && drawerCandidate.notes.length > 0 ? (
-                    <div className="drawer-block">
-                      <span className="drawer-field-label">Notas</span>
-                      {drawerCandidate.notes.map((note, index) => (
-                        <p className="drawer-text" key={index}>
-                          {note}
-                        </p>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {drawerTab === "llamada" ? (
-                <div className="drawer-call">
-                  <p className="drawer-text muted">
-                    Llamada con <strong>{drawerCandidate.firstName?.trim() || `@${drawerCandidate.instagramUsername}`}</strong>
-                    {drawerCandidate.firstName?.trim() ? ` · @${drawerCandidate.instagramUsername}` : ""}
-                  </p>
-                  {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
-                    <button
-                      type="button"
-                      className="btn-xs accent drawer-call-btn"
-                      onClick={() => startCall(drawerCandidate)}
-                      title="Lanza la llamada por teléfono (ElevenLabs marca a su número y conecta el bot)"
-                    >
-                      📞 Llamar
-                    </button>
-                  ) : null}
-                  {drawerCandidate.lastCallConversationId ? (
-                    <CallRecordingAudio
-                      key={drawerCandidate.lastCallConversationId}
-                      conversationId={drawerCandidate.lastCallConversationId}
-                    />
-                  ) : drawerCandidate.lastCall?.result === "COMPLETED" ? (
-                    <div className="drawer-block">
-                      <span className="drawer-field-label">Grabación de la llamada</span>
-                      <p className="drawer-text muted">
-                        🎧 La grabación de audio aparece aquí en las llamadas reales (con el guardado de audio activado en
-                        ElevenLabs).
-                      </p>
-                    </div>
-                  ) : null}
-                  {drawerCandidate.lastCall ? (
-                    <>
-                      <div className="call-stats">
-                        <div className="call-stat">
-                          <span className="drawer-field-label">Resultado</span>
-                          <span className={drawerCandidate.lastCall.result === "COMPLETED" ? "call-result ok" : "call-result no"}>
-                            {drawerCandidate.lastCall.result === "COMPLETED" ? "Completada" : "No contestó"}
-                          </span>
-                        </div>
-                        <div className="call-stat">
-                          <span className="drawer-field-label">Duración</span>
-                          <strong>
-                            {drawerCandidate.lastCall.durationSec != null
-                              ? `${Math.floor(drawerCandidate.lastCall.durationSec / 60)}m ${
-                                  drawerCandidate.lastCall.durationSec % 60
-                                }s`
-                              : "—"}
-                          </strong>
-                        </div>
-                        <div className="call-stat">
-                          <span className="drawer-field-label">Reparto acordado</span>
-                          <strong>
-                            {drawerCandidate.lastCall.negotiatedModelShare != null
-                              ? `${drawerCandidate.lastCall.negotiatedModelShare}% / ${
-                                  100 - drawerCandidate.lastCall.negotiatedModelShare
-                                }%`
-                              : "—"}
-                          </strong>
-                        </div>
-                      </div>
-                      {drawerCandidate.lastCall.summary ? (
-                        <div className="drawer-block">
-                          <span className="drawer-field-label">Resumen de la llamada</span>
-                          <p className="drawer-text">{drawerCandidate.lastCall.summary}</p>
-                        </div>
-                      ) : null}
-                      {drawerCandidate.lastCall.transcript.length > 0 ? (
-                        <div className="drawer-block">
-                          <span className="drawer-field-label">Transcripción</span>
-                          <div className="drawer-conversation">
-                            {drawerCandidate.lastCall.transcript.map((turn, index) => (
-                              <div className={`message ${turn.role}`} key={index}>
-                                {turn.content}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      {drawerCandidate.lastCall.endedAt ? (
-                        <p className="drawer-text muted">
-                          Terminó: {new Date(drawerCandidate.lastCall.endedAt).toLocaleString("es-ES")}
-                        </p>
-                      ) : null}
-                    </>
-                  ) : drawerCandidate.scheduledCallSlot ? (
-                    <p className="drawer-text">
-                      📞 Llamada agendada: <strong>{drawerCandidate.scheduledCallSlot}</strong>
-                    </p>
-                  ) : (
-                    <p className="muted">Aún no hay llamada. Aprueba a la candidata y agéndala desde el CRM.</p>
-                  )}
-                </div>
-              ) : null}
-            </div>
-
-            <footer className="drawer-footer">
-              {/* Porque de la revision (que Alex sepa que mirar sin abrir el chat): especial para el movil. */}
-              {(drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
-                drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED") &&
-              drawerCandidate.humanReviewReason ? (
-                <p className="drawer-text">
-                  {drawerCandidate.humanReviewReason === "DEVICE_QUALITY_REVIEW"
-                    ? `📱 Tiene un ${drawerCandidate.deviceModel ?? "móvil"} — revisa la calidad y aprueba o no.`
-                    : `Motivo: ${REVIEW_REASON_LABELS[drawerCandidate.humanReviewReason] ?? drawerCandidate.humanReviewReason}`}
-                </p>
-              ) : null}
-              {/* Aviso explicito del doble gate: con el perfil ya aprobado pero el movil pendiente de calidad,
-                  la llamada NO se agenda y la candidata queda "muda" en revision. Sin este aviso parecia que
-                  "no pasaba nada" al aprobar el perfil (caso movil generico, Alex 23-jun). */}
-              {drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" &&
-              drawerCandidate.humanFitDecision === "APPROVED" &&
-              drawerCandidate.deviceEligibility === "PENDING_QUALITY_TEST" ? (
-                <p className="drawer-text" style={{ color: "#b8860b", fontWeight: 600 }}>
-                  ⚠️ Perfil aprobado, pero la llamada NO se agenda hasta que apruebes la calidad del móvil aquí abajo (📱 Móvil
-                  OK).
-                </p>
-              ) : null}
-              <div className="drawer-actions">
-                {/* Encaja/Rechazar en CUALQUIER fase activa (asi Alex revisa perfiles cuando quiere). */}
-                {drawerCandidate.currentState === "PROFILE_READY_FOR_REVIEW" ? (
-                  <>
-                    <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "PROFILE_FIT")}>
-                      👍 Encaja
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-xs danger"
-                      onClick={() => advanceStage(drawerCandidate, "PROFILE_NO_FIT")}
-                    >
-                      Rechazar
-                    </button>
-                  </>
-                ) : drawerCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
-                  drawerCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
-                  <>
-                    {/* Decision 1: ¿encaja el perfil? Si ya esta aprobado, normalmente se muestra el sello.
-                        EXCEPCION (anti dead-end): si el perfil esta aprobado Y el movil ya esta resuelto (no
-                        pendiente ni rechazado) pero la candidata SIGUE en revision (p.ej. iPhone <13 que paso
-                        por HIR: "Movil OK" no reanuda desde HIR por invariante 4), el avance a la llamada no se
-                        disparo. Se ofrece un boton EXPLICITO para que Alex reanude conscientemente (re-aprobar
-                        ES la salida humana designada de HIR; no debilita invariante 4). Sin esto, quedaba
-                        congelada con ambas aprobaciones hechas y ningun boton que la rescatara. */}
-                    {drawerCandidate.humanFitDecision === "APPROVED" ? (
-                      drawerCandidate.deviceEligibility !== "PENDING_QUALITY_TEST" &&
-                      drawerCandidate.deviceEligibility !== "NOT_ELIGIBLE" ? (
-                        <button
-                          type="button"
-                          className="btn-xs accent"
-                          onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
-                        >
-                          ▶️ Reanudar (proponer llamada)
-                        </button>
-                      ) : (
-                        <span className="crm2-ok-chip">✓ Perfil aprobado</span>
-                      )
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn-xs accent"
-                        onClick={() => void applyHumanDecision(drawerCandidate, "APPROVE")}
-                      >
-                        👍 Aprobar perfil
-                      </button>
-                    )}
-                    {/* Decision 2 SEPARADA: ¿el movil vale? Solo si esta pendiente de revision de calidad.
-                        El bot no agenda hasta que AMBAS (perfil + movil) esten aprobadas (Alex 22-jun). */}
-                    {drawerCandidate.deviceEligibility === "PENDING_QUALITY_TEST" ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn-xs accent"
-                          onClick={() => advanceStage(drawerCandidate, "DEVICE_APPROVE")}
-                        >
-                          📱 Móvil OK
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-xs danger"
-                          onClick={() => advanceStage(drawerCandidate, "DEVICE_REJECT")}
-                        >
-                          📱 Móvil no vale
-                        </button>
-                      </>
-                    ) : null}
-                    <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
-                      Rechazar
-                    </button>
-                  </>
-                ) : drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
-                  <>
-                    {drawerCandidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
-                      <span className="crm2-ok-chip">✓ Revisado y OK</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn-xs accent"
-                        onClick={() => void advanceStage(drawerCandidate, "PROFILE_OK")}
-                      >
-                        👍 Encaja
-                      </button>
-                    )}
-                    <button type="button" className="btn-xs danger" onClick={() => advanceStage(drawerCandidate, "REJECT")}>
-                      Rechazar
-                    </button>
-                  </>
-                ) : null}
-                {drawerCandidate.currentState === "COLLECTING_CALL_DETAILS" ||
-                drawerCandidate.currentState === "READY_TO_SCHEDULE" ? (
-                  <button type="button" className="btn-xs accent" onClick={() => advanceStage(drawerCandidate, "CONFIRM_CALL")}>
-                    Confirmar llamada
-                  </button>
-                ) : null}
-                {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
-                  <button
-                    type="button"
-                    className="btn-xs"
-                    onClick={() =>
-                      setBotPaused(drawerCandidate, !(drawerCandidate.manualControlActive || drawerCandidate.automationPaused))
-                    }
-                  >
-                    {drawerCandidate.manualControlActive || drawerCandidate.automationPaused ? "Reactivar bot" : "Pausar bot"}
-                  </button>
-                ) : null}
-                {/* Borrar la candidata y su historial: disponible en CUALQUIER estado (incluidos REJECTED/
-                    CLOSED), que es justo cuando se quiere reciclar la prueba E2E desde cero. */}
+      {drawerCandidate
+        ? (() => {
+            const dc = drawerCandidate;
+            const initial = (dc.firstName?.trim() || dc.instagramUsername || "?").charAt(0).toUpperCase();
+            const displayName = dc.firstName?.trim() || `@${dc.instagramUsername}`;
+            const reviewed = dc.humanProfileReviewStatus === "POTENTIAL_FIT";
+            const closed = dc.currentState === "REJECTED" || dc.currentState === "CLOSED";
+            const callsCount = dc.lastCall || dc.lastCallConversationId || dc.scheduledCallSlot ? 1 : 0;
+            const ringVar = ringColorVar(dc);
+            const stVar = stateColorVar(dc.currentState);
+            const dBtnBase: React.CSSProperties = {
+              padding: "11px 18px",
+              borderRadius: 22,
+              cursor: "pointer",
+              fontFamily: "var(--font-jost)",
+              fontWeight: 600,
+              fontSize: 13,
+              letterSpacing: ".02em",
+              transition: ".2s",
+              border: "1px solid transparent"
+            };
+            const dBtnGreen: React.CSSProperties = {
+              ...dBtnBase,
+              background: "rgba(143,185,159,.12)",
+              borderColor: "rgba(143,185,159,.4)",
+              color: "#8FB99F"
+            };
+            const dBtnRed: React.CSSProperties = {
+              ...dBtnBase,
+              background: "rgba(208,106,106,.1)",
+              borderColor: "rgba(208,106,106,.38)",
+              color: "#D06A6A"
+            };
+            const dBtnGray: React.CSSProperties = {
+              ...dBtnBase,
+              background: "rgba(169,180,196,.12)",
+              borderColor: "rgba(169,180,196,.4)",
+              color: "var(--text2)"
+            };
+            const dBtnViolet: React.CSSProperties = {
+              ...dBtnBase,
+              background: "rgba(185,139,201,.1)",
+              borderColor: "rgba(185,139,201,.4)",
+              color: "#B98BC9"
+            };
+            const dChipOk: React.CSSProperties = {
+              padding: "9px 14px",
+              borderRadius: 22,
+              background: "rgba(143,185,159,.14)",
+              color: "#8FB99F",
+              fontFamily: "var(--font-jost)",
+              fontWeight: 700,
+              fontSize: 12.5,
+              display: "inline-flex",
+              alignItems: "center"
+            };
+            const subTab = (key: "ficha" | "conversacion" | "llamada", label: string, badge?: number) => {
+              const on = drawerTab === key;
+              return (
                 <button
                   type="button"
-                  className="btn-xs danger"
-                  title="Borra esta candidata y todo su historial para repetir la prueba desde cero"
-                  onClick={() => deleteCandidate(drawerCandidate)}
+                  onClick={() => setDrawerTab(key)}
+                  style={{
+                    position: "relative",
+                    padding: "12px 18px",
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-jost)",
+                    fontWeight: 500,
+                    fontSize: 13,
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    color: on ? "var(--text)" : "var(--text3)",
+                    transition: ".2s",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7
+                  }}
                 >
-                  🗑️ Borrar / empezar de cero
-                </button>
-              </div>
-              {drawerCandidate.currentState !== "REJECTED" && drawerCandidate.currentState !== "CLOSED" ? (
-                <div className="drawer-reply">
-                  <textarea
-                    className="drawer-reply-input"
-                    value={drawerReply}
-                    onChange={(event) => setDrawerReply(event.target.value)}
-                    placeholder="Escribe una respuesta… (se envía a Instagram cuando esté conectado)"
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        void sendDrawerReply();
-                      }
+                  {label}
+                  {badge ? (
+                    <span
+                      style={{
+                        minWidth: 17,
+                        height: 17,
+                        padding: "0 5px",
+                        borderRadius: 9,
+                        background: "rgba(185,139,201,.2)",
+                        color: "#B98BC9",
+                        fontFamily: "var(--font-jost)",
+                        fontWeight: 600,
+                        fontSize: 10,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      {badge}
+                    </span>
+                  ) : null}
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 14,
+                      right: badge ? 34 : 14,
+                      bottom: -1,
+                      height: 2,
+                      background: "var(--accent)",
+                      opacity: on ? 1 : 0,
+                      transition: ".2s"
                     }}
                   />
-                  <button
-                    type="button"
-                    className="drawer-send"
-                    disabled={loading || !drawerReply.trim()}
-                    onClick={() => void sendDrawerReply()}
-                  >
-                    {loading ? "Enviando…" : "Enviar ➤"}
-                  </button>
-                </div>
-              ) : null}
-            </footer>
-          </aside>
-        </div>
-      ) : null}
+                </button>
+              );
+            };
+            return (
+              <div className="drawer-scrim" role="presentation" onClick={closeDrawer}>
+                <aside
+                  className="drawer"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Ficha de candidata"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {/* CABECERA + subpestañas (fijas) */}
+                  <div style={{ padding: "26px 28px 0", flexShrink: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
+                        <div
+                          style={{
+                            width: 66,
+                            height: 66,
+                            borderRadius: "50%",
+                            background: `var(${ringVar})`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontFamily: "var(--font-bodoni)",
+                            fontWeight: 600,
+                            fontSize: 25,
+                            color: "var(--accent-contrast)",
+                            boxShadow: "0 8px 26px rgba(0,0,0,.4)",
+                            flexShrink: 0,
+                            overflow: "hidden"
+                          }}
+                        >
+                          {(() => {
+                            const profile = igProfiles[dc.instagramUsername ?? ""];
+                            const picUrl = profile?.profilePicUrl;
+                            return picUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={picUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              initial
+                            );
+                          })()}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontFamily: "var(--font-bodoni)",
+                              fontWeight: 600,
+                              fontSize: 25,
+                              lineHeight: 1.1,
+                              color: "var(--text)"
+                            }}
+                          >
+                            {displayName}
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: "var(--font-jost)",
+                              fontSize: 12.5,
+                              color: "var(--text3)",
+                              marginTop: 3,
+                              fontWeight: 300
+                            }}
+                          >
+                            @{dc.instagramUsername}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 9, flexWrap: "wrap" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "4px 11px",
+                                borderRadius: 20,
+                                background: `color-mix(in srgb, var(${stVar}) 16%, transparent)`
+                              }}
+                            >
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: `var(${stVar})` }} />
+                              <span
+                                style={{
+                                  fontFamily: "var(--font-jost)",
+                                  fontSize: 10,
+                                  color: `var(${stVar})`,
+                                  letterSpacing: ".04em",
+                                  textTransform: "uppercase"
+                                }}
+                              >
+                                {stateLabel(dc.currentState)}
+                              </span>
+                            </span>
+                            {reviewed ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  padding: "4px 11px",
+                                  borderRadius: 20,
+                                  background: "rgba(143,185,159,.14)",
+                                  color: "#8FB99F",
+                                  fontFamily: "var(--font-jost)",
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  letterSpacing: ".04em",
+                                  textTransform: "uppercase"
+                                }}
+                              >
+                                ✓ Revisado
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Cerrar ficha"
+                        onClick={closeDrawer}
+                        style={{
+                          width: 34,
+                          height: 34,
+                          border: "1px solid rgba(var(--line-rgb),.1)",
+                          background: "rgba(var(--line-rgb),.04)",
+                          borderRadius: "50%",
+                          color: "var(--text3)",
+                          cursor: "pointer",
+                          fontSize: 15,
+                          transition: ".2s",
+                          flexShrink: 0
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 2, borderBottom: "1px solid rgba(var(--line-rgb),.07)" }}>
+                      {subTab("ficha", "Ficha")}
+                      {subTab("conversacion", "Chat")}
+                      {subTab("llamada", "Llamadas", callsCount || undefined)}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+                    {/* ===================== FICHA TAB ===================== */}
+                    {drawerTab === "ficha" ? (
+                      <div
+                        style={{
+                          flex: 1,
+                          overflowY: "auto",
+                          overflowX: "hidden",
+                          padding: "22px 28px 28px",
+                          animation: "tabIn .34s ease both"
+                        }}
+                      >
+                        {/* Campos extraidos (todos, en tarjetas al estilo maqueta — no perdemos datos). */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginBottom: 18 }}>
+                          {buildCandidatePanelRows(dc).map(([label, value]) => (
+                            <div
+                              key={label}
+                              style={{
+                                padding: 15,
+                                borderRadius: 14,
+                                background: "rgba(var(--line-rgb),.03)",
+                                border: "1px solid rgba(var(--line-rgb),.06)",
+                                minWidth: 0
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontFamily: "var(--font-jost)",
+                                  fontSize: 9.5,
+                                  color: "var(--text3)",
+                                  letterSpacing: ".14em",
+                                  textTransform: "uppercase"
+                                }}
+                              >
+                                {label}
+                              </div>
+                              <div
+                                style={{
+                                  fontWeight: 400,
+                                  fontSize: 15,
+                                  marginTop: 5,
+                                  color: "var(--text)",
+                                  wordBreak: "break-word"
+                                }}
+                              >
+                                {value}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Objeciones / resumen / notas: se conservan. */}
+                        {dc.objections && dc.objections.length > 0 ? (
+                          <div style={{ marginBottom: 18 }}>
+                            <div
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontSize: 10,
+                                letterSpacing: ".16em",
+                                color: "var(--text3)",
+                                textTransform: "uppercase",
+                                marginBottom: 9
+                              }}
+                            >
+                              Objeciones
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {dc.objections.map((objection, index) => (
+                                <span
+                                  key={index}
+                                  style={{
+                                    fontSize: 12,
+                                    padding: "4px 11px",
+                                    borderRadius: 20,
+                                    background: "rgba(208,106,106,.1)",
+                                    border: "1px solid rgba(208,106,106,.3)",
+                                    color: "#D06A6A"
+                                  }}
+                                >
+                                  {objection}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {dc.conversationSummary ? (
+                          <div
+                            style={{
+                              marginBottom: 18,
+                              padding: "14px 16px",
+                              borderRadius: 14,
+                              background: "rgba(214,178,124,.07)",
+                              border: "1px solid rgba(214,178,124,.18)"
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontSize: 9.5,
+                                letterSpacing: ".16em",
+                                textTransform: "uppercase",
+                                color: "#D6B27C",
+                                marginBottom: 6
+                              }}
+                            >
+                              📝 Resumen
+                            </div>
+                            <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.5, fontWeight: 300 }}>
+                              {dc.conversationSummary}
+                            </div>
+                          </div>
+                        ) : null}
+                        {dc.notes && dc.notes.length > 0 ? (
+                          <div style={{ marginBottom: 18 }}>
+                            <div
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontSize: 10,
+                                letterSpacing: ".16em",
+                                color: "var(--text3)",
+                                textTransform: "uppercase",
+                                marginBottom: 9
+                              }}
+                            >
+                              Notas
+                            </div>
+                            {dc.notes.map((note, index) => (
+                              <p
+                                key={index}
+                                style={{
+                                  margin: "0 0 6px",
+                                  fontSize: 13.5,
+                                  color: "var(--text2)",
+                                  lineHeight: 1.5,
+                                  fontWeight: 300
+                                }}
+                              >
+                                {note}
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {/* Motivo de revision (para el movil especialmente). */}
+                        {(dc.currentState === "WAITING_HUMAN_REVIEW" || dc.currentState === "HUMAN_INTERVENTION_REQUIRED") &&
+                        dc.humanReviewReason ? (
+                          <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--text2)", lineHeight: 1.5 }}>
+                            {dc.humanReviewReason === "DEVICE_QUALITY_REVIEW"
+                              ? `📱 Tiene un ${dc.deviceModel ?? "móvil"} — revisa la calidad y aprueba o no.`
+                              : `Motivo: ${REVIEW_REASON_LABELS[dc.humanReviewReason] ?? dc.humanReviewReason}`}
+                          </p>
+                        ) : null}
+                        {/* Aviso del doble gate (perfil aprobado + movil pendiente). */}
+                        {dc.currentState === "WAITING_HUMAN_REVIEW" &&
+                        dc.humanFitDecision === "APPROVED" &&
+                        dc.deviceEligibility === "PENDING_QUALITY_TEST" ? (
+                          <p style={{ margin: "0 0 12px", fontSize: 13, color: "#D6B27C", fontWeight: 600, lineHeight: 1.5 }}>
+                            ⚠️ Perfil aprobado, pero la llamada NO se agenda hasta que apruebes la calidad del móvil aquí abajo
+                            (📱 Móvil OK).
+                          </p>
+                        ) : null}
+
+                        {/* ===== ACCIONES DE DECISION (misma logica que el CRM, invariante 4) ===== */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginBottom: 14 }}>
+                          {dc.currentState === "PROFILE_READY_FOR_REVIEW" ? (
+                            <>
+                              <button type="button" style={dBtnGreen} onClick={() => advanceStage(dc, "PROFILE_FIT")}>
+                                ✓ Encaja
+                              </button>
+                              <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "PROFILE_NO_FIT")}>
+                                ✕ Rechazar
+                              </button>
+                            </>
+                          ) : dc.currentState === "WAITING_HUMAN_REVIEW" || dc.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
+                            <>
+                              {dc.humanFitDecision === "APPROVED" ? (
+                                dc.deviceEligibility !== "PENDING_QUALITY_TEST" && dc.deviceEligibility !== "NOT_ELIGIBLE" ? (
+                                  <button type="button" style={dBtnGreen} onClick={() => void applyHumanDecision(dc, "APPROVE")}>
+                                    ▶️ Reanudar (proponer llamada)
+                                  </button>
+                                ) : (
+                                  <span style={dChipOk}>✓ Perfil aprobado</span>
+                                )
+                              ) : (
+                                <button type="button" style={dBtnGreen} onClick={() => void applyHumanDecision(dc, "APPROVE")}>
+                                  👍 Aprobar perfil
+                                </button>
+                              )}
+                              {dc.deviceEligibility === "PENDING_QUALITY_TEST" ? (
+                                <>
+                                  <button type="button" style={dBtnGray} onClick={() => advanceStage(dc, "DEVICE_APPROVE")}>
+                                    📱 Móvil OK
+                                  </button>
+                                  <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "DEVICE_REJECT")}>
+                                    📱 Móvil no vale
+                                  </button>
+                                </>
+                              ) : null}
+                              <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "REJECT")}>
+                                ✕ Rechazar
+                              </button>
+                            </>
+                          ) : !closed ? (
+                            <>
+                              {dc.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
+                                <span style={dChipOk}>✓ Revisado y OK</span>
+                              ) : (
+                                <button type="button" style={dBtnGreen} onClick={() => void advanceStage(dc, "PROFILE_OK")}>
+                                  👍 Encaja
+                                </button>
+                              )}
+                              <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "REJECT")}>
+                                ✕ Rechazar
+                              </button>
+                            </>
+                          ) : null}
+                          {dc.currentState === "COLLECTING_CALL_DETAILS" || dc.currentState === "READY_TO_SCHEDULE" ? (
+                            <button type="button" style={dBtnViolet} onClick={() => advanceStage(dc, "CONFIRM_CALL")}>
+                              Confirmar llamada
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {/* ===== Automatizacion de Rose (pausa/reanuda el bot) ===== */}
+                        {!closed ? (
+                          <div
+                            style={{
+                              padding: "14px 16px",
+                              borderRadius: 14,
+                              background: "rgba(var(--line-rgb),.03)",
+                              border: "1px solid rgba(var(--line-rgb),.06)",
+                              marginBottom: 12,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 12
+                            }}
+                          >
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{ fontFamily: "var(--font-jost)", fontSize: 13.5, color: "var(--text)", fontWeight: 400 }}
+                              >
+                                Automatización de Rose
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: "var(--font-jost)",
+                                  fontSize: 11,
+                                  color: "var(--text3)",
+                                  fontWeight: 300,
+                                  marginTop: 2
+                                }}
+                              >
+                                {dc.manualControlActive || dc.automationPaused
+                                  ? "En pausa — respondes tú"
+                                  : "Activa — Rose responde sola"}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setBotPaused(dc, !(dc.manualControlActive || dc.automationPaused))}
+                              style={{
+                                padding: "10px 16px",
+                                borderRadius: 22,
+                                cursor: "pointer",
+                                fontFamily: "var(--font-jost)",
+                                fontWeight: 600,
+                                fontSize: 12.5,
+                                background: "rgba(var(--line-rgb),.04)",
+                                border: "1px solid rgba(var(--line-rgb),.12)",
+                                color: "var(--text2)",
+                                transition: ".2s",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              {dc.manualControlActive || dc.automationPaused ? "Reactivar bot" : "Pausar bot"}
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {/* ===== Ver chat / Agendar llamada ===== */}
+                        <div style={{ display: "flex", gap: 11, marginBottom: 11 }}>
+                          <button
+                            type="button"
+                            onClick={() => setDrawerTab("conversacion")}
+                            style={{
+                              flex: 1,
+                              padding: 14,
+                              border: "none",
+                              cursor: "pointer",
+                              borderRadius: 24,
+                              background: "linear-gradient(135deg,var(--accent),var(--accent2))",
+                              color: "var(--accent-contrast)",
+                              fontFamily: "var(--font-jost)",
+                              fontWeight: 600,
+                              fontSize: 13.5,
+                              letterSpacing: ".02em",
+                              boxShadow: "0 6px 18px rgba(200,90,120,.32)",
+                              transition: ".25s"
+                            }}
+                          >
+                            ✉ Ver chat
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDrawerTab("llamada")}
+                            style={{
+                              flex: 1,
+                              padding: 14,
+                              border: "1px solid rgba(185,139,201,.4)",
+                              cursor: "pointer",
+                              borderRadius: 24,
+                              background: "rgba(185,139,201,.1)",
+                              color: "#B98BC9",
+                              fontFamily: "var(--font-jost)",
+                              fontWeight: 600,
+                              fontSize: 13.5,
+                              letterSpacing: ".02em",
+                              transition: ".2s"
+                            }}
+                          >
+                            ☎ Ver llamadas
+                          </button>
+                        </div>
+
+                        {/* ===== Eliminar candidata (con modal de confirmacion via deleteCandidate) ===== */}
+                        <button
+                          type="button"
+                          title="Borra esta candidata y todo su historial para repetir la prueba desde cero"
+                          onClick={() => deleteCandidate(dc)}
+                          style={{
+                            width: "100%",
+                            padding: 12,
+                            border: "1px solid rgba(208,106,106,.28)",
+                            cursor: "pointer",
+                            borderRadius: 22,
+                            background: "rgba(208,106,106,.06)",
+                            color: "#D06A6A",
+                            fontFamily: "var(--font-jost)",
+                            fontWeight: 600,
+                            fontSize: 12.5,
+                            letterSpacing: ".02em",
+                            transition: ".2s"
+                          }}
+                        >
+                          🗑️ Eliminar candidata / empezar de cero
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {/* ===================== CHAT TAB ===================== */}
+                    {drawerTab === "conversacion" ? (
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0 }}>
+                        <div
+                          style={{
+                            flex: 1,
+                            overflowY: "auto",
+                            overflowX: "hidden",
+                            padding: "20px 24px 8px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 11
+                          }}
+                        >
+                          {drawerLoading ? (
+                            <p className="muted">Cargando conversación…</p>
+                          ) : drawerMessages.length === 0 ? (
+                            <p className="muted">Sin mensajes todavía.</p>
+                          ) : (
+                            drawerMessages.map((item) => {
+                              const mine = item.role === "agent" || item.role === "alex";
+                              return (
+                                <div key={item.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
+                                  <div
+                                    style={{
+                                      maxWidth: "78%",
+                                      padding: "12px 16px",
+                                      borderRadius: 18,
+                                      borderBottomRightRadius: mine ? 5 : 18,
+                                      borderBottomLeftRadius: mine ? 18 : 5,
+                                      background: mine
+                                        ? "color-mix(in srgb, var(--accent) 16%, transparent)"
+                                        : "rgba(var(--s1),.85)",
+                                      border: mine
+                                        ? "1px solid color-mix(in srgb, var(--accent) 30%, transparent)"
+                                        : "1px solid rgba(var(--line-rgb),.07)",
+                                      color: "var(--text)",
+                                      fontSize: 14,
+                                      lineHeight: 1.45,
+                                      fontWeight: 300,
+                                      whiteSpace: "pre-wrap",
+                                      overflowWrap: "anywhere",
+                                      wordBreak: "break-word"
+                                    }}
+                                  >
+                                    {item.content}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                        {!closed ? (
+                          <div style={{ padding: "6px 20px 20px", display: "flex", gap: 10, alignItems: "flex-end" }}>
+                            <textarea
+                              value={drawerReply}
+                              onChange={(event) => setDrawerReply(event.target.value)}
+                              placeholder="Escribe una respuesta… (se envía a Instagram cuando esté conectado)"
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" && !event.shiftKey) {
+                                  event.preventDefault();
+                                  void sendDrawerReply();
+                                }
+                              }}
+                              style={{
+                                flex: 1,
+                                minHeight: 46,
+                                maxHeight: 120,
+                                padding: "13px 16px",
+                                borderRadius: 24,
+                                border: "1px solid rgba(var(--line-rgb),.09)",
+                                background: "rgba(var(--s3),.7)",
+                                color: "var(--text)",
+                                fontFamily: "var(--font-jost)",
+                                fontSize: 14,
+                                fontWeight: 300,
+                                outline: "none",
+                                resize: "none"
+                              }}
+                            />
+                            <button
+                              type="button"
+                              disabled={loading || !drawerReply.trim()}
+                              onClick={() => void sendDrawerReply()}
+                              style={{
+                                width: 46,
+                                height: 46,
+                                flexShrink: 0,
+                                border: "none",
+                                cursor: loading || !drawerReply.trim() ? "default" : "pointer",
+                                borderRadius: "50%",
+                                background: "linear-gradient(135deg,var(--accent),var(--accent2))",
+                                color: "var(--accent-contrast)",
+                                fontSize: 17,
+                                opacity: loading || !drawerReply.trim() ? 0.5 : 1,
+                                boxShadow: "0 6px 18px rgba(200,90,120,.35)",
+                                transition: ".25s",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center"
+                              }}
+                            >
+                              ➤
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {/* ===================== LLAMADAS TAB ===================== */}
+                    {drawerTab === "llamada" ? (
+                      <div
+                        style={{
+                          flex: 1,
+                          overflowY: "auto",
+                          overflowX: "hidden",
+                          padding: "22px 28px 28px",
+                          animation: "tabIn .34s ease both"
+                        }}
+                      >
+                        <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--text3)", fontWeight: 300 }}>
+                          Llamada con <strong style={{ color: "var(--text2)" }}>{displayName}</strong>
+                        </p>
+                        {!closed ? (
+                          <button
+                            type="button"
+                            onClick={() => startCall(dc)}
+                            title="Lanza la llamada por teléfono (ElevenLabs marca a su número y conecta el bot)"
+                            style={{
+                              padding: "12px 18px",
+                              marginBottom: 16,
+                              border: "none",
+                              cursor: "pointer",
+                              borderRadius: 24,
+                              background: "linear-gradient(135deg,#B98BC9,#9A6DB4)",
+                              color: "#1c1020",
+                              fontFamily: "var(--font-jost)",
+                              fontWeight: 600,
+                              fontSize: 13.5,
+                              boxShadow: "0 6px 18px rgba(185,139,201,.35)",
+                              transition: ".25s"
+                            }}
+                          >
+                            📞 Llamar ahora
+                          </button>
+                        ) : null}
+                        {dc.lastCallConversationId ? (
+                          <CallRecordingAudio key={dc.lastCallConversationId} conversationId={dc.lastCallConversationId} />
+                        ) : dc.lastCall?.result === "COMPLETED" ? (
+                          <div style={{ marginBottom: 12 }}>
+                            <div
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontSize: 10,
+                                letterSpacing: ".14em",
+                                color: "var(--text3)",
+                                textTransform: "uppercase",
+                                marginBottom: 6
+                              }}
+                            >
+                              Grabación de la llamada
+                            </div>
+                            <p style={{ margin: 0, fontSize: 13, color: "var(--text3)", fontWeight: 300, lineHeight: 1.5 }}>
+                              🎧 La grabación de audio aparece aquí en las llamadas reales (con el guardado de audio activado en
+                              ElevenLabs).
+                            </p>
+                          </div>
+                        ) : null}
+                        {dc.lastCall ? (
+                          <>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, margin: "6px 0 14px" }}>
+                              <div
+                                style={{
+                                  padding: "11px 12px",
+                                  borderRadius: 12,
+                                  background: "rgba(185,139,201,.08)",
+                                  border: "1px solid rgba(185,139,201,.2)"
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontFamily: "var(--font-jost)",
+                                    fontSize: 9.5,
+                                    letterSpacing: ".1em",
+                                    color: "var(--text3)",
+                                    textTransform: "uppercase"
+                                  }}
+                                >
+                                  Resultado
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    marginTop: 4,
+                                    color: dc.lastCall.result === "COMPLETED" ? "#8FB99F" : "#D06A6A"
+                                  }}
+                                >
+                                  {dc.lastCall.result === "COMPLETED" ? "Completada" : "No contestó"}
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  padding: "11px 12px",
+                                  borderRadius: 12,
+                                  background: "rgba(185,139,201,.08)",
+                                  border: "1px solid rgba(185,139,201,.2)"
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontFamily: "var(--font-jost)",
+                                    fontSize: 9.5,
+                                    letterSpacing: ".1em",
+                                    color: "var(--text3)",
+                                    textTransform: "uppercase"
+                                  }}
+                                >
+                                  Duración
+                                </div>
+                                <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4, color: "var(--text)" }}>
+                                  {dc.lastCall.durationSec != null
+                                    ? `${Math.floor(dc.lastCall.durationSec / 60)}m ${dc.lastCall.durationSec % 60}s`
+                                    : "—"}
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  padding: "11px 12px",
+                                  borderRadius: 12,
+                                  background: "rgba(185,139,201,.08)",
+                                  border: "1px solid rgba(185,139,201,.2)"
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontFamily: "var(--font-jost)",
+                                    fontSize: 9.5,
+                                    letterSpacing: ".1em",
+                                    color: "var(--text3)",
+                                    textTransform: "uppercase"
+                                  }}
+                                >
+                                  Reparto acordado
+                                </div>
+                                <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4, color: "var(--text)" }}>
+                                  {dc.lastCall.negotiatedModelShare != null
+                                    ? `${dc.lastCall.negotiatedModelShare}% / ${100 - dc.lastCall.negotiatedModelShare}%`
+                                    : "—"}
+                                </div>
+                              </div>
+                            </div>
+                            {dc.lastCall.summary ? (
+                              <div
+                                style={{
+                                  marginBottom: 12,
+                                  padding: "13px 15px",
+                                  borderRadius: 12,
+                                  background: "rgba(214,178,124,.07)",
+                                  border: "1px solid rgba(214,178,124,.18)"
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontFamily: "var(--font-jost)",
+                                    fontSize: 9.5,
+                                    letterSpacing: ".16em",
+                                    textTransform: "uppercase",
+                                    color: "#D6B27C",
+                                    marginBottom: 6
+                                  }}
+                                >
+                                  Resumen de la llamada
+                                </div>
+                                <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.5, fontWeight: 300 }}>
+                                  {dc.lastCall.summary}
+                                </div>
+                              </div>
+                            ) : null}
+                            {dc.lastCall.transcript.length > 0 ? (
+                              <details style={{ marginBottom: 8 }}>
+                                <summary
+                                  style={{
+                                    cursor: "pointer",
+                                    color: "#B98BC9",
+                                    fontFamily: "var(--font-jost)",
+                                    fontSize: 12.5,
+                                    fontWeight: 500
+                                  }}
+                                >
+                                  Ver transcripción
+                                </summary>
+                                <div
+                                  style={{
+                                    marginTop: 9,
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 10,
+                                    padding: "14px 16px",
+                                    borderRadius: 12,
+                                    background: "rgba(var(--s3),.5)",
+                                    border: "1px solid rgba(var(--line-rgb),.05)"
+                                  }}
+                                >
+                                  {dc.lastCall.transcript.map((turn, index) => (
+                                    <div key={index}>
+                                      <span
+                                        style={{
+                                          fontFamily: "var(--font-jost)",
+                                          fontWeight: 500,
+                                          fontSize: 11,
+                                          color: turn.role === "agent" ? "var(--accent)" : "var(--text3)",
+                                          textTransform: "uppercase",
+                                          letterSpacing: ".08em"
+                                        }}
+                                      >
+                                        {turn.role === "agent" ? "Rose" : "Candidata"}
+                                      </span>
+                                      <div
+                                        style={{
+                                          fontSize: 13.5,
+                                          color: "var(--text2)",
+                                          fontWeight: 300,
+                                          marginTop: 2,
+                                          lineHeight: 1.45
+                                        }}
+                                      >
+                                        {turn.content}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            ) : null}
+                            {dc.lastCall.endedAt ? (
+                              <p style={{ margin: 0, fontSize: 12, color: "var(--text3)", fontWeight: 300 }}>
+                                Terminó: {new Date(dc.lastCall.endedAt).toLocaleString("es-ES")}
+                              </p>
+                            ) : null}
+                          </>
+                        ) : dc.scheduledCallSlot ? (
+                          <p style={{ margin: 0, fontSize: 13.5, color: "var(--text2)" }}>
+                            📞 Llamada agendada: <strong>{dc.scheduledCallSlot}</strong>
+                          </p>
+                        ) : (
+                          <p className="muted">Aún no hay llamada. Aprueba a la candidata y agéndala desde el CRM.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </aside>
+              </div>
+            );
+          })()
+        : null}
 
       {modal ? (
         <div className="modal-scrim" role="presentation" onClick={() => setModal(null)}>
