@@ -8,7 +8,7 @@ import "./globals.css";
 // variables CSS (--font-bodoni / --font-jost) que globals.css usa en body y títulos.
 const bodoni = Bodoni_Moda({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
   style: ["normal", "italic"],
   variable: "--font-bodoni",
   display: "swap"

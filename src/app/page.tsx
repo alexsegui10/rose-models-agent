@@ -383,9 +383,12 @@ export default function Home() {
   }, [livePolling, activeTab, drawerCandidate, loading]);
 
   // Auto-limpieza (decision de Alex): las candidatas en la columna "Tu decision" que llevan mas de 7 dias
-  // sin que Alex las apruebe se BORRAN del todo (permanente). Es una limpieza DETERMINISTA (no la decide el
-  // modelo) y NO aprueba ni avanza a nadie: solo descarta leads fantasma que llevan una semana esperando.
-  // Usa `updatedAt` como "esperando desde" (si sigue activa/actualizandose, no se toca). Corre al refrescar.
+  // sin que Alex las apruebe se CIERRAN (advance-stage REJECT -> REJECTED + bot pausado + silenciado). NO se
+  // borran del todo a proposito: una candidata borrada que volviera a escribir se recrearia y el bot le
+  // responderia; una REJECTED queda silenciada PARA SIEMPRE (isSilencedState) aunque vuelva a escribir, que es
+  // justo lo que pidio Alex (bot pausado con ellas + que no reaparezcan; salen de la columna a Cerradas).
+  // Determinista (no la decide el modelo), no avanza a nadie, y usa `updatedAt` como "esperando desde"
+  // (si sigue activa/actualizandose, no se toca). Corre al refrescar.
   const autoPurgedIds = useRef<Set<string>>(new Set());
   useEffect(() => {
     const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -399,20 +402,26 @@ export default function Home() {
     if (stale.length === 0) return;
     stale.forEach((candidate) => autoPurgedIds.current.add(candidate.id));
     void (async () => {
-      let removed = 0;
+      let closed = 0;
       for (const candidate of stale) {
         try {
-          const response = await fetch(`/api/candidates/${candidate.id}`, { method: "DELETE" });
-          if (response.ok) removed += 1;
+          const response = await fetch("/api/simulator/advance-stage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ candidateId: candidate.id, action: "REJECT" })
+          });
+          if (response.ok) closed += 1;
           else autoPurgedIds.current.delete(candidate.id);
         } catch {
           // Best-effort: si falla la red, se reintenta en el proximo refresco.
           autoPurgedIds.current.delete(candidate.id);
         }
       }
-      if (removed > 0) {
+      if (closed > 0) {
         await refreshCandidates();
-        setCrmNotice(`Auto-limpieza: eliminada(s) ${removed} candidata(s) que llevaban más de 7 días esperando tu decisión.`);
+        setCrmNotice(
+          `Auto-limpieza: ${closed} candidata(s) que llevaban más de 7 días esperando tu decisión se cerraron (el bot no volverá a hablarles). Están en Cerradas.`
+        );
       }
     })();
   }, [candidates]);
@@ -790,6 +799,20 @@ export default function Home() {
       setDrawerCandidate(data.candidate);
     }
     await refreshCandidates();
+  }
+
+  // Fusion "Encaja" (Alex 13-jul): un solo boton aprueba PERFIL + MOVIL. Si el movil bloquea el doble
+  // gate (PENDING_QUALITY_TEST / NOT_ELIGIBLE) se aprueba primero (DEVICE_APPROVE) y luego el perfil
+  // (APPROVE); el motor agenda al ver ambas aprobaciones. Via UI (no toca el motor); un movil que no
+  // valga de verdad se descarta con "Rechazar".
+  async function approveAll(candidate: Candidate) {
+    // Solo el movil PENDIENTE de revision se auto-aprueba con Encaja. Un movil NOT_ELIGIBLE (claramente
+    // malo) NO se aprueba desde aqui: para eso esta "Rechazar" (asi no se agenda una llamada con un movil
+    // que no puede grabar).
+    if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
+      await doAdvanceStage(candidate, "DEVICE_APPROVE");
+    }
+    await applyHumanDecision(candidate, "APPROVE");
   }
 
   function openModal(next: ModalState) {
@@ -2915,6 +2938,7 @@ export default function Home() {
                           {candProfile?.profilePicUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
+                              loading="lazy"
                               className="chat2-cand-avatar-img"
                               src={candProfile.profilePicUrl}
                               alt=""
@@ -2970,6 +2994,7 @@ export default function Home() {
                     {currentCandidate && igProfiles[currentCandidate.instagramUsername]?.profilePicUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
+                        loading="lazy"
                         className="chat2-cand-avatar-img"
                         src={igProfiles[currentCandidate.instagramUsername]?.profilePicUrl ?? ""}
                         alt=""
@@ -3594,7 +3619,6 @@ export default function Home() {
                                   candidate.currentState === "COLLECTING_CALL_DETAILS" ||
                                   candidate.currentState === "READY_TO_SCHEDULE";
                                 const closed = candidate.currentState === "REJECTED" || candidate.currentState === "CLOSED";
-                                const needsDevice = candidate.deviceEligibility === "PENDING_QUALITY_TEST";
                                 const isIgsid = /^\d{5,}$/.test(candidate.instagramUsername);
                                 const profile = igProfiles[candidate.instagramUsername];
                                 const handle = profile?.username ?? (isIgsid ? null : candidate.instagramUsername);
@@ -3717,6 +3741,7 @@ export default function Home() {
                                             {picUrl ? (
                                               // eslint-disable-next-line @next/next/no-img-element
                                               <img
+                                                loading="lazy"
                                                 src={picUrl}
                                                 alt=""
                                                 referrerPolicy="no-referrer"
@@ -3915,7 +3940,8 @@ export default function Home() {
                                           <>
                                             <button
                                               type="button"
-                                              onClick={() => void applyHumanDecision(candidate, "APPROVE")}
+                                              title="Aprueba a la candidata (perfil y móvil de una vez)"
+                                              onClick={() => void approveAll(candidate)}
                                               style={decBtn("rgba(143,185,159,.12)", "rgba(143,185,159,.4)", "#8FB99F")}
                                             >
                                               ✓ Encaja
@@ -3926,25 +3952,6 @@ export default function Home() {
                                               style={decBtn("rgba(208,106,106,.1)", "rgba(208,106,106,.38)", "#D06A6A")}
                                             >
                                               ✕ Rechazar
-                                            </button>
-                                          </>
-                                        ) : null}
-                                        {needsDevice ? (
-                                          <>
-                                            <button
-                                              type="button"
-                                              title="Aprueba la calidad del móvil (doble gate)"
-                                              onClick={() => void advanceStage(candidate, "DEVICE_APPROVE")}
-                                              style={decBtn("rgba(169,180,196,.12)", "rgba(169,180,196,.38)", "var(--text2)")}
-                                            >
-                                              ✓ Móvil OK
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => void advanceStage(candidate, "DEVICE_REJECT")}
-                                              style={decBtn("rgba(208,106,106,.1)", "rgba(208,106,106,.38)", "#D06A6A")}
-                                            >
-                                              ✕ Móvil no
                                             </button>
                                           </>
                                         ) : null}
@@ -4096,12 +4103,6 @@ export default function Home() {
               borderColor: "rgba(208,106,106,.38)",
               color: "#D06A6A"
             };
-            const dBtnGray: React.CSSProperties = {
-              ...dBtnBase,
-              background: "rgba(169,180,196,.12)",
-              borderColor: "rgba(169,180,196,.4)",
-              color: "var(--text2)"
-            };
             const dBtnViolet: React.CSSProperties = {
               ...dBtnBase,
               background: "rgba(185,139,201,.1)",
@@ -4216,6 +4217,7 @@ export default function Home() {
                             return picUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
+                                loading="lazy"
                                 src={picUrl}
                                 alt=""
                                 style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
@@ -4399,16 +4401,6 @@ export default function Home() {
                               : `Motivo: ${REVIEW_REASON_LABELS[dc.humanReviewReason] ?? dc.humanReviewReason}`}
                           </p>
                         ) : null}
-                        {/* Aviso del doble gate (perfil aprobado + movil pendiente). */}
-                        {dc.currentState === "WAITING_HUMAN_REVIEW" &&
-                        dc.humanFitDecision === "APPROVED" &&
-                        dc.deviceEligibility === "PENDING_QUALITY_TEST" ? (
-                          <p style={{ margin: "0 0 12px", fontSize: 13, color: "#D6B27C", fontWeight: 600, lineHeight: 1.5 }}>
-                            ⚠️ Perfil aprobado, pero la llamada NO se agenda hasta que apruebes la calidad del móvil aquí abajo
-                            (📱 Móvil OK).
-                          </p>
-                        ) : null}
-
                         {/* ===== ACCIONES DE DECISION (misma logica que el CRM, invariante 4) ===== */}
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginBottom: 14 }}>
                           {dc.currentState === "PROFILE_READY_FOR_REVIEW" ? (
@@ -4422,29 +4414,9 @@ export default function Home() {
                             </>
                           ) : dc.currentState === "WAITING_HUMAN_REVIEW" || dc.currentState === "HUMAN_INTERVENTION_REQUIRED" ? (
                             <>
-                              {dc.humanFitDecision === "APPROVED" ? (
-                                dc.deviceEligibility !== "PENDING_QUALITY_TEST" && dc.deviceEligibility !== "NOT_ELIGIBLE" ? (
-                                  <button type="button" style={dBtnGreen} onClick={() => void applyHumanDecision(dc, "APPROVE")}>
-                                    ▶️ Reanudar (proponer llamada)
-                                  </button>
-                                ) : (
-                                  <span style={dChipOk}>✓ Perfil aprobado</span>
-                                )
-                              ) : (
-                                <button type="button" style={dBtnGreen} onClick={() => void applyHumanDecision(dc, "APPROVE")}>
-                                  👍 Aprobar perfil
-                                </button>
-                              )}
-                              {dc.deviceEligibility === "PENDING_QUALITY_TEST" ? (
-                                <>
-                                  <button type="button" style={dBtnGray} onClick={() => advanceStage(dc, "DEVICE_APPROVE")}>
-                                    📱 Móvil OK
-                                  </button>
-                                  <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "DEVICE_REJECT")}>
-                                    📱 Móvil no vale
-                                  </button>
-                                </>
-                              ) : null}
+                              <button type="button" style={dBtnGreen} onClick={() => void approveAll(dc)}>
+                                ✓ Encaja
+                              </button>
                               <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "REJECT")}>
                                 ✕ Rechazar
                               </button>
