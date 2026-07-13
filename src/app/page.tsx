@@ -243,6 +243,8 @@ export default function Home() {
   // Canal activo en la bandeja de Mensajes: Instagram (candidatas normales) o WhatsApp (clave wa:<digitos>).
   const [chatChannel, setChatChannel] = useState<"instagram" | "whatsapp">("instagram");
   const [loading, setLoading] = useState(false);
+  // Carga inicial: para mostrar un esqueleto/aviso en vez de un tablero vacio mientras llega el primer fetch.
+  const [initialLoading, setInitialLoading] = useState(true);
   const [retrievedExamples, setRetrievedExamples] = useState<RetrievedExample[]>([]);
   const [knowledgeEntries, setKnowledgeEntries] = useState<RetrievedKnowledgeEntry[]>([]);
   const [responsePlan, setResponsePlan] = useState<ResponsePlanSummary | null>(null);
@@ -341,7 +343,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void refreshCandidates();
+    void refreshCandidates().finally(() => setInitialLoading(false));
     void fetch("/api/simulator/status")
       .then((response) => response.json())
       .then((data: SimulatorStatus) => setRuntimeStatus(data));
@@ -379,6 +381,41 @@ export default function Home() {
     }, 5000);
     return () => clearInterval(interval);
   }, [livePolling, activeTab, drawerCandidate, loading]);
+
+  // Auto-limpieza (decision de Alex): las candidatas en la columna "Tu decision" que llevan mas de 7 dias
+  // sin que Alex las apruebe se BORRAN del todo (permanente). Es una limpieza DETERMINISTA (no la decide el
+  // modelo) y NO aprueba ni avanza a nadie: solo descarta leads fantasma que llevan una semana esperando.
+  // Usa `updatedAt` como "esperando desde" (si sigue activa/actualizandose, no se toca). Corre al refrescar.
+  const autoPurgedIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const stale = candidates.filter((candidate) => {
+      if (crmColumnOf(candidate.currentState) !== "decision") return false;
+      if (autoPurgedIds.current.has(candidate.id)) return false;
+      const updated = new Date(candidate.updatedAt).getTime();
+      return !Number.isNaN(updated) && now - updated >= SEVEN_DAYS_MS;
+    });
+    if (stale.length === 0) return;
+    stale.forEach((candidate) => autoPurgedIds.current.add(candidate.id));
+    void (async () => {
+      let removed = 0;
+      for (const candidate of stale) {
+        try {
+          const response = await fetch(`/api/candidates/${candidate.id}`, { method: "DELETE" });
+          if (response.ok) removed += 1;
+          else autoPurgedIds.current.delete(candidate.id);
+        } catch {
+          // Best-effort: si falla la red, se reintenta en el proximo refresco.
+          autoPurgedIds.current.delete(candidate.id);
+        }
+      }
+      if (removed > 0) {
+        await refreshCandidates();
+        setCrmNotice(`Auto-limpieza: eliminada(s) ${removed} candidata(s) que llevaban más de 7 días esperando tu decisión.`);
+      }
+    })();
+  }, [candidates]);
 
   // Mantiene la ficha abierta SINCRONIZADA con los datos frescos del tablero (estado, botones, motivo, %).
   // Sin esto, el auto-refresco actualizaba los mensajes pero NO el estado/botones de la ficha: podias ver
@@ -488,34 +525,6 @@ export default function Home() {
       setCrmNotice(`Cargadas ${data.seeded ?? 0} candidatas de demo.`);
     } catch (error) {
       setCrmNotice(`No se pudieron cargar las candidatas de demo: ${error instanceof Error ? error.message : "error de red"}.`);
-    }
-  }
-
-  // Quita SOLO las candidatas de demo (por su prefijo de id). Nunca toca las reales.
-  // Borra las candidatas de prueba/demo (las que no son de Instagram real). Pide confirmacion.
-  function clearTest() {
-    const fakeCount = candidates.filter((item) => !/^\d{5,}$/.test(item.instagramUsername)).length;
-    openModal({
-      title: "¿Limpiar candidatas de prueba?",
-      body: `Se borrarán ${fakeCount} candidata(s) de prueba/demo (las que no son de Instagram real). Las candidatas reales NO se tocan.`,
-      danger: true,
-      confirmLabel: "Limpiar pruebas",
-      onConfirm: () => void doClearTest()
-    });
-  }
-
-  async function doClearTest() {
-    try {
-      const response = await fetch("/api/simulator/clear-test", { method: "POST" });
-      const data = (await response.json().catch(() => ({}))) as { removed?: number; error?: string };
-      if (!response.ok) {
-        setCrmNotice(`No se pudieron limpiar las pruebas (${response.status}). ${data.error ?? ""}`.trim());
-        return;
-      }
-      await refreshCandidates();
-      setCrmNotice(`Limpiadas ${data.removed ?? 0} candidatas de prueba.`);
-    } catch (error) {
-      setCrmNotice(`No se pudieron limpiar las pruebas: ${error instanceof Error ? error.message : "error de red"}.`);
     }
   }
 
@@ -3367,7 +3376,23 @@ export default function Home() {
               {crmNotice}
             </p>
           ) : null}
-          {candidates.length === 0 ? (
+          {initialLoading && candidates.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "70px 20px" }}>
+              <span
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  border: "3px solid rgba(var(--accent-rgb),.2)",
+                  borderTopColor: "var(--accent)",
+                  animation: "ringSpin .8s linear infinite"
+                }}
+              />
+              <p style={{ margin: 0, color: "var(--text3)", fontFamily: "var(--font-jost)", fontSize: 14, fontWeight: 300 }}>
+                Cargando candidatas…
+              </p>
+            </div>
+          ) : candidates.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text3)" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>🗂️</div>
               <p style={{ margin: "0 0 6px", color: "var(--text)", fontFamily: "var(--font-bodoni)", fontSize: 22 }}>
