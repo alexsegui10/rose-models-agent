@@ -1142,66 +1142,269 @@ export default function Home() {
           willChange: "transform"
         }}
       />
-      <header className="top-bar">
-        <div>
-          <h1>Rose Models Agent</h1>
-          <p className="muted">Simulador local sin Instagram real.</p>
-        </div>
-        <nav className="tab-bar">
-          <button
-            className={activeTab === "DASHBOARD" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("DASHBOARD")}
-          >
-            Resumen
-          </button>
-          <button
-            className={activeTab === "CRM" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("CRM")}
-          >
-            CRM
-          </button>
-          <button
-            className={activeTab === "LLAMADAS" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("LLAMADAS")}
-          >
-            Llamadas
-          </button>
-          <button
-            className={activeTab === "ANUNCIOS" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("ANUNCIOS")}
-          >
-            Anuncios
-          </button>
-          <button
-            className={activeTab === "CHAT" ? "tab-button active" : "tab-button"}
-            type="button"
-            onClick={() => setActiveTab("CHAT")}
-          >
-            Mensajes
-          </button>
-        </nav>
-        <button
-          type="button"
-          className="theme-toggle"
-          aria-label="Cambiar tema claro u oscuro"
-          title={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
-          onClick={() => {
-            const next = theme === "dark" ? "light" : "dark";
-            setTheme(next);
-            document.documentElement.dataset.theme = next;
-            window.localStorage.setItem("rm-theme", next);
+      {/* ===== CABECERA (reproducción FIEL de la maqueta) ===== */}
+      <header
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          backdropFilter: "blur(16px)",
+          background: "linear-gradient(180deg,rgba(var(--s2),.9),rgba(var(--s2),.55))",
+          borderBottom: "1px solid rgba(var(--accent-rgb),.14)"
+        }}
+      >
+        <div
+          data-m="navwrap"
+          style={{
+            maxWidth: 1320,
+            margin: "0 auto",
+            padding: "0 30px",
+            height: 70,
+            display: "flex",
+            alignItems: "center",
+            gap: 30
           }}
         >
-          {theme === "dark" ? "☀️" : "🌙"}
-        </button>
-        <p className="status-bar">
-          Persistencia: {runtimeStatus?.persistenceMode ?? "..."} · IA: {runtimeStatus?.llmMode ?? "..."} (
-          {runtimeStatus?.writingModel ?? "..."})
-        </p>
+          {/* Logo + wordmark */}
+          <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                background: "linear-gradient(140deg,var(--accent),var(--accent3))",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 6px 20px rgba(200,90,120,.4)"
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 700, color: "#fff", fontSize: 19, lineHeight: 1 }}>
+                R
+              </span>
+            </div>
+            <div data-m="hidesmall" style={{ lineHeight: 1.05 }}>
+              <div
+                style={{
+                  fontFamily: "var(--font-bodoni)",
+                  fontWeight: 600,
+                  letterSpacing: ".16em",
+                  fontSize: 16,
+                  color: "var(--text)"
+                }}
+              >
+                ROSE MODELS
+              </div>
+              <div
+                style={{
+                  fontFamily: "var(--font-jost)",
+                  fontWeight: 400,
+                  fontSize: 9,
+                  letterSpacing: ".52em",
+                  color: "#C99AA6",
+                  marginTop: 3
+                }}
+              >
+                M A N A G E M E N T
+              </div>
+            </div>
+          </div>
+
+          {/* Pestañas */}
+          <nav data-m="tabs-top" style={{ display: "flex", alignItems: "center", gap: 2, marginLeft: 6 }}>
+            {(
+              [
+                { key: "DASHBOARD", label: "Resumen" },
+                { key: "CRM", label: "CRM" },
+                { key: "LLAMADAS", label: "Llamadas" },
+                { key: "ANUNCIOS", label: "Anuncios" },
+                { key: "CHAT", label: "Mensajes" }
+              ] as const
+            ).map((t) => {
+              const active = activeTab === t.key;
+              const pending = t.key === "CHAT" ? candidates.filter(needsHumanDecision).length : 0;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setActiveTab(t.key)}
+                  style={{
+                    position: "relative",
+                    padding: "10px 16px",
+                    borderRadius: 10,
+                    fontFamily: "var(--font-jost)",
+                    fontWeight: 500,
+                    fontSize: 13,
+                    letterSpacing: ".12em",
+                    textTransform: "uppercase",
+                    color: active ? "var(--text)" : "var(--text3)",
+                    transition: ".25s",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8
+                  }}
+                >
+                  {t.label}
+                  {pending > 0 ? (
+                    <span
+                      style={{
+                        minWidth: 18,
+                        height: 18,
+                        padding: "0 5px",
+                        borderRadius: 9,
+                        background: "var(--accent)",
+                        color: "var(--accent-contrast)",
+                        fontFamily: "var(--font-jost)",
+                        fontWeight: 600,
+                        fontSize: 10,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      {pending}
+                    </span>
+                  ) : null}
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 16,
+                      right: 16,
+                      bottom: 3,
+                      height: 1.5,
+                      background: "var(--accent)",
+                      opacity: active ? 1 : 0,
+                      transition: ".25s"
+                    }}
+                  />
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Derecha: píldora IA + modo/acentos + avatar */}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              data-m="hidesmall"
+              title={`Persistencia: ${runtimeStatus?.persistenceMode ?? "..."} · IA: ${runtimeStatus?.llmMode ?? "..."}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "7px 12px",
+                borderRadius: 20,
+                border: "1px solid rgba(214,178,124,.28)",
+                background: "rgba(214,178,124,.06)"
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#D6B27C",
+                  animation: "softPulse 2.4s ease-in-out infinite"
+                }}
+              />
+              <span style={{ fontFamily: "var(--font-jost)", fontSize: 11, color: "var(--text2)", letterSpacing: ".04em" }}>
+                IA · {runtimeStatus?.writingModel ?? "…"}
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 10px",
+                borderRadius: 22,
+                border: "1px solid rgba(var(--line-rgb),.12)",
+                background: "rgba(var(--s2),.5)"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  const next = theme === "dark" ? "light" : "dark";
+                  setTheme(next);
+                  const root = document.documentElement;
+                  root.dataset.theme = next;
+                  root.dataset.mode = next;
+                  window.localStorage.setItem("rm-theme", JSON.stringify({ mode: next, accent }));
+                }}
+                title="Cambiar modo"
+                style={{
+                  width: 26,
+                  height: 26,
+                  border: "none",
+                  cursor: "pointer",
+                  borderRadius: "50%",
+                  background: "rgba(var(--accent-rgb),.16)",
+                  color: "var(--accent)",
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: ".2s"
+                }}
+              >
+                {theme === "dark" ? "☀" : "☾"}
+              </button>
+              <span style={{ width: 1, height: 16, background: "rgba(var(--line-rgb),.14)" }} />
+              {(
+                [
+                  { k: "rose", hex: "#E68CA0" },
+                  { k: "green", hex: "#37B26B" },
+                  { k: "blue", hex: "#4C8DF0" },
+                  { k: "violet", hex: "#A66BE8" },
+                  { k: "gold", hex: "#D6A94B" }
+                ] as const
+              ).map((d) => (
+                <button
+                  key={d.k}
+                  type="button"
+                  onClick={() => {
+                    setAccent(d.k);
+                    document.documentElement.dataset.accent = d.k;
+                    window.localStorage.setItem("rm-theme", JSON.stringify({ mode: theme, accent: d.k }));
+                  }}
+                  title={d.k}
+                  style={{
+                    width: 17,
+                    height: 17,
+                    borderRadius: "50%",
+                    cursor: "pointer",
+                    background: d.hex,
+                    border: `2px solid ${accent === d.k ? "var(--text)" : "transparent"}`,
+                    boxShadow: "0 0 0 1px rgba(var(--line-rgb),.1)",
+                    transition: ".2s"
+                  }}
+                />
+              ))}
+            </div>
+            <div
+              data-m="hidesmall"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: "linear-gradient(140deg,#B98BC9,#8A5FA6)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "var(--font-bodoni)",
+                fontWeight: 600,
+                color: "#fff",
+                fontSize: 15,
+                boxShadow: "0 4px 14px rgba(138,95,166,.4)"
+              }}
+            >
+              A
+            </div>
+          </div>
+        </div>
       </header>
 
       {activeTab === "DASHBOARD"
