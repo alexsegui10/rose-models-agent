@@ -9,6 +9,7 @@ import {
   computeFitScore,
   CRM_COLUMNS,
   crmColumnOf,
+  type CrmColumnId,
   isTopPick,
   needsHumanDecision,
   ringColorVar,
@@ -193,7 +194,7 @@ export default function Home() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   // Acento conmutable de la maqueta (5 colores). Escribe html[data-accent]; persiste junto al modo.
   const [accent, setAccent] = useState<AccentKey>("rose");
-  // Intro splash (pétalos) SOLO en la primera visita (decisión de Alex: no en cada recarga).
+  // Intro splash (pétalos) en CADA visita (Alex lo pidió así, 13-jul). Se puede saltar con un clic.
   const [showIntro, setShowIntro] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [modalInput, setModalInput] = useState("");
@@ -229,7 +230,7 @@ export default function Home() {
   const [crmNotice, setCrmNotice] = useState<string | null>(null);
   const [crmSearch, setCrmSearch] = useState("");
   // Movil: el CRM enseña una etapa a la vez (filtro) y Mensajes alterna lista/chat.
-  const [crmMobileFilter, setCrmMobileFilter] = useState("cualificando");
+  const [crmMobileFilter, setCrmMobileFilter] = useState<CrmColumnId>("cualificando");
   const [msgView, setMsgView] = useState<"list" | "chat">("list");
   const [testCallPhone, setTestCallPhone] = useState("");
   const [testCallBusy, setTestCallBusy] = useState(false);
@@ -378,7 +379,8 @@ export default function Home() {
           })
           .catch(() => undefined);
       }
-    }, 5000);
+      // 8s (antes 5s): refresco en vivo del tablero mas ligero -> menos peticiones y menos jank, sin perder reactividad.
+    }, 8000);
     return () => clearInterval(interval);
   }, [livePolling, activeTab, drawerCandidate, loading]);
 
@@ -666,36 +668,54 @@ export default function Home() {
       return;
     }
 
-    await fetch("/api/simulator/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        candidateId: selectedCandidate.id,
-        messageId: lastAgentMessage.id,
-        status,
-        originalResponse: lastAgentMessage.content,
-        editedResponse: status === "EDITED" ? editedResponse : undefined,
-        reason: feedbackReason || undefined,
-        styleRating: styleRating ? Number(styleRating) : undefined,
-        state: selectedCandidate.currentState,
-        contextSnapshot: JSON.stringify(lastResult ?? styleContext),
-        modelVersion: lastResult?.draft?.modelVersion
-      })
-    });
-    setFeedbackStatus(status);
+    try {
+      const response = await fetch("/api/simulator/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidateId: selectedCandidate.id,
+          messageId: lastAgentMessage.id,
+          status,
+          originalResponse: lastAgentMessage.content,
+          editedResponse: status === "EDITED" ? editedResponse : undefined,
+          reason: feedbackReason || undefined,
+          styleRating: styleRating ? Number(styleRating) : undefined,
+          state: selectedCandidate.currentState,
+          contextSnapshot: JSON.stringify(lastResult ?? styleContext),
+          modelVersion: lastResult?.draft?.modelVersion
+        })
+      });
+      if (!response.ok) {
+        setCrmNotice(`No se pudo guardar el feedback (${response.status}).`);
+        return;
+      }
+      setFeedbackStatus(status);
+    } catch (error) {
+      setCrmNotice(`No se pudo guardar el feedback: ${error instanceof Error ? error.message : "error de red"}.`);
+    }
   }
 
   async function takeManualControl() {
     if (!selectedCandidate) return;
 
-    const response = await fetch("/api/simulator/manual-control", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        candidateId: selectedCandidate.id,
-        manualControlActive: true
-      })
-    });
+    let response: Response;
+    try {
+      response = await fetch("/api/simulator/manual-control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidateId: selectedCandidate.id,
+          manualControlActive: true
+        })
+      });
+    } catch (error) {
+      setCrmNotice(`No se pudo tomar el control (error de red): ${error instanceof Error ? error.message : "sin conexión"}.`);
+      return;
+    }
+    if (!response.ok) {
+      setCrmNotice(`No se pudo tomar el control (${response.status}).`);
+      return;
+    }
     const data = (await response.json()) as { candidate: Candidate };
     setSelectedCandidate(data.candidate);
     setFeedbackStatus("TAKEN_OVER");
@@ -2776,7 +2796,7 @@ export default function Home() {
                                         <audio
                                           controls
                                           preload="none"
-                                          src={`/api/call/${item.lastCallConversationId}/audio`}
+                                          src={`/api/call/${encodeURIComponent(item.lastCallConversationId)}/audio`}
                                           style={{ height: 30, maxWidth: 200 }}
                                         />
                                         <span
@@ -4416,6 +4436,19 @@ export default function Home() {
                             <>
                               <button type="button" style={dBtnGreen} onClick={() => void approveAll(dc)}>
                                 ✓ Encaja
+                              </button>
+                              <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "REJECT")}>
+                                ✕ Rechazar
+                              </button>
+                            </>
+                          ) : dc.currentState === "WAITING_PROFILE_ACCESS" ? (
+                            <>
+                              <button
+                                type="button"
+                                style={dBtnGreen}
+                                onClick={() => void advanceStage(dc, "FOLLOW_REQUEST_SENT")}
+                              >
+                                Ya le mandé la solicitud
                               </button>
                               <button type="button" style={dBtnRed} onClick={() => advanceStage(dc, "REJECT")}>
                                 ✕ Rechazar
