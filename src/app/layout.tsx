@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Bodoni_Moda, Jost } from "next/font/google";
 import "./globals.css";
@@ -22,7 +22,25 @@ const jost = Jost({
 
 export const metadata: Metadata = {
   title: "Rose Models Agent",
-  description: "Simulador local del agente conversacional de Rose Models"
+  description: "CRM y bot de captación de Rose Models",
+  applicationName: "Rose Models",
+  // Manifiesto PWA (lo genera src/app/manifest.ts) -> instalable en el movil.
+  manifest: "/manifest.webmanifest",
+  // iOS: al "Añadir a pantalla de inicio" se abre a PANTALLA COMPLETA (sin barras de Safari), con este
+  // titulo bajo el icono y la barra de estado translucida sobre el fondo oscuro de la app.
+  appleWebApp: {
+    capable: true,
+    title: "Rose Models",
+    statusBarStyle: "black-translucent"
+  }
+};
+
+// El color de la barra/tema y el ajuste al notch (viewport-fit cover) para que se vea como una app nativa.
+export const viewport: Viewport = {
+  themeColor: "#150d12",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
