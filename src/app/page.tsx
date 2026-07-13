@@ -1402,6 +1402,9 @@ export default function Home() {
           position: "sticky",
           top: 0,
           zIndex: 30,
+          // Safe area del iPhone (notch/barra de estado) en modo PWA: el contenido baja debajo de la barra
+          // y se puede tocar. En navegador/escritorio env() = 0, asi que no cambia nada.
+          paddingTop: "env(safe-area-inset-top)",
           backdropFilter: "blur(16px)",
           background: "linear-gradient(180deg,rgba(var(--s2),.9),rgba(var(--s2),.55))",
           borderBottom: "1px solid rgba(var(--accent-rgb),.14)"
@@ -1671,7 +1674,9 @@ export default function Home() {
           right: 0,
           bottom: 0,
           zIndex: 35,
-          height: 64,
+          // Altura = 64px de contenido + la safe-area del home indicator (antes la safe-area se comia los
+          // 64px fijos y aplastaba los iconos -> la linea cruzaba por en medio).
+          height: "calc(64px + env(safe-area-inset-bottom))",
           padding: "6px 6px calc(6px + env(safe-area-inset-bottom))",
           background: "linear-gradient(0deg,rgba(var(--s2),.98),rgba(var(--s2),.86))",
           backdropFilter: "blur(16px)",
@@ -1812,7 +1817,10 @@ export default function Home() {
             const initialOf = (item: Candidate): string =>
               (item.firstName?.trim() || item.instagramUsername || "?").charAt(0).toUpperCase();
             return (
-              <div style={{ position: "relative", zIndex: 5, maxWidth: 1320, margin: "0 auto", padding: "34px 30px 80px" }}>
+              <div
+                data-m="screen"
+                style={{ position: "relative", zIndex: 5, maxWidth: 1320, margin: "0 auto", padding: "34px 30px 80px" }}
+              >
                 <div style={{ animation: "scrRise .55s cubic-bezier(.16,1,.3,1) both" }}>
                   {/* HERO */}
                   <div data-m="hero" style={{ display: "grid", gridTemplateColumns: "1fr 372px", gap: 22, marginBottom: 26 }}>
@@ -2363,6 +2371,7 @@ export default function Home() {
             };
             return (
               <div
+                data-m="screen"
                 style={{
                   position: "relative",
                   zIndex: 5,
@@ -3344,6 +3353,7 @@ export default function Home() {
 
       {activeTab === "CRM" ? (
         <div
+          data-m="screen"
           style={{
             position: "relative",
             zIndex: 5,

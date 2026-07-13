@@ -1,3 +1,12 @@
+/* Reset universal de caja: el padding/borde va DENTRO del ancho. Sin esto, elementos con width:100% +
+   padding (botones, cajas) se hacen mas anchos que su contenedor -> se cortan por la derecha en el movil.
+   Estandar moderno; la maqueta se diseño asumiendolo. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 :root {
   color-scheme: dark;
   /* Rediseño ROSA (jul-2026): mismos NOMBRES de token (los usan todos los componentes), valores nuevos.
@@ -2641,6 +2650,14 @@ button {
   [data-m="introword"] {
     font-size: 27px !important;
     letter-spacing: 0.1em !important;
+  }
+  /* Envoltorio de cada pantalla en movil: menos padding lateral (mas aire) + fondo que despeja la barra
+     inferior (botnav) + su safe-area, para que el ultimo contenido no quede tapado. */
+  [data-m="screen"] {
+    padding-top: 22px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important;
   }
   /* El drawer (clase .drawer en esta app) ocupa toda la pantalla en el teléfono. */
   .drawer {
