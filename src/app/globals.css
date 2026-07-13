@@ -81,6 +81,205 @@ html[data-theme="light"] {
   --ring: 0 0 0 1px rgba(var(--accent-rgb), 0.4), 0 0 22px rgba(var(--accent-rgb), 0.15);
 }
 
+/* ============================================================================
+   SISTEMA DE DISEÑO ROSA de la maqueta de Alex (.dc.html) — VERBATIM.
+   Estos tokens (--bg1/2/3, --s1/2/3 sombras rgb, --panel1/2, --line-rgb, --text2/3,
+   --accent2/3/-lt) los usa el MARKUP NUEVO (cascarón + pantallas reproducidas con
+   estilos inline). Conviven con los tokens de la app (--background, --panel…) durante
+   la migración. Modo: html[data-mode]; acento: html[data-accent] (5 acentos).
+   ============================================================================ */
+:root {
+  --bg1: #150d12;
+  --bg2: #100a0e;
+  --bg3: #0c070a;
+  --s1: 28, 18, 23;
+  --s2: 24, 15, 20;
+  --s3: 16, 10, 14;
+  --panel1: #1d141a;
+  --panel2: #130c10;
+  --line-rgb: 255, 255, 255;
+  --text2: #c6b2b8;
+  --text3: #8a7880;
+  --accent2: #d06e86;
+  --accent3: #c85a78;
+  --accent-lt: #f2aebe;
+}
+html[data-mode="light"],
+html[data-theme="light"] {
+  --bg1: #fbf4f6;
+  --bg2: #f5ecef;
+  --bg3: #ebdce3;
+  --s1: 255, 255, 255;
+  --s2: 255, 255, 255;
+  --s3: 255, 255, 255;
+  --panel1: #ffffff;
+  --panel2: #f4ecef;
+  --line-rgb: 64, 36, 48;
+  --text2: #6c525c;
+  --text3: #9c8892;
+}
+html[data-accent="rose"] {
+  --accent: #e68ca0;
+  --accent2: #d06e86;
+  --accent3: #c85a78;
+  --accent-lt: #f2aebe;
+  --accent-rgb: 230, 140, 160;
+}
+html[data-accent="green"] {
+  --accent: #37b26b;
+  --accent2: #2c9c5c;
+  --accent3: #1f8a55;
+  --accent-lt: #79d89c;
+  --accent-rgb: 55, 178, 107;
+}
+html[data-accent="blue"] {
+  --accent: #4c8df0;
+  --accent2: #3c77db;
+  --accent3: #2e63c4;
+  --accent-lt: #8cb8ff;
+  --accent-rgb: 76, 141, 240;
+}
+html[data-accent="violet"] {
+  --accent: #a66be8;
+  --accent2: #8e54d6;
+  --accent3: #7442c0;
+  --accent-lt: #c9a6ff;
+  --accent-rgb: 166, 107, 232;
+}
+html[data-accent="gold"] {
+  --accent: #d6a94b;
+  --accent2: #c2933a;
+  --accent3: #a87b2c;
+  --accent-lt: #efcd86;
+  --accent-rgb: 214, 169, 75;
+}
+
+/* Las 30 animaciones de la maqueta (verbatim). */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.975); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes bloomDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-40px, 30px) scale(1.08); }
+}
+@keyframes bloomDrift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(50px, -24px) scale(1.05); }
+}
+@keyframes softPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes barGrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes sheen {
+  0% { transform: translateX(-130%); }
+  55%, 100% { transform: translateX(240%); }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 24px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes drawerIn {
+  from { opacity: 0; transform: translateX(44px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dotJump {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+@keyframes introMono {
+  0% { opacity: 0; transform: scale(0.5) rotate(-8deg); }
+  55% { opacity: 1; transform: scale(1.06) rotate(0); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes introBloom {
+  0% { opacity: 0; transform: scale(0.2); }
+  40% { opacity: 0.75; }
+  100% { opacity: 0; transform: scale(2.6); }
+}
+@keyframes introWord {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes introSub {
+  0% { opacity: 0; letter-spacing: 0.2em; }
+  100% { opacity: 0.9; letter-spacing: 0.6em; }
+}
+@keyframes introLine {
+  0% { transform: scaleX(0); opacity: 0; }
+  100% { transform: scaleX(1); opacity: 1; }
+}
+@keyframes introOut {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.14); visibility: hidden; }
+}
+@keyframes shimmerText {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+@keyframes ringSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes drawRing {
+  from { stroke-dashoffset: 283; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes petalFall {
+  0% { opacity: 0; transform: translate(0, -60px) rotate(0); }
+  12% { opacity: 0.9; }
+  55% { transform: translate(34px, 46vh) rotate(170deg); }
+  100% { opacity: 0.12; transform: translate(-22px, 108vh) rotate(330deg); }
+}
+@keyframes scrRise {
+  0% { opacity: 0; transform: translateY(34px); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes scrRight {
+  0% { opacity: 0; transform: translateX(50px); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes scrZoom {
+  0% { opacity: 0; transform: scale(0.955); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes scrLeft {
+  0% { opacity: 0; transform: translateX(-44px); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes tabIn {
+  0% { opacity: 0; transform: translateX(26px) scale(0.97); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes rippleFx {
+  0% { opacity: 0.7; transform: scale(0); }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+@keyframes shockRing {
+  0% { opacity: 0.65; transform: scale(0.15); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+@keyframes numPop {
+  0% { transform: scale(0.7); opacity: 0; }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* Animaciones para el rediseño (drawer de candidata, modal, punto "en directo" de llamada). */
 @keyframes pulse {
   0%,
