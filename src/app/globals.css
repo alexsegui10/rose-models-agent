@@ -2581,21 +2581,21 @@ button {
     display: flex !important;
   }
   [data-m="hero"] {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     gap: 14px !important;
   }
   [data-m="kpis"] {
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
     gap: 12px !important;
   }
   [data-m="funnel"] {
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   }
   [data-m="split"] {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   [data-m="board5"] {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   /* CRM movil: filtro visible + solo la etapa elegida (una columna a la vez, como la maqueta). */
   [data-m="crmfilter"] {
@@ -2612,7 +2612,7 @@ button {
   }
   /* Mensajes movil: alterna lista <-> chat con boton volver (data-msgview). */
   [data-m="msg"] {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     height: calc(100vh - 140px) !important;
     min-height: 420px !important;
   }
@@ -2636,7 +2636,7 @@ button {
     display: flex !important;
   }
   [data-m="calls2"] {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   [data-m="introword"] {
     font-size: 27px !important;
