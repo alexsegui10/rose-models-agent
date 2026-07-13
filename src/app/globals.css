@@ -2622,8 +2622,11 @@ button {
   /* Mensajes movil: alterna lista <-> chat con boton volver (data-msgview). */
   [data-m="msg"] {
     grid-template-columns: minmax(0, 1fr) !important;
-    height: calc(100vh - 140px) !important;
-    min-height: 420px !important;
+    /* Alto = pantalla menos cabecera + barra inferior (botnav) + safe-areas del iPhone, para que el
+       composer del chat quede POR ENCIMA de la barra de abajo (antes quedaba tapado: no se podia escribir
+       ni enviar en el movil). */
+    height: calc(100vh - 160px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+    min-height: 340px !important;
   }
   /* En movil el panel visible ocupa toda la altura (anula el tope de 65vh del breakpoint de tablet). */
   [data-m="msg"] > .chat2-panel {
