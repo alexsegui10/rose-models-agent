@@ -3419,9 +3419,50 @@ button {
   }
 }
 
-/* Tablero CRM del rediseño: 5 columnas en desktop, apiladas en móvil. */
+/* Responsive de la maqueta: colapso a móvil (<=760px) clavado al diseño de Alex. */
 @media (max-width: 760px) {
+  [data-m="tabs-top"] {
+    display: none !important;
+  }
+  [data-m="hidesmall"] {
+    display: none !important;
+  }
+  [data-m="navwrap"] {
+    padding: 0 14px !important;
+    height: 56px !important;
+    gap: 12px !important;
+  }
+  [data-m="botnav"] {
+    display: flex !important;
+  }
+  [data-m="hero"] {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  [data-m="kpis"] {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+  }
+  [data-m="funnel"] {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  [data-m="split"] {
+    grid-template-columns: 1fr !important;
+  }
   [data-m="board5"] {
     grid-template-columns: 1fr !important;
+  }
+  [data-m="calls2"] {
+    grid-template-columns: 1fr !important;
+  }
+  [data-m="introword"] {
+    font-size: 27px !important;
+    letter-spacing: 0.1em !important;
+  }
+  /* El drawer (clase .drawer en esta app) ocupa toda la pantalla en el teléfono. */
+  .drawer {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-left: none !important;
   }
 }
