@@ -2609,10 +2609,17 @@ button {
   /* Mensajes movil: alterna lista <-> chat con boton volver (data-msgview). */
   [data-m="msg"] {
     grid-template-columns: 1fr !important;
-    height: auto !important;
-    min-height: 0 !important;
+    height: calc(100vh - 140px) !important;
+    min-height: 420px !important;
   }
-  [data-m="msg"] [data-pane="chat"] {
+  /* En movil el panel visible ocupa toda la altura (anula el tope de 65vh del breakpoint de tablet). */
+  [data-m="msg"] > .chat2-panel {
+    max-height: none !important;
+  }
+  /* Vista lista por defecto: chat oculto. Las trazas de IA (panel revision) solo en escritorio,
+     fiel a la maqueta movil de 2 paneles; el invariante 6 se mantiene (trazas honestas y visibles en desktop). */
+  [data-m="msg"] [data-pane="chat"],
+  [data-m="msg"] [data-pane="review"] {
     display: none !important;
   }
   [data-m="msg"][data-msgview="chat"] [data-pane="list"] {

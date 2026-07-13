@@ -3045,7 +3045,7 @@ export default function Home() {
               </form>
             </div>
 
-            <div className="chat2-panel" data-pane="chat">
+            <div className="chat2-panel" data-pane="review">
               <div className="chat2-review-head">
                 <span className="chat2-review-title">Revisión de Alex</span>
                 {currentCandidate ? (
