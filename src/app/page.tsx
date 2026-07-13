@@ -1755,16 +1755,43 @@ export default function Home() {
                     <div style={{ animation: "fadeUp .7s both" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 16 }}>
                         <span style={{ width: 28, height: 1, background: "linear-gradient(90deg,var(--accent),transparent)" }} />
-                        <span style={{ fontFamily: "var(--font-jost)", fontSize: 11, letterSpacing: ".34em", color: "var(--accent)", textTransform: "uppercase" }}>
+                        <span
+                          style={{
+                            fontFamily: "var(--font-jost)",
+                            fontSize: 11,
+                            letterSpacing: ".34em",
+                            color: "var(--accent)",
+                            textTransform: "uppercase"
+                          }}
+                        >
                           Panel de control
                         </span>
                       </div>
-                      <h1 style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 52, lineHeight: 1.02, margin: 0, letterSpacing: "-.01em", color: "var(--text)" }}>
+                      <h1
+                        style={{
+                          fontFamily: "var(--font-bodoni)",
+                          fontWeight: 600,
+                          fontSize: 52,
+                          lineHeight: 1.02,
+                          margin: 0,
+                          letterSpacing: "-.01em",
+                          color: "var(--text)"
+                        }}
+                      >
                         Buenas, <span style={{ fontStyle: "italic", color: "var(--accent)" }}>Alex</span>
                       </h1>
-                      <p style={{ color: "var(--text2)", fontSize: 16, lineHeight: 1.5, margin: "14px 0 0", maxWidth: 540, fontWeight: 300 }}>
-                        Esto es lo que ocurre en tu embudo ahora mismo. Rose trabaja <span style={{ color: "#D6B27C" }}>día y noche</span> captando y
-                        cualificando talento por ti.
+                      <p
+                        style={{
+                          color: "var(--text2)",
+                          fontSize: 16,
+                          lineHeight: 1.5,
+                          margin: "14px 0 0",
+                          maxWidth: 540,
+                          fontWeight: 300
+                        }}
+                      >
+                        Esto es lo que ocurre en tu embudo ahora mismo. Rose trabaja{" "}
+                        <span style={{ color: "#D6B27C" }}>día y noche</span> captando y cualificando talento por ti.
                       </p>
                     </div>
                     <div
@@ -1781,15 +1808,56 @@ export default function Home() {
                         transition: ".3s"
                       }}
                     >
-                      <div style={{ position: "absolute", top: 0, bottom: 0, width: "40%", background: "linear-gradient(105deg,transparent,rgba(var(--line-rgb),.1),transparent)", animation: "sheen 6s ease-in-out infinite" }} />
-                      <div style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, letterSpacing: ".28em", color: "var(--accent)", textTransform: "uppercase" }}>Acción sugerida</div>
-                      <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 30, margin: "12px 0 4px", color: "var(--text)" }}>
-                        {total === 0 ? "Cargar demo" : `${pendingList.length} ${pendingList.length === 1 ? "decisión" : "decisiones"}`}
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          bottom: 0,
+                          width: "40%",
+                          background: "linear-gradient(105deg,transparent,rgba(var(--line-rgb),.1),transparent)",
+                          animation: "sheen 6s ease-in-out infinite"
+                        }}
+                      />
+                      <div
+                        style={{
+                          fontFamily: "var(--font-jost)",
+                          fontSize: 10.5,
+                          letterSpacing: ".28em",
+                          color: "var(--accent)",
+                          textTransform: "uppercase"
+                        }}
+                      >
+                        Acción sugerida
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: "var(--font-bodoni)",
+                          fontWeight: 600,
+                          fontSize: 30,
+                          margin: "12px 0 4px",
+                          color: "var(--text)"
+                        }}
+                      >
+                        {total === 0
+                          ? "Cargar demo"
+                          : `${pendingList.length} ${pendingList.length === 1 ? "decisión" : "decisiones"}`}
                       </div>
                       <div style={{ color: "var(--text2)", fontSize: 14, fontWeight: 300 }}>
                         {total === 0 ? "añade candidatas de ejemplo para ver el panel" : "te esperan para aprobar o descartar"}
                       </div>
-                      <div style={{ marginTop: 18, display: "inline-flex", alignItems: "center", gap: 9, fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".06em", color: "var(--accent)" }}>
+                      <div
+                        style={{
+                          marginTop: 18,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 9,
+                          fontFamily: "var(--font-jost)",
+                          fontWeight: 500,
+                          fontSize: 13,
+                          letterSpacing: ".06em",
+                          color: "var(--accent)"
+                        }}
+                      >
                         {total === 0 ? "Cargar ahora" : "Revisar ahora"} <span style={{ fontSize: 15 }}>→</span>
                       </div>
                     </div>
@@ -1799,32 +1867,139 @@ export default function Home() {
                   <div data-m="kpis" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 18, marginBottom: 26 }}>
                     {(
                       [
-                        { label: "Te esperan", value: pendingList.length, color: "var(--accent)", sub: "decisiones pendientes", delay: 0.05, bar: "var(--accent)", bd: 0.2 },
-                        { label: "Activas", value: active, color: "#D6B27C", sub: "en el embudo", delay: 0.12, bar: "#D6B27C", bd: 0.28 },
-                        { label: "Llamadas hoy", value: todayCalls.length, color: "#B98BC9", sub: "agendadas", delay: 0.19, bar: "#B98BC9", bd: 0.36 },
-                        { label: "Total talento", value: total, color: "var(--text2)", sub: "en base de datos", delay: 0.26, bar: "#A9B4C4", bd: 0.44 }
+                        {
+                          label: "Te esperan",
+                          value: pendingList.length,
+                          color: "var(--accent)",
+                          sub: "decisiones pendientes",
+                          delay: 0.05,
+                          bar: "var(--accent)",
+                          bd: 0.2
+                        },
+                        {
+                          label: "Activas",
+                          value: active,
+                          color: "#D6B27C",
+                          sub: "en el embudo",
+                          delay: 0.12,
+                          bar: "#D6B27C",
+                          bd: 0.28
+                        },
+                        {
+                          label: "Llamadas hoy",
+                          value: todayCalls.length,
+                          color: "#B98BC9",
+                          sub: "agendadas",
+                          delay: 0.19,
+                          bar: "#B98BC9",
+                          bd: 0.36
+                        },
+                        {
+                          label: "Total talento",
+                          value: total,
+                          color: "var(--text2)",
+                          sub: "en base de datos",
+                          delay: 0.26,
+                          bar: "#A9B4C4",
+                          bd: 0.44
+                        }
                       ] as const
                     ).map((k) => (
                       <div
                         key={k.label}
-                        style={{ animation: `popIn .55s ${k.delay}s both`, position: "relative", overflow: "hidden", borderRadius: 16, padding: 22, background: "rgba(var(--s1),.6)", border: "1px solid rgba(var(--line-rgb),.06)", transition: ".3s" }}
+                        style={{
+                          animation: `popIn .55s ${k.delay}s both`,
+                          position: "relative",
+                          overflow: "hidden",
+                          borderRadius: 16,
+                          padding: 22,
+                          background: "rgba(var(--s1),.6)",
+                          border: "1px solid rgba(var(--line-rgb),.06)",
+                          transition: ".3s"
+                        }}
                       >
-                        <div style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, letterSpacing: ".2em", color: "#A99098", textTransform: "uppercase" }}>{k.label}</div>
-                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 52, lineHeight: 1, marginTop: 14, color: k.color }}>{k.value}</div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-jost)",
+                            fontSize: 10.5,
+                            letterSpacing: ".2em",
+                            color: "#A99098",
+                            textTransform: "uppercase"
+                          }}
+                        >
+                          {k.label}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-bodoni)",
+                            fontWeight: 600,
+                            fontSize: 52,
+                            lineHeight: 1,
+                            marginTop: 14,
+                            color: k.color
+                          }}
+                        >
+                          {k.value}
+                        </div>
                         <div style={{ color: "var(--text3)", fontSize: 12.5, marginTop: 8, fontWeight: 300 }}>{k.sub}</div>
-                        <div style={{ position: "absolute", left: 0, bottom: 0, height: 2, width: "100%", background: `linear-gradient(90deg,${k.bar},transparent)`, transformOrigin: "left", animation: `barGrow 1s ${k.bd}s both` }} />
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            bottom: 0,
+                            height: 2,
+                            width: "100%",
+                            background: `linear-gradient(90deg,${k.bar},transparent)`,
+                            transformOrigin: "left",
+                            animation: `barGrow 1s ${k.bd}s both`
+                          }}
+                        />
                       </div>
                     ))}
                   </div>
 
                   {/* EMBUDO */}
-                  <div style={{ animation: "fadeUp .7s .2s both", borderRadius: 18, padding: 26, background: "rgba(var(--s2),.5)", border: "1px solid rgba(var(--line-rgb),.06)", marginBottom: 26 }}>
+                  <div
+                    style={{
+                      animation: "fadeUp .7s .2s both",
+                      borderRadius: 18,
+                      padding: 26,
+                      background: "rgba(var(--s2),.5)",
+                      border: "1px solid rgba(var(--line-rgb),.06)",
+                      marginBottom: 26
+                    }}
+                  >
                     <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22 }}>
                       <div>
-                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 23, color: "var(--text)" }}>Embudo de talento</div>
-                        <div style={{ fontFamily: "var(--font-jost)", fontSize: 12.5, color: "var(--text3)", marginTop: 4, fontWeight: 300 }}>{total} candidatas · flujo en tiempo real</div>
+                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 23, color: "var(--text)" }}>
+                          Embudo de talento
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-jost)",
+                            fontSize: 12.5,
+                            color: "var(--text3)",
+                            marginTop: 4,
+                            fontWeight: 300
+                          }}
+                        >
+                          {total} candidatas · flujo en tiempo real
+                        </div>
                       </div>
-                      <button type="button" onClick={() => setActiveTab("CRM")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 13, letterSpacing: ".05em", color: "var(--accent)" }}>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("CRM")}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          fontFamily: "var(--font-jost)",
+                          fontWeight: 500,
+                          fontSize: 13,
+                          letterSpacing: ".05em",
+                          color: "var(--accent)"
+                        }}
+                      >
                         Abrir CRM →
                       </button>
                     </div>
@@ -1833,15 +2008,62 @@ export default function Home() {
                         <div
                           key={phase.label}
                           onClick={() => setActiveTab(phase.label === "Llamadas" ? "LLAMADAS" : "CRM")}
-                          style={{ cursor: "pointer", borderRadius: 14, padding: "18px 16px", background: "rgba(var(--s3),.55)", border: "1px solid rgba(var(--line-rgb),.05)", transition: ".3s", position: "relative", overflow: "hidden" }}
+                          style={{
+                            cursor: "pointer",
+                            borderRadius: 14,
+                            padding: "18px 16px",
+                            background: "rgba(var(--s3),.55)",
+                            border: "1px solid rgba(var(--line-rgb),.05)",
+                            transition: ".3s",
+                            position: "relative",
+                            overflow: "hidden"
+                          }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                             <span style={{ width: 7, height: 7, borderRadius: "50%", background: `var(${phase.colorVar})` }} />
-                            <span style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, letterSpacing: ".1em", color: "#A99098", textTransform: "uppercase", fontWeight: 400 }}>{phase.label}</span>
+                            <span
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontSize: 10.5,
+                                letterSpacing: ".1em",
+                                color: "#A99098",
+                                textTransform: "uppercase",
+                                fontWeight: 400
+                              }}
+                            >
+                              {phase.label}
+                            </span>
                           </div>
-                          <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 38, lineHeight: 1, color: `var(${phase.colorVar})` }}>{phase.count}</div>
-                          <div style={{ marginTop: 14, height: 3, borderRadius: 4, background: "rgba(var(--line-rgb),.06)", overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${Math.round((phase.count / funnelMax) * 100)}%`, background: `var(${phase.colorVar})`, borderRadius: 4, transformOrigin: "left", animation: "barGrow 1.1s .3s both" }} />
+                          <div
+                            style={{
+                              fontFamily: "var(--font-bodoni)",
+                              fontWeight: 600,
+                              fontSize: 38,
+                              lineHeight: 1,
+                              color: `var(${phase.colorVar})`
+                            }}
+                          >
+                            {phase.count}
+                          </div>
+                          <div
+                            style={{
+                              marginTop: 14,
+                              height: 3,
+                              borderRadius: 4,
+                              background: "rgba(var(--line-rgb),.06)",
+                              overflow: "hidden"
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: "100%",
+                                width: `${Math.round((phase.count / funnelMax) * 100)}%`,
+                                background: `var(${phase.colorVar})`,
+                                borderRadius: 4,
+                                transformOrigin: "left",
+                                animation: "barGrow 1.1s .3s both"
+                              }}
+                            />
                           </div>
                         </div>
                       ))}
@@ -1850,32 +2072,97 @@ export default function Home() {
 
                   {/* SPLIT: llamadas de hoy + actividad */}
                   <div data-m="split" style={{ display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 22 }}>
-                    <div style={{ animation: "fadeUp .7s .28s both", borderRadius: 18, padding: 24, background: "rgba(var(--s2),.5)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
+                    <div
+                      style={{
+                        animation: "fadeUp .7s .28s both",
+                        borderRadius: 18,
+                        padding: 24,
+                        background: "rgba(var(--s2),.5)",
+                        border: "1px solid rgba(var(--line-rgb),.06)"
+                      }}
+                    >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 19, color: "var(--text)" }}>Llamadas de hoy</div>
-                        <button type="button" onClick={() => setActiveTab("LLAMADAS")} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-jost)", fontWeight: 500, fontSize: 12.5, letterSpacing: ".04em", color: "#B98BC9" }}>
+                        <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 19, color: "var(--text)" }}>
+                          Llamadas de hoy
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("LLAMADAS")}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            fontFamily: "var(--font-jost)",
+                            fontWeight: 500,
+                            fontSize: 12.5,
+                            letterSpacing: ".04em",
+                            color: "#B98BC9"
+                          }}
+                        >
                           Ver todas →
                         </button>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {todayCalls.length === 0 ? (
-                          <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300, padding: "8px 2px" }}>Sin llamadas para hoy.</div>
+                          <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300, padding: "8px 2px" }}>
+                            Sin llamadas para hoy.
+                          </div>
                         ) : (
                           todayCalls.map((item) => (
                             <div
                               key={item.id}
                               onClick={() => void openDrawer(item)}
-                              style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderRadius: 12, background: "rgba(var(--s3),.5)", border: "1px solid rgba(var(--line-rgb),.05)", transition: ".25s", cursor: "pointer" }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 14,
+                                padding: "12px 14px",
+                                borderRadius: 12,
+                                background: "rgba(var(--s3),.5)",
+                                border: "1px solid rgba(var(--line-rgb),.05)",
+                                transition: ".25s",
+                                cursor: "pointer"
+                              }}
                             >
-                              <div style={{ width: 36, height: 36, borderRadius: "50%", background: `var(${ringColorVar(item)})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 13, color: "var(--accent-contrast)" }}>
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: "50%",
+                                  background: `var(${ringColorVar(item)})`,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontFamily: "var(--font-bodoni)",
+                                  fontWeight: 600,
+                                  fontSize: 13,
+                                  color: "var(--accent-contrast)"
+                                }}
+                              >
                                 {initialOf(item)}
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 500, fontSize: 14.5, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</div>
-                                <div style={{ fontFamily: "var(--font-jost)", fontSize: 11, color: "var(--text3)", fontWeight: 300 }}>{callCardSlotText(item)}</div>
+                                <div style={{ fontWeight: 500, fontSize: 14.5, color: "var(--text)" }}>
+                                  {item.firstName?.trim() || `@${item.instagramUsername}`}
+                                </div>
+                                <div
+                                  style={{ fontFamily: "var(--font-jost)", fontSize: 11, color: "var(--text3)", fontWeight: 300 }}
+                                >
+                                  {callCardSlotText(item)}
+                                </div>
                               </div>
                               <span
-                                style={{ fontFamily: "var(--font-jost)", fontSize: 9.5, padding: "4px 11px", borderRadius: 20, background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 14%, transparent)`, color: `var(${stateColorVar(item.currentState)})`, letterSpacing: ".08em", textTransform: "uppercase", whiteSpace: "nowrap" }}
+                                style={{
+                                  fontFamily: "var(--font-jost)",
+                                  fontSize: 9.5,
+                                  padding: "4px 11px",
+                                  borderRadius: 20,
+                                  background: `color-mix(in srgb, var(${stateColorVar(item.currentState)}) 14%, transparent)`,
+                                  color: `var(${stateColorVar(item.currentState)})`,
+                                  letterSpacing: ".08em",
+                                  textTransform: "uppercase",
+                                  whiteSpace: "nowrap"
+                                }}
                               >
                                 {stateLabel(item.currentState)}
                               </span>
@@ -1885,23 +2172,62 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div style={{ animation: "fadeUp .7s .34s both", borderRadius: 18, padding: 24, background: "rgba(var(--s2),.5)", border: "1px solid rgba(var(--line-rgb),.06)" }}>
-                      <div style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 19, marginBottom: 16, color: "var(--text)" }}>Actividad reciente</div>
+                    <div
+                      style={{
+                        animation: "fadeUp .7s .34s both",
+                        borderRadius: 18,
+                        padding: 24,
+                        background: "rgba(var(--s2),.5)",
+                        border: "1px solid rgba(var(--line-rgb),.06)"
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: "var(--font-bodoni)",
+                          fontWeight: 600,
+                          fontSize: 19,
+                          marginBottom: 16,
+                          color: "var(--text)"
+                        }}
+                      >
+                        Actividad reciente
+                      </div>
                       {recent.length === 0 ? (
                         <div style={{ color: "var(--text3)", fontSize: 13, fontWeight: 300 }}>Sin actividad todavía.</div>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column" }}>
                           {recent.map((item, index) => (
-                            <div key={item.id} onClick={() => void openDrawer(item)} style={{ display: "flex", gap: 14, padding: "10px 2px", cursor: "pointer" }}>
+                            <div
+                              key={item.id}
+                              onClick={() => void openDrawer(item)}
+                              style={{ display: "flex", gap: 14, padding: "10px 2px", cursor: "pointer" }}
+                            >
                               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 4 }}>
-                                <span style={{ width: 9, height: 9, borderRadius: "50%", background: `var(${stateColorVar(item.currentState)})`, flexShrink: 0 }} />
-                                {index < recent.length - 1 ? <span style={{ width: 1, flex: 1, background: "rgba(var(--line-rgb),.08)", marginTop: 5 }} /> : null}
+                                <span
+                                  style={{
+                                    width: 9,
+                                    height: 9,
+                                    borderRadius: "50%",
+                                    background: `var(${stateColorVar(item.currentState)})`,
+                                    flexShrink: 0
+                                  }}
+                                />
+                                {index < recent.length - 1 ? (
+                                  <span style={{ width: 1, flex: 1, background: "rgba(var(--line-rgb),.08)", marginTop: 5 }} />
+                                ) : null}
                               </div>
                               <div style={{ flex: 1, paddingBottom: 8 }}>
                                 <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.4, fontWeight: 300 }}>
-                                  <strong style={{ fontWeight: 500, color: "var(--text)" }}>{item.firstName?.trim() || `@${item.instagramUsername}`}</strong> · {stateLabel(item.currentState)}
+                                  <strong style={{ fontWeight: 500, color: "var(--text)" }}>
+                                    {item.firstName?.trim() || `@${item.instagramUsername}`}
+                                  </strong>{" "}
+                                  · {stateLabel(item.currentState)}
                                 </div>
-                                <div style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, color: "var(--text3)", marginTop: 3 }}>{relTime(item.lastMessageAt)}</div>
+                                <div
+                                  style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, color: "var(--text3)", marginTop: 3 }}
+                                >
+                                  {relTime(item.lastMessageAt)}
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -2582,55 +2908,131 @@ export default function Home() {
       ) : null}
 
       {activeTab === "CRM" ? (
-        <section className="panel">
-          <div className="crm2-head">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-              <div>
-                <h2>CRM de candidatas</h2>
-                <p>
-                  Cada columna es una fase del embudo. Las que esperan tu decisión llevan el anillo{" "}
-                  <strong style={{ color: "var(--warn)" }}>ámbar</strong> ⚠️ en el avatar.
-                </p>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  className="crm2-btn crm2-btn--ghost"
-                  type="button"
-                  onClick={exportCandidatesCsv}
-                  disabled={candidates.length === 0}
-                  title="Descarga todas las candidatas en un archivo CSV (copia de seguridad con teléfono, estado y anuncio)"
+        <div
+          style={{
+            position: "relative",
+            zIndex: 5,
+            maxWidth: 1320,
+            margin: "0 auto",
+            padding: "34px 30px 80px",
+            animation: "scrRight .5s cubic-bezier(.16,1,.3,1) both"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-between",
+              marginBottom: 24,
+              flexWrap: "wrap",
+              gap: 16
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 12 }}>
+                <span style={{ width: 28, height: 1, background: "linear-gradient(90deg,var(--accent),transparent)" }} />
+                <span
+                  style={{
+                    fontFamily: "var(--font-jost)",
+                    fontSize: 11,
+                    letterSpacing: ".32em",
+                    color: "var(--accent)",
+                    textTransform: "uppercase"
+                  }}
                 >
-                  Exportar CSV
-                </button>
-                <button
-                  className="crm2-btn crm2-btn--ghost"
-                  type="button"
-                  onClick={() => void seedDemo()}
-                  title="Añade candidatas de ejemplo para ver el CRM lleno (idempotente; no toca las reales)"
-                >
-                  Cargar demo
-                </button>
+                  Embudo de captación
+                </span>
               </div>
+              <h1 style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 40, margin: 0, color: "var(--text)" }}>
+                CRM de talento
+              </h1>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={exportCandidatesCsv}
+                disabled={candidates.length === 0}
+                title="Descarga todas las candidatas en CSV (copia de seguridad)"
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 22,
+                  background: "rgba(var(--s1),.6)",
+                  border: "1px solid rgba(var(--line-rgb),.08)",
+                  color: "var(--text2)",
+                  fontFamily: "var(--font-jost)",
+                  fontWeight: 500,
+                  fontSize: 12.5,
+                  cursor: candidates.length === 0 ? "not-allowed" : "pointer",
+                  opacity: candidates.length === 0 ? 0.5 : 1
+                }}
+              >
+                Exportar CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => void seedDemo()}
+                title="Añade candidatas de ejemplo (no toca las reales)"
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: 22,
+                  background: "rgba(var(--s1),.6)",
+                  border: "1px solid rgba(var(--line-rgb),.08)",
+                  color: "var(--text2)",
+                  fontFamily: "var(--font-jost)",
+                  fontWeight: 500,
+                  fontSize: 12.5,
+                  cursor: "pointer"
+                }}
+              >
+                Cargar demo
+              </button>
             </div>
           </div>
-          {crmNotice ? <p className="status-bar">{crmNotice}</p> : null}
+          {crmNotice ? (
+            <p
+              style={{
+                margin: "0 0 16px",
+                padding: "11px 15px",
+                borderRadius: 12,
+                background: "rgba(var(--accent-rgb),.08)",
+                border: "1px solid rgba(var(--accent-rgb),.2)",
+                color: "var(--text2)",
+                fontFamily: "var(--font-jost)",
+                fontSize: 13
+              }}
+            >
+              {crmNotice}
+            </p>
+          ) : null}
           {candidates.length === 0 ? (
-            <div className="crm2-seed">
-              <div className="crm2-seed-icon">🗂️</div>
-              <p>Aún no hay candidatas.</p>
-              <p className="muted">
-                Las candidatas entran solas por Instagram. Para ver cómo queda el tablero lleno, carga unas de ejemplo.
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--text3)" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🗂️</div>
+              <p style={{ margin: "0 0 6px", color: "var(--text)", fontFamily: "var(--font-bodoni)", fontSize: 22 }}>
+                Aún no hay candidatas.
               </p>
-              <div className="crm2-seed-actions">
-                <button className="crm2-btn crm2-btn--teal" type="button" onClick={() => void seedDemo()}>
-                  Cargar candidatas de demo
-                </button>
-              </div>
+              <p style={{ margin: "0 0 18px", fontSize: 14, fontWeight: 300 }}>
+                Las candidatas entran solas por Instagram. Para ver el tablero lleno, carga unas de ejemplo.
+              </p>
+              <button
+                type="button"
+                onClick={() => void seedDemo()}
+                style={{
+                  padding: "12px 22px",
+                  borderRadius: 22,
+                  background: "rgba(var(--accent-rgb),.12)",
+                  border: "1px solid rgba(var(--accent-rgb),.4)",
+                  color: "var(--accent)",
+                  fontFamily: "var(--font-jost)",
+                  fontWeight: 600,
+                  fontSize: 13.5,
+                  cursor: "pointer"
+                }}
+              >
+                Cargar candidatas de demo
+              </button>
             </div>
           ) : (
             (() => {
-              // Columnas, etiquetas y agrupacion por estado viven en crmView.ts (capa de presentacion
-              // pura y exhaustiva sobre los 15 estados: ninguna candidata desaparece del tablero).
               const epochOf = (value?: Date | string): number => {
                 if (!value) return 0;
                 const time = new Date(value).getTime();
@@ -2669,11 +3071,35 @@ export default function Home() {
                   item.currentState !== "REJECTED" &&
                   item.currentState !== "CLOSED"
               ).length;
+              const chipStyle = {
+                display: "flex",
+                alignItems: "center",
+                gap: 9,
+                padding: "10px 15px",
+                borderRadius: 22,
+                background: "rgba(var(--s1),.6)",
+                border: "1px solid rgba(var(--line-rgb),.08)",
+                fontFamily: "var(--font-jost)",
+                fontWeight: 500,
+                fontSize: 12.5
+              } as React.CSSProperties;
               return (
                 <>
-                  <div className="crm2-toolbar">
-                    <div className="crm2-search">
-                      <span className="crm2-search-icon">
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 9,
+                        flex: "1 1 240px",
+                        minWidth: 200,
+                        padding: "10px 15px",
+                        borderRadius: 22,
+                        background: "rgba(var(--s1),.6)",
+                        border: "1px solid rgba(var(--line-rgb),.08)"
+                      }}
+                    >
+                      <span style={{ color: "var(--text3)", display: "flex" }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <circle cx="11" cy="11" r="7" />
                           <path d="m21 21-4.3-4.3" />
@@ -2684,95 +3110,129 @@ export default function Home() {
                         placeholder="Buscar por nombre o @usuario…"
                         value={crmSearch}
                         onChange={(event) => setCrmSearch(event.target.value)}
+                        style={{
+                          flex: 1,
+                          background: "none",
+                          border: "none",
+                          outline: "none",
+                          color: "var(--text)",
+                          fontFamily: "var(--font-jost)",
+                          fontSize: 13.5
+                        }}
                       />
                     </div>
-                    <div className="crm2-kpis">
-                      <div className="crm2-kpi" style={{ border: "1px solid color-mix(in srgb, var(--warn) 40%, var(--line))" }}>
-                        <span
-                          className="crm2-kpi-icon"
-                          style={{ background: "color-mix(in srgb, var(--warn) 16%, transparent)", color: "var(--warn)" }}
-                        >
-                          ⚠️
-                        </span>
-                        <div>
-                          <div className="crm2-kpi-value" style={{ color: "var(--warn)" }}>
-                            {attentionCount}
-                          </div>
-                          <div className="crm2-kpi-label">te esperan</div>
-                        </div>
-                      </div>
-                      <div className="crm2-kpi">
-                        <span
-                          className="crm2-kpi-icon"
-                          style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--accent)" }}
-                        >
-                          ⚡
-                        </span>
-                        <div>
-                          <div className="crm2-kpi-value">{activeCount}</div>
-                          <div className="crm2-kpi-label">activas</div>
-                        </div>
-                      </div>
-                      <div className="crm2-kpi">
-                        <span className="crm2-kpi-icon" style={{ background: "var(--panel-2)", color: "var(--muted)" }}>
-                          👥
-                        </span>
-                        <div>
-                          <div className="crm2-kpi-value">{candidates.length}</div>
-                          <div className="crm2-kpi-label">total</div>
-                        </div>
-                      </div>
+                    <div style={{ ...chipStyle, borderColor: "rgba(214,178,124,.35)" }}>
+                      <span style={{ color: "#D6B27C" }}>⚠️</span>
+                      <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 16, color: "#D6B27C" }}>
+                        {attentionCount}
+                      </span>
+                      <span style={{ color: "var(--text3)", fontWeight: 300 }}>te esperan</span>
+                    </div>
+                    <div style={chipStyle}>
+                      <span style={{ color: "var(--accent)" }}>⚡</span>
+                      <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 16, color: "var(--text)" }}>
+                        {activeCount}
+                      </span>
+                      <span style={{ color: "var(--text3)", fontWeight: 300 }}>activas</span>
+                    </div>
+                    <div style={chipStyle}>
+                      <span style={{ color: "var(--text3)" }}>👥</span>
+                      <span style={{ fontFamily: "var(--font-bodoni)", fontWeight: 600, fontSize: 16, color: "var(--text)" }}>
+                        {candidates.length}
+                      </span>
+                      <span style={{ color: "var(--text3)", fontWeight: 300 }}>total</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLivePolling((value) => !value)}
+                      title={livePolling ? "Actualizando en vivo. Clic para pausar." : "Pausado. Clic para reanudar."}
+                      style={{
+                        ...chipStyle,
+                        cursor: "pointer",
+                        color: livePolling ? "var(--accent)" : "var(--text3)",
+                        borderColor: livePolling ? "rgba(var(--accent-rgb),.35)" : "rgba(var(--line-rgb),.08)"
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: "50%",
+                          background: livePolling ? "var(--accent)" : "var(--text3)",
+                          animation: livePolling ? "softPulse 2s ease-in-out infinite" : "none"
+                        }}
+                      />
+                      {livePolling ? "En vivo" : "Pausado"}
+                    </button>
+                    {candidates.some((item) => !/^\d{5,}$/.test(item.instagramUsername)) ? (
                       <button
                         type="button"
-                        className={livePolling ? "live-pill on" : "live-pill"}
-                        onClick={() => setLivePolling((value) => !value)}
-                        title={
-                          livePolling
-                            ? "Actualizando el tablero en vivo. Clic para pausar."
-                            : "Auto-refresco pausado. Clic para reanudar."
-                        }
+                        onClick={() => clearTest()}
+                        title="Borra las candidatas de prueba (las reales no se tocan)"
+                        style={{ ...chipStyle, cursor: "pointer", color: "var(--text3)" }}
                       >
-                        <span className="live-dot" />
-                        {livePolling ? "En vivo" : "Pausado"}
+                        🗑️ Limpiar pruebas
                       </button>
-                      {candidates.some((item) => !/^\d{5,}$/.test(item.instagramUsername)) ? (
-                        <button
-                          type="button"
-                          className="live-pill"
-                          title="Borra las candidatas de prueba y demo (las reales de Instagram no se tocan)"
-                          onClick={() => clearTest()}
-                        >
-                          🗑️ Limpiar pruebas
-                        </button>
-                      ) : null}
-                    </div>
+                    ) : null}
                   </div>
-                  <div className="crm2-board">
+                  <div
+                    data-m="board5"
+                    style={{ display: "grid", gridTemplateColumns: "repeat(5,minmax(0,1fr))", gap: 16, alignItems: "start" }}
+                  >
                     {CRM_COLUMNS.map((phase) => {
                       const cards = visible
                         .filter((item) => crmColumnOf(item.currentState) === phase.id)
                         .sort((a, b) => epochOf(b.lastMessageAt) - epochOf(a.lastMessageAt));
                       return (
-                        <div key={phase.id} className="crm2-col">
-                          <div className="crm2-col-head">
-                            <span className="crm2-col-bar" style={{ background: `var(${phase.colorVar})` }} />
-                            <span className="crm2-col-title">{phase.title}</span>
-                            <span className="crm2-col-count">{cards.length}</span>
+                        <div key={phase.id} style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "0 4px 14px" }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: `var(${phase.colorVar})` }} />
+                            <span
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontWeight: 500,
+                                fontSize: 13,
+                                letterSpacing: ".06em",
+                                textTransform: "uppercase",
+                                color: "var(--text)"
+                              }}
+                            >
+                              {phase.title}
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: "var(--font-jost)",
+                                fontWeight: 500,
+                                fontSize: 11,
+                                color: "var(--accent-contrast)",
+                                background: `var(${phase.colorVar})`,
+                                padding: "2px 9px",
+                                borderRadius: 20,
+                                marginLeft: "auto"
+                              }}
+                            >
+                              {cards.length}
+                            </span>
                           </div>
-                          <div className="crm2-col-body" style={{ borderLeftColor: `var(${phase.colorVar})` }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 60 }}>
                             {cards.length === 0 ? (
-                              <div className="crm2-empty">
-                                <div className="crm2-empty-icon">{phase.emptyIcon}</div>
-                                <div className="crm2-empty-text">{phase.emptyText}</div>
+                              <div
+                                style={{
+                                  textAlign: "center",
+                                  padding: "18px 8px",
+                                  color: "var(--text3)",
+                                  fontSize: 12,
+                                  fontWeight: 300
+                                }}
+                              >
+                                <div style={{ fontSize: 22, marginBottom: 4 }}>{phase.emptyIcon}</div>
+                                {phase.emptyText}
                               </div>
                             ) : (
                               cards.map((candidate) => {
                                 const awaitingDecision =
                                   candidate.currentState === "WAITING_HUMAN_REVIEW" ||
                                   candidate.currentState === "HUMAN_INTERVENTION_REQUIRED";
-                                // El bot esta RETENIDO (no responde solo) tanto si Alex lo paus0 a mano como si
-                                // escalo y espera su decision (HIR/revision): el indicador y el boton lo reflejan
-                                // ("Reanudar"), aunque el reanudado real de una escalada sea via Aprobar/Rechazar.
                                 const paused = candidate.manualControlActive || candidate.automationPaused || awaitingDecision;
                                 const awaitingProfileReview = candidate.currentState === "PROFILE_READY_FOR_REVIEW";
                                 const awaitingProfileAccess = candidate.currentState === "WAITING_PROFILE_ACCESS";
@@ -2780,26 +3240,22 @@ export default function Home() {
                                   candidate.currentState === "COLLECTING_CALL_DETAILS" ||
                                   candidate.currentState === "READY_TO_SCHEDULE";
                                 const closed = candidate.currentState === "REJECTED" || candidate.currentState === "CLOSED";
+                                const needsDevice = candidate.deviceEligibility === "PENDING_QUALITY_TEST";
                                 const isIgsid = /^\d{5,}$/.test(candidate.instagramUsername);
                                 const profile = igProfiles[candidate.instagramUsername];
-                                // @usuario real si se resolvio; si no, el usuario del simulador; para un IGSID sin resolver, nada.
                                 const handle = profile?.username ?? (isIgsid ? null : candidate.instagramUsername);
-                                const profileUrl = profile?.profileUrl ?? null;
                                 const picUrl = profile?.profilePicUrl ?? null;
-                                const hasName = Boolean(candidate.firstName?.trim());
                                 const displayName = candidate.firstName?.trim() || (handle ? `@${handle}` : "Candidata nueva");
                                 const initial = (candidate.firstName?.trim() || handle || candidate.instagramUsername || "?")
                                   .charAt(0)
                                   .toUpperCase();
-                                // Si te sigue, puedes ver su perfil aunque sea privado (sustituto oficial de is_private).
-                                const followsBusiness = profile?.followsBusiness === true;
                                 const followerCount = typeof profile?.followerCount === "number" ? profile.followerCount : null;
                                 const ringVar = ringColorVar(candidate);
                                 const pillVar = stateColorVar(candidate.currentState);
                                 const tags: string[] = [];
                                 if (candidate.age) tags.push(`${candidate.age} años`);
                                 if (typeof candidate.hasOnlyFans === "boolean")
-                                  tags.push(candidate.hasOnlyFans ? "OF: si" : "OF: no");
+                                  tags.push(candidate.hasOnlyFans ? "OF: sí" : "OF: no");
                                 if (candidate.deviceModel) tags.push(candidate.deviceModel);
                                 if (candidate.country || candidate.city)
                                   tags.push((candidate.country || candidate.city) as string);
@@ -2808,10 +3264,38 @@ export default function Home() {
                                     followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}k seg` : `${followerCount} seg`
                                   );
                                 if (candidate.phone) tags.push("📱");
+                                const iconBtn = {
+                                  width: 32,
+                                  height: 32,
+                                  flexShrink: 0,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  border: "1px solid rgba(var(--line-rgb),.08)",
+                                  cursor: "pointer",
+                                  borderRadius: "50%",
+                                  background: "rgba(var(--line-rgb),.03)",
+                                  color: "var(--text2)",
+                                  transition: ".2s"
+                                } as React.CSSProperties;
+                                const decBtn = (bg: string, brd: string, col: string) =>
+                                  ({
+                                    flex: 1,
+                                    height: 33,
+                                    border: `1px solid ${brd}`,
+                                    cursor: "pointer",
+                                    borderRadius: 20,
+                                    background: bg,
+                                    color: col,
+                                    fontFamily: "var(--font-jost)",
+                                    fontWeight: 600,
+                                    fontSize: 11.5,
+                                    letterSpacing: ".02em",
+                                    transition: ".2s"
+                                  }) as React.CSSProperties;
                                 return (
-                                  <article
+                                  <div
                                     key={candidate.id}
-                                    className="crm2-card"
                                     role="button"
                                     tabIndex={0}
                                     onClick={() => void openDrawer(candidate)}
@@ -2821,245 +3305,452 @@ export default function Home() {
                                         void openDrawer(candidate);
                                       }
                                     }}
+                                    title="Abrir ficha"
+                                    style={{
+                                      cursor: "pointer",
+                                      position: "relative",
+                                      borderRadius: 16,
+                                      background: "linear-gradient(162deg,rgba(var(--s1),.92),rgba(var(--s2),.94))",
+                                      border: "1px solid rgba(var(--line-rgb),.07)",
+                                      transition: ".28s",
+                                      animation: "popIn .45s both",
+                                      overflow: "hidden"
+                                    }}
                                   >
-                                    <div className="crm2-card-top">
-                                      <span className="crm2-avatar-wrap">
+                                    <div style={{ height: 3, background: `var(${pillVar})` }} />
+                                    <div
+                                      style={{
+                                        position: "absolute",
+                                        top: 3,
+                                        right: 0,
+                                        width: 130,
+                                        height: 130,
+                                        background: `radial-gradient(circle at 85% 5%,color-mix(in srgb, var(${pillVar}) 16%, transparent),transparent 68%)`,
+                                        pointerEvents: "none"
+                                      }}
+                                    />
+                                    <div style={{ padding: 15, position: "relative" }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                        <span style={{ position: "relative", flexShrink: 0 }}>
+                                          <span
+                                            style={{
+                                              width: 46,
+                                              height: 46,
+                                              borderRadius: "50%",
+                                              background: `var(${ringVar})`,
+                                              display: "flex",
+                                              alignItems: "center",
+                                              justifyContent: "center",
+                                              fontFamily: "var(--font-bodoni)",
+                                              fontWeight: 600,
+                                              fontSize: 16,
+                                              color: "var(--accent-contrast)",
+                                              boxShadow: `0 0 0 2px var(--bg2),0 0 0 3.5px var(${ringVar})`,
+                                              overflow: "hidden"
+                                            }}
+                                          >
+                                            {picUrl ? (
+                                              // eslint-disable-next-line @next/next/no-img-element
+                                              <img
+                                                src={picUrl}
+                                                alt=""
+                                                referrerPolicy="no-referrer"
+                                                onError={(event) => {
+                                                  event.currentTarget.style.display = "none";
+                                                }}
+                                                style={{
+                                                  position: "absolute",
+                                                  inset: 0,
+                                                  width: "100%",
+                                                  height: "100%",
+                                                  objectFit: "cover"
+                                                }}
+                                              />
+                                            ) : null}
+                                            {initial}
+                                          </span>
+                                          <span
+                                            title={paused ? "Bot pausado" : "Bot activo"}
+                                            style={{
+                                              position: "absolute",
+                                              right: -1,
+                                              bottom: -1,
+                                              width: 12,
+                                              height: 12,
+                                              borderRadius: "50%",
+                                              border: "2px solid var(--bg2)",
+                                              background: paused ? "var(--text3)" : "#8FB99F"
+                                            }}
+                                          />
+                                        </span>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div
+                                            style={{
+                                              fontFamily: "var(--font-bodoni)",
+                                              fontWeight: 600,
+                                              fontSize: 16.5,
+                                              color: "var(--text)",
+                                              lineHeight: 1.12,
+                                              whiteSpace: "nowrap",
+                                              overflow: "hidden",
+                                              textOverflow: "ellipsis"
+                                            }}
+                                          >
+                                            {displayName}
+                                          </div>
+                                          {handle ? (
+                                            <div
+                                              style={{
+                                                fontFamily: "var(--font-jost)",
+                                                fontSize: 11,
+                                                color: "var(--text3)",
+                                                fontWeight: 300,
+                                                whiteSpace: "nowrap",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                marginTop: 2
+                                              }}
+                                            >
+                                              @{handle}
+                                            </div>
+                                          ) : null}
+                                        </div>
                                         <span
-                                          className="crm2-avatar"
                                           style={{
-                                            background: `var(${ringVar})`,
-                                            boxShadow: `0 0 0 2px var(--panel), 0 0 0 4px var(${ringVar})`
+                                            flexShrink: 0,
+                                            fontFamily: "var(--font-jost)",
+                                            fontSize: 9.5,
+                                            padding: "4px 10px",
+                                            borderRadius: 20,
+                                            color: `var(${pillVar})`,
+                                            background: `color-mix(in srgb, var(${pillVar}) 12%, transparent)`,
+                                            border: `1px solid color-mix(in srgb, var(${pillVar}) 33%, transparent)`,
+                                            letterSpacing: ".06em",
+                                            textTransform: "uppercase",
+                                            whiteSpace: "nowrap"
                                           }}
                                         >
-                                          {picUrl ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img
-                                              className="crm2-avatar-img"
-                                              src={picUrl}
-                                              alt=""
-                                              referrerPolicy="no-referrer"
-                                              onError={(event) => {
-                                                event.currentTarget.style.display = "none";
-                                              }}
-                                            />
-                                          ) : null}
-                                          {initial}
+                                          {stateLabel(candidate.currentState)}
                                         </span>
-                                        <span
-                                          className="crm2-bot-dot"
-                                          title={paused ? "Bot pausado" : "Bot activo"}
-                                          style={{ background: paused ? "var(--faint)" : "var(--success)" }}
-                                        />
-                                      </span>
-                                      <div className="crm2-id">
-                                        <div className="crm2-name-row">
-                                          <span className="crm2-name">{displayName}</span>
+                                      </div>
+                                      {awaitingDecision && candidate.humanReviewReason ? (
+                                        <div
+                                          style={{
+                                            marginTop: 11,
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 7,
+                                            padding: "4px 10px",
+                                            borderRadius: 20,
+                                            background: "rgba(214,178,124,.12)",
+                                            border: "1px solid rgba(214,178,124,.3)",
+                                            fontFamily: "var(--font-jost)",
+                                            fontSize: 10.5,
+                                            color: "#D6B27C"
+                                          }}
+                                        >
+                                          ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
                                         </div>
-                                        {hasName && handle ? (
-                                          profileUrl ? (
-                                            <a
-                                              className="crm2-username"
-                                              href={profileUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              onClick={(event) => event.stopPropagation()}
+                                      ) : null}
+                                      {profile?.followsBusiness === true || profile?.isPrivate != null ? (
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 11 }}>
+                                          {profile?.followsBusiness === true ? (
+                                            <span
+                                              title="Te sigue: puedes ver su perfil aunque sea privado"
+                                              style={{
+                                                fontFamily: "var(--font-jost)",
+                                                fontSize: 10.5,
+                                                color: "var(--info)",
+                                                padding: "3px 10px",
+                                                borderRadius: 20,
+                                                background: "color-mix(in srgb, var(--info) 12%, transparent)",
+                                                border: "1px solid color-mix(in srgb, var(--info) 33%, transparent)"
+                                              }}
                                             >
-                                              @{handle} ↗
-                                            </a>
-                                          ) : (
-                                            <span className="crm2-username">@{handle}</span>
-                                          )
+                                              ✓ Te sigue
+                                            </span>
+                                          ) : null}
+                                          {profile?.isPrivate === true ? (
+                                            <span
+                                              title="Cuenta privada: mándale tú la solicitud de seguimiento"
+                                              style={{
+                                                fontFamily: "var(--font-jost)",
+                                                fontSize: 10.5,
+                                                color: "var(--text3)",
+                                                padding: "3px 10px",
+                                                borderRadius: 20,
+                                                background: "rgba(var(--line-rgb),.04)",
+                                                border: "1px solid rgba(var(--line-rgb),.05)"
+                                              }}
+                                            >
+                                              🔒 Privada
+                                            </span>
+                                          ) : profile?.isPrivate === false ? (
+                                            <span
+                                              title="Cuenta pública: puedes ver su perfil directamente"
+                                              style={{
+                                                fontFamily: "var(--font-jost)",
+                                                fontSize: 10.5,
+                                                color: "var(--text3)",
+                                                padding: "3px 10px",
+                                                borderRadius: 20,
+                                                background: "rgba(var(--line-rgb),.04)",
+                                                border: "1px solid rgba(var(--line-rgb),.05)"
+                                              }}
+                                            >
+                                              🌐 Pública
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
+                                      {tags.length > 0 ? (
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 13 }}>
+                                          {tags.map((tag, index) => (
+                                            <span
+                                              key={index}
+                                              style={{
+                                                fontFamily: "var(--font-jost)",
+                                                fontSize: 11,
+                                                color: "var(--text2)",
+                                                fontWeight: 300,
+                                                padding: "3px 10px",
+                                                borderRadius: 20,
+                                                background: "rgba(var(--line-rgb),.04)",
+                                                border: "1px solid rgba(var(--line-rgb),.05)"
+                                              }}
+                                            >
+                                              {tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                      {paused && !awaitingDecision ? (
+                                        <div
+                                          style={{
+                                            marginTop: 11,
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 7,
+                                            padding: "5px 11px",
+                                            borderRadius: 20,
+                                            background: "rgba(214,178,124,.12)",
+                                            border: "1px solid rgba(214,178,124,.3)"
+                                          }}
+                                        >
+                                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#D6B27C" }} />
+                                          <span style={{ fontFamily: "var(--font-jost)", fontSize: 10.5, color: "#D6B27C" }}>
+                                            Bot en pausa
+                                          </span>
+                                        </div>
+                                      ) : null}
+                                      <div
+                                        onClick={(event) => event.stopPropagation()}
+                                        style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 12 }}
+                                      >
+                                        {awaitingProfileAccess ? (
+                                          <button
+                                            type="button"
+                                            title="Ya le enviaste tú la solicitud de seguimiento"
+                                            onClick={() => void advanceStage(candidate, "FOLLOW_REQUEST_SENT")}
+                                            style={decBtn(
+                                              "rgba(var(--accent-rgb),.1)",
+                                              "rgba(var(--accent-rgb),.4)",
+                                              "var(--accent)"
+                                            )}
+                                          >
+                                            Ya le mandé la solicitud
+                                          </button>
+                                        ) : null}
+                                        {awaitingProfileReview ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => void advanceStage(candidate, "PROFILE_FIT")}
+                                              style={decBtn("rgba(143,185,159,.12)", "rgba(143,185,159,.4)", "#8FB99F")}
+                                            >
+                                              ✓ Encaja
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => void advanceStage(candidate, "PROFILE_NO_FIT")}
+                                              style={decBtn("rgba(208,106,106,.1)", "rgba(208,106,106,.38)", "#D06A6A")}
+                                            >
+                                              ✕ No encaja
+                                            </button>
+                                          </>
+                                        ) : null}
+                                        {awaitingDecision ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => void applyHumanDecision(candidate, "APPROVE")}
+                                              style={decBtn("rgba(143,185,159,.12)", "rgba(143,185,159,.4)", "#8FB99F")}
+                                            >
+                                              ✓ Encaja
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => void advanceStage(candidate, "REJECT")}
+                                              style={decBtn("rgba(208,106,106,.1)", "rgba(208,106,106,.38)", "#D06A6A")}
+                                            >
+                                              ✕ Rechazar
+                                            </button>
+                                          </>
+                                        ) : null}
+                                        {needsDevice ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              title="Aprueba la calidad del móvil (doble gate)"
+                                              onClick={() => void advanceStage(candidate, "DEVICE_APPROVE")}
+                                              style={decBtn("rgba(169,180,196,.12)", "rgba(169,180,196,.38)", "var(--text2)")}
+                                            >
+                                              ✓ Móvil OK
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => void advanceStage(candidate, "DEVICE_REJECT")}
+                                              style={decBtn("rgba(208,106,106,.1)", "rgba(208,106,106,.38)", "#D06A6A")}
+                                            >
+                                              ✕ Móvil no
+                                            </button>
+                                          </>
+                                        ) : null}
+                                        {awaitingCallConfirm ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => void advanceStage(candidate, "CONFIRM_CALL")}
+                                            style={decBtn("rgba(185,139,201,.12)", "rgba(185,139,201,.4)", "#B98BC9")}
+                                          >
+                                            Confirmar llamada
+                                          </button>
+                                        ) : null}
+                                        {!closed && !awaitingProfileReview && !awaitingDecision ? (
+                                          <>
+                                            {candidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
+                                              <span
+                                                style={{
+                                                  display: "inline-flex",
+                                                  alignItems: "center",
+                                                  height: 33,
+                                                  padding: "0 12px",
+                                                  borderRadius: 20,
+                                                  background: "rgba(143,185,159,.1)",
+                                                  color: "#8FB99F",
+                                                  fontFamily: "var(--font-jost)",
+                                                  fontWeight: 600,
+                                                  fontSize: 11.5
+                                                }}
+                                              >
+                                                ✓ Revisado y OK
+                                              </span>
+                                            ) : (
+                                              <button
+                                                type="button"
+                                                title="Marca el perfil como revisado y OK"
+                                                onClick={() => void advanceStage(candidate, "PROFILE_OK")}
+                                                style={decBtn("rgba(143,185,159,.12)", "rgba(143,185,159,.4)", "#8FB99F")}
+                                              >
+                                                👍 Encaja
+                                              </button>
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => void advanceStage(candidate, "REJECT")}
+                                              style={decBtn("rgba(208,106,106,.1)", "rgba(208,106,106,.38)", "#D06A6A")}
+                                            >
+                                              ✕ Rechazar
+                                            </button>
+                                          </>
                                         ) : null}
                                       </div>
-                                      <span
-                                        className="crm2-pill"
+                                      <div
+                                        onClick={(event) => event.stopPropagation()}
                                         style={{
-                                          color: `var(${pillVar})`,
-                                          background: `color-mix(in srgb, var(${pillVar}) 12%, transparent)`,
-                                          border: `1px solid color-mix(in srgb, var(${pillVar}) 33%, transparent)`
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: 7,
+                                          marginTop: 14,
+                                          paddingTop: 13,
+                                          borderTop: "1px solid rgba(var(--line-rgb),.06)"
                                         }}
                                       >
-                                        {stateLabel(candidate.currentState)}
-                                      </span>
-                                    </div>
-                                    {(awaitingDecision && candidate.humanReviewReason) ||
-                                    followsBusiness ||
-                                    profile?.isPrivate != null ? (
-                                      <div className="crm2-badges">
-                                        {awaitingDecision && candidate.humanReviewReason ? (
-                                          <span
-                                            className="crm2-badge"
-                                            style={{
-                                              color: "var(--warn)",
-                                              background: "color-mix(in srgb, var(--warn) 12%, transparent)",
-                                              border: "1px solid color-mix(in srgb, var(--warn) 33%, transparent)"
-                                            }}
+                                        <button
+                                          type="button"
+                                          title="Responder a mano (pausa el bot)"
+                                          onClick={() => void sendManualReply(candidate)}
+                                          style={iconBtn}
+                                        >
+                                          ✉
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title="Llamar / ver llamadas"
+                                          onClick={() => void openDrawer(candidate)}
+                                          style={iconBtn}
+                                        >
+                                          ☎
+                                        </button>
+                                        {!closed && !awaitingProfileReview && !awaitingDecision ? (
+                                          <button
+                                            type="button"
+                                            title={paused ? "Reanudar bot" : "Pausar bot"}
+                                            onClick={() => void setBotPaused(candidate, !paused)}
+                                            style={{ ...iconBtn, fontSize: 9.5 }}
                                           >
-                                            ⚠ {REVIEW_REASON_LABELS[candidate.humanReviewReason] ?? candidate.humanReviewReason}
-                                          </span>
+                                            {paused ? "▶" : "❚❚"}
+                                          </button>
                                         ) : null}
-                                        {followsBusiness ? (
-                                          <span
-                                            className="crm2-badge"
-                                            title="Te sigue: puedes ver su perfil aunque sea privado"
-                                            style={{
-                                              color: "var(--info)",
-                                              background: "color-mix(in srgb, var(--info) 12%, transparent)",
-                                              border: "1px solid color-mix(in srgb, var(--info) 33%, transparent)"
-                                            }}
+                                        <div style={{ flex: 1 }} />
+                                        <button
+                                          type="button"
+                                          title="Eliminar (confirmación en la ficha)"
+                                          onClick={() => void openDrawer(candidate)}
+                                          style={{ ...iconBtn, color: "var(--text3)" }}
+                                        >
+                                          <svg
+                                            width="13"
+                                            height="13"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
                                           >
-                                            ✓ Te sigue
-                                          </span>
-                                        ) : null}
-                                        {profile?.isPrivate === true ? (
-                                          <span
-                                            className="crm2-badge"
-                                            title="Cuenta privada: mándale tú la solicitud para ver su perfil"
-                                            style={{
-                                              color: "var(--muted)",
-                                              background: "var(--panel-2)",
-                                              border: "1px solid var(--line)"
-                                            }}
-                                          >
-                                            🔒 Privada
-                                          </span>
-                                        ) : profile?.isPrivate === false ? (
-                                          <span
-                                            className="crm2-badge"
-                                            title="Cuenta pública: puedes ver su perfil directamente"
-                                            style={{
-                                              color: "var(--muted)",
-                                              background: "var(--panel-2)",
-                                              border: "1px solid var(--line)"
-                                            }}
-                                          >
-                                            🌐 Pública
-                                          </span>
-                                        ) : null}
+                                            <polyline points="3 6 5 6 21 6" />
+                                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                          </svg>
+                                        </button>
                                       </div>
-                                    ) : null}
-                                    {tags.length > 0 ? (
-                                      <div className="crm2-metas">
-                                        {tags.map((tag, index) => (
-                                          <span key={index} className="crm2-meta">
-                                            {tag}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    ) : null}
-                                    <div className="crm2-actions" onClick={(event) => event.stopPropagation()}>
-                                      {awaitingProfileAccess ? (
-                                        <button
-                                          className="crm2-btn crm2-btn--teal"
-                                          type="button"
-                                          title="La cuenta es privada y ya le has enviado tú la solicitud de seguimiento"
-                                          onClick={() => void advanceStage(candidate, "FOLLOW_REQUEST_SENT")}
+                                      {formatRelativeTime(candidate.lastMessageAt) ? (
+                                        <div
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 6,
+                                            marginTop: 12,
+                                            color: "var(--text3)",
+                                            fontFamily: "var(--font-jost)",
+                                            fontSize: 10.5
+                                          }}
                                         >
-                                          Ya le mandé la solicitud
-                                        </button>
-                                      ) : null}
-                                      {awaitingProfileReview ? (
-                                        <>
-                                          <button
-                                            className="crm2-btn crm2-btn--teal"
-                                            type="button"
-                                            onClick={() => void advanceStage(candidate, "PROFILE_FIT")}
+                                          <svg
+                                            width="11"
+                                            height="11"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
                                           >
-                                            Encaja
-                                          </button>
-                                          <button
-                                            className="crm2-btn crm2-btn--danger"
-                                            type="button"
-                                            onClick={() => void advanceStage(candidate, "PROFILE_NO_FIT")}
-                                          >
-                                            No encaja
-                                          </button>
-                                        </>
-                                      ) : null}
-                                      {awaitingDecision ? (
-                                        <>
-                                          <button
-                                            className="crm2-btn crm2-btn--teal"
-                                            type="button"
-                                            onClick={() => void applyHumanDecision(candidate, "APPROVE")}
-                                          >
-                                            Encaja
-                                          </button>
-                                          <button
-                                            className="crm2-btn crm2-btn--danger"
-                                            type="button"
-                                            onClick={() => void advanceStage(candidate, "REJECT")}
-                                          >
-                                            Rechazar
-                                          </button>
-                                        </>
-                                      ) : null}
-                                      {awaitingCallConfirm ? (
-                                        <button
-                                          className="crm2-btn crm2-btn--teal"
-                                          type="button"
-                                          onClick={() => void advanceStage(candidate, "CONFIRM_CALL")}
-                                        >
-                                          Confirmar llamada
-                                        </button>
-                                      ) : null}
-                                      <button
-                                        className="crm2-btn crm2-btn--ghost"
-                                        type="button"
-                                        onClick={() => void sendManualReply(candidate)}
-                                      >
-                                        Responder
-                                      </button>
-                                      {!closed && !awaitingProfileReview && !awaitingDecision ? (
-                                        <button
-                                          className="crm2-btn crm2-btn--ghost"
-                                          type="button"
-                                          onClick={() => void setBotPaused(candidate, !paused)}
-                                        >
-                                          {paused ? "Reanudar" : "Pausar"}
-                                        </button>
-                                      ) : null}
-                                      {!closed && !awaitingProfileReview && !awaitingDecision ? (
-                                        <>
-                                          {candidate.humanProfileReviewStatus === "POTENTIAL_FIT" ? (
-                                            <span className="crm2-ok-chip">✓ Revisado y OK</span>
-                                          ) : (
-                                            <button
-                                              className="crm2-btn crm2-btn--teal"
-                                              type="button"
-                                              title="Marca el perfil como revisado y OK por ti"
-                                              onClick={() => void advanceStage(candidate, "PROFILE_OK")}
-                                            >
-                                              👍 Encaja
-                                            </button>
-                                          )}
-                                          <button
-                                            className="crm2-btn crm2-btn--danger"
-                                            type="button"
-                                            onClick={() => void advanceStage(candidate, "REJECT")}
-                                          >
-                                            Rechazar
-                                          </button>
-                                        </>
+                                            <circle cx="12" cy="12" r="9" />
+                                            <path d="M12 7v5l3 2" />
+                                          </svg>
+                                          Último mensaje {formatRelativeTime(candidate.lastMessageAt)}
+                                        </div>
                                       ) : null}
                                     </div>
-                                    {formatRelativeTime(candidate.lastMessageAt) ? (
-                                      <div className="crm2-footer">
-                                        <svg
-                                          width="11"
-                                          height="11"
-                                          viewBox="0 0 24 24"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        >
-                                          <circle cx="12" cy="12" r="9" />
-                                          <path d="M12 7v5l3 2" />
-                                        </svg>
-                                        Último mensaje {formatRelativeTime(candidate.lastMessageAt)}
-                                      </div>
-                                    ) : null}
-                                  </article>
+                                  </div>
                                 );
                               })
                             )}
@@ -3072,7 +3763,7 @@ export default function Home() {
               );
             })()
           )}
-        </section>
+        </div>
       ) : null}
 
       {drawerCandidate ? (

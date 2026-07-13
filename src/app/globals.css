@@ -3378,3 +3378,10 @@ button {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Tablero CRM del rediseño: 5 columnas en desktop, apiladas en móvil. */
+@media (max-width: 760px) {
+  [data-m="board5"] {
+    grid-template-columns: 1fr !important;
+  }
+}
