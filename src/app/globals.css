@@ -968,6 +968,9 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* Red de seguridad: nada desborda en horizontal (evita scroll lateral, sobre todo en movil). */
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 .top-bar {
@@ -2170,6 +2173,8 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Recorte circular en la propia imagen: Safari iOS a veces no recorta con overflow:hidden + border-radius del contenedor. */
+  border-radius: 50%;
 }
 .chat2-peer-avatar {
   position: relative;

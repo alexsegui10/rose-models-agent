@@ -3547,10 +3547,7 @@ export default function Home() {
                       </button>
                     ) : null}
                   </div>
-                  <div
-                    data-m="crmfilter"
-                    style={{ display: "none", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}
-                  >
+                  <div data-m="crmfilter" style={{ display: "none", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
                     {CRM_COLUMNS.map((phase) => {
                       const on = crmMobileFilter === phase.id;
                       return (
@@ -3718,7 +3715,10 @@ export default function Home() {
                                       border: "1px solid rgba(var(--line-rgb),.07)",
                                       transition: ".28s",
                                       animation: "popIn .45s both",
-                                      overflow: "hidden"
+                                      overflow: "hidden",
+                                      minHeight: 172,
+                                      display: "flex",
+                                      flexDirection: "column"
                                     }}
                                   >
                                     <div style={{ height: 3, background: `var(${pillVar})` }} />
@@ -3767,7 +3767,8 @@ export default function Home() {
                                                   inset: 0,
                                                   width: "100%",
                                                   height: "100%",
-                                                  objectFit: "cover"
+                                                  objectFit: "cover",
+                                                  borderRadius: "50%"
                                                 }}
                                               />
                                             ) : null}
@@ -4322,7 +4323,11 @@ export default function Home() {
                             const picUrl = profile?.profilePicUrl;
                             return picUrl ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={picUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              <img
+                                src={picUrl}
+                                alt=""
+                                style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                              />
                             ) : (
                               initial
                             );
@@ -4437,9 +4442,12 @@ export default function Home() {
                           animation: "tabIn .34s ease both"
                         }}
                       >
-                        {/* Campos extraidos (todos, en tarjetas al estilo maqueta — no perdemos datos). */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginBottom: 18 }}>
-                          {buildCandidatePanelRows(dc).map(([label, value]) => (
+                        {/* Solo lo esencial (maqueta): 4 tarjetas clave. */}
+                        {(() => {
+                          const prof = igProfiles[dc.instagramUsername ?? ""];
+                          const fc = typeof prof?.followerCount === "number" ? prof.followerCount : null;
+                          const followers = fc == null ? "—" : fc >= 1000 ? `${(fc / 1000).toFixed(1)}k` : `${fc}`;
+                          const fieldCard = (label: string, value: React.ReactNode) => (
                             <div
                               key={label}
                               style={{
@@ -4473,100 +4481,22 @@ export default function Home() {
                                 {value}
                               </div>
                             </div>
-                          ))}
-                        </div>
-
-                        {/* Objeciones / resumen / notas: se conservan. */}
-                        {dc.objections && dc.objections.length > 0 ? (
-                          <div style={{ marginBottom: 18 }}>
-                            <div
-                              style={{
-                                fontFamily: "var(--font-jost)",
-                                fontSize: 10,
-                                letterSpacing: ".16em",
-                                color: "var(--text3)",
-                                textTransform: "uppercase",
-                                marginBottom: 9
-                              }}
-                            >
-                              Objeciones
-                            </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                              {dc.objections.map((objection, index) => (
-                                <span
-                                  key={index}
-                                  style={{
-                                    fontSize: 12,
-                                    padding: "4px 11px",
-                                    borderRadius: 20,
-                                    background: "rgba(208,106,106,.1)",
-                                    border: "1px solid rgba(208,106,106,.3)",
-                                    color: "#D06A6A"
-                                  }}
-                                >
-                                  {objection}
+                          );
+                          return (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginBottom: 20 }}>
+                              {fieldCard("Ciudad", dc.city ?? "—")}
+                              {fieldCard("Edad", dc.age != null ? `${dc.age} años` : "—")}
+                              {fieldCard("Seguidores", followers)}
+                              {fieldCard(
+                                "Móvil",
+                                <span style={{ color: dc.phone ? "var(--accent)" : "var(--text)" }}>
+                                  {dc.phone ?? "—"}
+                                  {dc.phone ? <span style={{ color: "#8FB99F", fontWeight: 600 }}> ✓</span> : null}
                                 </span>
-                              ))}
+                              )}
                             </div>
-                          </div>
-                        ) : null}
-                        {dc.conversationSummary ? (
-                          <div
-                            style={{
-                              marginBottom: 18,
-                              padding: "14px 16px",
-                              borderRadius: 14,
-                              background: "rgba(214,178,124,.07)",
-                              border: "1px solid rgba(214,178,124,.18)"
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontFamily: "var(--font-jost)",
-                                fontSize: 9.5,
-                                letterSpacing: ".16em",
-                                textTransform: "uppercase",
-                                color: "#D6B27C",
-                                marginBottom: 6
-                              }}
-                            >
-                              📝 Resumen
-                            </div>
-                            <div style={{ fontSize: 13.5, color: "var(--text2)", lineHeight: 1.5, fontWeight: 300 }}>
-                              {dc.conversationSummary}
-                            </div>
-                          </div>
-                        ) : null}
-                        {dc.notes && dc.notes.length > 0 ? (
-                          <div style={{ marginBottom: 18 }}>
-                            <div
-                              style={{
-                                fontFamily: "var(--font-jost)",
-                                fontSize: 10,
-                                letterSpacing: ".16em",
-                                color: "var(--text3)",
-                                textTransform: "uppercase",
-                                marginBottom: 9
-                              }}
-                            >
-                              Notas
-                            </div>
-                            {dc.notes.map((note, index) => (
-                              <p
-                                key={index}
-                                style={{
-                                  margin: "0 0 6px",
-                                  fontSize: 13.5,
-                                  color: "var(--text2)",
-                                  lineHeight: 1.5,
-                                  fontWeight: 300
-                                }}
-                              >
-                                {note}
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
+                          );
+                        })()}
 
                         {/* Motivo de revision (para el movil especialmente). */}
                         {(dc.currentState === "WAITING_HUMAN_REVIEW" || dc.currentState === "HUMAN_INTERVENTION_REQUIRED") &&
