@@ -2657,9 +2657,10 @@ button {
 }
 .chat2-title {
   margin: 0;
-  font-size: 23px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  font-family: var(--font-bodoni), Georgia, serif;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 .chat2-subtitle {
   margin: 5px 0 0;
@@ -2675,9 +2676,9 @@ button {
   min-height: 520px;
 }
 .chat2-panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 3%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 8%, var(--line));
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2702,14 +2703,15 @@ button {
 .chat2-cand {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 8px;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 14px;
   border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+  transition: background 0.2s ease;
 }
 .chat2-cand:hover {
   background: var(--panel-2);
@@ -2721,13 +2723,14 @@ button {
 .chat2-cand-avatar {
   position: relative;
   overflow: hidden;
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-weight: 700;
-  font-size: 12px;
+  font-family: var(--font-bodoni), Georgia, serif;
+  font-weight: 600;
+  font-size: 15px;
   color: var(--accent-contrast);
   flex: none;
 }
@@ -2751,15 +2754,17 @@ button {
   min-width: 0;
 }
 .chat2-cand-name {
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .chat2-cand-pill {
-  font-size: 10.5px;
+  font-size: 12px;
+  font-weight: 300;
   color: var(--muted);
+  margin-top: 2px;
 }
 .chat2-center-head {
   flex: none;
@@ -2775,20 +2780,23 @@ button {
   gap: 10px;
 }
 .chat2-peer-avatar {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-weight: 700;
+  font-family: var(--font-bodoni), Georgia, serif;
+  font-weight: 600;
+  font-size: 16px;
   color: var(--accent-contrast);
 }
 .chat2-peer-name {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 500;
 }
 .chat2-peer-username {
   font-size: 11.5px;
+  font-weight: 300;
   color: var(--accent);
 }
 .chat2-status {
@@ -2852,13 +2860,21 @@ button {
   color: var(--warn);
 }
 .chat2-bubble {
-  max-width: 84%;
-  padding: 10px 13px;
-  border-radius: 14px;
-  font-size: 13.5px;
-  line-height: 1.5;
+  max-width: 78%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.45;
   color: var(--text);
   white-space: pre-wrap;
+}
+.chat2-msg[data-role="candidate"] .chat2-bubble {
+  border-bottom-left-radius: 5px;
+}
+.chat2-msg[data-role="agent"] .chat2-bubble,
+.chat2-msg[data-role="alex"] .chat2-bubble {
+  border-bottom-right-radius: 5px;
 }
 .chat2-bubble[data-role="candidate"] {
   background: var(--panel-2);
@@ -2930,25 +2946,28 @@ button {
 }
 .chat2-textarea {
   flex: 1;
-  min-height: 40px;
+  min-height: 44px;
   max-height: 100px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 12px 16px;
+  border-radius: 22px;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 300;
   font-family: inherit;
   resize: none;
   outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .chat2-textarea:focus {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 .chat2-btn-send {
   flex: none;
-  padding: 10px 15px;
-  border-radius: 10px;
+  padding: 10px 18px;
+  border-radius: 999px;
   border: none;
   background: linear-gradient(140deg, var(--accent), var(--accent-deep));
   color: var(--accent-contrast);
@@ -2956,6 +2975,12 @@ button {
   font-size: 12.5px;
   cursor: pointer;
   font-family: inherit;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.chat2-btn-send:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .chat2-btn-send:disabled {
   opacity: 0.5;
