@@ -94,7 +94,7 @@ function variantFor(texts: readonly string[], repetitionIndex: number): string {
 const DEFER_TEXTS = [
   "Mira, eso lo confirmo con mi socio y te lo digo ahora por WhatsApp, ¿vale?",
   "Eso también te lo confirmo por WhatsApp ahora al colgar, que no te quiero decir nada inexacto.",
-  "Pues eso va en el mismo paquete: te lo confirmo por escrito ahora, ¿vale?"
+  "Pues eso va en el mismo paquete: te lo confirmo por WhatsApp ahora, ¿vale?"
 ] as const;
 const DEFER_TEXT = DEFER_TEXTS[0];
 const HANDOFF_TEXTS = [
@@ -162,7 +162,9 @@ const CLOSE_RESCHEDULE_TEXTS = [
 // veta cualquier promesa de ocultar/difuminar la cara o anonimato en la salida redactada).
 const RECONDUCT_FACE_TEXTS = [
   "A muchas al principio les da un poco de corte, es de lo más normal. Pero la cara es justo lo que da confianza al cliente y trae el tráfico, por eso es imprescindible, y nosotros te acompañamos para que lo lleves con naturalidad. ¿Seguimos?",
-  "Te entiendo, de verdad, pero es que la cara es imprescindible para que esto funcione, y estamos contigo en todo el proceso. ¿Le damos una oportunidad?"
+  "Te entiendo, de verdad, pero es que la cara es imprescindible para que esto funcione, y estamos contigo en todo el proceso. ¿Le damos una oportunidad?",
+  "Ya, entiendo que te dé reparo, es de lo más normal al principio. Pero la cara es justo lo que genera confianza y hace que la cuenta funcione, no es algo que podamos quitar; lo bueno es que no vas sola, vamos contigo en todo. ¿Lo intentamos?",
+  "Te noto la duda y la respeto. Aun así, mostrar la cara es imprescindible en esto, es parte de cómo funciona; eso sí, te acompañamos en cada paso para que lo lleves con la mayor naturalidad posible. ¿Seguimos y te cuento el resto?"
 ] as const;
 // Rechazo educado por negarse EN FIRME a la cara (tras reconducir). Cierre con la PUERTA ABIERTA (script
 // aprobado de Alex, condensado para voz). NO valoraciones personales; el rechazo se limita a la política.
@@ -489,7 +491,9 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       // justo donde un LLM podria alucinar una salida de anonimato/difuminar. Con texto fijo aprobado NO hay
       // superficie de fuga; el validador de voz (promisesFaceConcealment) queda como red para el resto de
       // turnos redactados. Se pierde algo de naturalidad en este turno a cambio de garantizar el invariante.
-      const text = variantFor(RECONDUCT_FACE_TEXTS, input.repetitionIndex ?? 0);
+      // CICLA (modulo) en vez de clampar a la ultima: si insiste en la cara varias veces, cada reconduccion
+      // sale con OTRA formulacion en vez de repetir clavada la ultima (sweep AR 14-jul: salia identica x3).
+      const text = RECONDUCT_FACE_TEXTS[(input.repetitionIndex ?? 0) % RECONDUCT_FACE_TEXTS.length];
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };
     }
     case "CLOSE_FACE_REJECTED": {

@@ -220,6 +220,14 @@ const FOLLOWS_ALONG =
 const BARE_AFFIRMATION =
   /^\s*(?:(?:ah+|pues|bueno|si+|oye|mira|eh+|mmm+|mm+|holi|hey|hola+|buenas|uy)[\s,!¡.?]*)*(si+|vale|oka?y?|okis|claro|ya|dale|va|bueno|listo|correcto|perfecto|genial|bien|guay|aja+|ajam+|sip|entiend\w*)[\s,!¡.?]*$/;
 
+// Afirmacion TENTATIVA / "si blando" ("puede ser", "ponele", "supongo", "maso", "capaz (que) si", "igual"):
+// es un SI con reservas, no ruido. Antes caia en unclear -> "no te pillo" fingiendo sordera (sweep AR 14-jul,
+// candidata monosilabica: "puede ser", "puede ser si", "si ponele"). Alex: "aceptar 'puede ser si' como un si".
+// ANCLADA a la frase entera (coletillas + el token + colas tipo "que si"): una objecion ("puede ser pero no me
+// convence") deja texto tras el token y NO casa; ademas se excluye cualquier "no" aparte en el clasificador.
+const SOFT_AFFIRMATION =
+  /^[\s,!¡.?]*(?:(?:ah+|pues|bueno|mmm+|mm+|eh+|si+|ya|dale|va|este|o sea)[\s,!¡.?]+)*(?:puede ser|puede|ponele|supongo|maso|mas o menos|capaz|seguramente|imagino|calculo|igual)(?:[\s,]+(?:que[\s,]+)?(?:si+|igual|supongo|ponele|ser|maso))*[\s,!¡.?]*$/;
+
 // OPINION NEGADA: "no/tampoco/nunca/jamas/ya no ... me parece/gusta/convence/cuadra/encaja/vale/va bien/lo veo".
 // Es un NO, JAMAS un asentimiento. Sin esto, "tampoco me parece justo" caia en FOLLOWS_ALONG (por "me parece
 // justo") y el bot avanzaba/cerraba ignorando la objecion (rev-total 8-jul, roce invariante 3). Cubre negaciones
@@ -400,6 +408,10 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // Una opinion NEGADA nunca es asentimiento: en negociacion cuenta como queja de reparto (sigue la escalera);
   // en general se pide aclarar en vez de avanzar como si aceptara. ANTES de QUESTION y de FOLLOWS_ALONG.
   if (NEGATED_OPINION.test(text)) return input.moneyContext ? "complains-about-share" : "unclear";
+  // "Si blando" tentativo ("puede ser", "ponele", "supongo que si", "capaz si"): asentir y seguir, NUNCA
+  // "no te pillo" fingiendo sordera (sweep AR 14-jul). ANTES de QUESTION porque "supongo QUE si" lleva "que"
+  // (lo cazaba QUESTION -> defer). Anclada a la frase entera y excluye "no": jamas roba una pregunta real.
+  if (SOFT_AFFIRMATION.test(text) && !/\bno\b/.test(text)) return "follows-along";
   // "es que"/"ya que"/"asi que"/"sino que"/"puesto que"/"dado que" son CONJUNCIONES PURAS, NUNCA interrogativas:
   // no deben disparar QUESTION por llevar "que" (bug rev-total 8-jul: "hola si, es que estaba con el nino, dime
   // dime" se tomaba como pregunta desconocida y se defiere). Se neutralizan SOLO esas antes de mirar si es

@@ -13,6 +13,20 @@ describe("clasificador de señal de la llamada", () => {
     expect(sig("sois todas unas estafadoras")).toBe("hostile-or-suspicious");
   });
 
+  it("'sí blando' tentativo -> follows-along, no ASK_REPEAT (sweep AR 14-jul)", () => {
+    expect(sig("puede ser")).toBe("follows-along");
+    expect(sig("puede ser, si")).toBe("follows-along");
+    expect(sig("si, puede ser")).toBe("follows-along");
+    expect(sig("si, ponele")).toBe("follows-along");
+    expect(sig("mmm, puede ser")).toBe("follows-along");
+    expect(sig("supongo que si")).toBe("follows-along");
+    expect(sig("capaz si")).toBe("follows-along");
+    expect(sig("maso")).toBe("follows-along");
+    // NO se traga una objeción ni una negación (esas siguen sin ser asentimiento):
+    expect(sig("puede ser pero no me convence")).not.toBe("follows-along");
+    expect(sig("puede ser que no")).not.toBe("follows-along");
+  });
+
   it("pide hablar con una persona -> wants-human", () => {
     expect(sig("quiero hablar con una persona")).toBe("wants-human");
     expect(sig("prefiero no hablar con un bot")).toBe("wants-human");
