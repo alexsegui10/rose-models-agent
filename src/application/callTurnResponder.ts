@@ -320,7 +320,8 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
           signal = "distrust";
         }
       }
-      // kind "none": el modelo no lo entendió con seguridad -> se queda `unclear` (pedir que repita).
+      // "smalltalk" -> signal "acknowledge" (via resolveRefinedSignal, arriba en kind "signal"): la comprension
+      // entendio que es charla/respuesta, se acusa con naturalidad. "none"/null -> se queda `unclear` (repetir).
     }
     liveSignal = signal;
   }

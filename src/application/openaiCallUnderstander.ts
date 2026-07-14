@@ -85,7 +85,12 @@ export function buildUnderstandPrompt(request: CallUnderstandRequest): string {
   lines.push(
     "- time-concern: duda sobre el TIEMPO o la disponibilidad para hacerlo ('trabajo y no sé si tendré tiempo', 'estudio', 'tengo hijos y poco tiempo', 'cuánto hay que dedicarle al día'). NO es la cara ni desconfianza de estafa."
   );
-  lines.push("- none: no se entiende con seguridad, es ruido, o no encaja en nada de lo anterior.");
+  lines.push(
+    "- smalltalk: te está contando algo o respondiendo a lo que le preguntaste, sin pedir nada ni objetar (charla o conversación normal, p. ej. 'ando con los nenes', 'hago changas con redes', 'estoy en casa'). La entiendes bien, solo que no pide nada."
+  );
+  lines.push(
+    "- none: de verdad NO se entiende con seguridad, es ruido o el audio llegó roto (si la entiendes y es charla normal, usa smalltalk, no none)."
+  );
   if (request.lastBotUtterance && request.lastBotUtterance.trim().length > 0) {
     lines.push(`LO ÚLTIMO QUE DIJISTE TÚ (el bot): «${sanitize(request.lastBotUtterance)}»`);
   }

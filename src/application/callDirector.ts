@@ -40,6 +40,8 @@ export type CallCandidateSignal =
   | "not-interested" // desinterés ("no me interesa") -> cierre cálido sin presionar
   | "wants-to-think" // quiere pensarlo/consultarlo ("me lo tengo que pensar") -> cierre cálido sin contrato
   | "unclear" // ruido / no se entiende -> pedir que lo repita (no asumir asentimiento)
+  | "acknowledge" // dijo algo REAL que no es pregunta ni objecion (la comprension lo entendio como charla/
+  //                 respuesta): acusar con naturalidad y seguir, NUNCA fingir "no te pillo". NO cambia estado.
   | "underage" // declara ser menor de edad -> corte seguro inmediato (invariante 2 en la voz)
   | "face-refusal" // se niega EN FIRME a mostrar la cara / quiere anonimato -> reconducir y, si insiste, cerrar
   | "face-doubt" // DUDA/verguenza sobre la cara ("me da corte") -> tranquilizar con tacto, NUNCA cerrar
@@ -56,6 +58,7 @@ export type CallDirectiveType =
   | "DEFEND_SHARE" // defender el valor del 70 una vez antes de bajar
   | "CONCEDE_SHARE" // bajar un escalón del reparto (con la nueva oferta)
   | "REASSURE" // tranquilizar desconfianza y continuar
+  | "ACKNOWLEDGE" // acusar con naturalidad algo real que no es pregunta ni objecion, y seguir (no cambia estado)
   | "ASK_REPEAT" // no se entendió: pedir que lo repita
   | "HANDOFF_TO_ALEX" // pasar la llamada a una persona
   | "CLOSE_WITH_CONTRACT" // cerrar: "ahora te paso el contrato"
@@ -237,7 +240,7 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       // oí": re-soltarle el contrato entero sonaba a disco rayado (sweep R9 10-jul, decisión deliberada que
       // sustituye al "repetir una vez" de jul-02 PARA ESTE caso). Silencio; el colgado lo pone la
       // plataforma. Un `unclear` (de verdad no lo oyó) SÍ conserva la repetición única de abajo.
-      if (signal === "follows-along" || signal === "none") {
+      if (signal === "follows-along" || signal === "none" || signal === "acknowledge") {
         return { directive: { type: "STAY_SILENT" }, nextState: state };
       }
     }
@@ -335,6 +338,12 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       return { directive: { type: "CLARIFY_LAST_UTTERANCE" }, nextState: s };
     case "distrust":
       return { directive: { type: "REASSURE" }, nextState: s };
+    case "acknowledge":
+      // Dijo algo REAL que no es pregunta ni objecion (la comprension lo entendio como charla/respuesta, no
+      // ruido): se ACUSA con naturalidad y se sigue, en vez de fingir "no te pillo, repite" (sweep AR 14-jul,
+      // candidata que contaba su vida). NO cambia estado -> replay-safe (el replay ya trata el unclear-
+      // inteligible como reinicio-de-racha sin avanzar el guion, asi que live y replay coinciden).
+      return { directive: { type: "ACKNOWLEDGE" }, nextState: s };
     case "wants-to-end": {
       // jul-2026 (decisión de Alex): si quiere colgar NADA MÁS descolgar (aún no se ha explicado NADA),
       // no tiene sentido "te paso el contrato" — se cierra con reagendado por Instagram y el sistema

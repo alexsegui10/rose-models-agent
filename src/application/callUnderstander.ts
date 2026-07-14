@@ -32,6 +32,7 @@ export type CallUnderstoodIntent =
   | "clarification" // no entendió una palabra/parte de lo que el BOT acaba de decir -> reformular en simple
   | "face-concern" // duda / vergüenza / reparo sobre mostrar la CARA -> tranquilizar con el conocimiento de la cara
   | "time-concern" // duda de TIEMPO / disponibilidad ("trabajo y no sé si tendré tiempo") -> responder el tiempo real
+  | "smalltalk" // te cuenta algo o responde a lo que le preguntaste, sin pregunta ni objeción -> acusar y seguir
   | "none"; // no se entiende con seguridad -> se queda como unclear (pedir que repita)
 
 export interface CallUnderstandRequest {
@@ -60,6 +61,7 @@ export const CALL_UNDERSTOOD_INTENTS: readonly CallUnderstoodIntent[] = [
   "clarification",
   "face-concern",
   "time-concern",
+  "smalltalk",
   "none"
 ] as const;
 
@@ -97,6 +99,9 @@ export function resolveRefinedSignal(intent: CallUnderstoodIntent | null): Refin
       return { kind: "face-concern" };
     case "time-concern":
       return { kind: "time-concern" };
+    case "smalltalk":
+      // Charla / respuesta sin intención de negocio: acusar con naturalidad y seguir (no cambia estado).
+      return { kind: "signal", signal: "acknowledge" };
     case "distrust":
       return { kind: "signal", signal: "distrust" };
     case "identity":

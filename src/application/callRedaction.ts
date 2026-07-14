@@ -222,6 +222,10 @@ const REASSURE_FALLBACK_TEXTS = [
   "Te entiendo, es normal tener dudas. Vamos paso a paso y sin compromiso. Y lo importante: el dinero lo cobras tú directamente en tu cuenta y luego nos pasas nuestra parte, así que el dinero pasa primero por ti. ¿Qué es lo que más te preocupa?",
   "Que es normal, de verdad, no te preocupes. Tú no te comprometes a nada hoy: lo lees todo con calma y me preguntas lo que quieras."
 ] as const;
+// Acuse NEUTRO (sweep AR 14-jul): cuando dijo algo REAL que no es pregunta ni objecion (una respuesta a lo que
+// le preguntamos, o charla), se reacciona con naturalidad y se sigue, SIN fingir "no te pillo". Fallback si no
+// hay LLM; el redactor, si esta, reacciona a lo que dijo en concreto.
+const ACKNOWLEDGE_FALLBACK_TEXTS = ["Ya, te sigo, cuéntame.", "Vale, te sigo sin problema.", "Ajá, te sigo; dime."] as const;
 
 /**
  * Aviso al redactor cuando esta directiva YA se usó antes en la llamada: que no suene a disco rayado.
@@ -484,6 +488,17 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
           "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar, y retoma la conversación." + repeatHint(input),
         referenceInstagram: false,
         emptyFallback: variantFor(REASSURE_FALLBACK_TEXTS, input.repetitionIndex ?? 0)
+      });
+    case "ACKNOWLEDGE":
+      // Acuse neutro: ella conto/comento algo que NO es pregunta ni objecion (una respuesta o charla). Se
+      // reacciona con naturalidad y se sigue, JAMAS fingiendo que no se oye. Sin hechos que aportar; el
+      // validador de voz sigue vetando cifras/promesas/despedidas por si el LLM se pasa.
+      return planFromKnowledge(directive.type, input, {
+        instruction:
+          "Ella acaba de contarte o comentarte algo que NO es una pregunta ni una objeción (una respuesta a lo que le preguntaste, o charla). Reacciona con naturalidad e interés en UNA frase corta y sigue la conversación con calidez. NO le pidas que repita, NO digas que se oye mal, y no añadas datos ni cifras." +
+          repeatHint(input),
+        referenceInstagram: false,
+        emptyFallback: variantFor(ACKNOWLEDGE_FALLBACK_TEXTS, input.repetitionIndex ?? 0)
       });
     case "RECONDUCT_FACE": {
       // 1ª negativa a la cara: tranquilizar e insistir con TACTO, SIN cerrar (Alex: "hay que intentarlo").
