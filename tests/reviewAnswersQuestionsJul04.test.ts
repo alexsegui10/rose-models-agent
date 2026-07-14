@@ -7,8 +7,11 @@ import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMem
 
 // Re-sonda 4-jul (caso Fernanda): una pregunta de IDENTIDAD ("¿seria con mi nombre original?") estando
 // ya en WAITING_HUMAN_REVIEW recibia el holding "lo comento con mi socio", ignorandola. Regla de Alex:
-// SIEMPRE se contesta lo que pregunta y luego se reconduce. Ahora se responde con el conocimiento
-// aprobado, SIN cambiar de estado y SIN filtrar cifras en una negociacion (invariantes 3 y 4).
+// SIEMPRE se contesta lo que pregunta. Se responde con el conocimiento aprobado, SIN cambiar de estado y
+// SIN filtrar cifras en una negociacion (invariantes 3 y 4).
+// Actualizado 14-jul: en el PRIMER turno de revision, tras responder la duda se CIERRA con el socio en el
+// mismo mensaje (respuesta + cierre), y a partir de ahi pausa total. La duda sigue respondiendose (no se
+// ignora); lo nuevo es que ahora ademas se anexa el cierre del socio.
 
 function createEngine() {
   const repository = new InMemoryCandidateRepository();
@@ -39,7 +42,7 @@ async function seedInReview(repository: InMemoryCandidateRepository, overrides: 
 }
 
 describe("WAITING_HUMAN_REVIEW: se contesta la duda con cobertura (no solo %/contrato)", () => {
-  it("'¿seria con mi nombre original?' -> responde identidad espanola, NO el holding del socio (caso Fernanda)", async () => {
+  it("'¿seria con mi nombre original?' -> responde identidad espanola Y cierra con el socio (caso Fernanda, Alex 14-jul)", async () => {
     const { engine, repository } = createEngine();
     const seeded = await seedInReview(repository);
     const result = await engine.handleIncomingMessage({
@@ -47,8 +50,9 @@ describe("WAITING_HUMAN_REVIEW: se contesta la duda con cobertura (no solo %/con
       instagramUsername: seeded.instagramUsername,
       message: "O sea no seria con mi nombre original?"
     });
+    // La duda se responde (identidad) — NUNCA se ignora — y ademas cierra con el socio en el mismo mensaje.
     expect(result.response.toLowerCase()).toContain("identidad");
-    expect(result.response.toLowerCase()).not.toContain("comentar tu perfil con mi socio");
+    expect(result.response.toLowerCase()).toContain("comentar tu perfil con mi socio");
     // Sigue en revision: contesta pero NO reabre la cualificacion ni avanza (invariante 4).
     expect(result.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
   });

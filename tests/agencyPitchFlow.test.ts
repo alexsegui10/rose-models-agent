@@ -50,14 +50,58 @@ describe("agency pitch is delivered proactively when the candidate has no agency
     });
     expect(result.candidate.deviceEligibility).not.toBe("UNKNOWN");
     expect(result.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
+    // Arranque suavizado (Alex 14-jul); la coletilla "cualquier duda me preguntas" se MANTIENE (Alex 14-jul).
+    expect(result.response.toLowerCase()).toContain("de forma breve");
     expect(result.response.toLowerCase()).toContain("cualquier duda me preguntas");
 
-    // Anti-bucle: seguir hablando NO vuelve a soltar el pitch.
+    // Anti-bucle: seguir hablando NO vuelve a soltar el pitch; ahora ademas cierra con "lo comento con mi
+    // socio" (mensaje siguiente al pitch) y a partir de ahi pausa.
     const again = await engine.handleIncomingMessage({
       candidateId: id,
       instagramUsername: username,
       message: "vale, entendido"
     });
     expect(again.response.toLowerCase()).not.toMatch(/chatters|cuentas de instagram/);
+    expect(again.response.toLowerCase()).toContain("mi socio");
+  });
+
+  it("tras el pitch, si pregunta una duda la responde Y cierra con 'lo comento con mi socio' en el mismo mensaje, luego pausa (Alex 14-jul)", async () => {
+    const { engine } = createEngine();
+    const username = "pitch_socio";
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: username,
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+    const id = opener.candidate.id;
+    await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "me llamo sofia" });
+    await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "tengo 35" });
+    await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "no tengo of" });
+    const pitch = await engine.handleIncomingMessage({
+      candidateId: id,
+      instagramUsername: username,
+      message: "iphone 13 pro max"
+    });
+    // El pitch entra en revision pero NO lleva el cierre del socio (va en el mensaje siguiente).
+    expect(pitch.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
+    expect(pitch.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
+    expect(pitch.response.toLowerCase()).not.toContain("mi socio");
+
+    // Pregunta la cifra JUSTO despues del pitch: responde el 70/30 Y cierra con el socio en el MISMO mensaje.
+    const asked = await engine.handleIncomingMessage({
+      candidateId: id,
+      instagramUsername: username,
+      message: "y cuanto os quedais vosotros?"
+    });
+    expect(asked.response).toMatch(/70%/);
+    expect(asked.response.toLowerCase()).toContain("mi socio");
+
+    // A partir de ahi, pausa total (en visto) hasta el Encaja.
+    const paused = await engine.handleIncomingMessage({
+      candidateId: id,
+      instagramUsername: username,
+      message: "vale"
+    });
+    expect(paused.response.trim()).toBe("");
   });
 });

@@ -1615,6 +1615,12 @@ export class ConversationEngine {
       responsePlan.questionToAsk === null &&
       (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
         projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED");
+    // Turnos DENTRO de revision (menos el del pitch): los pone el CODIGO, nunca OpenAI (que repetia el pitch
+    // de relleno y no pausaba — spot-check de Alex 14-jul). En el PRIMER turno responde su duda si la hay y
+    // cierra con "lo comento con mi socio" en el mismo mensaje; una vez dicho el socio, TODO queda en visto
+    // (pausa total) hasta el Encaja, tambien las preguntas. El pitch (agencyExplanation) va aparte, sin socio.
+    const isReviewTurn =
+      !useCanonicalOpenerTemplate && agencyExplanation === null && projectedCandidate.currentState === "WAITING_HUMAN_REVIEW";
     // Cierre TERMINAL (p.ej. menor de edad -> CLOSED): el mensaje de cierre lo pone SIEMPRE el codigo, NUNCA
     // OpenAI (invariante 2). Sin esto, un turno social de una menor ("tengo 16, y tu?") dejaria que el LLM
     // redactara la respuesta social en vez del cierre legal. El estado ya es CLOSED; la respuesta tambien
@@ -1723,6 +1729,7 @@ export class ConversationEngine {
           : useCanonicalOpenerTemplate ||
               useDeterministicFitAnswer ||
               isAwaitingHoldingTurn ||
+              isReviewTurn ||
               useDeterministicFaceTurn ||
               useDeterministicClosingTurn
             ? deterministicDraftOutput(deterministicResponse)
@@ -1903,6 +1910,7 @@ export class ConversationEngine {
       !useCanonicalOpenerTemplate &&
       !useDeterministicFitAnswer &&
       !isAwaitingHoldingTurn &&
+      !isReviewTurn &&
       !useDeterministicFaceTurn &&
       !useDeterministicClosingTurn;
     // El borrador YA pregunta algo si lleva "?" O si pide con un imperativo/forma sin signo ("Dime la marca y el
@@ -2627,6 +2635,23 @@ function generateResponse(
     // seguridad (menor, contradicciones, inyeccion) saltan ANTES de llegar aqui, y al dar Alex el Encaja
     // el reproceso lee y contesta lo que ella escribio durante la pausa. Las ramas de debajo solo aplican
     // al turno en que AUN no se ha dicho lo del socio (responder-primero antes de pausar).
+    // Cierre "lo comento con mi socio" que se ANEXA a la respuesta en el primer turno de revision (Alex
+    // 14-jul): tras el pitch, si ella pregunta algo se le responde Y se cierra con el socio en el MISMO
+    // mensaje; si no hay nada que responder, va el cierre a secas. A partir de ahi, pausa total (arriba).
+    const partnerReviewClose =
+      "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
+    const answerThenPartnerClose = (answer: string): string => {
+      // Vamos a PAUSAR con el socio, asi que una pregunta-puente colada al final ("...¿cuanto tiempo le
+      // dedicas?") queda incoherente (pregunta + "lo comento con mi socio" a la vez). Se quitan las burbujas
+      // finales que sean pregunta; el resto de la respuesta se conserva (Alex 14-jul, fleco de la sim de Sofia).
+      const bubbles = answer
+        .split(/\n{2,}/)
+        .map((bubble) => bubble.trim())
+        .filter((bubble) => bubble.length > 0);
+      while (bubbles.length > 0 && bubbles[bubbles.length - 1].endsWith("?")) bubbles.pop();
+      const cleaned = bubbles.join("\n\n");
+      return cleaned.length > 0 ? `${cleaned}\n\n${partnerReviewClose}` : partnerReviewClose;
+    };
     if (alreadyAwaitingPartner) {
       return "";
     }
@@ -2641,7 +2666,9 @@ function generateResponse(
       responsePlan.answerFacts.length > 0 &&
       isBusinessAnswerIntent(understanding, responsePlan)
     ) {
-      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
+      return answerThenPartnerClose(
+        businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage))
+      );
     }
     // Duda de IDENTIDAD/PRIVACIDAD geografica en revision (re-sonda 4-jul, caso Fernanda: "¿seria con mi
     // nombre original?" recibia el holding del socio, ignorando su pregunta). Se responde con el conocimiento
@@ -2654,7 +2681,9 @@ function generateResponse(
       !responsePlan.requiresHumanReview &&
       responsePlan.knowledgeEntryIds.includes("geo-privacy-three-layers")
     ) {
-      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
+      return answerThenPartnerClose(
+        businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage))
+      );
     }
     // REGLA DE ALEX (5-jul): en revision, una PREGUNTA que el bot SABE responder (conocimiento aprobado
     // en el plan) SE RESPONDE — cualquier tema, no solo %/contrato/privacidad. Lo que NO sabe -> EN VISTO
@@ -2676,7 +2705,9 @@ function generateResponse(
       !responsePlan.uncoveredQuestion &&
       isBusinessAnswerIntent(understanding, responsePlan)
     ) {
-      return businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage));
+      return answerThenPartnerClose(
+        businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage))
+      );
     }
     // Pide o pregunta por la LLAMADA estando en revision: no se agenda sin el OK de Alex (invariante 4),
     // pero dejarla en visto seria ignorar la señal mas caliente del funnel. Linea HONESTA con el estado
@@ -2693,8 +2724,8 @@ function generateResponse(
     return turnProvidedInfo
       ? // "gracias" generico en vez de "por explicarmelo": esto ultimo suena a non-sequitur cuando ella no
         // explico nada (dio un telefono, dijo "Bien", etc.) — re-sonda 4-jul (Lourdes, silvana).
-        "Perfecto, gracias.\n\nVoy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado."
-      : "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
+        `Perfecto, gracias.\n\n${partnerReviewClose}`
+      : partnerReviewClose;
   }
 
   // Pregunta de ELEGIBILIDAD por la edad ("¿hay posibilidades con 21 años?", "¿sirvo teniendo 23?"): desde

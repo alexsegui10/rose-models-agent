@@ -5,9 +5,11 @@ import { LocalBusinessKnowledgeRetriever } from "@/application/businessKnowledge
 import { LocalExampleRetriever } from "@/application/exampleRetriever";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
-// Peticion de Alex (7-jul): el "lo comento con mi socio" NO debe dispararse si ella tiene ANTES una duda
-// CONTESTABLE. El bot debe responder la duda primero; solo cuando no hay nada que responder sale el socio-pause.
-// (Regla de Alex del 5-jul ya implementada: en revision, una pregunta con respuesta aprobada SE RESPONDE.)
+// Peticion de Alex (14-jul, REVIERTE la regla del 7-jul): tras el pitch, si ella pregunta una duda
+// CONTESTABLE, el bot la RESPONDE Y cierra con "lo comento con mi socio" en el MISMO mensaje; a partir de ahi,
+// pausa total (en visto) hasta el Encaja. La duda NUNCA se ignora (se responde), pero ya no se queda "abierto"
+// respondiendo dudas sin fin — eso hacia que no pausara (spot-check de Sofia). El reproceso, al dar Encaja,
+// lee y contesta lo que ella escribio durante la pausa.
 
 const SOCIO = /comento con mi socio|comentar tu perfil con mi socio|con mi socio/i;
 
@@ -34,8 +36,8 @@ async function toJustAfterPitch(engine: ConversationEngine, u: string) {
   return of.candidate;
 }
 
-describe("Socio-pause NO se dispara si hay una duda contestable (Alex 7-jul)", () => {
-  it("si pregunta el % justo despues del pitch, RESPONDE el 70/30 y NO suelta el socio-pause", async () => {
+describe("Tras el pitch: responde la duda Y cierra con el socio, luego pausa (Alex 14-jul)", () => {
+  it("si pregunta el % justo despues del pitch, RESPONDE el 70/30 Y cierra con el socio en el mismo mensaje", async () => {
     const { engine } = mk();
     const u = "sp_pct_" + Math.random().toString().slice(2, 6);
     const after = await toJustAfterPitch(engine, u);
@@ -45,11 +47,11 @@ describe("Socio-pause NO se dispara si hay una duda contestable (Alex 7-jul)", (
       instagramUsername: u,
       messages: [{ content: "oye y cuanto me llevo yo de lo que se gana?" }]
     });
-    expect(r.response).toMatch(/70|30/); // responde la cifra que pregunta
-    expect(r.response).not.toMatch(SOCIO); // NO pausa con el socio dejando la duda sin contestar
+    expect(r.response).toMatch(/70|30/); // responde la cifra que pregunta (NUNCA la ignora)
+    expect(r.response).toMatch(SOCIO); // ...y cierra con el socio en el mismo mensaje (Alex 14-jul)
   });
 
-  it("si pregunta como trabajais justo despues del pitch, lo EXPLICA y NO suelta el socio-pause", async () => {
+  it("si pregunta como trabajais justo despues del pitch, lo EXPLICA Y cierra con el socio en el mismo mensaje", async () => {
     const { engine } = mk();
     const u = "sp_met_" + Math.random().toString().slice(2, 6);
     await toJustAfterPitch(engine, u);
@@ -58,9 +60,9 @@ describe("Socio-pause NO se dispara si hay una duda contestable (Alex 7-jul)", (
       instagramUsername: u,
       messages: [{ content: "y como trabajais exactamente? que haceis vosotros?" }]
     });
-    // Responde con el metodo (contenido/monetizacion/trafico/gestion), sin soltar el socio-pause.
+    // Responde con el metodo (contenido/monetizacion/trafico/gestion) Y cierra con el socio (Alex 14-jul).
     expect(r.response.toLowerCase()).toMatch(/contenido|monetiz|trafico|gestion|nosotros/);
-    expect(r.response).not.toMatch(SOCIO);
+    expect(r.response).toMatch(SOCIO);
   });
 
   it("(control) si NO tiene ninguna duda, SI sale el mensaje del socio", async () => {
@@ -70,5 +72,22 @@ describe("Socio-pause NO se dispara si hay una duda contestable (Alex 7-jul)", (
 
     const r = await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: "vale genial" }] });
     expect(r.response).toMatch(SOCIO);
+  });
+
+  it("una SEGUNDA duda, ya dicho el socio, queda EN VISTO (pausa total, Alex 14-jul)", async () => {
+    const { engine } = mk();
+    const u = "sp_pausa_" + Math.random().toString().slice(2, 6);
+    await toJustAfterPitch(engine, u);
+
+    // 1a duda: se responde Y se cierra con el socio en el mismo mensaje.
+    const first = await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: "oye y cuanto me llevo yo?" }] });
+    expect(first.response).toMatch(SOCIO);
+
+    // 2a duda (ya se dijo el socio): queda EN VISTO, no se responde. Se contestara al dar Alex el Encaja.
+    const second = await engine.handleIncomingTurn({
+      instagramUsername: u,
+      messages: [{ content: "y la cuenta quien la abre?" }]
+    });
+    expect(second.response.trim()).toBe("");
   });
 });

@@ -16,13 +16,16 @@ const entries: KnowledgeEntryInput[] = [
       // pregunta "como trabajais". TROCEADO en burbujas CORTAS (Alex 22-jun: los parrafos largos quedan muy
       // de robot). Se mantiene en ~5 piezas: el techo de rafaga de Instagram (~9s, pausas capadas a 4.5s)
       // no entrega bien mas de ~5 burbujas por turno.
-      "Te explico rapido como trabajamos: tu solo te encargas de mandar el contenido.",
+      // Arranque suavizado (Alex 14-jul): "Vale pues, te voy a explicar de forma breve...". Se MANTIENE la
+      // coletilla "cualquier duda me preguntas" (Alex 14-jul lo confirmo). El cierre "lo comento con mi socio"
+      // NO va en el pitch: lo pone el codigo en el MENSAJE SIGUIENTE cuando ella responde/pregunta.
+      "Vale pues, te voy a explicar de forma breve como trabajamos: tu solo te encargas de mandar el contenido.",
       "Nosotros hacemos el resto: la monetizacion, el trafico y toda la gestion.",
       "El trafico lo hacemos con cuentas de instagram que creamos con ubicaciones y nombres españoles.",
       "Al tener bastantes seguidores ponemos el link a tu of y empezamos a monetizar con el equipo de chatters 24/7.",
       "En la llamada te lo explico todo mejor.",
-      // Cierre calido del pitch en su PROPIA burbuja (peticion de Alex 7-jul): tras explicar como trabajamos,
-      // invita a preguntar sin presionar, como mensaje aparte.
+      // Cierre calido del pitch en su PROPIA burbuja (peticion de Alex 7-jul, mantenida 14-jul): tras explicar
+      // como trabajamos, invita a preguntar sin presionar, como mensaje aparte.
       "Si tienes cualquier duda me preguntas sin problema."
     ],
     prohibitedClaims: [
@@ -45,10 +48,10 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["No prometer resultados.", "No inventar servicios concretos no documentados."],
     escalationConditions: ["La candidata pide resultados garantizados.", "La candidata pregunta por servicios no documentados."],
     requiresHumanReview: false,
-    version: "services-agency-management-2026-06-22.1",
+    version: "services-agency-management-2026-07-14.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-15"
+    updatedAt: "2026-07-14"
   }
 ];
 
