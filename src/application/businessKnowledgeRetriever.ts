@@ -414,11 +414,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("services", "agency", "agency-responsibilities", "instagram", "operations");
-  // Ubicación de la agencia ("¿dónde estáis?", "¿de dónde sois?"): perfil de agencia (española).
+  // Identidad / ubicación de la agencia ("¿dónde estáis?", "¿de dónde sois?", "¿de qué agencia sos?",
+  // "¿de qué empresa?", "¿para quién trabajas?"): perfil de agencia (Rose Models, española). Antes "de qué
+  // agencia sos" no casaba -> knowledgeEntries vacío -> uncovered por el token "agencia" -> HIR (auditoría
+  // 15-jul). Ahora surfacea la ficha agency-profile-rose-models y se responde "Soy Alex, de Rose Models".
   if (
-    /\b(donde (?:estais|estan|esta la agencia|trabajais)|de donde (?:sois|son)|ubicad\w*|ubicacion de la agencia)\b/.test(message)
+    /\b(donde (?:estais|estan|esta la agencia|trabajais)|de donde (?:sois|son)|ubicad\w*|ubicacion de la agencia|de que agencia|que agencia (?:es|sos|sois|son|eres|es esta)|de que empresa|para quien trabaj\w*|quien(?:es)? (?:sois|son|es) (?:la )?agencia)\b/.test(
+      message
+    )
   )
-    tags.push("agency", "identity");
+    // Se pushea "agency"/"rose-models" (ambas en agency-profile), NO "identity": esa tag la comparte la ficha
+    // AI-transparency (la del "¿eres un bot?"), que escala a HIR — y "de qué agencia sos" NO debe escalar. La
+    // pregunta de bot la surfacea su propio regex (línea ~236). (auditoría 15-jul: "identity" colaba HIR aquí.)
+    tags.push("agency", "rose-models");
   // Verificación de la cuenta de OnlyFans ("¿me verifico con mi DNI?"): proceso documentado de apertura.
   if (
     /\b(verificar|verificacion|verificarme|dni|documento de identidad)\b[^.!?]{0,30}\b(onlyfans|of|cuenta)\b/.test(message) ||
