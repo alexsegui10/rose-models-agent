@@ -123,6 +123,58 @@ const entries: KnowledgeEntryInput[] = [
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-07-07"
+  },
+  {
+    // Confirmado por Alex (15-jul-2026, auditoria E2E): "¿cuántas chicas llevan?" (tamaño del roster) no tenia
+    // respuesta -> se surfaceaba una ficha equivocada (tiempos de lanzamiento) = non-sequitur. Grupo pequeno,
+    // enmarcado como atencion cercana. Sin cifras de reparto ni promesas de ingresos (invariante 3).
+    id: "faq-roster-size",
+    category: "FAQ",
+    title: "Cuantas chicas lleva la agencia",
+    facts: [
+      "Rose Models es un equipo pequeno: ahora mismo lleva alrededor de cinco chicas.",
+      "Al ser pocas, se trabaja de cerca y de forma personalizada con cada una."
+    ],
+    approvedAnswerPoints: [
+      "Somos un equipo pequeno, ahora mismo llevamos unas 5 chicas.",
+      "Al ser pocas trabajamos de cerca con cada una, de forma personalizada."
+    ],
+    prohibitedClaims: ["Inventar un numero mayor para aparentar.", "Prometer resultados o ingresos.", "Dar cifras de reparto."],
+    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["faq", "roster", "how-many-girls"],
+    requiresHumanReview: false,
+    version: "faq-roster-size-2026-07-15.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-15"
+  },
+  {
+    // Confirmado por Alex (15-jul-2026, auditoria E2E): "¿cuántos seguidores tendre?" no tenia respuesta. Se
+    // enmarca como lo que HACE la agencia ("solemos crear cuentas que llegan a..."), NO como garantia de
+    // resultados a la candidata. Rango dado por Alex. Sin cifras de reparto ni promesa de ingresos (invariante 3).
+    id: "faq-followers-range",
+    category: "FAQ",
+    title: "A cuantos seguidores suelen llegar las cuentas",
+    facts: [
+      "Las cuentas de Instagram que crea la agencia suelen llegar a entre 5.000 y 20.000 seguidores en aproximadamente un mes o mes y algo.",
+      "Es lo habitual segun el trabajo de la agencia, no una cifra garantizada para cada caso."
+    ],
+    approvedAnswerPoints: [
+      "Solemos crear cuentas de Instagram que llegan a entre 5.000 y 20.000 seguidores en un mes o mes y algo.",
+      "Depende un poco de cada caso, pero ese suele ser el rango."
+    ],
+    prohibitedClaims: [
+      "Garantizar esos seguidores como resultado seguro para la candidata.",
+      "Prometer ingresos o dar cifras de ganancias.",
+      "Dar cifras de reparto."
+    ],
+    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
+    tags: ["faq", "followers", "instagram-growth", "results"],
+    requiresHumanReview: false,
+    version: "faq-followers-range-2026-07-15.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-15"
   }
 ];
 

@@ -229,6 +229,21 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // privacidad sin venir a cuento (auditoría 15-jul, voz). Se excluye el "nada raro" con lookbehind.
   if (/\b(desconfianza|duda|no me fio|estafa|enfadada|enfado)\b/.test(message) || /(?<!nada )\braro\b/.test(message))
     tags.push("distrust", "objection", "human-intervention", "scam", "anger");
+  // "¿cuántas chicas llevan?" (roster) y "¿cuántos seguidores tendré?" (crecimiento IG): tenían respuesta de
+  // Alex pero no ruta -> se surfaceaba una ficha equivocada (tiempos de lanzamiento) = non-sequitur (auditoría
+  // 15-jul). Ahora enrutan a sus FAQ dedicadas (faq-roster-size / faq-followers-range).
+  if (
+    /\b(cuantas (?:chicas|modelos|mujeres|personas|chavalas)|cuanta gente|cuantas (?:lleva|llevais|llevan|manejais|manejan|sois|teneis|tienen))\b/.test(
+      message
+    )
+  )
+    tags.push("roster", "faq");
+  if (
+    /\b(cuantos seguidores|seguidores (?:voy a|tendre|tendria|se consiguen|se llega|llega|tiene)|cuanto (?:crece|sube)|cuantos followers|\bfollowers\b)\b/.test(
+      message
+    )
+  )
+    tags.push("followers", "results", "faq");
   // Sin "requirement": esa etiqueta tambien marca la politica de cara y provocaba volcadas de
   // conocimiento no pedidas (sermon de la cara ante "tengo iPhone 14 Pro").
   if (/\b(iphone|i phone|android|movil|telefono necesito|samsung|galaxy|s23|s24|s25)\b/.test(message))
