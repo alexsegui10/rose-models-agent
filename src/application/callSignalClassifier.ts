@@ -203,9 +203,12 @@ const SUBSTANTIVE_QUESTION = /\b(que|como|cuando|cuanto|cuanta|cuantos|cual|cual
 const GREETING =
   /^\s*(?:(?:hola+|muy buenas|buenas tardes|buenas noches|buenos dias|buenas|holi|hey|que tal todo|que tal|como estas|como andas|como va|todo bien|estas|guap[oa]|ti[oa]|wey)[\s,!¡.?]*)+$/;
 
-// ¿Es una pregunta?
+// ¿Es una pregunta? OJO: la conjunción causal "porque" (junta, "hago changas PORQUE no tengo fijo") NO va en
+// el patrón — se confundía con el interrogativo y se difería un "detalle" inexistente al WhatsApp (auditoría
+// 15-jul, voz). El interrogativo real "¿por qué...?" lleva "?" (lo caza el `?$`) o se escribe "por que" con
+// espacio (que sí está); solo se excluye la forma junta causal.
 const QUESTION =
-  /\?\s*$|\b(que|como|cuando|cuanto|cuanta|cuantos|cual|cuales|donde|por que|porque|quien|para que)\b|(me puedes|puedes|podrias|podeis|me podeis|sabes|sabeis) (decir|explicar|contar|aclarar|mandar|ensenar|saber|si)|(tengo|una|otra) (duda|pregunta)/;
+  /\?\s*$|\b(que|como|cuando|cuanto|cuanta|cuantos|cual|cuales|donde|por que|quien|para que)\b|(me puedes|puedes|podrias|podeis|me podeis|sabes|sabeis) (decir|explicar|contar|aclarar|mandar|ensenar|saber|si)|(tengo|una|otra) (duda|pregunta)/;
 
 // Afirmaciones / asentimiento -> avanzar. El prefijo tolera VARIAS coletillas encadenadas ("hola si",
 // "mmm vale...", "eh bueno dale") — jul-2026, barrido de personas: "hola si" caía en unclear y el bot

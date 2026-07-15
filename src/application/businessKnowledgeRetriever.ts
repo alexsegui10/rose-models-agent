@@ -224,7 +224,10 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(preaviso|finalizar|terminar|contenido autorizado|dejar la agencia)\b/.test(message))
     tags.push("termination", "content-rights", "legal-review");
   if (/\b(como funciona|proceso|que pasos)\b/.test(message)) tags.push("faq", "process", "how-it-works");
-  if (/\b(desconfianza|duda|no me fio|raro|estafa|enfadada|enfado)\b/.test(message))
+  // "raro" como desconfianza es "esto es raro / suena raro / medio raro", NO "NADA raro" (descriptor benigno
+  // de contenido: "es nada raro, tranqui"), que empujaba el tag genérico "objection" y volcaba el bloque de
+  // privacidad sin venir a cuento (auditoría 15-jul, voz). Se excluye el "nada raro" con lookbehind.
+  if (/\b(desconfianza|duda|no me fio|estafa|enfadada|enfado)\b/.test(message) || /(?<!nada )\braro\b/.test(message))
     tags.push("distrust", "objection", "human-intervention", "scam", "anger");
   // Sin "requirement": esa etiqueta tambien marca la politica de cara y provocaba volcadas de
   // conocimiento no pedidas (sermon de la cara ante "tengo iPhone 14 Pro").
