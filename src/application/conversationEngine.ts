@@ -1572,10 +1572,15 @@ export class ConversationEngine {
       immediateObjective: immediateObjectiveFor(projectedCandidate.currentState, understanding.intent, isOpenerTurn)
     });
 
-    // Coherencia en la espera: si en mensajes recientes ya se aviso de que se consulta con el socio, no
-    // se repite el mismo aviso en bucle (se varia a un acuse breve). Decision de Alex (mas coherencia).
-    const alreadyAwaitingPartner = recentMessages.some(
-      (message) => message.role === "agent" && /\b(mi socio|comentar tu perfil|lo comento|comentarlo)\b/i.test(message.content)
+    // Coherencia en la espera: si ya se aviso de que se consulta con el socio, no se repite el aviso en bucle
+    // (se varia a un acuse breve / pausa total). Decision de Alex (mas coherencia). DURABLE (auditoria 15-jul):
+    // se mira la ventana ANCHA (pitchLookbackHistory, 100), no los 8 recientes, para que la pausa NO se re-emita
+    // cuando el aviso del socio scrollea fuera de la ventana corta (bug real: socio repetido 3 veces). Y el
+    // patron se ACOTA a los marcadores del cierre de revision ("comentar tu perfil / lo comento / comentarlo"):
+    // el "mi socio" a secas casaba tambien el acuse del MOVIL ("ese movil lo valoro con mi socio") y disparaba
+    // la pausa antes de tiempo (fuga real: pregunta sin responder en no-entiende).
+    const alreadyAwaitingPartner = pitchLookbackHistory.some(
+      (message) => message.role === "agent" && /\b(comentar tu perfil|lo comento|comentarlo)\b/i.test(message.content)
     );
     // Coherencia del gate de movil: si ya se le dijo que con ese movil no se puede, no repetir el mismo
     // rechazo en bucle (fallo real del replay: 11 veces "lamentablemente con ese movil...").
