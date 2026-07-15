@@ -21,7 +21,7 @@ const entries: KnowledgeEntryInput[] = [
       "No se envian mensajes indefinidamente.",
       "Si dice que no le interesa, se intenta recuperar una sola vez y si mantiene rechazo se cierra."
     ],
-    approvedAnswerPoints: ["Si no responde, se puede hacer seguimiento limitado, no insistir indefinidamente."],
+    approvedAnswerPoints: ["Sin agobios: si en algun momento no te encaja, no te insisto ni te lleno de mensajes."],
     prohibitedClaims: [
       "Enviar mensajes indefinidos.",
       "Insistir despues de rechazo mantenido.",
@@ -32,10 +32,10 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["Si no encaja, de momento puede dejar de responder sin motivos fisicos o detallados."],
     escalationConditions: ["Rechazo ambiguo.", "Enfado.", "Sospecha de estafa."],
     requiresHumanReview: false,
-    version: "follow-up-limited-attempts-2026-06-09.1",
+    version: "follow-up-limited-attempts-2026-07-15.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-09"
+    updatedAt: "2026-07-15"
   }
 ];
 

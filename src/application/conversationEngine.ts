@@ -3061,6 +3061,17 @@ function isAgeFitDoubt(message: string): boolean {
   if (/\d{1,3}\s*%|\b\d{1,3}\s*[\/\-]\s*\d{1,3}\b|\b\d{2}\s+\d{2}\b/.test(m)) {
     return false;
   }
+  // Encuadre de TIEMPO/PLAZO ("cuanto tardan en decirme si encajo", "cuando me avisas", "para cuando", "los
+  // tiempos"): es pregunta de proceso/tiempos, NO una duda de si es demasiado mayor. Sin esto, el token
+  // "encaj\w*" activaba la tranquilizacion de edad ante una pregunta de plazos (auditoria 15-jul). Se cuida
+  // "estoy a tiempo" (duda de edad real): no se excluye por "tiempo" a secas, solo por estos encuadres.
+  if (
+    /\b(cuanto\s+(?:tarda|tardan|tardas|tiempo)|cuando\s+(?:me\s+)?(?:avis|dic|dec|sab|confirm|escrib|contest|llam|responde|contact)\w*|para\s+cuando|en\s+cuanto\s+tiempo|los?\s+tiempos|plazos?)\b/.test(
+      m
+    )
+  ) {
+    return false;
+  }
   return (
     /\?/.test(message) &&
     /\b(demasiad\w*|suficiente|sirvo\b|sirve para|valgo\b|encaj\w*|muy mayor|mayor para|demasiado mayor|estoy a tiempo|mucho para (?:esto|vosotros|vos|vosotras))\b/.test(
