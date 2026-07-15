@@ -104,4 +104,54 @@ describe("agency pitch is delivered proactively when the candidate has no agency
     });
     expect(paused.response.trim()).toBe("");
   });
+
+  // REGRESION (Alex 15-jul, caso "Laura"): si la candidata COMPLETA el guion en el MISMO turno en que hace
+  // una pregunta cubierta de proceso ("¿la cuenta la abro yo o vosotros?"), esa respuesta pisaba el pitch
+  // proactivo y se PERDIA (saltaba directo a "lo comento con mi socio"). Orden pedido por Alex: primero se
+  // responde su pregunta, al turno siguiente sale el pitch, y despues el socio. Nunca se salta el pitch.
+  it("completa + pregunta cubierta en el mismo turno: responde primero, LUEGO el pitch, LUEGO el socio (no se salta el pitch)", async () => {
+    const { engine } = createEngine();
+    const username = "laura_pitch_skip";
+    const opener = await engine.handleIncomingMessage({
+      instagramUsername: username,
+      profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+    const id = opener.candidate.id;
+    await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "me llamo laura" });
+    await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "tengo 29" });
+    // Da el movil (aun sin OF -> guion incompleto, sin pitch todavia).
+    await engine.handleIncomingMessage({ candidateId: id, instagramUsername: username, message: "tengo un iphone 14" });
+
+    // Turno de COMPLETAR (da el OF) + pregunta cubierta a la vez: se le RESPONDE la pregunta y se queda en
+    // QUALIFYING (la revision se difiere un turno para no perder el pitch). NADA de pitch ni de socio aqui.
+    const answered = await engine.handleIncomingMessage({
+      candidateId: id,
+      instagramUsername: username,
+      message: "no tengo of. oye una cosa, la cuenta la abro yo o la abris vosotros?"
+    });
+    expect(answered.candidate.hasOnlyFans).toBe(false);
+    expect(answered.candidate.currentState).toBe("QUALIFYING");
+    expect(answered.response.toLowerCase()).not.toMatch(/chatters|cuentas de instagram/);
+    expect(answered.response.toLowerCase()).not.toContain("mi socio");
+
+    // Turno siguiente SIN pregunta nueva: AHORA si sale el pitch (no se lo saltó) y entra en revision.
+    const pitch = await engine.handleIncomingMessage({
+      candidateId: id,
+      instagramUsername: username,
+      message: "ah vale, gracias"
+    });
+    expect(pitch.response.toLowerCase()).toMatch(/chatters|cuentas de instagram/);
+    expect(pitch.response.toLowerCase()).toContain("de forma breve");
+    expect(pitch.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
+    expect(pitch.response.toLowerCase()).not.toContain("mi socio");
+
+    // Y despues del pitch, el cierre con el socio.
+    const socio = await engine.handleIncomingMessage({
+      candidateId: id,
+      instagramUsername: username,
+      message: "perfecto"
+    });
+    expect(socio.response.toLowerCase()).toContain("mi socio");
+  });
 });

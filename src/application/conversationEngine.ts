@@ -1239,6 +1239,13 @@ export class ConversationEngine {
     // de "Como te llamas?" x11). Un helper futuro debe elegir conscientemente cual de las dos usa.
     const recentMessages = await this.dependencies.repository.listMessages(activeCandidate.id, 8);
     const plannerHistory = await this.dependencies.repository.listMessages(activeCandidate.id, 30);
+    // Ventana ANCHA solo para "¿ya se solto el pitch de la agencia?": el pitch se da PRONTO (al completar
+    // el guion), asi que 100 mensajes cubren cualquier conversacion real. Con la ventana corta, tras una
+    // pausa larga + reentrada por REQUEST_MORE_INFO el pitch podia scrollear fuera y re-dispararse (duplicado).
+    const pitchLookbackHistory = await this.dependencies.repository.listMessages(activeCandidate.id, 100);
+    const agencyPitchDelivered = pitchLookbackHistory.some(
+      (message) => message.role === "agent" && agencyExplanationGivenPattern.test(message.content)
+    );
     // El ultimo mensaje del agente se reutiliza en varios pasos del turno (extraccion contextual,
     // declive contextual, guard anti-repeticion): se calcula una vez y se recorre el array una sola vez.
     const lastAgentMsg = lastAgentMessageContent(recentMessages);
@@ -1487,13 +1494,22 @@ export class ConversationEngine {
     // No-fit por plataforma: si BUSCA Fansly/otra en vez de OnlyFans, se cierra (Alex 6-jul). Solo cuando lo
     // busca, no cuando solo pregunta si trabajamos con ella (eso lo aclara el guard de plataforma y se sigue).
     const wantsOtherPlatform = wantsCompetitorPlatformInsteadOfOF(groupedMessage.content);
+    // Pitch ya dado? (Alex 15-jul): si en el historial reciente ya salio el pitch de la agencia, la revision
+    // NO se difiere esperandolo (evita quedarse en QUALIFYING para siempre). Mismo patron que usa el beat.
+    const pitchAlreadyGiven = agencyPitchDelivered;
+    // Una pregunta de dinero/negociacion NUNCA se difiere por el pitch (cae en revision, invariante 3). Se
+    // normaliza (minusculas + sin tildes) porque el regex tiene los literales sin acentos: sin esto "cuanto
+    // cobro" con tilde ("cuánto cobro") no casaba y colaba una pregunta de dinero en el defer del pitch.
+    const messageMentionsMoney = moneyOrNegotiationPattern.test(normalizeText(groupedMessage.content));
     for (let step = 0; step < 3; step += 1) {
       const nextState = decideNextState(
         projectedCandidate,
         understanding,
         responsePlan,
         criticalHumanReviewReason,
-        wantsOtherPlatform
+        wantsOtherPlatform,
+        pitchAlreadyGiven,
+        messageMentionsMoney
       );
       if (!nextState || nextState === projectedCandidate.currentState) {
         break;
@@ -1596,7 +1612,7 @@ export class ConversationEngine {
     // Beat del pitch: a una candidata inexperta (sin OF o sin agencias) se le explica como trabajamos
     // de forma proactiva (decision de Alex) con el pitch confirmado verbatim, sin pasar por el LLM, pero
     // SOLO cuando el guion esencial (incl. movil) ya esta completo, para que el movil vaya antes del pitch.
-    const agencyExplanation = agencyExplanationBeat(projectedCandidate, activeCandidate, recentMessages, responsePlan);
+    const agencyExplanation = agencyExplanationBeat(projectedCandidate, activeCandidate, agencyPitchDelivered, responsePlan);
     // PIVOTE Fase 2 (Alex 6-jul, esere.md): los turnos de cualificacion YA NO usan la plantilla determinista
     // fija. Antes, un turno que era SOLO una pregunta de cualificacion (sin nada que responder) emitia la
     // pregunta de guion tal cual (robotico); ahora pasa por el LLM (gpt-5.4) para que REACCIONE a su situacion
@@ -2377,7 +2393,9 @@ function decideNextState(
   understanding: ModelConversationOutput,
   responsePlan: ResponsePlan,
   criticalHumanReviewReason: string | null,
-  wantsOtherPlatform = false
+  wantsOtherPlatform = false,
+  pitchAlreadyGiven = false,
+  messageMentionsMoney = false
 ): CandidateState | null {
   // CLOSED es terminal: ningun plan posterior puede sacar a la candidata de ahi.
   if (candidate.currentState === "CLOSED") {
@@ -2460,14 +2478,22 @@ function decideNextState(
   }
 
   if (candidate.currentState === "QUALIFYING" && evaluateQualificationReadiness(candidate).readyForHumanReview) {
-    // No saltar a revision en el MISMO turno en que la candidata hace una pregunta RESPONDIBLE (%, contrato):
-    // primero se le responde (sigue en QUALIFYING) y al turno siguiente, sin pregunta nueva, pasa a revision.
-    // Asi el "lo comento con mi socio" sale AL FINAL, no cortando su pregunta (peticion de Alex 22-jun). La
-    // negociacion ya escalo antes (requiresHumanReview -> HIR), asi que aqui solo se difiere una duda legitima.
+    // No saltar a revision en el MISMO turno en que la candidata hace una pregunta RESPONDIBLE: primero se le
+    // responde (sigue en QUALIFYING) y al turno siguiente, sin pregunta nueva, pasa a revision. Asi el "lo
+    // comento con mi socio" sale AL FINAL, no cortando su pregunta (peticion de Alex 22-jun). El
+    // `!requiresHumanReview` excluye SIEMPRE la negociacion (isCommercialEscalation ya la marca): una
+    // negociacion NUNCA se difiere ni recibe el pitch, cae en revision (invariante 3).
+    const inexperienced = candidate.hasOnlyFans === false || candidate.worksWithAnotherAgency === false;
+    // Pitch pendiente (Alex 15-jul, caso Laura): si una inexperta COMPLETA el guion en el mismo turno en que
+    // hace una pregunta cubierta (p. ej. "¿la cuenta la abro yo o vosotros?"), esa respuesta PISA el pitch
+    // proactivo (beat, que se suprime con answerFacts>0) y se perderia. Se difiere la revision un turno: se
+    // responde su pregunta ahora, el pitch sale al turno siguiente y el socio despues (orden pedido por Alex:
+    // responder -> pitch -> socio). Una vez dado el pitch (pitchAlreadyGiven) ya no se difiere por esto.
+    const pitchStillOwed = inexperienced && !pitchAlreadyGiven && !messageMentionsMoney;
     const hasAnswerablePendingQuestion =
       responsePlan.answerFacts.length > 0 &&
       !responsePlan.requiresHumanReview &&
-      (understanding.intent === "ASKS_ABOUT_PERCENTAGE" || understanding.intent === "ASKS_ABOUT_CONTRACT");
+      (understanding.intent === "ASKS_ABOUT_PERCENTAGE" || understanding.intent === "ASKS_ABOUT_CONTRACT" || pitchStillOwed);
     if (!hasAnswerablePendingQuestion) {
       return "WAITING_HUMAN_REVIEW";
     }
@@ -4198,6 +4224,16 @@ function escapeRegExp(value: string): string {
 const agencyPitchEntry = businessKnowledgeEntries.find((entry) => entry.id === "services-agency-management");
 const AGENCY_PITCH_TEXT = agencyPitchEntry ? agencyPitchEntry.approvedAnswerPoints.join("\n\n") : null;
 const agencyExplanationGivenPattern = /chatters|cuentas de instagram|cuentas con ubicaciones/i;
+// Dinero / negociacion (Alex 15-jul): una candidata que pregunta por cifras o negocia ("cuanto cobro",
+// "cuanto gano", "quiero ganar mas", "el 50 para mi", "70/30", "%") NUNCA se difiere por el pitch — cae en
+// revision como siempre (invariante 3). El pitch proactivo solo se difiere para una pregunta de PROCESO
+// cubierta y no-comercial (p. ej. "¿la cuenta la abro yo o vosotros?", caso Laura). Se evalua sobre texto
+// NORMALIZADO (sin tildes). OJO: los tokens deben ser ESPECIFICOS de dinero; "para mi" y "mejora*" sueltos
+// casaban preguntas de proceso ("es solo para mi?", "mejorar mis fotos") y les robaban el pitch -> por eso
+// "para mi" exige una cifra delante (\d para mi = "50 para mi") y "mejora*" se quita (lo comercial de verdad
+// ya escala via requiresHumanReview/isCommercialEscalation, que es la red primaria de la cifra).
+const moneyOrNegotiationPattern =
+  /\b(cuanto (cobro|gano|gana|ganaria|cobraria|pagan|pagais|me pagan|me llevo|saco|me queda|me toca)|porcentaje|comision|reparto|salario|sueldo|ganar mas|quiero\s+(el\s+|un\s+)?\d|negoci\w*)\b|\d{1,3}\s+para mi\b|\d{1,3}\s?%|\d{1,2}\/\d{1,2}/i;
 
 /**
  * Beat proactivo del pitch (decision de Alex 14-jun): cuando la candidata ACABA de decir que NO ha
@@ -4208,7 +4244,7 @@ const agencyExplanationGivenPattern = /chatters|cuentas de instagram|cuentas con
 function agencyExplanationBeat(
   candidateAfter: Candidate,
   candidateBefore: Candidate,
-  recentMessages: ConversationMessage[],
+  pitchAlreadyDelivered: boolean,
   responsePlan: ResponsePlan
 ): string | null {
   if (responsePlan.requiresHumanReview || responsePlan.uncoveredQuestion) return null;
@@ -4231,15 +4267,24 @@ function agencyExplanationBeat(
   // basta con hasOnlyFans===false.
   const inexperienced = candidateAfter.hasOnlyFans === false || candidateAfter.worksWithAnotherAgency === false;
   if (!inexperienced) return null;
-  // El pitch va EXACTAMENTE en el turno en que se COMPLETA el guion esencial (nombre, edad, OF, movil),
-  // que es justo despues de dar el movil: asi el movil va antes del pitch (orden pedido por Alex 15-jun) y
-  // el pitch no resucita en turnos posteriores (p. ej. cuando pide la llamada).
-  const justCompleted = essentialScriptComplete(candidateAfter) && !essentialScriptComplete(candidateBefore);
-  if (!justCompleted) return null;
-  const alreadyExplained = recentMessages.some(
-    (message) => message.role === "agent" && agencyExplanationGivenPattern.test(message.content)
-  );
-  return alreadyExplained ? null : AGENCY_PITCH_TEXT;
+  // El pitch va cuando el guion esencial (nombre, edad, OF, movil) ya esta completo. Dispara en DOS
+  // situaciones (y solo esas), para no PERDERLO ni DUPLICARLO:
+  //  - justCompleted: el guion se completa EN este turno. Incluye el salto multi-hop desde
+  //    PROFILE_READY_FOR_REVIEW->QUALIFYING (el movil llega y completa a la vez): before aun incompleto,
+  //    asi que este flag lo captura aunque la candidata no "venga de QUALIFYING".
+  //  - deferredPitchPending: ya estaba completa pero SIGUE en QUALIFYING porque una pregunta cubierta
+  //    pospuso el pitch un turno (caso Laura 15-jul): se le respondio primero y ahora sale el pitch, antes
+  //    del "lo comento con mi socio". Estar aun en QUALIFYING (no en revision) distingue este caso de una
+  //    candidata sembrada/parada en revision, a la que no se le vuelve a soltar el pitch.
+  if (!essentialScriptComplete(candidateAfter)) return null;
+  const wasCompleteBefore = essentialScriptComplete(candidateBefore);
+  const justCompleted = !wasCompleteBefore;
+  const deferredPitchPending = wasCompleteBefore && candidateBefore.currentState === "QUALIFYING";
+  if (!justCompleted && !deferredPitchPending) return null;
+  // `pitchAlreadyDelivered` se calcula sobre una ventana ANCHA del historial (no los ultimos mensajes): asi
+  // el pitch nunca resucita aunque haya scrolleado fuera de la ventana corta tras una pausa larga + una
+  // reentrada por REQUEST_MORE_INFO (que devuelve la candidata a QUALIFYING con los datos intactos).
+  return pitchAlreadyDelivered ? null : AGENCY_PITCH_TEXT;
 }
 
 /**

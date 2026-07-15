@@ -937,6 +937,17 @@ describe("ConversationEngine call advance (el funnel termina en llamada)", () =>
       hasOnlyFans: false,
       deviceEligibility: "APPROVED"
     });
+    // Ya se le explico como trabajamos (pitch de la agencia): una inexperta que llega completa YA lo tuvo
+    // en su turno de completar (Alex 15-jul). Sin esto, el beat proactivo le soltaria el pitch aqui en vez
+    // del socio (lo correcto es que el pitch ya salio antes; esto solo mantiene el escenario realista).
+    await repository.addMessage({
+      id: crypto.randomUUID(),
+      candidateId: seeded.id,
+      role: "agent",
+      author: "AI_AGENT",
+      content: "Nosotros gestionamos cuentas de Instagram con ubicaciones y los chatters escriben por ti.",
+      createdAt: new Date()
+    });
     await repository.addMessage({
       id: crypto.randomUUID(),
       candidateId: seeded.id,

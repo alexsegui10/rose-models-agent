@@ -71,6 +71,16 @@ describe("Pre-OK: 'Encaja' antes de acabar -> el bot propone la llamada sin 'lo 
   it("SIN pre-OK: al terminar frena en WAITING_HUMAN_REVIEW con el holding (comportamiento previo intacto)", async () => {
     const { engine, repository } = mk();
     const c = await seedReadyQualifying(repository);
+    // Una inexperta que llega completa YA tuvo el pitch de la agencia en su turno de completar (Alex 15-jul):
+    // se refleja en el historial para que el beat proactivo no lo repita aqui y salga el holding del socio.
+    await repository.addMessage({
+      id: "pitch-hist-preok",
+      candidateId: c.id,
+      role: "agent",
+      author: "AI_AGENT",
+      content: "Nosotros gestionamos cuentas de Instagram con ubicaciones y los chatters escriben por ti.",
+      createdAt: new Date()
+    });
     const r = await engine.handleIncomingTurn({
       instagramUsername: c.instagramUsername,
       messages: [{ content: "vale, genial" }]
