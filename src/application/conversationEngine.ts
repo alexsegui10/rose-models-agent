@@ -4542,6 +4542,19 @@ function classifyFaceConcern(inboundMessage: string): FaceConcernKind | null {
   const message = normalizeText(inboundMessage);
   const mentionsFace = faceTopicPattern.test(message) || /\b(mostrarme|ensenarme|salir en|aparecer en)\b/.test(message);
   if (mentionsFace && facePartialPattern.test(message)) return "partial";
+  // PREGUNTA sobre si se PUEDE tapar/cubrir/pixelar la cara (interrogativa + verbo de posibilidad + SIN
+  // negacion): es una DUDA, no una negativa. Sin esto, "se puede tapar o algo?" casaba faceRefusalSignalPattern
+  // por el verbo "tapar" y, al segundo concern, CERRABA el lead (auditoria 15-jul, cara: cierre prematuro ante
+  // una pregunta). Se trata como reconduccion (recognition), nunca como refusal -> nunca cierra por preguntar.
+  const asksCoverPossibility =
+    mentionsFace &&
+    /\?/.test(inboundMessage) &&
+    /\b(se puede|se pueden|puedo|hay (?:alguna )?(?:forma|manera|modo|opcion)|es posible|se podria|podria|habria (?:forma|manera))\b/.test(
+      message
+    ) &&
+    /\b(tapar\w*|pixelar\w*|difuminar\w*|ocultar\w*|cubrir\w*|disimular\w*|borrar\w*)\b/.test(message) &&
+    !/\b(no|nunca|jamas|prefiero no|me niego|tampoco|ni loca|ni en pedo)\b/.test(message);
+  if (asksCoverPossibility) return "recognition";
   // Rechazo de cara: tema de cara/anonimato + cualquier senal de negacion. Captura formulaciones
   // evasivas ("sigo sin querer mostrar la cara") sin depender de una frase literal concreta.
   if ((mentionsFace && faceRefusalSignalPattern.test(message)) || /\banonim/.test(message)) return "refusal";
