@@ -1583,8 +1583,10 @@ export class ConversationEngine {
       (message) => message.role === "agent" && /\b(comentar tu perfil|lo comento|comentarlo)\b/i.test(message.content)
     );
     // Coherencia del gate de movil: si ya se le dijo que con ese movil no se puede, no repetir el mismo
-    // rechazo en bucle (fallo real del replay: 11 veces "lamentablemente con ese movil...").
-    const alreadyToldDeviceIssue = recentMessages.some(
+    // rechazo en bucle (fallo real del replay: 11 veces "lamentablemente con ese movil..."). DURABLE
+    // (auditoria 15-jul): ventana ANCHA (pitchLookbackHistory, 100), no los 8 recientes, para que el aviso
+    // no se re-emita cuando scrollea fuera de la ventana corta (monosilabica: rechazo repetido 5 veces).
+    const alreadyToldDeviceIssue = pitchLookbackHistory.some(
       (message) =>
         message.role === "agent" &&
         /con ese movil no podemos|cambiarte el movil|movil lo tendriamos que valorar|movil mejor lo retomamos/i.test(
@@ -2962,12 +2964,19 @@ function humanInterventionResponse(
     }
     // Ya se le explico antes lo del movil: no repetir el mismo rechazo en bucle (coherencia).
     if (alreadyToldDeviceIssue) {
+      // Si solo acusa/se despide (nada que responder ni preguntar), se queda en VISTO en vez de repetir el
+      // rechazo (auditoria 15-jul, monosilabica: 5x la misma plantilla). Si pregunta algo, se le recuerda breve.
+      if (responsePlan.answerFacts.length === 0 && responsePlan.questionToAsk === null) return "";
       return "Como te decia, en cuanto tengas un movil mejor lo retomamos encantados. Cualquier cosa me dices.";
     }
     return "Lamentablemente con ese movil no podemos trabajar, es muy importante la calidad de fotos y videos.\n\nNo has pensado en cambiarte el movil? Si lo consigues estariamos encantados.";
   }
 
   if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
+    // Ya avisado + solo acuse (nada que responder) -> visto, no repetir en bucle (auditoria 15-jul).
+    if (alreadyToldDeviceIssue && responsePlan.answerFacts.length === 0 && responsePlan.questionToAsk === null) {
+      return "";
+    }
     return "Ese movil lo tendriamos que valorar bien, Instagram penaliza mucho la calidad de las fotos.\n\nPodemos seguir viendo tu perfil igualmente y lo miramos.";
   }
 
