@@ -19,6 +19,9 @@ describe("petición 'mandámelo/pásame' no es ruido: follows-along, no ASK_REPE
     expect(sig("pasámelo y lo veo")).toBe("follows-along");
     expect(sig("enviámelo por favor")).toBe("follows-along");
     expect(sig("tirámelo por whatsapp")).toBe("follows-along");
+    // Plurales ("mandámelos", "pasámelas"): también son consentimiento, no ruido (barrido voz 16-jul, l.25).
+    expect(sig("mandámelos y veo")).toBe("follows-along");
+    expect(sig("pasámelas por whatsapp")).toBe("follows-along");
   });
 
   it("NO se traga la petición de la CIFRA del reparto (eso es asks-share-figure / nº1, no follows-along)", () => {

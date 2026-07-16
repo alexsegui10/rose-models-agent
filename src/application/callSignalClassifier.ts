@@ -252,7 +252,7 @@ const YES_BUT =
 // (me/melo/lo/la...) para no casar "qué pasa" ni "manda" a secas. Se evalúa al FINAL (solo rescata lo que
 // caería en unclear): una PREGUNTA ("¿me lo mandas?") ya la cazó QUESTION antes. La petición de la CIFRA del
 // reparto se EXCLUYE aparte (no debe aplanarse a follows-along: la maneja asks-share-figure — invariante 3).
-const SEND_ME_INFO = /\b(?:manda|pasa|envia|tira)(?:melo|mela|noslo|nosla|me|nos|lo|la)\b/;
+const SEND_ME_INFO = /\b(?:manda|pasa|envia|tira)(?:melos|melas|melo|mela|noslo|nosla|nos|me|los|las|lo|la)\b/;
 
 // Confirmación de identidad al descolgar ("sí, soy yo", "con ella habla", "la misma"): es un "sí, sigue",
 // no ruido (jul-2026, barrido de personas: "hola si soy yo" acababa en "¿me lo repites?"). ANCLADA a la
