@@ -638,6 +638,47 @@ function planFromKnowledge(
   return { directiveType, draftingBrief: brief, fallbackText };
 }
 
+/**
+ * Reescritura a 1ª persona SOLO PARA LA VOZ (decisión de Alex, 16-jul). El conocimiento de negocio está
+ * redactado para el FUNNEL/texto: habla del bot en 3ª persona ("El chatbot recopila datos...") y de Alex
+ * como un tercero ("el resumen queda para Alex"). En la LLAMADA el bot ES Alex, así que voceado tal cual
+ * suena a robot y delata la IA (barrido de voz 16-jul, nº2).
+ *
+ * Se sustituye AQUÍ (capa de voz) y solo aquí: el contenido compartido con el bot de texto y las políticas
+ * confirmadas por Alex quedan INTACTOS (decisión suya: arreglar solo la voz). El SIGNIFICADO no cambia —
+ * sigue siendo Alex quien revisa; solo lo dice en primera persona.
+ *
+ * Ojo: el emparejamiento es por texto EXACTO. Si alguien edita esas frases del contenido, la reescritura
+ * dejaría de casar y la fuga volvería en silencio -> el guard de deriva de `callVoiceFirstPersonJul16`
+ * falla RUIDOSAMENTE para volver a mapearlas.
+ */
+const VOICE_FIRST_PERSON: ReadonlyMap<string, string> = new Map([
+  [
+    "El chatbot recopila datos y pasa el perfil a revision humana.",
+    "Te voy preguntando lo básico y luego reviso yo tu perfil con calma."
+  ],
+  ["La revision final del perfil la hace Alex.", "La revisión final del perfil la hago yo."],
+  // escalation-immediate-human-intervention: es JUSTO la entrada que se recupera cuando ella sospecha /
+  // se enfada / pregunta si habla con un bot — la que más delata si se vocea en 3ª persona (revisor 16-jul).
+  [
+    "Lo revisa Alex personalmente y te damos una respuesta con calma.",
+    "Lo reviso yo personalmente y te damos una respuesta con calma."
+  ],
+  ["Alex puede detener el bot.", "Si hace falta, lo paro yo y lo vemos con calma."],
+  // content-production-volume (barrido propio del contenido 16-jul): otra fuga de Alex en 3ª persona.
+  ["Alex organiza los detalles despues de la llamada.", "Los detalles ya los organizo yo después de la llamada."],
+  [
+    "Despues de la llamada, el resumen queda para Alex y el proceso pasa a revision manual.",
+    "Cuando colguemos me lo miro todo con calma y te digo algo."
+  ],
+  ["Despues de la llamada el chatbot deja el proceso en manos de Alex.", "Cuando colguemos, del resto me encargo yo."]
+]);
+
+/** Pasa un punto de conocimiento a la voz de Alex (1ª persona). Lo no mapeado se deja tal cual. */
+function toVoiceFirstPerson(point: string): string {
+  return VOICE_FIRST_PERSON.get(point.trim()) ?? point;
+}
+
 function gatherKnowledge(entries: KnowledgeEntry[] = []): {
   points: string[];
   prohibited: string[];
@@ -647,9 +688,11 @@ function gatherKnowledge(entries: KnowledgeEntry[] = []): {
   const prohibited: string[] = [];
   const nuances: string[] = [];
   for (const entry of entries) {
-    points.push(...entry.approvedAnswerPoints);
+    // Los puntos y matices los DICE / los usa el redactor -> a 1ª persona. Lo prohibido no se dice nunca
+    // (es una lista de vetos para el prompt), así que no se toca.
+    points.push(...entry.approvedAnswerPoints.map(toVoiceFirstPerson));
     prohibited.push(...entry.prohibitedClaims);
-    nuances.push(...entry.mandatoryNuances);
+    nuances.push(...entry.mandatoryNuances.map(toVoiceFirstPerson));
   }
   return { points: dedupe(points), prohibited: dedupe(prohibited), nuances: dedupe(nuances) };
 }

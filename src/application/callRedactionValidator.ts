@@ -142,6 +142,14 @@ export function validateCallUtterance(
     return { valid: false, reason: "voz de la agencia en femenino (el bot es Alex, masculino)" };
   }
 
+  // 3ª PERSONA / lenguaje del funnel de TEXTO en la llamada: el bot ES Alex, así que hablar de "el chatbot"
+  // o de "la revisión humana/manual" delata la IA (barrido voz 16-jul, nº2). El conocimiento ya se reescribe
+  // a 1ª persona en la capa de voz (callRedaction.VOICE_FIRST_PERSON); esto es la RED por si el modelo lo
+  // suelta igual -> fallback determinista. "reviso yo / la revisión del perfil" (1ª persona) sí pasa.
+  if (/\b(?:el|un|del|al) chatbot\b|\bel bot\b|\brevision (?:humana|manual)\b/.test(norm)) {
+    return { valid: false, reason: "lenguaje de chatbot / 3ª persona en la llamada (el bot es Alex)" };
+  }
+
   // Despedidas improvisadas en turnos intermedios: cerrar la llamada lo decide el DIRECTOR, no el LLM.
   if (options?.allowFarewell === false) {
     if (
