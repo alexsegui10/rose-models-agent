@@ -224,10 +224,18 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(preaviso|finalizar|terminar|contenido autorizado|dejar la agencia)\b/.test(message))
     tags.push("termination", "content-rights", "legal-review");
   if (/\b(como funciona|proceso|que pasos)\b/.test(message)) tags.push("faq", "process", "how-it-works");
-  // "raro" como desconfianza es "esto es raro / suena raro / medio raro", NO "NADA raro" (descriptor benigno
-  // de contenido: "es nada raro, tranqui"), que empujaba el tag genérico "objection" y volcaba el bloque de
-  // privacidad sin venir a cuento (auditoría 15-jul, voz). Se excluye el "nada raro" con lookbehind.
-  if (/\b(desconfianza|duda|no me fio|estafa|enfadada|enfado)\b/.test(message) || /(?<!nada )\braro\b/.test(message))
+  // "raro" como desconfianza es "esto es raro / suena raro / medio raro", NO "NADA raro" (descriptor benigno:
+  // "es nada raro, tranqui", auditoría 15-jul) ni "CONTRATO raro / cláusula rara" (preocupación contractual
+  // benigna, que debe escalar a Alex por la ruta de contrato, NO soltar el boilerplate de transparencia;
+  // auditoría 16-jul). Se excluyen ambos; "es raro / suena raro / no me fío" siguen siendo desconfianza.
+  // Solo los sustantivos que SÍ tienen ruta contractual (línea ~223: contrato/clausula/permanencia): así al
+  // excluir "raro" de distrust, GANA la escalada de contrato a Alex. No se incluyen "condiciones/letra pequeña"
+  // (no enrutan a contrato), para no dejar el turno sin ficha (NOTA del revisor 16-jul).
+  const contractualRaro =
+    /\b(contrato|clausula\w*|permanencia)\b[^.?!]{0,25}\braro\b/.test(message) ||
+    /\braro\b[^.?!]{0,15}\b(contrato|clausula\w*|permanencia)\b/.test(message);
+  const suspiciousRaro = /(?<!nada )\braro\b/.test(message) && !contractualRaro;
+  if (/\b(desconfianza|duda|no me fio|estafa|enfadada|enfado)\b/.test(message) || suspiciousRaro)
     tags.push("distrust", "objection", "human-intervention", "scam", "anger");
   // "¿cuántas chicas llevan?" (roster) y "¿cuántos seguidores tendré?" (crecimiento IG): tenían respuesta de
   // Alex pero no ruta -> se surfaceaba una ficha equivocada (tiempos de lanzamiento) = non-sequitur (auditoría
