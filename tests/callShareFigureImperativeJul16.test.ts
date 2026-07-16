@@ -56,7 +56,7 @@ describe("pedir la cifra del reparto en IMPERATIVO se trata como la pregunta (nÂ
     const state: CallDirectorState = {
       ...initialCallDirectorState(),
       disclosureGiven: true,
-      coveredStages: ["INTRO", "WORK_MODEL", "MONEY"] as CallDirectorState["coveredStages"],
+      coveredStages: ["HOW_AGENCY_WORKS", "MONEY"],
       revenueShareStep: 2,
       shareDefended: true
     };

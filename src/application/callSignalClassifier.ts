@@ -203,6 +203,20 @@ const SUBSTANTIVE_QUESTION = /\b(que|como|cuando|cuanto|cuanta|cuantos|cual|cual
 const GREETING =
   /^\s*(?:(?:hola+|muy buenas|buenas tardes|buenas noches|buenos dias|buenas|holi|hey|que tal todo|que tal|como estas|como andas|como va|todo bien|estas|guap[oa]|ti[oa]|wey)[\s,!¡.?]*)+$/;
 
+// IMPUESTOS / tema fiscal (DECISIÓN DE ALEX 16-jul): el bot NO habla de impuestos — es terreno fiscal y no
+// hay contenido aprobado suyo, así que se DEFIERE a él ("eso te lo confirmo y te lo paso"), jamás se
+// improvisa una respuesta fiscal. Antes el recuperador daba la pregunta por "cubierta" y el bot contestaba
+// sobre las CUOTAS de la agencia ("con nosotros no pagas nada por entrar"): un sinsentido, no respondía lo
+// que preguntaba (barrido de voz 16-jul, nº7, confirmado en vivo). Gana a `isCoveredQuestion`.
+// Cubre los fraseos REALES (revisor 16-jul: la primera versión se dejaba media docena): enclíticos y
+// conjugaciones ("hay que declararlo", "quién lo declara"), alta de autónoma, facturar, cotizar, cobrar en
+// DELIBERADAMENTE SIMPLE (criterio de Alex, 16-jul): los impuestos son cosa de ELLA (OnlyFans le paga a su
+// cuenta y desde ahí nos paga a nosotros), y estas preguntas casi no salen en la práctica. Así que basta con
+// reconocer el TEMA y pasárselo a Alex. NO se persiguen fraseos exóticos ("facturar", "en negro", "darse de
+// alta", "cotizar"...): daban falsos positivos reales ("las fotos las hago en negro" = color) y no aportan.
+// Guard de "iva": el STT escribe a veces "iva" por "iba" ("yo iva a preguntarte..."), que no es el impuesto.
+const TAX_TOPIC = /\bimpuesto\w*|\bafip\b|\bmonotribut\w*|\bhacienda\b|\bfiscal\w*|\bdeclar\w*|\btribut\w*|\biva\b(?!\s+a\s)/;
+
 // ¿Es una pregunta? OJO: la conjunción causal "porque" (junta, "hago changas PORQUE no tengo fijo") NO va en
 // el patrón — se confundía con el interrogativo y se difería un "detalle" inexistente al WhatsApp (auditoría
 // 15-jul, voz). El interrogativo real "¿por qué...?" lleva "?" (lo caza el `?$`) o se escribe "por que" con
@@ -461,7 +475,13 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // proposito (es un relativo AMBIGUO que SI puede encabezar una pregunta: "lo que gano es mio?"); se deja como
   // estaba (lo coge QUESTION -> asks-*), asi el fix del "es que" no introduce falsos negativos con "lo que".
   const withoutConjunctionThat = text.replace(/\b(?:es|ya|asi|sino|puesto|dado)\s+que\b/g, " ");
-  if (QUESTION.test(withoutConjunctionThat)) return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
+  if (QUESTION.test(withoutConjunctionThat)) {
+    // Impuestos -> a Alex, aunque el recuperador crea que lo cubre (criterio de Alex 16-jul). Va DESPUÉS de
+    // asks-share-figure a propósito: "¿cuánto os lleváis después de impuestos?" SÍ pide la cifra del reparto
+    // y debe responderse (invariante 3 es reactivo), no evadirse.
+    if (TAX_TOPIC.test(text)) return "asks-unknown";
+    return input.isCoveredQuestion ? "asks-covered" : "asks-unknown";
+  }
   // Declaracion del ESTADO de su OnlyFans ("no tengo onlyfans", "si tengo pero abandonado", "lo tengo
   // abandonado"): es INFORMACION, no ruido -> asentir y seguir (el redactor la reconoce; el extractor de
   // hechos la recuerda). Sweep R9 10-jul: caia en unclear -> "no te pillo" x2 fingiendo sordera. Va ANTES
