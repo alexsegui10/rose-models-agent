@@ -245,6 +245,15 @@ const NEGATED_OPINION =
 const YES_BUT =
   /^\s*(?:(?:ah+|pues|bueno|mira|oye|mmm+|eh+|este|em+)[\s,]*)*(?:ya|vale|si+|claro|okay?|oka|okis|va|bueno|dale|de acuerdo|entiendo)\b[\s,]*(?:pero|aunque)\b/;
 
+// Petición IMPERATIVA de que le MANDEN la info ("mandámelo", "pásame los datos", "mandámelo por whatsapp",
+// "mandámelo pero si no está claro no sigo"): es consentimiento (a veces condicional), NO ruido -> asentir y
+// seguir, JAMÁS "no te pillo" fingiendo sordera (barrido de voz 16-jul, desconfiada: "bueno, mandámelo, pero
+// si no está claro ni en pedo sigo" caía en unclear -> ASK_REPEAT). Exige el verbo imperativo + un enclítico
+// (me/melo/lo/la...) para no casar "qué pasa" ni "manda" a secas. Se evalúa al FINAL (solo rescata lo que
+// caería en unclear): una PREGUNTA ("¿me lo mandas?") ya la cazó QUESTION antes. La petición de la CIFRA del
+// reparto se EXCLUYE aparte (no debe aplanarse a follows-along: la maneja asks-share-figure — invariante 3).
+const SEND_ME_INFO = /\b(?:manda|pasa|envia|tira)(?:melo|mela|noslo|nosla|me|nos|lo|la)\b/;
+
 // Confirmación de identidad al descolgar ("sí, soy yo", "con ella habla", "la misma"): es un "sí, sigue",
 // no ruido (jul-2026, barrido de personas: "hola si soy yo" acababa en "¿me lo repites?"). ANCLADA a la
 // frase entera para que "lo hablo con ella" (consultar a alguien) no cuente como asentimiento.
@@ -453,6 +462,13 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
       text
     )
   ) {
+    return "follows-along";
+  }
+
+  // "Mandámelo / pásame los datos": consentimiento imperativo a que le envíen la info -> seguir, no fingir
+  // sordera. Se excluye la petición de la CIFRA/reparto (términos de dinero): esa NO se aplana a follows-along
+  // (la maneja asks-share-figure; aplanarla enmascararía el bug de la negociación — invariante 3).
+  if (SEND_ME_INFO.test(text) && !SHARE_TERMS.test(text) && !/\b(?:cifra|dinero|plata|pago|paga)\b/.test(text)) {
     return "follows-along";
   }
 
