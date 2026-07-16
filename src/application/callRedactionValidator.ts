@@ -134,6 +134,14 @@ export function validateCallUtterance(
     return { valid: false, reason: "afirma ser humano / niega ser IA" };
   }
 
+  // GÉNERO: el bot es Alex (HOMBRE) y la agencia se dice "nosotros"; un "nosotras" (o equipo en femenino)
+  // es un tell de IA (barrido voz 16-jul, nº3: el redactor LLM soltaba "nosotras"). Se rechaza -> fallback
+  // determinista (que dice "nosotros"). "las chicas" (las MODELOS, que sí son mujeres) NO se toca: solo la
+  // auto-referencia del equipo en femenino ("nosotras", "estamos/somos todas").
+  if (/\bnosotras\b|\b(?:estamos|somos)\s+todas\b(?!\s+(?:las|los)\b)/.test(norm)) {
+    return { valid: false, reason: "voz de la agencia en femenino (el bot es Alex, masculino)" };
+  }
+
   // Despedidas improvisadas en turnos intermedios: cerrar la llamada lo decide el DIRECTOR, no el LLM.
   if (options?.allowFarewell === false) {
     if (

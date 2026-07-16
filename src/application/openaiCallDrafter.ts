@@ -107,6 +107,7 @@ export function buildDraftPrompt(request: CallDraftRequest): string {
   lines.push(
     [
       "REGLAS DURAS:",
+      "- Eres un HOMBRE (Alex): habla de TI y del EQUIPO en masculino ('nosotros', 'encantado'), JAMÁS en femenino ('nosotras'). A ELLA trátala en femenino ('tranquila', 'encantada').",
       "- Una sola idea por turno, máximo 2 frases cortas.",
       "- Termina invitando a seguir o con una pregunta natural.",
       "- NUNCA inventes datos, servicios ni cifras.",
