@@ -1593,6 +1593,13 @@ export class ConversationEngine {
           message.content
         )
     );
+    // Anti-repeticion del holding de HIR (auditoria 16-jul): ante acuses, el bot repetia "lo hablo con mi
+    // socio / sigue pendiente con mi socio" turno tras turno (disco rayado). Se cuentan los holdings ya dichos
+    // en la ventana ancha; tras 2, se queda en VISTO (ella ya esta en HIR, Alex la atiende), como device/pausa.
+    const hirHoldingSaidEnough =
+      pitchLookbackHistory.filter(
+        (message) => message.role === "agent" && /lo hablo con mi socio|sigue pendiente con mi socio/i.test(message.content)
+      ).length >= 2;
     const deterministicResponse = generateResponse(
       projectedCandidate,
       understanding,
@@ -1601,7 +1608,8 @@ export class ConversationEngine {
       groupedMessage.content,
       isOpenerTurn,
       alreadyAwaitingPartner,
-      alreadyToldDeviceIssue
+      alreadyToldDeviceIssue,
+      hirHoldingSaidEnough
     );
     // El opener real de Alex es una plantilla pegada a mano y SIEMPRE va en el PRIMER turno del lead, pase lo
     // que pase: cero deriva del modelo (traza honesta: deterministico). YA NO depende de answerFacts===0 (antes,
@@ -2552,7 +2560,8 @@ function generateResponse(
   inboundMessage: string,
   isOpenerTurn = false,
   alreadyAwaitingPartner = false,
-  alreadyToldDeviceIssue = false
+  alreadyToldDeviceIssue = false,
+  hirHoldingSaidEnough = false
 ): string {
   if (candidate.currentState === "CLOSED" && candidate.age && candidate.age < 18) {
     return "Gracias por contestar. Ahora mismo solo podemos valorar perfiles de personas mayores de edad, asi que no podemos seguir con el proceso. Te deseo lo mejor.";
@@ -2649,7 +2658,8 @@ function generateResponse(
       responsePlan,
       approvedNegotiationDecision,
       alreadyAwaitingPartner,
-      alreadyToldDeviceIssue
+      alreadyToldDeviceIssue,
+      hirHoldingSaidEnough
     );
   }
 
@@ -2929,7 +2939,8 @@ function humanInterventionResponse(
   responsePlan: ResponsePlan,
   approvedNegotiationDecision: NegotiationDecision | null,
   alreadyAwaitingPartner = false,
-  alreadyToldDeviceIssue = false
+  alreadyToldDeviceIssue = false,
+  hirHoldingSaidEnough = false
 ): string {
   if (approvedNegotiationDecision?.decision === "ALLOW_CUSTOM_TERMS") {
     return `Lo he revisado con mi socio y podemos valorarlo con estas condiciones: ${approvedNegotiationDecision.approvedModelPercentage}% para ti y ${approvedNegotiationDecision.approvedAgencyPercentage}% para la agencia. En la llamada te lo explicamos bien.`;
@@ -3011,7 +3022,10 @@ function humanInterventionResponse(
     return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada.";
   }
 
-  // Espera en HIR: la primera vez se deriva al socio; si ya se le dijo, se varia para no repetir en bucle.
+  // Espera en HIR: la primera vez se deriva al socio; si ya se le dijo, se varia para no repetir en bucle; y
+  // tras un par de avisos (hirHoldingSaidEnough), se queda en VISTO en vez de repetir el holding turno tras
+  // turno (auditoria 16-jul: "lo hablo con mi socio" en bucle). Ella ya esta en HIR, Alex la atiende.
+  if (hirHoldingSaidEnough) return "";
   return alreadyAwaitingPartner
     ? "Tranquila, sigue pendiente con mi socio; en cuanto lo vea te confirmo."
     : "Vale, esto lo hablo con mi socio y te digo, no te preocupes.";
