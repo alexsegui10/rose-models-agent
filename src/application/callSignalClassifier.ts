@@ -267,6 +267,22 @@ const IDENTITY_CONFIRM =
 const ASKS_SHARE_FIGURE =
   /\bcuanto (?:os|se|te) (?:llevais|llevas|lleva|llevan|quedais|quedas|queda|quedan|cobrais|cobran)\b|\bcuanto cobr(?:ais|as|an)\b(?!\s+(?:las|los|una|un|otras)\b)|\bque (?:porcentaje|comision)\b|\bcomo (?:es|era|va|iba|funciona|queda) (?:el|lo del) reparto\b|\bel reparto como (?:es|era|va|iba|queda)\b|\bcual (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\bcuanto (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b/;
 
+// Pedir la cifra en IMPERATIVO ("decime/explicame/repetime/pasame ... el porcentaje/reparto"): es la MISMA
+// petición reactiva que la forma pregunta -> se responde el escalón AUTORIZADO vigente (invariante 3), jamás
+// se recita el 70/30 enlatado revirtiendo una concesión (barrido voz 16-jul nº1: cedido el 40, "decime bien
+// el porcentaje" caía en asks-covered -> ANSWER_FROM_KNOWLEDGE -> 30/70, contradiciéndose; regla de Alex
+// "siempre a más, nunca a menos"). Va con ASKS_SHARE_FIGURE (tras las QUEJAS, que se evalúan mucho antes).
+// Excluye "dame" a propósito: "dame más porcentaje" es pedir MÁS (queja), no pedir oír la cifra. Exige un
+// término explícito de la cifra (porcentaje/reparto/comision/cifra) para no robar una orden cualquiera.
+const ASKS_SHARE_FIGURE_IMPERATIVE =
+  /\b(?:decime|decinos|dime|deci|explicame|explica|repetime|repiteme|repeti|aclarame|aclara|contame|cuentame|conta|pasame|recordame|recuerdame)\b[^.?!]{0,20}\b(?:porcentaje|reparto|comision|cifra)\b/;
+// El imperativo NO cuenta si el término de la cifra está NEGADO ("no el reparto", "explicame no el reparto
+// sino como grabo") o DESESTIMADO ("el reparto no me importa"), ni si es el homógrafo "reparto de tareas/
+// trabajo" (revisor 16-jul): ahí ella NO pide la cifra, y presentarla robaría su pregunta real. Guard de
+// negación/alcance para el patrón imperativo (la forma pregunta ASKS_SHARE_FIGURE no lo necesita).
+const SHARE_FIGURE_NOT_REQUESTED =
+  /\bno\s+(?:el\s+|la\s+|lo del\s+|lo de la\s+|del\s+|de la\s+|me hables del\s+|me digas el\s+)?(?:porcentaje|reparto|comision|cifra)\b|\b(?:porcentaje|reparto|comision|cifra)\b[^.?!]{0,15}\b(?:no me (?:importa|interesa|va|preocupa)|me da igual|da igual)\b|\breparto de (?:tareas|trabajo|tarea|labores|roles)\b/;
+
 // Pregunta VAGA por el DINERO (no la cifra exacta ni una queja): "y del dinero como va la cosa", "el pago
 // como funciona", "y el dinero?" (DECISION de Alex 8-jul: presentar el reparto, que es la etapa MONEY del
 // guion; asks-share-figure -> si MONEY no se cubrio, la presenta; si ya, repite la cifra autorizada). Va
@@ -403,7 +419,9 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (ASKS_BOT_REPEAT.test(text)) return "asks-bot-to-repeat";
   // Pregunta la CIFRA del reparto (sin quejarse: las quejas ya se evaluaron antes) -> responderla (inv. 3
   // reactivo), nunca deferir. Antes que QUESTION/earnings ("cuánto os lleváis" contiene "cuanto").
-  if (ASKS_SHARE_FIGURE.test(text)) return "asks-share-figure";
+  if (ASKS_SHARE_FIGURE.test(text) || (ASKS_SHARE_FIGURE_IMPERATIVE.test(text) && !SHARE_FIGURE_NOT_REQUESTED.test(text))) {
+    return "asks-share-figure";
+  }
   // Pregunta VAGA por el dinero -> presentar el reparto (misma señal; el director presenta MONEY si falta o
   // repite la cifra vigente). Tras las quejas; antes que earnings/QUESTION. Decisión de Alex 8-jul.
   if (ASKS_MONEY_MODEL.test(text)) return "asks-share-figure";
