@@ -1246,6 +1246,9 @@ export class ConversationEngine {
     const agencyPitchDelivered = pitchLookbackHistory.some(
       (message) => message.role === "agent" && agencyExplanationGivenPattern.test(message.content)
     );
+    // Semilla de variacion para el puente de re-pregunta (nº de turnos del bot): asi una re-pregunta de un
+    // dato no sale clavada dos veces (Alex 16-jul: "no de la misma manera exactamente"). Ver bridgeBackToQuestion.
+    const bridgeVariation = pitchLookbackHistory.filter((message) => message.role === "agent").length;
     // El ultimo mensaje del agente se reutiliza en varios pasos del turno (extraccion contextual,
     // declive contextual, guard anti-repeticion): se calcula una vez y se recorre el array una sola vez.
     const lastAgentMsg = lastAgentMessageContent(recentMessages);
@@ -1965,8 +1968,8 @@ export class ConversationEngine {
       const base = response.trim();
       const rescued =
         base.length > 0
-          ? `${base}\n\n${bridgeBackToQuestion(responsePlan.questionToAsk)}`
-          : bridgeBackToQuestion(responsePlan.questionToAsk);
+          ? `${base}\n\n${bridgeBackToQuestion(responsePlan.questionToAsk, bridgeVariation)}`
+          : bridgeBackToQuestion(responsePlan.questionToAsk, bridgeVariation);
       if (rescued !== response && validateFactualResponse(rescued, responsePlan).valid) {
         response = rescued;
         // Traza honesta (invariante 6): si el LLM SI redacto (base no vacia) y solo se le anadio la pregunta del
@@ -3409,12 +3412,18 @@ const QUALIFICATION_QUESTION_HINTS = /como te llamas|que edad tienes|has tenido 
 // Tras responder una duda de la candidata, retomar la pregunta del GUION con un puente natural (peticion
 // de Alex 16-jun), no a palo seco ("...70/30. Que edad tienes?" -> "...70/30. Y volviendo a lo de antes,
 // que edad tienes?"). Solo para preguntas de cualificacion; la de agendar/telefono se deja tal cual.
-function bridgeBackToQuestion(question: string): string {
+// Variantes del puente al re-preguntar un dato (Alex 16-jul: "no de la misma manera exactamente, sino algo
+// como 'y volviendo a lo del movil, ¿cual tienes?'"). Rotan por el nº de turnos del bot para que una
+// re-pregunta no salga clavada dos veces seguidas (siempre a mas, nunca clavado).
+const BRIDGE_INTROS = ["Y volviendo a lo de antes, ", "Ah, y una cosa que me faltaba: ", "Perfecto. Por cierto, se me pasaba: "];
+
+export function bridgeBackToQuestion(question: string, variationIndex = 0): string {
   if (!QUALIFICATION_QUESTION_HINTS.test(question)) return question;
   // Algunas preguntas del guion ya empiezan con "Y " ("Y que movil tienes?"); el puente lo recorta
   // para no encadenar "Y volviendo a lo de antes, y que movil tienes?".
   const trimmed = question.replace(/^y\s+/i, "");
-  return `Y volviendo a lo de antes, ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
+  const intro = BRIDGE_INTROS[((variationIndex % BRIDGE_INTROS.length) + BRIDGE_INTROS.length) % BRIDGE_INTROS.length];
+  return `${intro}${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
 }
 
 function withOptionalQuestion(response: string, responsePlan: ResponsePlan): string {
