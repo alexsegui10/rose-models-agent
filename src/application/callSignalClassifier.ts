@@ -347,7 +347,19 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (UNDERAGE.test(text)) return "underage";
   // Sospecha hipotética ("y si esto es una estafa?") -> tranquilizar, va ANTES de HOSTILE (ver arriba).
   if (HYPOTHETICAL_SUSPICION.test(text)) return "distrust";
-  if (HOSTILE.test(text)) return "hostile-or-suspicious";
+  if (HOSTILE.test(text)) {
+    // Excepciones a la agresión: modismos rioplatenses que contienen "mierda"/"me jode" sin ser un ataque
+    // (barrido de voz 16-jul, candidatas VÁLIDAS mandadas a handoff hostil por error):
+    //  - "no escucho/entiendo una mierda" = mala señal ("no oigo nada"), no un insulto (Belen).
+    //  - "(es) lo que (más) me jode" = señalar el tema que le molesta (una objeción), no un ataque (Priscila).
+    // Se degradan SOLO si el modismo era el ÚNICO disparador: se re-evalúa HOSTILE con el modismo neutralizado;
+    // si aún queda un insulto real ("sois una mierda, es lo que me jode de vosotros"), sigue siendo hostil.
+    const withoutIdioms = text
+      .replace(/\b(?:escuch\w+|oig\w+|oye\w*|entiend\w+|entend\w+|pill\w+|capt\w+)\s+(?:ni\s+)?(?:una\s+)?mierda\b/g, " ")
+      .replace(/\blo que (?:mas )?me jode\b/g, " ");
+    if (HOSTILE.test(withoutIdioms)) return "hostile-or-suspicious";
+    // El único marcador hostil era el modismo -> NO es agresión: cae al flujo normal (mala señal, cara, etc.).
+  }
   if ((HUMAN_REF.test(text) && WANT_HUMAN_VERB.test(text)) || REJECT_MACHINE.test(text)) return "wants-human";
   if (SHARE_TERMS.test(text) && COMPLAINT_TERMS.test(text)) return "complains-about-share";
   // Quejas inequívocas del reparto (mitad y mitad, más para mí, otra agencia me da X): valen sin moneyContext.
