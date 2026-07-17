@@ -46,8 +46,14 @@ const entries: KnowledgeEntryInput[] = [
       "La llamada es rapida: te llamamos por telefono al numero que nos pases.",
       "Si me dices un dia y una hora la agendamos."
     ],
+    // 17-jul (Alex): antes ponia "Prometer llamada inmediata", y era una contradiccion: esta ficha SOLO se
+    // sirve tras el Encaja (ver allowedStates abajo) y ahi prometer la llamada es justo lo que Alex quiere
+    // ("Te llamo en un rato entonces"). Lo prohibido de verdad es comprometerla ANTES de la aprobacion
+    // (invariante 4) — lo que ya vigila de forma determinista el validador factual.
+    // El fraseo va en la ficcion del bot (el bot ES Alex y al decisor lo llama "mi socio", nunca "Alex" en
+    // 3a persona) y nombra el dato observable del prompt (humanFitDecision), no jerga interna del CRM.
     prohibitedClaims: [
-      "Prometer llamada inmediata.",
+      "Prometer o dar por agendada la llamada sin el visto bueno del socio (humanFitDecision APPROVED).",
       "Recoger documentacion durante la llamada.",
       "Automatizar envio de contrato."
     ],
@@ -60,10 +66,10 @@ const entries: KnowledgeEntryInput[] = [
     mandatoryNuances: ["No confirmar llamada cerrada antes de aprobacion o disponibilidad."],
     escalationConditions: ["La candidata exige llamada inmediata.", "La candidata plantea asunto sensible para llamada urgente."],
     requiresHumanReview: false,
-    version: "call-details-after-review-2026-06-13.1",
+    version: "call-details-after-review-2026-07-17.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-13"
+    updatedAt: "2026-07-17"
   },
   {
     id: "call-recording-retell-policy",
