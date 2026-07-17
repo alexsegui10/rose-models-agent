@@ -1469,9 +1469,20 @@ export class ConversationEngine {
           ? inboundTimeText
           : priorCallTimePreference;
     // Persistir la hora/franja propuesta (texto crudo) para no perderla entre turnos: la hora y el telefono
-    // pueden llegar por separado. No se persiste un "asap" (no es franja) ni lo negado (proposesConcreteTime
-    // ya lo excluye). Lo fija el CODIGO determinista (invariante 1).
-    if (isApprovedCallClosing && inboundProposesTime && !inboundIsAsap) {
+    // pueden llegar por separado. Lo negado no entra (proposesConcreteTime ya lo excluye). Lo fija el CODIGO
+    // determinista (invariante 1).
+    //
+    // 17-jul (3a prueba real de Alex): antes se descartaba TODO "asap" (`!inboundIsAsap`) porque un "ahora"
+    // se cerraba con "te llamamos lo antes posible" y llamaba el a mano. Resultado: ella decia "ahora en 5
+    // minutos", el bot lo VEIA (proposesConcreteTime=true) pero lo tiraba, y al llegar el telefono ya no
+    // habia hora -> no se agendaba nada -> no la llamaba nadie. Queja literal de Alex: "dice que la agenda
+    // pero sigue sin agendarla y no llama a los 5 minutos".
+    // Ahora, un asap que se RESUELVE a un momento concreto ("ahora en 5 minutos", "en media hora") SI se
+    // persiste y se agenda (decision suya de hoy). El asap VAGO ("lo antes posible", "cuando puedas") no
+    // resuelve a ninguna hora, asi que sigue con el cierre de siempre y lo llama Alex.
+    const inboundResolvesToTime =
+      parseProposedCallTime(inboundTimeText, new Date(), candidateZoneFromPhone(updatedCandidate.phone)) !== null;
+    if (isApprovedCallClosing && (inboundProposesTime || inboundResolvesToTime) && (!inboundIsAsap || inboundResolvesToTime)) {
       updatedCandidate = { ...updatedCandidate, callTimePreference: groupedMessage.content.trim() };
     }
     // AUTO-AGENDADO determinista (decision de Alex 19-jun): con hora de RELOJ concreta -> CALL_SCHEDULED. Sin

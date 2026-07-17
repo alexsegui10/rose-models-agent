@@ -212,17 +212,37 @@ function parseRelativeMinutes(message: string): number | null {
   // numero". Sin este guard el bot agendaba una llamada REAL en 5 minutos por esas frases (bloqueante del
   // revisor 17-jul, reproducido E2E). Y si ella nombra un DIA o una FRANJA ("ahora estoy liada, manana por
   // la tarde"), manda eso: el "ahora" es contexto, no la cita.
-  // "en N minutos / en media hora / en un cuarto de hora / en una hora" son propuestas INEQUIVOCAS: van ANTES
-  // del guard de dia, porque si no "hoy en media hora" se perdia (nota del revisor 17-jul).
-  const explicit = message.match(/\ben\s+(\d{1,3})\s*(?:min\w*)\b/);
-  if (explicit) {
-    const minutes = Number(explicit[1]);
-    // Tope de 3h: "en 5 minutos" si, "en 500 minutos" es ruido (y una hora de reloj la caza el otro parser).
-    if (minutes >= 1 && minutes <= 180) return minutes;
+  // Una DURACION solo es propuesta si ES la propuesta. Si no, el bot agendaba una llamada REAL por frases como
+  // "tengo clase en una hora" (la llamaba EN CLASE), "en media hora te escribo", "mi jefe llega en 5 minutos"
+  // o "lo hablo con mi novio y en 10 minutos te digo" (que ademas pisaba su cita real de manana) — bloqueante
+  // del revisor 17-jul, reproducido E2E. Por eso se exige que el mensaje SEA la duracion (con coletillas de
+  // aceptacion delante/detras) o que sea un "llamame en X".
+  const durationCore = "en\\s+(?:\\d{1,3}\\s*min\\w*|(?:un\\s+)?cuarto\\s+de\\s+hora|media\\s+hora|(?:un|una)\\s+hora)";
+  // Coletillas de ACEPTACION que pueden ir detras sin dejar de ser la propuesta. El cierre es
+  // `[^\p{L}\p{N}]*$` (con flag u) a proposito: traga "?", ":)" y emojis — "en media hora?" es de lo mas
+  // comun en IG y antes se perdia — pero sigue exigiendo que NO quede ninguna LETRA detras, asi que
+  // "en 10 minutos te digo" o "tengo clase en una hora" siguen muertos (bloqueante del revisor 17-jul).
+  const acceptTail =
+    "me\\s+va\\s+bien|me\\s+viene\\s+bien|te\\s+va\\s+bien|si\\s+te\\s+va\\s+bien|si\\s+te\\s+viene\\s+bien|si\\s+te\\s+parece|si\\s+(?:podes|puedes)|si\\s+quieres|estoy\\s+libre|puedo|porfa|por\\s+favor|entonces|va|dale|vale|mejor|tranquila|okey|ok|si+";
+  const isDurationProposal =
+    new RegExp(
+      `^[^\\p{L}\\p{N}]*(?:(?:ahora|ya|hoy|dale|vale|si+|ok|okey|perfecto|bueno|pues|mira|mejor|venga)[\\s,]+)*${durationCore}(?:[\\s,]+(?:${acceptTail}))*[^\\p{L}\\p{N}]*$`,
+      "u"
+    ).test(message) ||
+    new RegExp(
+      `\\b(?:llamame|llamarme|llama|me llamas|me podes llamar|me puedes llamar|podes llamarme|puedes llamarme)\\b[^.!?]{0,10}\\b${durationCore}`
+    ).test(message);
+  if (isDurationProposal) {
+    const explicit = message.match(/\ben\s+(\d{1,3})\s*(?:min\w*)\b/);
+    if (explicit) {
+      const minutes = Number(explicit[1]);
+      // Tope de 3h: "en 5 minutos" si, "en 500 minutos" es ruido (y una hora de reloj la caza el otro parser).
+      if (minutes >= 1 && minutes <= 180) return minutes;
+    }
+    if (/\ben (?:un )?cuarto de hora\b/.test(message)) return 15;
+    if (/\ben media hora\b/.test(message)) return 30;
+    if (/\ben (?:un|una) hora\b/.test(message)) return 60;
   }
-  if (/\ben (?:un )?cuarto de hora\b/.test(message)) return 15;
-  if (/\ben media hora\b/.test(message)) return 30;
-  if (/\ben (?:un|una) hora\b/.test(message)) return 60;
 
   if (/\b(?:manana|pasado|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/.test(message)) return null;
   if (DAY_SLOT_HOURS.some((slot) => slot.pattern.test(message))) return null;
@@ -369,10 +389,13 @@ export function parseProposedCallTime(
   if (relativeMinutes !== null && !parseArgentinaHour(normalized)) {
     const startMsUtc = now.getTime() + relativeMinutes * 60_000;
     return {
+      // El CRM y Alex siguen viendo la hora de reloj; a ELLA se le devuelve SU fraseo ("te llamo en 5
+      // minutos"), no "te llamo el viernes a las 08:49", que para algo inmediato suena a robot (Alex 17-jul:
+      // "'un rato' no me gusta, 5 minutos no es un rato" -> se le repite lo que ella dijo).
       startMsUtc,
       labelEs: `el ${spainWeekday(startMsUtc)} a las ${madridClockLabel(startMsUtc)}`,
       labelAr: argentinaLabelFromMs(startMsUtc),
-      labelCandidate: candidateLabelFromMs(startMsUtc, zone)
+      labelCandidate: relativeMinutes >= 60 ? "en una hora" : `en ${relativeMinutes} minutos`
     };
   }
 

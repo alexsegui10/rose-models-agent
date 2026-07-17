@@ -113,6 +113,54 @@ describe("horas VAGAS: se agendan con la hora que decidió Alex (prueba real 17-
     expect(second.response.toLowerCase()).toMatch(/te llamo/);
   });
 
+  // LA CONVERSACIÓN EXACTA DE ALEX (3ª prueba, "Laura"): ella dice "ahora en 5 minutos", el bot le pide el
+  // teléfono, ella lo pasa... y NO se agendaba nada ("Te llamamos lo antes posible" -> lo llamaba él a mano).
+  // Causa: el "asap" se DESCARTABA a propósito (`!inboundIsAsap`), así que al llegar el teléfono la hora ya
+  // no estaba. Queja literal: "dice que la agenda pero sigue sin agendarla y no llama a los 5 minutos".
+  it("la hora en un turno y el teléfono en otro SÍ se combinan: 'ahora en 5 minutos' + teléfono -> AGENDADA", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      automationMode: "AUTOMATIC"
+    });
+    const seeded = await repository.saveCandidate(
+      normalizeCandidate({
+        ...createCandidate({ instagramUsername: "laura_5min", profileVisibility: "PUBLIC" }),
+        firstName: "Laura",
+        age: 42,
+        isAdultConfirmed: true,
+        deviceEligibility: "APPROVED",
+        deviceModel: "iPhone 13",
+        hasOnlyFans: false,
+        currentState: "COLLECTING_CALL_DETAILS",
+        humanFitDecision: "APPROVED"
+      } as unknown as Candidate)
+    );
+    // 1º turno: dice la hora pero aún no hay teléfono -> se PERSISTE la hora (antes se tiraba).
+    const withTime = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "laura_5min",
+      message: "ahora en 5 minutos"
+    });
+    expect(withTime.candidate.callTimePreference).toBe("ahora en 5 minutos");
+
+    // 2º turno: pasa el teléfono -> se combina con la hora persistida y se AGENDA de verdad.
+    const withPhone = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: "laura_5min",
+      message: "si es +54 9 11 5555 0134"
+    });
+    expect(withPhone.candidate.currentState).toBe("CALL_SCHEDULED");
+    expect(withPhone.candidate.scheduledCallStartMs).toBeTruthy();
+    const enMinutos = Math.round((withPhone.candidate.scheduledCallStartMs! - Date.now()) / 60_000);
+    expect(enMinutos).toBeLessThanOrEqual(6);
+    // Y se le repite SU fraseo, no "el viernes a las 08:49" ni "en un rato" (Alex: "5 minutos no es un rato").
+    expect(withPhone.response.toLowerCase()).toContain("en 5 minutos");
+    expect(withPhone.response.toLowerCase()).not.toContain("en un rato");
+    expect(withPhone.response.toLowerCase()).not.toContain("lo antes posible");
+  });
+
   // LÍMITE CONSCIENTE (riesgo del revisor 17-jul): al aceptar solo se mira el ÚLTIMO texto de hora que dijo.
   // Si ese no lleva día ("por la tarde cuando sea"), asumir HOY podría llamarla el día equivocado (ella había
   // dicho "mañana"), así que NO se agenda: se mantiene el comportamiento de junio y la llama Alex a mano.
@@ -171,11 +219,54 @@ describe("horas VAGAS: se agendan con la hora que decidió Alex (prueba real 17-
     }
   });
 
-  it("'hoy en media hora' se agenda: 'en N minutos' es inequívoco y gana al guard de día (revisor 17-jul)", () => {
+  it("'hoy en media hora' se agenda: la duración gana al guard de día si ES la propuesta (revisor 17-jul)", () => {
     const media = parseProposedCallTime("hoy en media hora", NOW, "AR");
     expect(media).not.toBeNull();
     expect(media!.startMsUtc - NOW.getTime()).toBe(30 * 60_000);
     expect(parseProposedCallTime("hoy en 5 minutos", NOW, "AR")).not.toBeNull();
+  });
+
+  // BLOQUEANTE del revisor (17-jul): una duración que es de OTRA cosa agendaba una llamada REAL. El bot habría
+  // llamado a una candidata EN CLASE. Es la misma familia que el "ahora" descriptivo, por la rama de duración.
+  it("una duración que NO es la propuesta no agenda nada (no la llamamos en mitad de su clase)", () => {
+    const noPropuesta = [
+      "tengo clase en una hora",
+      "estoy en una reunion, en media hora te escribo",
+      "mi jefe llega en 5 minutos",
+      "el bus sale en 20 minutos",
+      "entro a trabajar en una hora",
+      "salgo del trabajo en una hora",
+      "te contesto en una hora",
+      "ok, lo hablo con mi novio y en 10 minutos te digo"
+    ];
+    for (const frase of noPropuesta) {
+      expect(parseProposedCallTime(frase, NOW, "AR"), frase).toBeNull();
+    }
+  });
+
+  it("pero la duración SÍ cuenta cuando ES la propuesta", () => {
+    for (const frase of [
+      "en 5 minutos",
+      "ahora en 5 minutos",
+      "en media hora",
+      "dale en 5 minutos",
+      "en 5 minutos me va bien",
+      "llamame en 10 minutos",
+      "en un cuarto de hora",
+      // Fraseos comunísimos en IG que la 1ª versión perdía (nota del revisor 17-jul): interrogación, emojis
+      // y coletillas de aceptación. Se perdían leads que se podían automatizar.
+      "en media hora?",
+      "en 5 minutos :)",
+      "en 10 minutos 😊",
+      "pues en 10 minutos si te va bien",
+      "en media hora si te viene bien",
+      "en una hora si podes",
+      "en 10 minutos estoy libre",
+      "me podes llamar en media hora",
+      "en 20 minutos okey"
+    ]) {
+      expect(parseProposedCallTime(frase, NOW, "AR"), frase).not.toBeNull();
+    }
   });
 
   it("si dice un DÍA o una FRANJA, manda eso — el 'ahora' es contexto, no la cita", () => {
