@@ -112,6 +112,30 @@ function draftBufferWord(directive: CallDirectiveType, turnIndex: number): strin
   return options[turnIndex % options.length];
 }
 
+/**
+ * Coletilla-check FINAL corta ("¿vale?", "¿me sigues?", "¿te va?", "¿cómo lo ves?"...). En la 1ª llamada
+ * real (17-jul) los 10 turnos del bot acababan en una — el tell de robot nº1 según el panel; criterio de
+ * Alex: "el vale me gusta como queda, pero no siempre". Solo casa la LISTA de coletillas cortas: una
+ * pregunta REAL (pedir un dato, "¿me lo repites?", la pregunta de una etapa) jamás entra aquí.
+ */
+// Dos protecciones (revisor Ronda 2): el \b evita cortar POR DENTRO de palabra ("¿Mejor así?" -> "¿Mejor
+// a."), y el arranque exige PUNTUACIÓN previa o el "¿" — sin eso, una pregunta REAL que termina en un token
+// de la lista se mutilaba ("¿Te viene bien?" -> "¿Te viene.", "¿Tienes OnlyFans o no?" -> "...o."). Una
+// coletilla de verdad siempre llega como frase aparte (", ¿vale?" / ". ¿Me sigues?" / " ¿te va?").
+const TRAILING_CHECK_CLOSER =
+  /(?:[.,;!…—-]\s*¿?|\s¿)\b(?:vale|va|s[ií]|no|eh|bien|ok(?:ey)?|de acuerdo|me sigues|te va(?: bien)?|te parece(?: bien)?|te cuadra(?: as[ií])?|c[oó]mo lo ves|qu[eé] te parece|te encaja(?: as[ií])?|mejor(?: as[ií])?|seguimos|sigo|hasta ah[ií] bien|me explico|lo ves|verdad|sabes)\s*\?\s*$/i;
+
+/**
+ * Quita la coletilla-check final si la hay (y remata con puntuación limpia). Si la coletilla ERA todo el
+ * turno, se conserva tal cual (nunca dejar el turno vacío).
+ */
+export function stripTrailingCheckCloser(content: string): string {
+  const stripped = content.replace(TRAILING_CHECK_CLOSER, "").trim();
+  if (stripped.length === 0) return content;
+  if (stripped === content.trim()) return content;
+  return /[.!…?]$/.test(stripped) ? stripped : `${stripped}.`;
+}
+
 /** Ruido de ASR/línea: vacío o solo puntuación ("...", "…"). Compartido por el atajo en vivo y el replay. */
 function isNoiseUtterance(utterance: string): boolean {
   return utterance.trim().length === 0 || /^[\s.·…,;:!?-]*$/.test(utterance);
@@ -408,6 +432,20 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     }
   } else {
     content = plan.fallbackText;
+  }
+
+  // ALTERNANCIA de coletillas-check (Ronda 2, 17-jul): si el turno ANTERIOR del bot ya acabó en pregunta,
+  // este NO vuelve a rematar con una coletilla de confirmación corta — encadenarlas en todos los turnos era
+  // el tell de robot nº1 (panel de la 1ª llamada real; Alex: "el vale me gusta como queda, pero no siempre").
+  // Determinista y replay-safe (depende solo del transcript). REPEAT_LAST_UTTERANCE se excluye (el eco debe
+  // ser fiel) y CLOSE_UNDERAGE también (el corte de menor no se retoca — invariante 2).
+  if (
+    content &&
+    /\?\s*$/.test((lastBotUtterance ?? "").trim()) &&
+    result.directive.type !== "REPEAT_LAST_UTTERANCE" &&
+    result.directive.type !== "CLOSE_UNDERAGE"
+  ) {
+    content = stripTrailingCheckCloser(content);
   }
 
   // Observabilidad por turno (sin PII: ni nombre ni texto): la llamada deja de ser una caja negra.

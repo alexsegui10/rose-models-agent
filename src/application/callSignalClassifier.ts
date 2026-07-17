@@ -98,7 +98,7 @@ const ASKS_SALARY = /\bsalario\b|\bsueldo\b|\bpago fijo\b|\bpaga fija\b|\bmensua
 // Desconfianza LEVE (worried) -> tranquilizar y seguir. Incluye sospecha HIPOTÉTICA ("y si es una
 // estafa?"), que NO es agresión: por eso HOSTILE excluye las formas precedidas de "si".
 const DISTRUST =
-  /como se que\b|como se si\b|no me fio|me cuesta (creer|fiarme)|no me lo creo|(sera|no sera|sera esto) (una )?(estafa|timo|broma|mentira|verdad)|si (es|fuera|fuese|seria|esto es) (una )?(estafa|timo|fraude|mentira|engano)|y si me (estafan|enganan|timan|roban)|(esto es|es esto|esto sera) (real|seguro|legal|de verdad|fiable|verdad)|es (de )?fiar|me da (un poco de )?(cosa|miedo|reparo|cosica|repelus|no se que)|da (un poco de )?miedo|desconfi|no se si (fiarme|me fio|es verdad|esto es real)|(seguro que|de verdad) (es legal|me vais a pagar|esto funciona)|no (me )?(van|vais|vayais) a (pagar|estafar|enganar)|y si es mentira/;
+  /como se que\b|como se si\b|no me fio|me cuesta (creer|fiarme)|no me lo creo|(sera|no sera|sera esto) (una )?(estafa|timo|broma|mentira|verdad)|si (es|fuera|fuese|seria|esto es) (una )?(estafa|timo|fraude|mentira|engano)|y si me (estafan|enganan|timan|roban)|(esto es|es esto|esto sera) (real|seguro|legal|de verdad|fiable|verdad)|es (de )?fiar|me da (un poco de )?(cosa|miedo|reparo|cosica|repelus|no se que)|da (un poco de )?miedo|desconfi|no se si (fiarme|me fio|es verdad|esto es real)|no se si (?:me|nos) est[ae](?:n|is|s)?\s+(?:enganando|timando|estafando|cagando|tomando el pelo)|(seguro que|de verdad) (es legal|me vais a pagar|esto funciona)|no (me )?(van|vais|vayais) a (pagar|estafar|enganar)|y si es mentira/;
 
 // Sospecha HIPOTÉTICA ("y si esto es una estafa?", "y si esto fuera un timo"): NO es agresión, es duda
 // -> tranquilizar. Se evalúa ANTES que HOSTILE porque "si esto es una estafa" contiene "es una estafa",
@@ -394,7 +394,19 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
     // si aún queda un insulto real ("sois una mierda, es lo que me jode de vosotros"), sigue siendo hostil.
     const withoutIdioms = text
       .replace(/\b(?:escuch\w+|oig\w+|oye\w*|entiend\w+|entend\w+|pill\w+|capt\w+)\s+(?:ni\s+)?(?:una\s+)?mierda\b/g, " ")
-      .replace(/\blo que (?:mas )?me jode\b/g, " ");
+      .replace(/\blo que (?:mas )?me jode\b/g, " ")
+      // DUDA enmarcada, no acusación (Ronda 2, 17-jul): "¿cómo sé que NO me están estafando?" / "no sé si me
+      // están timando" es una candidata PREOCUPADA — el "me están estafando" de dentro disparaba HOSTILE y se
+      // la mandaba a handoff como agresiva. Neutralizado el marco de duda, DISTRUST la recoge ("como se que")
+      // y se la tranquiliza. Una acusación directa ("me estáis estafando") sigue siendo hostil.
+      .replace(
+        /\b(?:como se que|no se si|y si|que)\s+no\s+(?:me|nos)\s+est[ae](?:n|is|s)?\s+(?:enganando|timando|estafando|cagando|tomando el pelo)\b|\b(?:no se si|y si)\s+(?:me|nos)\s+est[ae](?:n|is|s)?\s+(?:enganando|timando|estafando|cagando|tomando el pelo)\b/g,
+        " "
+      )
+      // "que NO es una estafa" (negado/duda: "¿cómo sé que no es una estafa?", "dime que no es un timo"):
+      // el patrón de "es una estafa" casaba aunque fuera NEGADO y mandaba a handoff hostil a una candidata
+      // preocupada (barrido Ronda 2). Neutralizado, DISTRUST la recoge. "esto ES una estafa" sigue hostil.
+      .replace(/\bno\s+(?:es|sea|fuera|sera)\s+(?:una\s+)?(?:estafa|timo|fraude|mentira|engano)\b/g, " ");
     if (HOSTILE.test(withoutIdioms)) return "hostile-or-suspicious";
     // El único marcador hostil era el modismo -> NO es agresión: cae al flujo normal (mala señal, cara, etc.).
   }

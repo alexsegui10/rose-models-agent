@@ -166,7 +166,9 @@ describe("planificador de redacción de la llamada", () => {
     expect(planCallUtterance({ directive: { type: "CLOSE_SOFT" } }).deterministicText?.toLowerCase()).toContain("te animas");
     expect(planCallUtterance({ directive: { type: "ASK_REPEAT" } }).deterministicText?.toLowerCase()).toContain("repetir");
     const defend = planCallUtterance({ directive: { type: "DEFEND_SHARE" } });
-    expect(defend.deterministicText).toContain("70");
+    // Ronda 2 (17-jul): el texto pasó a decir "setenta" en palabra (mejor para el TTS); la intención de la
+    // aserción se conserva — la defensa nombra el 70 de la agencia.
+    expect(defend.deterministicText?.toLowerCase()).toMatch(/70|setenta/);
     // Fix Alex jun-2026: defender el 70 de la AGENCIA, nunca decir que el 70 "es para ti" (ella tiene el 30).
     expect(defend.deterministicText?.toLowerCase()).not.toContain("para ti");
   });

@@ -181,8 +181,14 @@ const CLOSE_UNDERAGE_TEXTS = [
 // Defensa del 70 una vez antes de bajar (el porqué del reparto; el modelo de la agencia ya documentado).
 // Defensa HONESTA del reparto (fix Alex jun-2026): la AGENCIA se queda el 70 PORQUE hace todo el
 // trabajo; ella se queda el 30. NUNCA decir "ese 70 es para ti" (era un bug que invertía el reparto).
+// Reescrita en la Ronda 2 (panel de la 1ª llamada real, 17-jul): la versión anterior recitaba la MISMA
+// enumeración que la presentación del dinero del turno justo anterior (monetización/tráfico/chatters, hasta
+// 3 veces en una llamada) y re-preguntaba "¿Cómo lo ves?" cuando ella ACABABA de decir cómo lo ve. Mismos
+// hechos aprobados (el 70 paga el trabajo de la agencia; ella no paga nada por entrar), otro encuadre, y
+// remate en afirmación: la pelota ya está en su tejado.
+// (Sin "para ti" en ningún punto: el candado del bug de inversión de jun-2026 lo veta como substring.)
 const DEFEND_SHARE_TEXT =
-  "Te entiendo, es justo preguntarlo. Mira, nosotros nos quedamos ese 70% porque hacemos todo el trabajo: el tráfico, el equipo de chatters las 24 horas y toda la gestión, y tú solo subes el contenido. Por eso el reparto es así. ¿Cómo lo ves?";
+  "Te entiendo, es justo pensarlo. Pero ese setenta no me lo quedo yo tal cual: de ahí sale todo lo que te montamos, las cuentas, la publicidad y el equipo que está vendiendo por ti a todas horas. Tú no pones un euro de tu bolsillo: pones el contenido, y tu parte es limpia, sin gastos.";
 
 // Pide SALARIO/sueldo fijo (Alex 17-jul, 1a llamada real: "me gustaria pago por salario" -> el bot cerraba).
 // Sin cifras y sin cerrar: se explica el modelo y la negociacion sigue viva. La 2a variante evita el
@@ -269,8 +275,11 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return {
         directiveType: directive.type,
         draftingBrief: {
+          // Ronda 2 (panel 17-jul): la versión anterior DICTABA la fórmula ("prefieres confirmarlo y se lo
+          // mandas por WhatsApp en cuanto colguéis") y el modelo la parroteaba casi literal en cada defer —
+          // a la segunda ya sonaba a guion. Ahora se describe la INTENCIÓN y se le pide variar la forma.
           instruction:
-            "No tienes la respuesta segura a lo que acaba de decir. NO respondas su pregunta ni afirmes NINGÚN dato nuevo: si es una duda del negocio, dile con naturalidad que eso prefieres confirmarlo y se lo mandas por WhatsApp en cuanto colguéis; si es una pregunta personal o de charla, sal del paso con simpatía (sin inventar datos personales) y retoma la conversación con suavidad." +
+            "No tienes la respuesta segura a lo que acaba de decir. NO respondas su pregunta ni afirmes NINGÚN dato nuevo: si es una duda del negocio, hazle saber con naturalidad y EN TUS PALABRAS que eso se lo confirmas tú después por WhatsApp — di la idea como la diría una persona en ese momento de la conversación, no con una frase hecha; si es una pregunta personal o de charla, sal del paso con simpatía (sin inventar datos personales) y retoma la conversación con suavidad." +
             repeatHint(input),
           groundingFacts: [],
           prohibitedClaims: [
