@@ -977,7 +977,7 @@ export class ConversationEngine {
     const phone = existing.phone?.trim();
     const hasTime = Boolean(existing.scheduledCallStartMs || existing.scheduledCallSlot?.trim() || slot);
     if (!phone || !hasTime) {
-      const missing = !phone && !hasTime ? "su numero de WhatsApp y una hora" : !phone ? "su numero de WhatsApp" : "una hora";
+      const missing = !phone && !hasTime ? "su numero de telefono y una hora" : !phone ? "su numero de telefono" : "una hora";
       return {
         candidate: existing,
         transitions: [],
@@ -3007,28 +3007,63 @@ function humanInterventionResponse(
     return businessResponseFromPlan(responsePlan);
   }
 
+  // ENCAJA ya dado (Alex 17-jul, su prueba real con "Cynthia"): al preguntar "¿cuál va a ser mi %?" el caso
+  // salta a revisión por la cifra (invariante 3), pero Alex YA le había dado al Encaja. Repetirle entonces
+  // "lo hablo con mi socio" suena a que no se ha movido nada ("al darle a encaja ya debería hacer todo").
+  // Con el fit aprobado se confirma la llamada, recogiendo lo que ella propuso (fraseo elegido por Alex).
+  // OJO: esto es SOLO el TEXTO. El caso SIGUE en HUMAN_INTERVENTION_REQUIRED y la salida la decide Alex
+  // (invariante 4 intacto): aquí únicamente se deja de repetir el holding del socio a quien ya está aprobada.
+  // Gate (revisor 17-jul): el Encaja solo confirma la llamada en un turno LIMPIO. Si en ESTE turno ella pide
+  // una persona, intenta una inyección de prompt o el modelo pide revisión, se vuelve al holding del socio:
+  // prometerle la llamada a quien Alex quizá quiera rechazar convertiría un "pendiente" honesto en una
+  // promesa firme. El caso de Alex (ella pasa su número sin más) no se ve afectado.
+  const encajaGiven =
+    candidate.humanFitDecision === "APPROVED" &&
+    !understanding.requiresHumanReview &&
+    understanding.intent !== "PROMPT_INJECTION" &&
+    understanding.intent !== "REQUESTS_HUMAN" &&
+    // DECLINES fuera (revisor 17-jul): a quien acaba de decir "no me interesa, dejalo" NO se le promete una
+    // llamada — eso roza el acoso. El holding del socio es insulso pero honesto; que decida Alex.
+    understanding.intent !== "DECLINES";
+
   if (understanding.intent === "REQUESTS_CALL" || understanding.requestsCall) {
     if (candidate.phone || !responsePlan.questionToAsk) {
-      return "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada.";
+      return encajaGiven
+        ? "Perfecto. Te llamo en un rato entonces."
+        : "Perfecto. Lo hablo con mi socio y te digo para agendar la llamada.";
     }
-    return `Perfecto, lo hablo con mi socio para agendar la llamada.\n\n${responsePlan.questionToAsk}`;
+    return encajaGiven
+      ? `Perfecto, te llamo y te lo explico todo bien.\n\n${responsePlan.questionToAsk}`
+      : `Perfecto, lo hablo con mi socio para agendar la llamada.\n\n${responsePlan.questionToAsk}`;
   }
 
   if (understanding.intent === "PROVIDES_PHONE" && candidate.phone) {
-    return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada.";
+    return encajaGiven
+      ? "Perfecto, lo apunto. Te llamo en un rato entonces."
+      : "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada.";
   }
 
   // BUG A: el telefono ya esta apuntado; el cierre es confirmar y derivar al socio, jamas reabrir
   // el guion de cualificacion (replay-1 T22, replay-3 T15, replay-14 T9). No saca de HIR: solo
   // redacta el acuse de cierre mientras el caso sigue pendiente con el socio.
   if (candidate.phone && candidate.age && candidate.isAdultConfirmed) {
-    return "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada.";
+    return encajaGiven
+      ? "Perfecto, lo apunto. Te llamo en un rato entonces."
+      : "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada.";
   }
 
   // Espera en HIR: la primera vez se deriva al socio; si ya se le dijo, se varia para no repetir en bucle; y
   // tras un par de avisos (hirHoldingSaidEnough), se queda en VISTO en vez de repetir el holding turno tras
   // turno (auditoria 16-jul: "lo hablo con mi socio" en bucle). Ella ya esta en HIR, Alex la atiende.
   if (hirHoldingSaidEnough) return "";
+  // Con el ENCAJA dado, tampoco aquí se repite el socio (revisor 17-jul: la queja de Alex seguía viva en este
+  // fall-through si ella acusa recibo ANTES de pasar el número). La negociación real del % no llega hasta
+  // aquí: la caza antes su propia rama, que SÍ sigue derivando al socio (ahí está genuinamente pendiente).
+  if (encajaGiven) {
+    return alreadyAwaitingPartner
+      ? "Tranquila, que te llamo en un rato y lo vemos todo."
+      : "Perfecto, te llamo en un rato y lo vemos todo, no te preocupes.";
+  }
   return alreadyAwaitingPartner
     ? "Tranquila, sigue pendiente con mi socio; en cuanto lo vea te confirmo."
     : "Vale, esto lo hablo con mi socio y te digo, no te preocupes.";

@@ -664,7 +664,7 @@ describe("ConversationEngine answers documented knowledge inside HUMAN_INTERVENT
     });
 
     expect(result.candidate.currentState).toBe("HUMAN_INTERVENTION_REQUIRED");
-    expect(result.response.toLowerCase()).not.toContain("numero de whatsapp");
+    expect(result.response.toLowerCase()).not.toContain("numero de telefono");
     expect(result.response.toLowerCase()).not.toContain("que dia y hora");
   });
 
@@ -714,7 +714,7 @@ describe("ConversationEngine conversion moment (regresiones de amnesia de datos 
     // Hasta el "Encaja" de Alex: difiere (lo hablo con mi socio), no agenda ni pide el numero.
     expect(result.candidate.currentState).not.toBe("CALL_SCHEDULED");
     expect(result.response.toLowerCase()).toContain("socio");
-    expect(result.response.toLowerCase()).not.toContain("numero de whatsapp");
+    expect(result.response.toLowerCase()).not.toContain("numero de telefono");
   });
 
   it("does not resurrect an already-capped question turns later (ventana ancha anti-bucle, replay-10)", async () => {

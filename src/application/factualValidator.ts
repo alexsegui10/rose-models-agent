@@ -26,8 +26,11 @@ const serviceClaims = [
 // Propuesta/confirmacion de AGENDAR la llamada: pedir dia/hora, darla por apuntada o comprometer una
 // franja concreta. Anclado para NO cazar el opener ("si encaja agendamos una llamada para contartelo")
 // ni el holding honesto ("te escribo y cuadramos la llamada, no te preocupes" — sin fecha).
+// 17-jul (revisor): "te llamo en un rato/enseguida" es un COMPROMISO de llamada aunque no lleve fecha, y se
+// colaba por este guard. En el camino determinista solo se dice con el Encaja dado, pero al entrar en el
+// vocabulario del bot el redactor puede imitarlo con una candidata SIN aprobar: aquí lo para la red.
 const schedulingProposalPattern =
-  /\bque dia y (?:a que )?hora\b|\bte la dejo apuntada\b|\bla agendamos\b|\bqueda agendada\b|\bagendamos la llamada\b|\bte llamo (?:hoy|manana|el \w+|a las \d)|\bcuadramos la llamada (?:para|el|hoy|manana)\b|\bme va bien\b[^.!?]{0,25}\bllamada\b|\bllamada\b[^.!?]{0,25}\bme va bien\b/;
+  /\bque dia y (?:a que )?hora\b|\bte la dejo apuntada\b|\bla agendamos\b|\bqueda agendada\b|\bagendamos la llamada\b|\bte llamo (?:hoy|manana|el \w+|a las \d|en un rato|en breve|ahora|enseguida|luego)\b|\bte llamamos (?:en un rato|en breve|ahora|enseguida|lo antes posible)\b|\bcuadramos la llamada (?:para|el|hoy|manana)\b|\bme va bien\b[^.!?]{0,25}\bllamada\b|\bllamada\b[^.!?]{0,25}\bme va bien\b/;
 
 function normalizeForGuards(value: string): string {
   return value
