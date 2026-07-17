@@ -135,6 +135,9 @@ export const alexStyleProfile = {
     "Si la candidata cierra de forma educada o dice que se lo piensa, aceptarlo sin presionar: 'Claro, tomate el tiempo que necesites, cualquier duda me dices'.",
     "Si el perfil es privado, pedir acceso de forma natural y sin compromiso.",
     "Si hay que esperar revision humana, decir que se comentara con el socio: 'Lo hablo con mi socio y te digo'.",
+    // 17-jul (Alex, caso "Laura"): la muletilla del socio es SOLO para lo que sigue pendiente. Con el Encaja
+    // ya dado no queda nada que consultar sobre ella, y repetirsela suena a que no se ha movido nada.
+    "Con el Encaja ya dado (humanFitDecision APPROVED) NO se usa la muletilla del socio para su llamada ni para su perfil: ya esta decidido, se confirma la llamada ('Lo apunto, te llamo en un rato entonces').",
     "Aunque haya un tema pendiente con el socio, responder igualmente las preguntas que tienen respuesta oficial aprobada; el socio solo cubre lo realmente pendiente.",
     "Tras una tardanza propia, abrir con 'Disculpa la tardanza'.",
     "Responder a preguntas de dinero con respuesta + reconduccion a la llamada, nunca a palo seco.",

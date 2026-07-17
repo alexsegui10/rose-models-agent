@@ -1572,7 +1572,12 @@ export class ConversationEngine {
       responsePlan,
       allowedActions: allowedActionsFor(projectedCandidate.currentState),
       forbiddenActions: forbiddenActionsFor(projectedCandidate.currentState),
-      immediateObjective: immediateObjectiveFor(projectedCandidate.currentState, understanding.intent, isOpenerTurn)
+      immediateObjective: immediateObjectiveFor(
+        projectedCandidate.currentState,
+        understanding.intent,
+        isOpenerTurn,
+        projectedCandidate.humanFitDecision === "APPROVED"
+      )
     });
 
     // Coherencia en la espera: si ya se aviso de que se consulta con el socio, no se repite el aviso en bucle

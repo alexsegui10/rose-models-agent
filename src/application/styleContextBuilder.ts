@@ -25,6 +25,19 @@ export interface BuiltStyleContext {
   context: string;
 }
 
+// 17-jul (2a prueba real de Alex, caso "Laura"): con el Encaja YA dado, el redactor le soltaba "Lo apunto. Lo
+// hablo con mi socio y te digo para la llamada" — porque esa muletilla se le ofrece como ejemplo de COMO HABLA
+// ALEX, y con ~9k tokens de contexto una instruccion mas ("no la uses si ya esta aprobada") se pierde entre las
+// demas: el modelo la usaba igual. Se le QUITA la tentacion en vez de anadir otra regla — con el Encaja dado no
+// queda nada pendiente que consultar sobre ella. La red del factualValidator sigue detras por si acaso.
+// Solo se filtra la muletilla del SOCIO; el resto del estilo de Alex queda intacto.
+const PARTNER_HOLDING_EXPRESSION = /con mi socio/i;
+
+function signatureExpressionsFor(candidate: StyleContextInput["candidate"]): string[] {
+  if (candidate.humanFitDecision !== "APPROVED") return [...alexStyleProfile.signatureExpressions];
+  return alexStyleProfile.signatureExpressions.filter((expression) => !PARTNER_HOLDING_EXPRESSION.test(expression));
+}
+
 export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
   const context = [
     "### BUSINESS_RULES",
@@ -41,7 +54,7 @@ export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
     `registro_vivo: ${alexStyleProfile.registers.live.join(" | ")}`,
     `registro_plantilla: ${alexStyleProfile.registers.template.join(" | ")}`,
     `typos_habituales: ${alexStyleProfile.habitualTypos.join(" | ")}`,
-    `muletillas: ${alexStyleProfile.signatureExpressions.join(" | ")}`,
+    `muletillas: ${signatureExpressionsFor(input.candidate).join(" | ")}`,
     `prohibido: ${alexStyleProfile.forbiddenExpressions.join(" | ")}`,
     `evitar: ${alexStyleProfile.undesiredPatterns.join(" | ")}`,
     "",
@@ -113,18 +126,37 @@ export function buildStyleContext(input: StyleContextInput): BuiltStyleContext {
   };
 }
 
-export function immediateObjectiveFor(state: CandidateState, intent: ConversationIntent, isOpenerTurn = false): string {
+/**
+ * OJO (17-jul, 2a prueba real de Alex): esto es el `### IMMEDIATE_OBJECTIVE`, la ULTIMA seccion del prompt y
+ * por tanto la de mas peso. Decia literalmente "decir que lo hablas con tu socio para la llamada" SIN mirar
+ * el Encaja, asi que a una candidata YA APROBADA se le ordenaba justo lo que Alex no quiere — mientras otras
+ * capas le decian lo contrario y el validador lo rechazaba. Ahora el objetivo tambien sabe del Encaja: con el
+ * fit aprobado ya no queda nada que consultar sobre ella y se confirma la llamada.
+ */
+export function immediateObjectiveFor(
+  state: CandidateState,
+  intent: ConversationIntent,
+  isOpenerTurn = false,
+  fitApproved = false
+): string {
   if (state === "WAITING_PROFILE_ACCESS") return "Pedir que acepte la solicitud de seguimiento sin presionar.";
-  if (state === "WAITING_HUMAN_REVIEW") return "Indicar que se comentara el perfil con el socio y que se respondera despues.";
+  if (state === "WAITING_HUMAN_REVIEW" && !fitApproved)
+    return "Indicar que se comentara el perfil con el socio y que se respondera despues.";
   if (state === "HUMAN_INTERVENTION_REQUIRED")
-    return "Hay un tema derivado al socio, pero responde IGUALMENTE a lo que la candidata pregunta usando el conocimiento oficial del plan. Usa 'lo hablo con mi socio' SOLO para lo que de verdad esta pendiente (agenda, condiciones). Nunca te despidas, nunca rechaces y nunca dejes de responder una pregunta con respuesta aprobada. Si confirma la llamada y falta el telefono, pidelo.";
+    return fitApproved
+      ? "Hay un tema derivado al socio, pero SU PERFIL YA ESTA APROBADO: responde IGUALMENTE a lo que pregunta usando el conocimiento oficial del plan, y NUNCA digas que hablaras con tu socio para SU llamada, para agendar ni para valorar su perfil (ya esta decidido) — si toca, confirma la llamada ('te llamo en un rato'). 'Lo hablo con mi socio' SOLO para una duda concreta que de verdad siga pendiente (condiciones). Nunca te despidas, nunca rechaces y nunca dejes de responder una pregunta con respuesta aprobada. Si confirma la llamada y falta el telefono, pidelo."
+      : "Hay un tema derivado al socio, pero responde IGUALMENTE a lo que la candidata pregunta usando el conocimiento oficial del plan. Usa 'lo hablo con mi socio' SOLO para lo que de verdad esta pendiente (agenda, condiciones). Nunca te despidas, nunca rechaces y nunca dejes de responder una pregunta con respuesta aprobada. Si confirma la llamada y falta el telefono, pidelo.";
   if (state === "CLOSED") return "Cerrar de forma educada y breve.";
   if (isOpenerTurn)
     return "Primer turno con la candidata: opener canonico de Alex en tres pasos (saludo + 'soy Alex de Rose Models', validar el perfil o pedir aceptar la solicitud de seguimiento, y el marco 'unas preguntas rapidas y luego una llamada'). PROHIBIDO hacer cualquier pregunta de cualificacion en este turno: espera a que ella acepte el marco.";
   if (intent === "REQUESTS_CALL")
-    return "Aceptar la llamada como objetivo y avanzar hacia ella: si la edad esta confirmada, decir que lo hablas con tu socio para agendarla y pedir el numero de telefono si falta; si no, confirmar la edad primero.";
+    return fitApproved
+      ? "Aceptar la llamada y CONFIRMARLA: su perfil ya esta aprobado, asi que NO digas que lo hablaras con tu socio para agendarla. Pide el numero de telefono si falta; si la edad no esta confirmada, confirmala primero."
+      : "Aceptar la llamada como objetivo y avanzar hacia ella: si la edad esta confirmada, decir que lo hablas con tu socio para agendarla y pedir el numero de telefono si falta; si no, confirmar la edad primero.";
   if (intent === "PROVIDES_PHONE")
-    return "Reconocer el telefono, decir que lo hablas con tu socio para la llamada y no repetir preguntas ya contestadas.";
+    return fitApproved
+      ? "Reconocer el telefono y CONFIRMAR la llamada ('Lo apunto, te llamo en un rato entonces'): su perfil ya esta aprobado, asi que NO digas que lo hablaras con tu socio para la llamada. No repitas preguntas ya contestadas."
+      : "Reconocer el telefono, decir que lo hablas con tu socio para la llamada y no repetir preguntas ya contestadas.";
   return "Avanzar la cualificacion con una sola pregunta principal: responde primero a lo que diga, sin volcar conocimiento que no ha pedido.";
 }
 

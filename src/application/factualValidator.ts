@@ -32,6 +32,16 @@ const serviceClaims = [
 const schedulingProposalPattern =
   /\bque dia y (?:a que )?hora\b|\bte la dejo apuntada\b|\bla agendamos\b|\bqueda agendada\b|\bagendamos la llamada\b|\bte llamo (?:hoy|manana|el \w+|a las \d|en un rato|en breve|ahora|enseguida|luego)\b|\bte llamamos (?:en un rato|en breve|ahora|enseguida|lo antes posible)\b|\bcuadramos la llamada (?:para|el|hoy|manana)\b|\bme va bien\b[^.!?]{0,25}\bllamada\b|\bllamada\b[^.!?]{0,25}\bme va bien\b/;
 
+// 17-jul (2a prueba real de Alex, caso "Laura"): con el Encaja YA dado, el redactor seguia soltando "Lo hablo
+// con mi socio y te digo para la llamada" a una candidata aprobada. Es MENTIRA (la decision ya esta tomada) y
+// suena a que no se ha movido nada. La instruccion del prompt ya lo prohibe; esto es la RED determinista.
+// OJO: deferir una DUDA concreta al socio SIGUE siendo legitimo y NO entra aqui — ni siquiera con "para X"
+// ("ese movil lo tengo que ver con mi socio para valorar la calidad", "los limites los hablo con mi socio
+// para revisar como lo llevamos"). Por eso el objeto va ANCLADO a ELLA (su llamada / su perfil): un "para
+// valorar/revisar" suelto NO cuenta (falso positivo real que cazo el revisor 17-jul).
+const partnerGatesApprovedCallPattern =
+  /\bcon (?:mi|el) socio\b[^.!?]{0,40}\b(?:para (?:la llamada|agendar|la cita)|(?:para |y te )?(?:digo|confirmo|cuento) (?:para )?la llamada)\b|\b(?:comentar|valorar|revisar|ver) tu perfil con (?:mi|el) socio\b|\bcon (?:mi|el) socio\b[^.!?]{0,40}\bpara (?:valorar|revisar) tu perfil\b|\b(?:se lo paso|se lo comento|se lo digo) a (?:mi|el) socio para que (?:valore|revise) tu perfil\b|\b(?:sigue|esta) pendiente con (?:mi|el) socio\b/;
+
 function normalizeForGuards(value: string): string {
   return value
     .toLowerCase()
@@ -48,6 +58,11 @@ export function validateFactualResponse(response: string, plan: ResponsePlan): F
   // CRM. La llave la da el plan (callSchedulingAuthorized = humanFitDecision APPROVED).
   if (!plan.callSchedulingAuthorized && schedulingProposalPattern.test(normalizeForGuards(response))) {
     reasons.push("La respuesta propone o confirma agendar la llamada sin el Encaja de Alex (invariante 4).");
+  }
+
+  // El reverso: CON el Encaja dado, derivar su llamada o su perfil al socio es mentira (ver el patron arriba).
+  if (plan.callSchedulingAuthorized && partnerGatesApprovedCallPattern.test(normalizeForGuards(response))) {
+    reasons.push("Deriva al socio la llamada o el perfil de una candidata que Alex YA aprobo (Encaja dado).");
   }
 
   // Invariante 3 (ultima linea de defensa): un porcentaje SOLO es legitimo si el PLAN lo autorizo este

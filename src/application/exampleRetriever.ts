@@ -23,6 +23,7 @@ export class LocalExampleRetriever implements ExampleRetriever {
     const limit = input.limit ?? 5;
     const scored = this.examples
       .filter((example) => isUsableExample(example, input.includeUnapproved))
+      .filter((example) => !derivesHerCallToPartner(example, input))
       .map((example) => ({ example, score: scoreExample(example, input) }))
       .filter((item) => item.score > 0)
       .sort((a, b) => b.score - a.score);
@@ -52,7 +53,27 @@ function isUsableExample(example: ConversationExample, includeUnapproved?: boole
     return false;
   }
 
-  return includeUnapproved ? example.qualityScore !== undefined && example.qualityScore >= 0.7 : example.approvedByAlex && example.qualityScore !== undefined && example.qualityScore >= 0.8;
+  return includeUnapproved
+    ? example.qualityScore !== undefined && example.qualityScore >= 0.7
+    : example.approvedByAlex && example.qualityScore !== undefined && example.qualityScore >= 0.8;
+}
+
+/**
+ * 17-jul (2a prueba real de Alex, caso "Laura"): con el Encaja YA dado, el redactor soltaba "Lo apunto. Lo
+ * hablo con mi socio y te digo para la llamada" — y NO se lo inventaba: copiaba LITERAL el ejemplo
+ * `example-real-provides-phone-early-1`, cuya respuesta ideal es justo esa. Ese ejemplo es de QUALIFYING (sin
+ * aprobar), pero el recuperador lo servia igual a una aprobada porque casa el intent PROVIDES_PHONE (+1.6).
+ *
+ * Con el Encaja dado no queda nada pendiente que consultar sobre ella, asi que un ejemplo que derive SU
+ * llamada al socio no se le ofrece: no puede copiar lo que no ve. Es mas fiable que anadir otra instruccion
+ * al prompt (que ya ronda los 9k tokens y se las traga). Solo se filtra ese sentido: los ejemplos que derivan
+ * una DUDA concreta al socio siguen sirviendo.
+ */
+function derivesHerCallToPartner(example: ConversationExample, input: ExampleRetrievalInput): boolean {
+  if (input.candidate.humanFitDecision !== "APPROVED") return false;
+  return /con mi socio[^.!?]{0,30}(?:para (?:la llamada|agendar)|y te digo para)|comentar tu perfil con mi socio/i.test(
+    example.idealNextResponse ?? ""
+  );
 }
 
 function scoreExample(example: ConversationExample, input: ExampleRetrievalInput): number {
@@ -75,7 +96,9 @@ function scoreExample(example: ConversationExample, input: ExampleRetrievalInput
   }
 
   for (const message of example.messages) {
-    const words = normalize(message.content).split(/\s+/).filter((word) => word.length > 3);
+    const words = normalize(message.content)
+      .split(/\s+/)
+      .filter((word) => word.length > 3);
     for (const word of words) {
       if (normalizedMessage.includes(word)) {
         score += 0.08;

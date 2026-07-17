@@ -253,6 +253,38 @@ const rawExamples: ConversationExampleInput[] = [
     useForGeneration: true
   },
   {
+    // 17-jul (2a prueba real de Alex, caso "Laura"): faltaba el ejemplo del MISMO caso CON el Encaja ya dado.
+    // Solo existia el de abajo (stateBefore QUALIFYING, deriva al socio), y el recuperador lo servia igual a
+    // una candidata YA APROBADA porque casa el intent PROVIDES_PHONE (+1.6) — el redactor lo copiaba literal
+    // y soltaba "Lo apunto. Lo hablo con mi socio y te digo para la llamada" a quien Alex ya habia aprobado.
+    // Con este, el estado TAMBIEN casa (+1.8) y gana: el modelo copia el patron correcto.
+    id: "example-provides-phone-after-fit-approved-1",
+    category: "provides-phone",
+    sourceType: "ALEX_APPROVED",
+    title: "La candidata da el telefono con el Encaja ya dado",
+    description:
+      "Alex ya aprobo el perfil (Encaja) y ella pasa su numero: la decision YA esta tomada, asi que se confirma la llamada y NUNCA se vuelve a derivar al socio (sonaria a que no se ha movido nada). Fraseo elegido por Alex el 17-jul. Telefono falso con formato argentino realista.",
+    candidateContext: { profileVisibility: "PUBLIC", phone: "ANON_PHONE" },
+    stateBefore: "COLLECTING_CALL_DETAILS",
+    intents: ["PROVIDES_PHONE"],
+    messages: [{ role: "candidate", content: "+54 9 11 5555 0134" }],
+    idealNextResponse: "Perfecto, lo apunto\n\nTe llamo en un rato entonces",
+    whyItIsGood: [
+      "Reconoce el telefono y no lo pierde.",
+      "Con el Encaja ya dado, confirma la llamada en vez de derivar al socio: la decision ya esta tomada.",
+      "Recoge lo que ella propuso sin comprometer una hora exacta que Alex no ha confirmado."
+    ],
+    undesirablePatterns: [
+      "derivar al socio la llamada o el perfil de una candidata ya aprobada ('lo hablo con mi socio y te digo para la llamada')",
+      "reiniciar la cualificacion tras tener el telefono",
+      "comprometer una hora exacta que Alex no ha confirmado"
+    ],
+    tags: ["phone", "call", "encaja", "approved"],
+    approvedByAlex: true,
+    qualityScore: 0.95,
+    useForGeneration: true
+  },
+  {
     id: "example-real-provides-phone-early-1",
     category: "provides-phone",
     sourceType: "ALEX_APPROVED",

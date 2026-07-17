@@ -3,6 +3,8 @@ import { ConversationEngine } from "@/application/conversationEngine";
 import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
 import { createCandidate, normalizeCandidate, type Candidate } from "@/domain/candidate";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
+import { validateFactualResponse } from "@/application/factualValidator";
+import type { ResponsePlan } from "@/domain/businessKnowledge";
 
 // PRUEBA REAL DE ALEX (17-jul, conversación con "Cynthia"): le dio a ENCAJA, el bot le pidió día/hora, ella
 // pasó su número... y el bot le soltó "Perfecto, lo apunto. Lo hablo con mi socio y te digo para la llamada".
@@ -121,6 +123,56 @@ describe("tras el ENCAJA, el bot NO vuelve a decir 'lo hablo con mi socio' (prue
       user: "inyeccion"
     });
     expect(injection.response.toLowerCase()).not.toContain("te llamo en un rato");
+  });
+
+  // 2ª PRUEBA REAL DE ALEX (caso "Laura"): el arreglo anterior NO servía, porque en producción el mensaje lo
+  // ESCRIBE OpenAI (no el texto fijo), y "Lo hablo con mi socio y te digo" está en el perfil de estilo de Alex
+  // como muletilla suya. Encima el prompt decía que esa frase valía "para agendar la llamada". Los tests
+  // pasaban porque corren SIN OpenAI. Esta es la RED determinista sobre lo que escriba el redactor.
+  it("RED: con el Encaja dado, un draft que derive la llamada al socio se RECHAZA", () => {
+    const plan = {
+      callSchedulingAuthorized: true,
+      answerFacts: [],
+      prohibitedClaims: [],
+      knowledgeEntryIds: [],
+      questionToAsk: null
+    } as unknown as ResponsePlan;
+    const rejected = [
+      "Lo apunto\n\nLo hablo con mi socio y te digo para la llamada",
+      "Perfecto, lo apunto. Lo hablo con mi socio y te digo para agendar la llamada.",
+      "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo.",
+      "Tranquila, sigue pendiente con mi socio; en cuanto lo vea te confirmo.",
+      // Agujeros que cazó el revisor (17-jul): fraseos alternativos que se colaban por la red.
+      "Perfecto, lo apunto. Lo hablo con mi socio y te confirmo la llamada.",
+      "Se lo paso a mi socio para que valore tu perfil.",
+      "Lo hablo con mi socio a ver que dice y luego te digo para la llamada"
+    ];
+    for (const draft of rejected) {
+      expect(validateFactualResponse(draft, plan).valid, draft).toBe(false);
+    }
+  });
+
+  it("RED: pero deferir una DUDA concreta al socio sigue siendo legítimo aunque haya Encaja", () => {
+    const plan = {
+      callSchedulingAuthorized: true,
+      answerFacts: [],
+      prohibitedClaims: [],
+      knowledgeEntryIds: [],
+      questionToAsk: null
+    } as unknown as ResponsePlan;
+    const allowed = [
+      "Eso dejame que lo hable con mi socio y te digo.",
+      "Buena pregunta, eso lo consulto con mi socio y te digo sin problema.",
+      "Lo apunto, te llamo en un rato entonces.",
+      // Falsos positivos REALES que cazó el revisor (17-jul): deferir una duda concreta al socio es legítimo
+      // aunque lleve "para valorar/revisar" — el objeto NO es ella. Estos DEBEN pasar.
+      "Ese movil lo tengo que ver con mi socio para valorar si da la calidad que necesitamos.",
+      "El tema de los limites lo hablo con mi socio para revisar como lo llevamos y te digo.",
+      "Eso de la exclusividad lo miro con mi socio para revisar el caso y te cuento."
+    ];
+    for (const draft of allowed) {
+      expect(validateFactualResponse(draft, plan).valid, draft).toBe(true);
+    }
   });
 
   // Lo peor que cazó el revisor: prometerle una llamada a quien acaba de decir que no quiere roza el acoso.
