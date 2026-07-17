@@ -1458,14 +1458,37 @@ export class ConversationEngine {
     // fresca tal cual (cubre que cambie de dia). Si es PARCIAL ("a las 6"), se combina con la franja persistida
     // ("manana por la tarde") para poder agendar; si no propone hora, se usa la persistida. Asi una hora dada en
     // un turno y el telefono en otro SI se combinan (antes la hora se perdia y acababa en "lo antes posible").
+    // 17-jul (bug encontrado probando el agendado): "a las 6" PARSEA solo, pero asumiendo HOY — y es PARCIAL.
+    // Si ella ya habia dicho "manana por la tarde" y el bot le pregunta la hora, "a las 6" es MANANA a las 6;
+    // antes se agendaba HOY (si aun no habian dado las 6), pisando el dia que ella dijo. Ahora solo cuenta
+    // como COMPLETO si trae DIA propio ("el martes a las 5", que si debe ganar por ser mas fresco); sin dia
+    // propio y con un dia ya persistido, se COMBINAN, que es justo lo que este bloque queria hacer.
+    const dayMarkerPattern = /\bpasado\s+manana\b|\b(?:manana|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/;
+    const inboundHasOwnDay = dayMarkerPattern.test(normalizeText(inboundTimeText));
+    // Un RELATIVO ("ahora en 5 minutos", "en media hora") es completo por si solo aunque no nombre dia: si se
+    // le forzara la combinacion con un dia persistido, no parsearia NADA y volveria el "no llama a los 5
+    // minutos" (bloqueante del revisor 17-jul sobre este mismo cambio).
+    // Si es RELATIVO se lo preguntamos al PARSER, no al texto: un regex lexico ("¿pone 'ahora'?") daba true a
+    // "ahora estoy liada, a las 6" y se saltaba la combinacion -> la llamaba HOY aunque ella hubiera dicho
+    // manana (bloqueante del revisor 17-jul). La rama relativa es la unica que devuelve un labelCandidate que
+    // empieza por "en " ("en 5 minutos"); la absoluta siempre da "el <dia> a las HH:MM".
+    const parsedInboundAlone = parseProposedCallTime(inboundTimeText, new Date(), candidateZoneFromPhone(updatedCandidate.phone));
+    const inboundIsRelative = parsedInboundAlone !== null && /^en /.test(parsedInboundAlone.labelCandidate);
+    // Hay hora si lo dice el detector O si el parser la resuelve: "en media hora" NO pasa proposesConcreteTime
+    // y se perdia entera (nota del revisor: el comentario prometia que funcionaba y era mentira).
+    const inboundOffersTime = inboundProposesTime || parsedInboundAlone !== null;
+    const priorDayMarker = normalizeText(priorCallTimePreference).match(dayMarkerPattern)?.[0];
     const inboundParsesAlone =
-      inboundProposesTime &&
-      parseProposedCallTime(inboundTimeText, new Date(), candidateZoneFromPhone(updatedCandidate.phone)) !== null;
+      inboundOffersTime && (inboundHasOwnDay || inboundIsRelative || !priorDayMarker) && parsedInboundAlone !== null;
+    // Al combinar se hereda SOLO EL DIA del prior, nunca el texto entero (revisor 17-jul). Heredarlo entero
+    // traia dos regalos: la hora VIEJA ganaba a su correccion ("manana a las 6" + "mejor a las 8" -> las 6,
+    // porque el parser coge el primer match) y la FRANJA vieja colaba una llamada a las 06:00 de la madrugada
+    // ("manana por la manana" + "a las 6"). Con solo el dia: "manana" + "a las 6" -> manana a las 18:00.
     const effectiveCallTimeText = inboundParsesAlone
       ? inboundTimeText
-      : inboundProposesTime && priorCallTimePreference && priorCallTimePreference !== inboundTimeText
-        ? `${priorCallTimePreference} ${inboundTimeText}`.trim()
-        : inboundProposesTime
+      : inboundOffersTime && priorDayMarker && !inboundHasOwnDay
+        ? `${priorDayMarker} ${inboundTimeText}`.trim()
+        : inboundOffersTime
           ? inboundTimeText
           : priorCallTimePreference;
     // Persistir la hora/franja propuesta (texto crudo) para no perderla entre turnos: la hora y el telefono
@@ -1480,9 +1503,8 @@ export class ConversationEngine {
     // Ahora, un asap que se RESUELVE a un momento concreto ("ahora en 5 minutos", "en media hora") SI se
     // persiste y se agenda (decision suya de hoy). El asap VAGO ("lo antes posible", "cuando puedas") no
     // resuelve a ninguna hora, asi que sigue con el cierre de siempre y lo llama Alex.
-    const inboundResolvesToTime =
-      parseProposedCallTime(inboundTimeText, new Date(), candidateZoneFromPhone(updatedCandidate.phone)) !== null;
-    if (isApprovedCallClosing && (inboundProposesTime || inboundResolvesToTime) && (!inboundIsAsap || inboundResolvesToTime)) {
+    const inboundResolvesToTime = parsedInboundAlone !== null;
+    if (isApprovedCallClosing && inboundOffersTime && (!inboundIsAsap || inboundResolvesToTime)) {
       updatedCandidate = { ...updatedCandidate, callTimePreference: groupedMessage.content.trim() };
     }
     // AUTO-AGENDADO determinista (decision de Alex 19-jun): con hora de RELOJ concreta -> CALL_SCHEDULED. Sin

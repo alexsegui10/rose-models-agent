@@ -161,6 +161,74 @@ describe("horas VAGAS: se agendan con la hora que decidió Alex (prueba real 17-
     expect(withPhone.response.toLowerCase()).not.toContain("lo antes posible");
   });
 
+  // BUG encontrado probando el agendado a petición de Alex (17-jul): ella dice "mañana por la tarde", el bot le
+  // pide la hora exacta, ella dice "a las 6"... y la llamaba HOY a las 6 (si aún no habían dado las 6), pisando
+  // el día que ella dijo. "a las 6" PARSEA solo (asumiendo hoy) pero es PARCIAL: sin día propio no puede pisar
+  // el día ya persistido. Es su caso más común, así que dolía.
+  it("'mañana por la tarde' + 'a las 6' es MAÑANA a las 6, no hoy", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      automationMode: "AUTOMATIC"
+    });
+    const seeded = await repository.saveCandidate(
+      normalizeCandidate({
+        ...createCandidate({ instagramUsername: "dia_parcial", profileVisibility: "PUBLIC" }),
+        firstName: "Ana",
+        age: 34,
+        isAdultConfirmed: true,
+        deviceEligibility: "APPROVED",
+        deviceModel: "iPhone 13",
+        hasOnlyFans: false,
+        currentState: "COLLECTING_CALL_DETAILS",
+        humanFitDecision: "APPROVED"
+      } as unknown as Candidate)
+    );
+    const turno = (message: string) =>
+      engine.handleIncomingMessage({ candidateId: seeded.id, instagramUsername: "dia_parcial", message });
+    await turno("mañana por la tarde");
+    await turno("mi movil es +54 9 11 5555 0134");
+    const r = await turno("a las 6");
+    expect(r.candidate.scheduledCallStartMs).toBeTruthy();
+    // La cita cae MAÑANA (>20h desde ahora), nunca hoy (que serían <14h como mucho).
+    const horasDesdeAhora = (r.candidate.scheduledCallStartMs! - Date.now()) / 3_600_000;
+    expect(horasDesdeAhora).toBeGreaterThan(14);
+  });
+
+  // El revisor cazó que un "ahora" DENTRO de la frase ("ahora estoy liada, a las 6") hacía que el bot tratara
+  // el mensaje como relativo y se saltara el día que ella había dicho -> la llamaba HOY. La lección: si algo es
+  // relativo se le pregunta al PARSER, no al texto.
+  it("un 'ahora' de pasada junto a una hora no pisa el día que ella dijo", async () => {
+    const repository = new InMemoryCandidateRepository();
+    const engine = new ConversationEngine({
+      repository,
+      understandingProvider: new DeterministicUnderstandingProvider(),
+      automationMode: "AUTOMATIC"
+    });
+    const seeded = await repository.saveCandidate(
+      normalizeCandidate({
+        ...createCandidate({ instagramUsername: "ahora_suelto", profileVisibility: "PUBLIC" }),
+        firstName: "Sol",
+        age: 34,
+        isAdultConfirmed: true,
+        deviceEligibility: "APPROVED",
+        deviceModel: "iPhone 13",
+        hasOnlyFans: false,
+        currentState: "COLLECTING_CALL_DETAILS",
+        humanFitDecision: "APPROVED"
+      } as unknown as Candidate)
+    );
+    const turno = (message: string) =>
+      engine.handleIncomingMessage({ candidateId: seeded.id, instagramUsername: "ahora_suelto", message });
+    await turno("mañana por la tarde");
+    await turno("mi movil es +54 9 11 5555 0134");
+    const r = await turno("ahora estoy liada, a las 6");
+    expect(r.candidate.scheduledCallStartMs).toBeTruthy();
+    // Cae MAÑANA (>14h), no hoy: el "ahora" es contexto, el día lo dijo antes.
+    expect((r.candidate.scheduledCallStartMs! - Date.now()) / 3_600_000).toBeGreaterThan(14);
+  });
+
   // LÍMITE CONSCIENTE (riesgo del revisor 17-jul): al aceptar solo se mira el ÚLTIMO texto de hora que dijo.
   // Si ese no lleva día ("por la tarde cuando sea"), asumir HOY podría llamarla el día equivocado (ella había
   // dicho "mañana"), así que NO se agenda: se mantiene el comportamiento de junio y la llama Alex a mano.
