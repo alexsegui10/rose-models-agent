@@ -56,7 +56,9 @@ const UNDERAGE =
 // peninsular y 3a persona LATAM (son/están). NO incluye formas "preocupadas" ("¿no será estafa?": eso es
 // distrust), que se evalúa después.
 const HOSTILE =
-  /\b(idiota|imbecil|gilipoll\w*|subnormal|cabron|cabrona|payas[oa]|capull\w*|sinverguenza|chorizos?|estafador\w*|timador\w*)\b|(una|que|vaya|menuda|de) mierda|me jode\b|no me jodas|vete a (la mierda|tomar)|(?<!\bsi )(es una|menuda|vaya|menudo) (estafa|timo|fraude|robo|porqueria|verguenza|tomadura de pelo)|(estafa|timo|fraude) de mierda|huele a (estafa|timo|fraude)|(?<!\bsi )(esto|eso) es (una )?(estafa|timo|fraude|ilegal|porqueria|tomadura de pelo)|(sois|son) (?:todos? |todas? )?unos? (estafadores|ladrones|mentirosos|sinverguenzas|rateros|tramposos|chorizos)|(me|nos) (estais|estan) (enganando|timando|estafando|tomando el pelo)|os voy a denunciar|voy a (denunciar|llamar a la policia|llamar a la guardia)|esto es ilegal|hijo de|callate|dejate de (gilipolleces|tonterias|chorradas|cuentos|historias|milongas)/;
+  /\b(idiota|imbecil|gilipoll\w*|subnormal|cabron|cabrona|payas[oa]|capull\w*|sinverguenza|chorizos?|estafador\w*|timador\w*)\b|(una|que|vaya|menuda|de) mierda|me jode\b|no me jodas|vete a (la mierda|tomar)|que (?:te|os) follen|\bjodete\b|\banda(?:te)? a la mierda\b|\b(?:vete|andate) a cagar\b|(?<!\bsi )(es una|menuda|vaya|menudo) (estafa|timo|fraude|robo|porqueria|verguenza|tomadura de pelo)|(estafa|timo|fraude) de mierda|huele a (estafa|timo|fraude)|(?<!\bsi )(esto|eso) es (una )?(estafa|timo|fraude|ilegal|porqueria|tomadura de pelo)|(sois|son) (?:todos? |todas? )?unos? (estafadores|ladrones|mentirosos|sinverguenzas|rateros|tramposos|chorizos)|(me|nos) (estais|estan) (enganando|timando|estafando|tomando el pelo)|os voy a denunciar|voy a (denunciar|llamar a la policia|llamar a la guardia)|esto es ilegal|hijo de|callate|dejate de (gilipolleces|tonterias|chorradas|cuentos|historias|milongas)/;
+// (17-jul, 1a llamada real de Alex: "que te follen" no estaba y acababa en "eso prefiero mirartelo bien y te
+// lo paso por WhatsApp" — un insulto tratado como una pregunta que consultar. Ahora escala como agresion.)
 
 // Pide hablar con una persona / rechaza la máquina -> handoff. Enfoque por INTENCIÓN (no plantillas
 // rígidas): un REFERENTE humano + un VERBO de "ponme con / que me lo explique / comunícame", o un rechazo
@@ -80,12 +82,18 @@ const COMPLAINT_TERMS =
 // Queja de SEGUIMIENTO en negociación: SOLO frases dirigidas al dinero (no términos sueltos como
 // "mucho"/"reducir" que podrían referirse al contenido/ritmo y regalarían un escalón sin queja real).
 const FOLLOWUP_SHARE_COMPLAINT =
-  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|\b(?:dar|dame|darme|darnos|dais|deis|dan|das)\b(?:me|nos|le)?\s*(?:un poco|algo)?\s*mas\b(?:\s+(?:porfa|porfi|porfis|por favor|please|plis|eh|anda))?(?!\s*\w)|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:muy )?(?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico|poc[oa]|poquit[oa])|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)|\b(?:no\s+)?(?:me\s+|nos\s+)?(?:lo\s+|la\s+)?(?:podeis|puedes|podes|pueden|puede|podrias|podriais|podrian)\s+mejorar(?:me|lo|la)?(?:\s+(?:eso|esto|el reparto|el porcentaje|la oferta|las condiciones|mi parte))?(?:\s+(?:un poco|algo))?\s*\??\s*$|\b(?:me\s+)?mejoras?\s+(?:el reparto|el porcentaje|la oferta|las condiciones|mi parte)\b/;
+  /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|\b(?:dar|dame|darme|darnos|dais|deis|dan|das)\b(?:me|nos|le)?\s*(?:un poco|algo)?\s*mas\b(?:\s+(?:porfa|porfi|porfis|por favor|please|plis|eh|anda))?(?!\s*\w)|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:muy )?(?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico|poc[oa]|poquit[oa])|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?<!no )(?<!tampoco )(?<!para nada )me parece (?:mal|fatal)(?=\s*[.,!¡]*\s*$)|me parece (?:mal|fatal)\b[^.?!]{0,25}\b(?:reparto|porcentaje|comision)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)|\b(?:no\s+)?(?:me\s+|nos\s+)?(?:lo\s+|la\s+)?(?:podeis|puedes|podes|pueden|puede|podrias|podriais|podrian)\s+mejorar(?:me|lo|la)?(?:\s+(?:eso|esto|el reparto|el porcentaje|la oferta|las condiciones|mi parte))?(?:\s+(?:un poco|algo))?\s*\??\s*$|\b(?:me\s+)?mejoras?\s+(?:el reparto|el porcentaje|la oferta|las condiciones|mi parte)\b/;
 // (R9 10-jul, endurecido tras NO-APTO del revisor) "mejorar" solo cuenta como queja en forma de PETICION
 // dirigida a la agencia: "¿(no) (me lo) podeis/puedes mejorar (eso|el porcentaje...)?" anclada a fin de
 // frase, o "me mejoras la oferta". Un COMPROMISO de ELLA ("voy a mejorar", "se que tengo que mejorar",
 // "prometo mejorar") JAMAS cuenta (regalaba el 65 sin queja real — misma familia que "dame mas X"). SOLO
 // en moneyContext (gate del FOLLOWUP); "podeis mejorar las fotos" tampoco (objeto no-dinero rompe el ancla).
+
+// Pide SALARIO / sueldo fijo (17-jul, 1a llamada real de Alex: "me gustaria pago por salario" en plena
+// negociacion -> el bot CERRABA la llamada en vez de contestar). DECISION DE ALEX: se le explica que NO se
+// trabaja por salario (va a porcentaje) y se SIGUE negociando — ni cerrar ni escalar. La respuesta es
+// determinista y sin cifras; si despues insiste con el %, la escalera sigue su curso normal.
+const ASKS_SALARY = /\bsalario\b|\bsueldo\b|\bpago fijo\b|\bpaga fija\b|\bmensualidad\b|\bfijo mensual\b|\bfijo semanal\b/;
 
 // Desconfianza LEVE (worried) -> tranquilizar y seguir. Incluye sospecha HIPOTÉTICA ("y si es una
 // estafa?"), que NO es agresión: por eso HOSTILE excluye las formas precedidas de "si".
@@ -391,6 +399,13 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
     // El único marcador hostil era el modismo -> NO es agresión: cae al flujo normal (mala señal, cara, etc.).
   }
   if ((HUMAN_REF.test(text) && WANT_HUMAN_VERB.test(text)) || REJECT_MACHINE.test(text)) return "wants-human";
+  // Salario ANTES que las quejas del reparto: "me parece mal, quiero salario" debe recibir la explicacion de
+  // no-salario (decision de Alex 17-jul), no un escalon regalado de la escalera. Si luego insiste con el %,
+  // esa siguiente queja SI negocia con normalidad. Guard del revisor: si en la MISMA frase se esta DESPIDIENDO
+  // o declinando ("te dejo, sin sueldo fijo no me sirve, chau"), gana el cierre — no se le vende a quien cuelga.
+  if (ASKS_SALARY.test(text) && !NOT_INTERESTED.test(text) && !WANTS_TO_END.test(text) && !WANTS_TO_THINK.test(text)) {
+    return "asks-salary";
+  }
   if (SHARE_TERMS.test(text) && COMPLAINT_TERMS.test(text)) return "complains-about-share";
   // Quejas inequívocas del reparto (mitad y mitad, más para mí, otra agencia me da X): valen sin moneyContext.
   if (DIRECT_SHARE_COMPLAINT.test(text)) return "complains-about-share";

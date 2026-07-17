@@ -183,6 +183,14 @@ const CLOSE_UNDERAGE_TEXTS = [
 // trabajo; ella se queda el 30. NUNCA decir "ese 70 es para ti" (era un bug que invertía el reparto).
 const DEFEND_SHARE_TEXT =
   "Te entiendo, es justo preguntarlo. Mira, nosotros nos quedamos ese 70% porque hacemos todo el trabajo: el tráfico, el equipo de chatters las 24 horas y toda la gestión, y tú solo subes el contenido. Por eso el reparto es así. ¿Cómo lo ves?";
+
+// Pide SALARIO/sueldo fijo (Alex 17-jul, 1a llamada real: "me gustaria pago por salario" -> el bot cerraba).
+// Sin cifras y sin cerrar: se explica el modelo y la negociacion sigue viva. La 2a variante evita el
+// "¿como lo ves?" calcado (el panel del 17-jul cazo esa coletilla repetida en turnos consecutivos).
+const NO_SALARY_TEXTS = [
+  "Te entiendo, pero sueldo fijo no manejamos: va a porcentaje, así los dos ganamos cuando la cuenta funciona. Y el dinero te lo paga la plataforma a ti directamente, cada 14 días. Dime qué te ronda y lo vemos.",
+  "Ya, pero es que no trabajamos con sueldo: es a porcentaje, y cobras tú directamente de la plataforma cada 14 días. Si lo que te preocupa es la cifra, lo hablamos sin problema."
+];
 // No se entendió bien lo que dijo (ruido/STT): pedir que lo repita, sin asumir asentimiento.
 const ASK_REPEAT_TEXTS = [
   "Perdona, no te he pillado bien con la línea. ¿Me lo puedes repetir?",
@@ -369,6 +377,12 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       // Requisito de edad: SIEMPRE determinista y SIEMPRE el mismo (invariante 2): ni redactor ni
       // variantes — la firmeza idéntica es deliberada.
       return { directiveType: directive.type, deterministicText: AGE_POLICY_TEXT, fallbackText: AGE_POLICY_TEXT };
+    case "GIVE_NO_SALARY": {
+      // Pide salario/sueldo fijo (Alex 17-jul, 1a llamada real): DETERMINISTA y sin cifras — se explica que
+      // va a porcentaje y se deja la pelota en su tejado para que la negociacion siga, sin cerrar nada.
+      const text = variantFor(NO_SALARY_TEXTS, input.repetitionIndex ?? 0);
+      return { directiveType: directive.type, deterministicText: text, fallbackText: text };
+    }
     case "CLOSE_SOFT": {
       const text = variantFor(CLOSE_SOFT_TEXTS, input.repetitionIndex ?? 0);
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };

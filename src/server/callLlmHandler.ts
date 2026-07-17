@@ -196,7 +196,8 @@ const SAFE_RETRY_TEXT = "Perdona, se me ha cortado un segundo la línea. ¿Me lo
  * Respuesta en streaming SSE en formato OpenAI, con "BUFFER WORDS" (jul-2026): el cerebro corre DENTRO del
  * stream y, justo antes de la única espera lenta (el redactor LLM), emite una muletilla corta ("Vale... ")
  * para que la voz ya esté hablando mientras se redacta — mata el silencio que delata al bot. Los caminos
- * deterministas no emiten muletilla (son instantáneos). CALL_BUFFER_WORDS=off la desactiva.
+ * deterministas no emiten muletilla (son instantáneos). APAGADO por defecto desde el 17-jul (decisión de
+ * Alex tras oír su 1ª llamada real: el patrón acuse+"..." sonaba robot); CALL_BUFFER_WORDS=on lo reactiva.
  */
 function streamCallResponse(args: { id: string; created: number; model: string; respondInput: RespondToCallInput }): Response {
   const encoder = new TextEncoder();
@@ -209,7 +210,11 @@ function streamCallResponse(args: { id: string; created: number; model: string; 
       choices: [{ index: 0, delta, finish_reason: finishReason }]
     })}\n\n`;
 
-  const bufferWordsEnabled = process.env.CALL_BUFFER_WORDS !== "off";
+  // APAGADAS por defecto (DECISION DE ALEX 17-jul, tras oir la grabacion de su 1a llamada real: "todas las
+  // palabras de antes de los 3 puntitos quedan robot, quitalos todos"). El patron [acuse + "..." + otro acuse]
+  // ("Vale... Vale, pues mira") era el tic de maquina mas sistematico de la llamada (panel 17-jul). El coste
+  // es ~1-2s de silencio mientras redacta el LLM — Alex lo prefiere al tic. CALL_BUFFER_WORDS=on lo reactiva.
+  const bufferWordsEnabled = process.env.CALL_BUFFER_WORDS === "on";
 
   const stream = new ReadableStream({
     async start(controller) {

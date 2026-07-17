@@ -31,6 +31,7 @@ export type CallCandidateSignal =
   | "asks-earnings" // pregunta cuánto se gana -> respuesta honesta sin cifras (no defiere)
   | "asks-age-policy" // pregunta el requisito de edad -> respuesta determinista (solo 18+), no defiere
   | "asks-share-figure" // pregunta la CIFRA del reparto -> responderla (inv. 3 reactivo), nunca deferir
+  | "asks-salary" // pide salario/sueldo fijo -> explicar que va a porcentaje y SEGUIR negociando (Alex 17-jul)
   | "asks-bot-to-repeat" // pide que el bot repita lo último ("¿qué decías?") -> repetirlo, no deferir
   | "asks-clarification" // no entendió una PALABRA/frase del bot ("¿qué significa X?") -> explicarla en simple
   | "complains-about-share" // se queja del reparto -> negociar a la baja (lo decide el código)
@@ -68,6 +69,7 @@ export type CallDirectiveType =
   | "SAY_GOODBYE" // despedida corta cuando ELLA se despide con la llamada ya cerrada
   | "STAY_SILENT" // no decir nada (anti-loro: el cierre/handoff ya se repitió una vez)
   | "GIVE_SHARE_FIGURE" // re-decir la cifra AUTORIZADA vigente del reparto (respuesta reactiva, inv. 3)
+  | "GIVE_NO_SALARY" // explicar que NO hay sueldo fijo (va a porcentaje) sin cerrar ni mover la escalera
   | "REPEAT_LAST_UTTERANCE" // repetir lo último que dijo el bot (ella no lo oyó)
   | "CLARIFY_LAST_UTTERANCE" // explicar en simple lo que el bot acaba de decir (no lo entendió)
   | "RECONDUCT_FACE" // 1ª negativa a la cara: tranquilizar con el conocimiento de la cara e insistir con tacto
@@ -221,6 +223,14 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       }
       if (signal === "asks-clarification") return { directive: { type: "CLARIFY_LAST_UTTERANCE" }, nextState: state };
       if (signal === "distrust") return { directive: { type: "REASSURE" }, nextState: state };
+      // Salario tras el cierre: se explica igual (no hay sueldo fijo), sin reabrir nada (Alex 17-jul).
+      if (signal === "asks-salary") return { directive: { type: "GIVE_NO_SALARY" }, nextState: state };
+      // La CARA tras el cierre (1a llamada real 17-jul: "¿puedo taparla en un video?" se IGNORABA y se
+      // repetia el cierre): se reconduce con el conocimiento de la cara, sin tocar el estado (ya esta
+      // cerrada; no cuenta hacia ningun cierre nuevo). Responder a lo que pregunta > repetir el cierre.
+      if (signal === "face-refusal" || signal === "face-doubt") {
+        return { directive: { type: "RECONDUCT_FACE" }, nextState: state };
+      }
       // Queja del reparto o pregunta no cubierta tras el cierre: se defiere (sin cifras y sin reabrir la
       // negociación — invariante 3); nunca se repite el discurso del contrato como "respuesta".
       if (signal === "complains-about-share" || signal === "asks-unknown") {
@@ -323,6 +333,11 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
         directive: { type: "GIVE_SHARE_FIGURE", shareOffer: callRevenueShareOfferForStep(s.revenueShareStep) },
         nextState: s
       };
+    case "asks-salary":
+      // Pide salario/sueldo fijo (Alex 17-jul, 1a llamada real: el bot CERRABA en vez de contestar). Se le
+      // explica que va a porcentaje (determinista, sin cifras) y la conversacion SIGUE donde estaba: no se
+      // cierra, no se defiere y NO se mueve la escalera (si luego insiste con el %, esa queja negocia normal).
+      return { directive: { type: "GIVE_NO_SALARY" }, nextState: s };
     case "asks-bot-to-repeat": {
       // No lo oyó: se repite lo último dicho (lo aporta el responder desde el transcript), sin avanzar.
       // A la TERCERA petición consecutiva, el audio hacia ella está roto -> a una persona (como unclear).

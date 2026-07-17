@@ -348,8 +348,15 @@ export class ConversationEngine {
       resumed = { ...resumed, currentState: "COLLECTING_CALL_DETAILS" };
     }
     resumed = { ...resumed, manualControlActive: false, automationPaused: false, updatedAt: new Date() };
-    const proposedMessage =
-      "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada rapida para explicartelo todo. Que dia y a que hora te viene mejor?";
+    // El proactivo "Buenas noticias..." SOLO si el Encaja de verdad la movio a COLLECTING_CALL_DETAILS (venia
+    // de revision/HIR). Si Alex aprueba TEMPRANO (aun en QUALIFYING, a mitad de preguntas), las transiciones
+    // de arriba no aplican y este mensaje quedaba RARO ("hemos revisado tu perfil" sin haber dicho nunca lo
+    // del socio) — peticion de Alex 17-jul. En ese caso no se envia nada: el PRE-OK (27-jun) ya encadena el
+    // avance al completar la cualificacion y el bot propone la llamada directamente, sin socio ni noticias.
+    const landedInCallDetails = resumed.currentState === "COLLECTING_CALL_DETAILS";
+    const proposedMessage = landedInCallDetails
+      ? "Buenas noticias, hemos revisado tu perfil y nos encaja.\n\nMe gustaria que hicieramos una llamada rapida para explicartelo todo. Que dia y a que hora te viene mejor?"
+      : null;
     return { candidate: resumed, transitions, proposedMessage };
   }
 

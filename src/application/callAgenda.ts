@@ -46,16 +46,23 @@ export const CALL_AGENDA: readonly CallAgendaStage[] = [
     id: "HER_RESPONSIBILITIES",
     order: 2,
     label: "Qué hace ella",
-    objective:
-      "Explicar su parte, CORTA: crear el contenido, enviárnoslo y responder en plazo (un día o dos). Los límites NO se sacan proactivamente (decisión de Alex 3-jul: van por WhatsApp tras leer el guion; solo se explican si ella los menciona).",
+    // OJO: este objective LLEGA AL PROMPT del redactor. La nota "los límites NO se sacan proactivamente"
+    // vivía aquí dentro y el modelo — ceguera a la negación — leía "límites" y LOS SACABA (1a llamada real
+    // 17-jul: soltó la pregunta de límites en mitad de la aclaración de Drive). Las restricciones van en
+    // comentarios (para humanos), nunca en el texto que ve el modelo. Límites: por WhatsApp (Alex 3-jul y
+    // 17-jul); su ficha está además en la blocklist de la llamada.
+    objective: "Explicar su parte, CORTA: crear el contenido, enviárnoslo y responder en plazo (un día o dos).",
     knowledgeRefs: ["content-model-responsibilities"]
   },
   {
     id: "CONTENT_AND_FACE",
     order: 3,
     label: "Contenido",
+    // Misma regla que arriba: la nota "la cara NO se menciona proactivamente" (Alex jun-2026) se quita del
+    // texto que ve el modelo (nombrarla para prohibirla es invitarla). La cara sigue cubierta REACTIVAMENTE
+    // por el conocimiento si ella pregunta.
     objective:
-      "Volumen inicial (~5 días, 2-3 fotos/día) y recurrente (Reels), contenido nuevo para Instagram y reutilizable en OnlyFans. La cara y la privacidad NO se mencionan proactivamente (decisión de Alex jun-2026): solo se responden si la candidata pregunta (el conocimiento las cubre de forma reactiva).",
+      "Volumen inicial (~5 días, 2-3 fotos/día) y recurrente (Reels), contenido nuevo para Instagram y reutilizable en OnlyFans.",
     knowledgeRefs: ["content-production-volume", "content-new-and-old-material"]
   },
   {

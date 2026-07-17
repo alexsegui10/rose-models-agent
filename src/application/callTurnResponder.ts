@@ -428,7 +428,15 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
 
 // Conocimiento del DM que NO tiene sentido decir EN la llamada (jul-2026, llamada real de Alex): las
 // entradas de "agendar la llamada" proponen agendar/te llamamos — absurdo cuando YA estás en la llamada.
-const IN_CALL_KNOWLEDGE_BLOCKLIST = new Set(["call-details-after-review", "call-post-summary"]);
+// content-boundaries-neutral-question (17-jul, 1a llamada real): Alex — "los limites los quitas de la
+// llamada, no quiero hablar de eso". El buscador la servia hasta para "¿que es Drive?" y el bot soltaba la
+// pregunta de limites sin venir a cuento. Fuera de la llamada SIEMPRE (tambien reactivo): si ella pregunta
+// por limites, cae a DEFER -> "te lo paso por WhatsApp", que es donde Alex los trata.
+const IN_CALL_KNOWLEDGE_BLOCKLIST = new Set([
+  "call-details-after-review",
+  "call-post-summary",
+  "content-boundaries-neutral-question"
+]);
 
 /** Entradas de conocimiento aprobado que cubren la pregunta (vacío si ninguna -> se defiere a Alex). */
 async function resolveCoveringEntries(question: string, retriever: BusinessKnowledgeRetriever): Promise<KnowledgeEntry[]> {
