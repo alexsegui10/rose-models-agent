@@ -1009,10 +1009,17 @@ export class ConversationEngine {
    * candidata. El llamante ya verifico el gate de invariante 4 (estado + fit aprobado). Devuelve null si
    * no hay hora clara (parser=null), para que el turno siga su curso y el planner vuelva a pedir el dia/hora.
    */
-  private async tryAutoScheduleCall(candidate: Candidate, message: string): Promise<HandleIncomingMessageResult | null> {
+  private async tryAutoScheduleCall(
+    candidate: Candidate,
+    message: string,
+    // `resolveDaySlot` traduce una FRANJA ("por la tarde") a la hora concreta de Alex. Va apagado por defecto
+    // (su decision del 23-jun: ante una franja, el bot insiste UNA vez en la hora exacta) y solo lo enciende
+    // `resolveVagueCallWindow` cuando ella YA insistio y la franja se acepta (decision de Alex 17-jul).
+    options: { resolveDaySlot?: boolean } = {}
+  ): Promise<HandleIncomingMessageResult | null> {
     // La hora se interpreta en la ZONA de la candidata (por prefijo: +34 España, resto Argentina).
     // Lanzamiento 3-jul: a una española "a las 18" se le agendaba a las 18 argentinas (23:00 suyas).
-    const parsed = parseProposedCallTime(message, new Date(), candidateZoneFromPhone(candidate.phone));
+    const parsed = parseProposedCallTime(message, new Date(), candidateZoneFromPhone(candidate.phone), options);
     if (!parsed) {
       return null;
     }
@@ -1105,7 +1112,28 @@ export class ConversationEngine {
       });
     }
 
-    // Ya se pidio la hora y sigue dando una franja: se acepta y se la llama en esa franja.
+    // Ya se pidio la hora y sigue dando una franja: se ACEPTA. DECISION DE ALEX (17-jul, tras su prueba real):
+    // en vez de dejarsela a el para llamarla a mano (el READY_TO_SCHEDULE de abajo), se traduce la franja a la
+    // hora concreta que el fijo ("despues de comer" -> 15:00 hora de ELLA) y se AGENDA de verdad, para que el
+    // marcador la llame. Su queja: "casi siempre dicen manana despues de comer... y no me ha llamado".
+    // Se delega en el camino normal de agendado: mismas guardas (choque de hora, control manual, transicion)
+    // y misma confirmacion con SU hora. Si la franja no se puede resolver, se cae al comportamiento de junio.
+    // Solo se auto-agenda si la franja dice QUÉ DÍA: `windowText` es el ÚLTIMO texto de hora que dijo, y si es
+    // "por la tarde cuando sea" no hay día -> se asumiría HOY y se la llamaría el día equivocado (riesgo del
+    // revisor 17-jul: dijo "mañana por la tarde" y se agendaba HOY). Sin día, se mantiene el comportamiento de
+    // junio: se acepta la franja y queda para que Alex la llame a mano.
+    const windowHasDay = /\b(?:manana|pasado|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/.test(
+      normalizeText(windowText)
+    );
+    if (windowHasDay) {
+      const autoScheduled = await this.tryAutoScheduleCall(candidate, windowText, { resolveDaySlot: true });
+      // OJO: solo se acepta el AGENDADO. Si tryAutoScheduleCall devolvió el mensaje de "esa hora la tengo
+      // pillada", NO se retorna: dejaría el turno en bucle (repite el choque a cada mensaje) y nunca caería a
+      // READY_TO_SCHEDULE, así que Alex no la vería para llamarla (riesgo del revisor 17-jul). En ese caso se
+      // sigue al cierre de abajo, que sí la deja lista para él.
+      if (autoScheduled?.candidate.currentState === "CALL_SCHEDULED") return autoScheduled;
+    }
+
     const confirm = `Perfecto, te llamo ${windowText}.`;
     const transitions: StateTransition[] = [];
     // La franja queda ACEPTADA: se limpia callTimePreference para no volver a re-confirmarla en bucle en cada

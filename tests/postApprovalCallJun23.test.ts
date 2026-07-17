@@ -135,7 +135,11 @@ describe("Cierre de llamada post-aprobacion (Alex 23-jun)", () => {
     expect(rDone.candidate.currentState).toBe("CALL_SCHEDULED");
   });
 
-  it("franja vaga: si tras pedir la hora SIGUE con una franja, se ACEPTA y se la llama en esa franja (Alex 23-jun)", async () => {
+  // 17-jul: desde la decisión de Alex, una franja CON día ("mañana por la tarde") ya se auto-agenda a su hora
+  // (17:00) para que el marcador llame. Esta sigue en READY_TO_SCHEDULE a propósito: "por la tarde cuando sea"
+  // NO dice el día, y adivinarlo podría llamarla el día equivocado -> se mantiene el cierre de junio (la llama
+  // Alex a mano). El caso que SÍ se agenda está en tests/horasVagasJul17.test.ts.
+  it("franja vaga SIN día: se ACEPTA y queda para que la llame Alex (Alex 23-jun; matiz 17-jul)", async () => {
     const { engine, repository } = setup();
     const c = await seedApprovedCollecting(repository);
     await engine.handleIncomingTurn({ instagramUsername: c.instagramUsername, messages: [{ content: "manana por la tarde" }] });

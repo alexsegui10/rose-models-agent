@@ -153,7 +153,9 @@ function resolveCandidateDate(message: string, now: Date, zone: CandidateCallZon
 
   // "de/por la manana" es la FRANJA del dia (8 de la manana), NO el dia "manana" (tomorrow): se elimina
   // antes de detectar el marcador de dia para no agendar tomorrow cuando dicen "a las 8 de la manana".
-  const dayMessage = message.replace(/\b(?:de|por) la manana\b/g, " ");
+  // Ídem "esta manana" (= hoy por la manana), que si no se colaba como el dia de manana (17-jul).
+  // "a la manana" es muy argentino ("manana a la manana") y tambien es FRANJA, no el dia (revisor 17-jul).
+  const dayMessage = message.replace(/\b(?:de|por|a|en) la manana\b/g, " ").replace(/\besta manana\b/g, " ");
   let offsetDays = 0;
   if (/\bpasado\s+manana\b/.test(dayMessage)) {
     offsetDays = 2;
@@ -174,9 +176,79 @@ function resolveCandidateDate(message: string, now: Date, zone: CandidateCallZon
 }
 
 /**
+ * FRANJAS del dia -> hora concreta, en hora de ELLA (DECISION DE ALEX, 17-jul, tras su prueba real).
+ *
+ * Las candidatas casi nunca dan una hora de reloj: dicen "manana despues de comer" o "por la tarde". Eso
+ * antes NO se agendaba (el parser exigia hora exacta) -> no habia cita -> el marcador no llamaba nunca y la
+ * candidata se quedaba esperando. Alex: "el problema es que casi siempre dicen manana despues de comer o al
+ * mediodia, no siempre dicen horas exactas". Ahora se traduce a una hora concreta y el bot se la CONFIRMA
+ * ("te llamo manana a las 3 entonces") para que ella pueda corregir si no le va.
+ *
+ * Solo se usan si NO hay hora exacta: "manana a las 8 de la manana" son las 8, no las 11.
+ */
+const DAY_SLOT_HOURS: ReadonlyArray<{ pattern: RegExp; hour: number }> = [
+  // "despues de comer" va PRIMERO: es mas especifico que "mediodia" y pueden aparecer juntos.
+  { pattern: /\b(?:despues de|tras|acabando de|acabar de|luego de) (?:comer|almorzar)\b|\bsobremesa\b/, hour: 15 },
+  { pattern: /\bmediodia\b/, hour: 13 },
+  { pattern: /\b(?:por|en|a|de) la manana\b|\bpor las mananas\b|\besta manana\b/, hour: 11 },
+  { pattern: /\b(?:por|en|a|de) la tarde\b|\bpor las tardes\b|\besta tarde\b/, hour: 17 },
+  { pattern: /\b(?:por|en|a|de) la noche\b|\bpor las noches\b|\besta noche\b/, hour: 21 }
+];
+
+function parseDaySlotHour(message: string): { hour: number; minute: number } | null {
+  for (const slot of DAY_SLOT_HOURS) {
+    if (slot.pattern.test(message)) return { hour: slot.hour, minute: 0 };
+  }
+  return null;
+}
+
+/**
+ * "AHORA / en 5 minutos / en media hora" -> minutos desde ya (DECISION DE ALEX, 17-jul). En su prueba real
+ * ella dijo "ahora en 5 minutos", el bot respondio "te llamo en un rato"... y no la llamo NUNCA, porque sin
+ * hora no se agendaba nada. Ahora se agenda de verdad y el marcador la llama.
+ */
+function parseRelativeMinutes(message: string): number | null {
+  // Un "ahora" DESCRIPTIVO no es una propuesta de hora: "ahora trabajo de camarera", "ahora te paso el
+  // numero". Sin este guard el bot agendaba una llamada REAL en 5 minutos por esas frases (bloqueante del
+  // revisor 17-jul, reproducido E2E). Y si ella nombra un DIA o una FRANJA ("ahora estoy liada, manana por
+  // la tarde"), manda eso: el "ahora" es contexto, no la cita.
+  // "en N minutos / en media hora / en un cuarto de hora / en una hora" son propuestas INEQUIVOCAS: van ANTES
+  // del guard de dia, porque si no "hoy en media hora" se perdia (nota del revisor 17-jul).
+  const explicit = message.match(/\ben\s+(\d{1,3})\s*(?:min\w*)\b/);
+  if (explicit) {
+    const minutes = Number(explicit[1]);
+    // Tope de 3h: "en 5 minutos" si, "en 500 minutos" es ruido (y una hora de reloj la caza el otro parser).
+    if (minutes >= 1 && minutes <= 180) return minutes;
+  }
+  if (/\ben (?:un )?cuarto de hora\b/.test(message)) return 15;
+  if (/\ben media hora\b/.test(message)) return 30;
+  if (/\ben (?:un|una) hora\b/.test(message)) return 60;
+
+  if (/\b(?:manana|pasado|hoy|lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/.test(message)) return null;
+  if (DAY_SLOT_HOURS.some((slot) => slot.pattern.test(message))) return null;
+
+  // "ahora"/"ya" SUELTOS solo cuentan si son la PROPUESTA: o el mensaje es basicamente eso ("ahora mismo"),
+  // o van pegados a un marcador de propuesta ("ahora puedo", "llamame ahora", "ahora si quieres", "ahora me
+  // va bien"). Un "ahora" en mitad de una frase descriptiva NO agenda nada.
+  if (/^\s*(?:ahora|ya|ahora mismo|ya mismo|enseguida|en un rato|en un ratito)[\s.!¡,]*$/.test(message)) return 5;
+  if (
+    /\b(?:ahora|ya)\b[\s,]*(?:mismo\b)?[\s,]*(?:puedo|podria|me va bien|me viene bien|si quieres|si te va|estoy libre|vale)\b/.test(
+      message
+    ) ||
+    /\b(?:llamame|llamarme|llama|me llamas|puedes llamarme|podeis llamarme)\b[^.!?]{0,15}\b(?:ahora|ya|enseguida|en un rato)\b/.test(
+      message
+    )
+  ) {
+    return 5;
+  }
+  return null;
+}
+
+/**
  * Extrae la hora de pared ARGENTINA (hour 0-23, minute) del mensaje, o null si no hay hora clara.
  * Soporta: "las 18", "6pm", "6 de la tarde", "18:30", "10.30am", "a las 10". Las palabras de franja
- * sueltas ("por las tardes", "por la noche") NO cuentan como hora concreta (devuelven null).
+ * sueltas ("por las tardes", "por la noche") NO cuentan como hora concreta aqui: las traduce
+ * `parseDaySlotHour` con las horas que fijo Alex.
  */
 function parseArgentinaHour(message: string): { hour: number; minute: number } | null {
   // 1) Hora con minutos explícitos: 18:30, 18.30, 10:30am. El separador puede ser ':' o '.'.
@@ -278,7 +350,12 @@ export function candidateLocalHour(utcMs: number, zone: CandidateCallZone): numb
 export function parseProposedCallTime(
   message: string,
   now: Date,
-  zone: CandidateCallZone = "AR"
+  zone: CandidateCallZone = "AR",
+  // Traducir una FRANJA vaga ("manana por la tarde") a la hora concreta de Alex es OPT-IN a proposito: por
+  // defecto NO, para respetar su decision del 23-jun (ante una franja, el bot insiste UNA vez en la hora
+  // exacta). Solo se activa cuando ella YA insistio y la franja se ACEPTA (resolveVagueCallWindow): ahi Alex
+  // prefiere que el bot la llame en esa franja a dejarsela a mano (decision 17-jul).
+  options: { resolveDaySlot?: boolean } = {}
 ): { startMsUtc: number; labelEs: string; labelAr: string; labelCandidate: string } | null {
   const normalized = normalizeForParse(message);
 
@@ -287,7 +364,20 @@ export function parseProposedCallTime(
     return null;
   }
 
-  const time = parseArgentinaHour(normalized);
+  // "ahora / en 5 minutos / en media hora": no lleva dia ni hora de reloj, se resuelve desde YA (Alex 17-jul).
+  const relativeMinutes = parseRelativeMinutes(normalized);
+  if (relativeMinutes !== null && !parseArgentinaHour(normalized)) {
+    const startMsUtc = now.getTime() + relativeMinutes * 60_000;
+    return {
+      startMsUtc,
+      labelEs: `el ${spainWeekday(startMsUtc)} a las ${madridClockLabel(startMsUtc)}`,
+      labelAr: argentinaLabelFromMs(startMsUtc),
+      labelCandidate: candidateLabelFromMs(startMsUtc, zone)
+    };
+  }
+
+  // Hora de reloj si la hay; si no, la FRANJA que dijo, pero SOLO si se pidio resolverla (ver options arriba).
+  const time = parseArgentinaHour(normalized) ?? (options.resolveDaySlot ? parseDaySlotHour(normalized) : null);
   if (!time) {
     return null;
   }
