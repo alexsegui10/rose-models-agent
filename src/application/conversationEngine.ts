@@ -1269,11 +1269,12 @@ export class ConversationEngine {
     }
 
     // DOS ventanas de contexto con proposito distinto: recentMessages(8) alimenta estilo/ritmo y el
-    // guard anti-repeticion verbatim; plannerHistory(30) es la ventana ANCHA solo para el guard
+    // guard anti-repeticion verbatim; plannerHistory(80) es la ventana ANCHA solo para el guard
     // anti-loop del planner (con 8 una pregunta capada "resucitaba" al salir de la ventana: bucle real
-    // de "Como te llamas?" x11). Un helper futuro debe elegir conscientemente cual de las dos usa.
+    // de "Como te llamas?" x11; con 30, la conversacion REAL de Daiana 18-jul — rafagas de burbujas cortas —
+    // desbordo la ventana y la pregunta del OF salio 4 veces). Un helper futuro debe elegir cual usa.
     const recentMessages = await this.dependencies.repository.listMessages(activeCandidate.id, 8);
-    const plannerHistory = await this.dependencies.repository.listMessages(activeCandidate.id, 30);
+    const plannerHistory = await this.dependencies.repository.listMessages(activeCandidate.id, 80);
     // Ventana ANCHA solo para "¿ya se solto el pitch de la agencia?": el pitch se da PRONTO (al completar
     // el guion), asi que 100 mensajes cubren cualquier conversacion real. Con la ventana corta, tras una
     // pausa larga + reentrada por REQUEST_MORE_INFO el pitch podia scrollear fuera y re-dispararse (duplicado).

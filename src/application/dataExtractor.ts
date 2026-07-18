@@ -568,8 +568,21 @@ export function extractDeterministicUnderstanding(
 
   // Si/no pelado a la pregunta de OF o de agencias: consume ese slot concreto.
   if (extractedData.hasOnlyFans === undefined && agentAskedOnlyFans) {
+    // HISTORIA de creacion/tenencia de la cuenta (caso REAL Daiana/Bianca 18-jul: 4 re-preguntas y un false
+    // erroneo): "lo hice", "la hice y la verifique", "hice la cuenta", "tengo una cuenta (de 600 seguidores)"
+    // son un SI aunque la frase lleve un "no" DE OTRA COSA ("NO se la pase a ellos", "no tengo TIEMPO",
+    // "pero no hice nada aun"). La negacion DIRECTA de la cuenta se evalua ANTES y sigue ganando.
+    const accountDeniedDirect =
+      /\b(?:nunca|jamas)\b[^.!?\n]{0,15}\b(?:l[ao] hice|cuenta|of|only|onlyfans)\b|\bno (?:tengo|hice|cree|abri|llegue a hacer(?:me)?|me hice)\b[^.!?\n]{0,12}\b(?:cuenta|of|only|onlyfans|ninguna|nada de eso)\b/;
+    const accountCreationStory =
+      /(?<!\bnunca )(?<!\bjamas )(?<!\bno )\b(?:l[ao]s? (?:hice|cree|abri|verifique|tengo)|hice (?:la|una|mi) cuenta|me (?:hice|cree|abri) (?:la|una) cuenta|tengo (?:la|una|mi) cuenta|la cuenta la (?:hice|tengo|cree|abri)|la (?:tengo|deje) (?:parada|verificada|limpia|abandonada))\b/;
+    // Una cuenta de INSTAGRAM no es la de OF ("hice la cuenta de instagram que me pidieron" — revisor T1):
+    // si la cuenta que menciona es de insta/ig, la historia de creación NO cuenta como OF.
+    const mentionsInstagramAccount = /\b(?:cuenta|l[ao] hice|la tengo)[^.!?\n]{0,8}\bde (?:insta\w*|ig)\b/.test(normalized);
+    if (accountDeniedDirect.test(normalized)) extractedData.hasOnlyFans = false;
+    else if (accountCreationStory.test(normalized) && !mentionsInstagramAccount) extractedData.hasOnlyFans = true;
     // La negacion (pelada o clara "claro que no") se evalua ANTES que el si pelado para no invertir.
-    if (bareNoPattern.test(normalized) || clearNegationPattern.test(normalized)) extractedData.hasOnlyFans = false;
+    else if (bareNoPattern.test(normalized) || clearNegationPattern.test(normalized)) extractedData.hasOnlyFans = false;
     else if (bareYesPattern.test(normalized)) extractedData.hasOnlyFans = true;
     // "Tengo dos", "tengo una cuenta activa", "ya tengo" como respuesta a "¿tienes OF?" = SI lo tiene,
     // aunque no diga la palabra "of" (replay 15-jun: se repreguntaba OF en bucle). Excluye "tengo que".

@@ -119,7 +119,13 @@ const qualificationSlots: QualificationSlot[] = [
     id: "onlyfans-or-experience",
     // Registro mas calido (peticion de Alex 15-jun): nada de pregunta fria a secas.
     question: "Me puedes contar si has tenido OF alguna vez?",
-    alreadyAskedPattern: /tienes of|has tenido of|tienes onlyfans|has tenido onlyfans/,
+    // AMPLIO a propósito (caso real Daiana 18-jul: el redactor REFORMULA la pregunta — "¿tienes cuenta de
+    // only creada o no?" — y el patrón estrecho no la contaba, así que el tope anti-bucle nunca saltaba y
+    // la pregunta salió 4 veces). OJO (revisor): sin "cuenta de" en la 1ª alternancia — la RESPUESTA del
+    // propio bot "La cuenta de OnlyFans la abres tú" contaba como pregunta hecha y agotaba el cupo en
+    // silencio (dead-end); la reformulación real la cubre la 3ª alternativa (cuenta de only + creada).
+    alreadyAskedPattern:
+      /(?:tienes|tenes|has tenido|tenido|tuviste)\s+(?:of|only|onlyfans)\b|(?:of|only|onlyfans)\b[^.?\n]{0,20}alguna vez|cuenta de only\w*\s+(?:creada|abierta|hecha)/,
     // Solo depende de si SABEMOS si tiene OnlyFans: una experienceDescription (a veces alucinada por
     // el LLM desde un mensaje de parloteo) NO dice si tiene OF, asi que no debe saltarse esta pregunta.
     isMissing: (candidate) => candidate.hasOnlyFans === undefined

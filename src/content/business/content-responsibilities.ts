@@ -5,6 +5,42 @@ export { communicationPolicy, contentProductionPolicy };
 
 const entries: KnowledgeEntryInput[] = [
   {
+    // DICTADA POR ALEX (18-jul, tras las conversaciones reales): "¿qué tipo de contenido debo enviarte?" /
+    // "¿qué me pides para comenzar?" se preguntan MUCHO y el bot respondía con otra cosa (la ficha del
+    // perfil objetivo: "no hace falta experiencia..." — un non-sequitur). Sus palabras: "para Instagram te
+    // enviaremos unos perfiles de referencia y para OF te pasaré unos guiones, pero esto te lo pasaré
+    // después de la llamada". SIEMPRE conocimiento, nunca plantilla.
+    id: "content-what-to-send",
+    category: "CONTENT_RESPONSIBILITIES",
+    title: "Qué contenido enviar (referencias y guiones)",
+    facts: [
+      "Para Instagram se envian perfiles de referencia como guia del estilo de contenido.",
+      "Para OnlyFans se pasa un guion.",
+      "Las referencias y los guiones se envian despues de la llamada."
+    ],
+    approvedAnswerPoints: [
+      "Para Instagram te enviaremos unos perfiles de referencia para que veas el estilo, y para OnlyFans te pasare unos guiones.",
+      "Esto te lo paso despues de la llamada, para que lo tengas todo junto y lo veas con calma."
+    ],
+    prohibitedClaims: ["Entrar en descripciones explicitas del contenido por Instagram.", "Prometer resultados o cifras."],
+    mandatoryNuances: ["Los detalles finos del contenido se ven en la llamada y despues de ella."],
+    escalationConditions: ["Peticiones de contenido fuera de lo habitual."],
+    allowedStates: [
+      "NEW_LEAD",
+      "QUALIFYING",
+      "WAITING_HUMAN_REVIEW",
+      "APPROVED",
+      "COLLECTING_CALL_DETAILS",
+      "HUMAN_INTERVENTION_REQUIRED"
+    ],
+    tags: ["content", "what-to-send", "references", "guides", "faq"],
+    requiresHumanReview: false,
+    version: "content-what-to-send-2026-07-18.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-18"
+  },
+  {
     id: "content-agency-responsibilities",
     category: "CONTENT_RESPONSIBILITIES",
     title: "Responsabilidades de Rose Models",

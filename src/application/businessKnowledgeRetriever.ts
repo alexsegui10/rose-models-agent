@@ -310,6 +310,16 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
       ))
   )
     tags.push("of-account", "account-setup", "onboarding", "faq");
+  // DICTADA POR ALEX (18-jul): "¿qué (tipo de) contenido debo enviarte?" / "¿cuánto contenido?" / "¿qué me
+  // pides para comenzar?" -> la ficha de referencias y guiones (content-what-to-send). Antes caía en la del
+  // perfil objetivo ("no hace falta experiencia...") — un non-sequitur visto en conversaciones REALES.
+  if (
+    // "q"/"m" son las abreviaturas reales de IG ("y q m pides para comenzar" — caso Daiana).
+    /\b(?:que|q|cuanto|cuanta|cual) (?:tipo de )?contenido\b[^.!?]{0,35}\b(?:enviar|enviarte|enviaros|mandar|mandarte|subir|hacer|pedis|pides|piden|necesitan?|hace falta)\b|\b(?:que|q|cuanto) contenido\b|\bq(?:ue)?\s+(?:me?\s+)?(?:pides|piden|pedis|necesitas|necesitan)\b[^.!?]{0,25}\b(?:para (?:comenzar|empezar|arrancar)|contenido)\b/.test(
+      message
+    )
+  )
+    tags.push("content", "what-to-send", "faq");
   // Hueco jun-2026: "que edad buscais?" -> franja objetivo (perfil maduro, ~30-50). Pregunta sobre la edad
   // del PUBLICO objetivo; no toca el corte de mayoria de edad (invariante 2 vive en candidate-requirements-adult).
   if (
