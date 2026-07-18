@@ -1792,7 +1792,7 @@ export class ConversationEngine {
     const repeatFilterApplies =
       (projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" && !inboundLooksLikeTextualQuestion) ||
       (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" && alreadyAwaitingPartner);
-    const hirResponsePlan = repeatFilterApplies
+    let hirResponsePlan = repeatFilterApplies
       ? {
           ...responsePlan,
           answerFacts: responsePlan.answerFacts.filter((fact) => {
@@ -1808,6 +1808,40 @@ export class ConversationEngine {
           })
         }
       : responsePlan;
+    // En PAUSA, una PREGUNTA REPETIDA no "drena" conocimiento ajeno (barrido 18-jul noche: cada re-pregunta
+    // de Ale por el porcentaje soltaba el siguiente lote de fichas sin relacion — identidad española,
+    // Pinterest...). Si ella YA hizo esta misma pregunta antes, solo se re-responden los facts EXENTOS
+    // (cifra del reparto / safety); si no quedan, el turno vuelve al visto. La 1ª vez responde normal.
+    if (
+      projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" &&
+      alreadyAwaitingPartner &&
+      hirResponsePlan.answerFacts.length > 0
+    ) {
+      const currentTokens = [
+        ...new Set(
+          normalizeText(groupedMessage.content)
+            .split(/[^a-z0-9]+/)
+            .filter((token) => token.length > 3)
+        )
+      ].slice(0, 12);
+      const lastCandidateIdx = pitchLookbackHistory.map((m) => m.role).lastIndexOf("candidate");
+      const repeatsEarlierQuestion =
+        currentTokens.length >= 3 &&
+        pitchLookbackHistory.some((message, idx) => {
+          if (message.role !== "candidate" || idx === lastCandidateIdx) return false;
+          const haystack = normalizeText(message.content);
+          const matched = currentTokens.filter((token) => haystack.includes(token)).length;
+          return matched / currentTokens.length >= 0.8;
+        });
+      if (repeatsEarlierQuestion) {
+        hirResponsePlan = {
+          ...hirResponsePlan,
+          answerFacts: hirResponsePlan.answerFacts.filter(
+            (fact) => /\b70\s?%|30\s?%|70\/30\b/.test(fact) || safetyFacts.has(fact)
+          )
+        };
+      }
+    }
     const deterministicResponse = generateResponse(
       projectedCandidate,
       understanding,
@@ -4860,8 +4894,11 @@ const FACE_RECOGNITION_RECONDUCTION_CAP = 2;
 // Tema de la cara/anonimato (no la privacidad geografica, que es "recognition").
 const faceTopicPattern = /\b(cara|rostro|anonim)\b/;
 // Senal de negarse / no querer, en cualquier formulacion ("no quiero", "sigo sin", "tampoco", "me niego"...).
+// SIN "me da cosa/verguenza/palo/corte" (barrido 18-jul noche, caso Priscila): eso es PREOCUPACION de
+// libro, no negativa — con ello dentro, "eso es lo q me da cosa" cerraba a un lead que solo preguntaba
+// (el propio bot usa "les da un poco de corte y es de lo mas normal" como empatia).
 const faceRefusalSignalPattern =
-  /\b(no(?:\s+\w+){0,2}\s+quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar|tapar|taparme|taparla|difuminar|pixelar|me da (cosa|verguenza|palo|apuro|reparo|corte)|sin la cara|sin cara|sin (?:mostrar|ensenar)\s+(?:la\s+|mi\s+)?cara|sin que se (?:me\s+)?vea\s+(?:la\s+)?cara|no enseno|no ensenar|no mostrar)\b/;
+  /\b(no(?:\s+\w+){0,2}\s+quiero|no pienso|no voy a|no me gusta|prefiero no|sigo sin|sin querer|tampoco quiero|tampoco|me niego|no la (muestro|enseno|enseno)|no salir|no aparecer|que no se me vea|ocultar|tapar|taparme|taparla|difuminar|pixelar|sin la cara|sin cara|sin (?:mostrar|ensenar)\s+(?:la\s+|mi\s+)?cara|sin que se (?:me\s+)?vea\s+(?:la\s+)?cara|no enseno|no ensenar|no mostrar)\b/;
 const facePartialPattern =
   /\b(solo (en )?(algun|alguna|algunas|algunos|parte|ciertas?|ratos?|a veces)|en algunas fotos|media cara|de espaldas|solo el cuerpo|parcial|sin que se vea del todo|a medias)\b/;
 // La candidata quiere mover/cancelar una llamada YA agendada (se evalua solo en CALL_SCHEDULED).
@@ -4930,10 +4967,14 @@ function classifyFaceConcern(inboundMessage: string): FaceConcernKind | null {
     /\b(tapar\w*|pixelar\w*|difuminar\w*|ocultar\w*|cubrir\w*|disimular\w*|borrar\w*)\b/.test(message) &&
     !/\b(no|nunca|jamas|prefiero no|me niego|tampoco|ni loca|ni en pedo)\b/.test(message);
   if (asksCoverPossibility) return "recognition";
+  // La PREOCUPACION por que la reconozcan gana al rechazo (barrido 18-jul noche): "si me ve alguien me
+  // reconoce, no?" llevaba tambien un "no, nunca trabaje con agencias" en el mismo mensaje y la negacion
+  // AJENA la convertia en refusal -> cierre. Quien expresa miedo-a-que-la-vean recibe la reconduccion de
+  // privacidad; el cierre queda para la negativa EXPLICITA sin ese matiz (y tras reconducir, decide Alex).
+  if (faceRecognitionPattern.test(message)) return "recognition";
   // Rechazo de cara: tema de cara/anonimato + cualquier senal de negacion. Captura formulaciones
   // evasivas ("sigo sin querer mostrar la cara") sin depender de una frase literal concreta.
   if ((mentionsFace && faceRefusalSignalPattern.test(message)) || /\banonim/.test(message)) return "refusal";
-  if (faceRecognitionPattern.test(message)) return "recognition";
   return null;
 }
 

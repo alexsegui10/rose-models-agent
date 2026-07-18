@@ -574,7 +574,9 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
     // "lo que gano yo", "cual es mi porcentaje"). jul-2026 (prueba E2E de Alba): "cual es mi porcentaje"
     // y "el que ganare yo" se clasificaban ASKS_ABOUT_PERCENTAGE pero el regex no los pillaba -> caian en
     // la rama general que REPETIA "no salario fijo" en vez de dar el 70/30 (antinatural, evasivo).
-    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro|mi porcentaje|porcentaje (para mi|mio)|el que (ganare|gano|gane|voy a ganar) yo|lo que (ganare|gano|voy a ganar|me llevo|me queda|me toca)|que me queda a mi|que me llevo yo|q(ue)? porcentaje|porcentaje[^.?!]{0,15}para (mi|ustedes|vosotros)|mi ganancia|su comision|cual es (su|la) comision)\b/.test(
+    // + "de cuanto seria/es el porcentaje" (barrido 18-jul noche: Ale lo pregunto SEIS veces con ese fraseo
+    // natural, el detector no lo casaba y jamas recibio la cifra — el mismo modo de fallo de Mayra).
+    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro|mi porcentaje|porcentaje (para mi|mio)|el que (ganare|gano|gane|voy a ganar) yo|lo que (ganare|gano|voy a ganar|me llevo|me queda|me toca)|que me queda a mi|que me llevo yo|q(ue)? porcentaje|de cuanto (seria|es|va a ser|sera) (el )?(porcentaje|reparto)|cuanto (seria|es) (el|mi) (porcentaje|reparto)|porcentaje[^.?!]{0,15}para (mi|ustedes|vosotros)|mi ganancia|su comision|cual es (su|la) comision)\b/.test(
       message
     );
   const generalCommercialQuestion =

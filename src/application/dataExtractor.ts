@@ -803,7 +803,20 @@ export function extractDeterministicUnderstanding(
     // trabajar con una agencia", "quiero trabajar con una agencia como la vuestra") y marcaria como que YA
     // trabaja con otra a un lead que justo quiere unirse (regresion cazada por el revisor 5-jul). La negacion
     // de abajo sigue ganando ("no trabajo con agencias").
-    /\b(?:he\s+)?trabaj(?:e|o|ando|ado|aba|amos)\b[^.!?]{0,20}\bagencias?\b/.test(normalized)
+    /\b(?:he\s+)?trabaj(?:e|o|ando|ado|aba|amos)\b[^.!?]{0,20}\bagencias?\b/.test(normalized) ||
+    // "ENTRE a una agencia (y me metieron en stripchat)" — barrido 18-jul noche: Daiana contaba su historia
+    // con "entre/estuve/me metieron" y el slot no se rellenaba -> el bot re-preguntaba agencias y ella "ya
+    // te dije". Solo PASADO REAL (entrar/meterse en futuro o deseo NO cuenta) y solo con una/otra/la/esa
+    // agencia (nunca "tu/vuestra agencia": entrar a la NUESTRA es justo lo que quiere). EXCLUYE los verbos de
+    // CONSIDERACION tras "estuve" (bloqueante del revisor 18-jul): "estuve pensando/mirando/viendo/buscando en
+    // una agencia" es DESEO, no militancia pasada — marcaba experta a una inexperta y le cambiaba el pitch.
+    /\b(?:entre|entrado|habia entrado|me meti|me metieron|me mandaron)\b[^.!?]{0,20}\b(?:una|otra|la|esa|dos|varias)\s+agencias?\b/.test(
+      normalized
+    ) ||
+    (/\b(?:estuve|estado)\b[^.!?]{0,20}\b(?:una|otra|la|esa|dos|varias)\s+agencias?\b/.test(normalized) &&
+      !/\b(?:estuve|estado)\s+(?:pensando|mirando|viendo|buscando|dudando|interesad|consideran|valorando|barajando)/.test(
+        normalized
+      ))
   )
     extractedData.worksWithAnotherAgency = true;
   // Negacion en cualquier formulacion ("no he trabajado con agencias", "nunca trabaje con agencias",
