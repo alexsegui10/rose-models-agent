@@ -13,7 +13,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Candidata no encontrada." }, { status: 404 });
   }
 
-  const [messages, transitions] = await Promise.all([repository.listMessages(id), repository.listTransitions(id)]);
+  // Ventana ancha (18-jul): la ficha muestra la conversacion ENTERA y suma el coste IA real de la traza —
+  // con el limite por defecto (50) una conversacion larga perdia turnos y el coste quedaba infravalorado.
+  const [messages, transitions] = await Promise.all([repository.listMessages(id, 500), repository.listTransitions(id)]);
 
   return NextResponse.json({ messages, transitions });
 }

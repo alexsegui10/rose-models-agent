@@ -2428,9 +2428,12 @@ export class ConversationEngine {
           fallbackReason: draft.fallbackReason ?? draft.error ?? "",
           durationMs: draft.durationMs + understanding.durationMs,
           retryCount: draft.retryCount + understanding.retryCount,
-          inputTokens: draft.inputTokens ?? understanding.inputTokens ?? 0,
-          outputTokens: draft.outputTokens ?? understanding.outputTokens ?? 0,
-          estimatedCostUsd: draft.estimatedCostUsd ?? understanding.estimatedCostUsd ?? 0,
+          // SUMA de las dos llamadas del turno (comprension + redaccion): antes el "??" se quedaba solo con
+          // la del redactor y el coste del turno quedaba infravalorado (peticion de Alex 18-jul: coste real
+          // por conversacion en el CRM; invariante 6: la traza no miente).
+          inputTokens: (draft.inputTokens ?? 0) + (understanding.inputTokens ?? 0),
+          outputTokens: (draft.outputTokens ?? 0) + (understanding.outputTokens ?? 0),
+          estimatedCostUsd: (draft.estimatedCostUsd ?? 0) + (understanding.estimatedCostUsd ?? 0),
           styleProfileVersion: styleContext.styleProfileVersion,
           promptVersion: styleContext.promptVersion,
           understandingPromptVersion: promptRegistry.understanding.version,

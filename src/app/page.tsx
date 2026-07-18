@@ -4594,6 +4594,12 @@ export default function Home() {
                               </div>
                             </div>
                           );
+                          // Coste IA real de la conversacion (peticion de Alex 18-jul): suma de la traza
+                          // por turno (comprension + redaccion) que ya guardan los metadatos del mensaje.
+                          const iaCostUsd = drawerMessages.reduce((sum, item) => {
+                            const value = item.metadata?.estimatedCostUsd;
+                            return sum + (typeof value === "number" ? value : 0);
+                          }, 0);
                           return (
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11, marginBottom: 20 }}>
                               {fieldCard("Ciudad", dc.city ?? "—")}
@@ -4606,6 +4612,8 @@ export default function Home() {
                                   {dc.phone ? <span style={{ color: "#8FB99F", fontWeight: 600 }}> ✓</span> : null}
                                 </span>
                               )}
+                              {fieldCard("Coste IA", iaCostUsd > 0 ? `$${iaCostUsd.toFixed(4)}` : "—")}
+                              {fieldCard("Mensajes", `${drawerMessages.length}`)}
                             </div>
                           );
                         })()}
