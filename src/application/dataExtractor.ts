@@ -700,11 +700,25 @@ export function extractDeterministicUnderstanding(
       ).trim();
       const after = stripped.slice(idx, idx + (m[0]?.length ?? 0) + 22);
       const durationBefore = /\b(hace|llevo|desde|durante|van|llevaba|llevamos)\b/.test(clausePrefix);
+      // "con una agencia 3 años" (caso REAL Bianca 18-jul): el numero va PEGADO a agencia/empresa/estudio
+      // -> es cuanto TIEMPO estuvo, no su edad. Sin esto, "trabajé con una agencia 3 años" leia edad=3 y
+      // CERRABA a una adulta de 30 como menor (falso positivo del invariante 2 que mata leads validos).
+      // ANCLADO AL DIGITO (bloqueante del revisor): la exencion SOLO aplica cuando el match EMPIEZA en el
+      // numero (la rama "N años" pelada). Las ramas "tengo N"/"edad N"/"cumpli N" empiezan en la palabra,
+      // asi que "estuve en una agencia TENGO 16 años" (menor explicita) queda FUERA de la exencion y sigue
+      // cerrando — sin el ancla, la exencion se tragaba declaraciones de edad reales. Y solo "años" pelado:
+      // "16 añitos" es diminutivo de EDAD, nadie mide antiguedad en añitos (nota 2 del revisor).
+      const digitStartMatch = /^\d+\s*anos\b/.test(m[0] ?? "");
+      const agencyDurationBefore = digitStartMatch && /(?:agencias?|empresas?|estudios?)\s*$/.test(clausePrefix);
+      // "estuve 2 años en una agencia" (riesgo del revisor, misma familia): verbo de estancia justo antes
+      // del numero = antiguedad. Tambien anclado al digito ("estuve... tengo 16" NO entra).
+      const stayDurationBefore = digitStartMatch && /\b(?:estuve|estuvimos|pase|estado)\s*$/.test(clausePrefix);
       // SAFETY-FIRST (invariante 2): una cifra en rango de menor (13-17) se trata como edad y cierra,
       // aunque vaya con contexto de duracion despues ("tengo 16 años trabajando", "13 años de
       // experiencia": podria ser una menor). EXCEPCION: un verbo de duracion claro DELANTE (llevo/hace/
-      // desde) la hace inequivocamente experiencia de adulta ("llevo 15 años"), no edad.
-      if (value >= 13 && value <= 17 && !durationBefore) {
+      // desde) o el numero pegado a "agencia/empresa" ("en la agencia 15 años" = antiguedad imposible
+      // para una menor) la hacen inequivocamente experiencia de adulta, no edad.
+      if (value >= 13 && value <= 17 && !durationBefore && !agencyDurationBefore && !stayDurationBefore) {
         extractedData.age = value;
         break;
       }
@@ -716,7 +730,14 @@ export function extractDeterministicUnderstanding(
           after
         );
       const weakDurationAfter = /anos?\s+en\s+(?:esto|el sector|el mundillo|el rubro|of|onlyfans|la plataforma)/.test(after);
-      if (durationBefore || strongDurationAfter || (weakDurationAfter && value < 13)) continue;
+      if (
+        durationBefore ||
+        agencyDurationBefore ||
+        stayDurationBefore ||
+        strongDurationAfter ||
+        (weakDurationAfter && value < 13)
+      )
+        continue;
       extractedData.age = value;
       break;
     }

@@ -44,6 +44,42 @@ describe("extractor: las historias REALES de Daiana/Bianca capturan el OF (antes
     expect((await extractOF("no, solo tengo una cuenta de instagram")).hasOnlyFans).not.toBe(true);
   });
 
+  it("'trabajé con una agencia 3 AÑOS' es DURACIÓN, no edad: no se cierra a una adulta como menor", async () => {
+    // Caso REAL Bianca (18-jul): su mensaje leía edad=3 -> CLOSED como menor -> para Alex, el bot "se calló".
+    const u = await provider.understand({
+      inboundMessage:
+        "hola che, te cuento de una: trabajé con una agencia 3 años y ahora tengo una cuenta de of con 600 seguidores, pero no tengo tiempo para manejarla yo",
+      recentMessages: []
+    } as never);
+    expect((u.extractedData as { age?: number }).age).toBeUndefined();
+  });
+
+  it("INVARIANTE 2 INTACTO: las declaraciones de menor REALES siguen cerrando", async () => {
+    for (const [msg, expected] of [
+      ["tengo 16 años", 16],
+      ["12 años", 12], // sin suelo numérico: sigue cerrando (diseño deliberado)
+      ["trabajo de camarera y tengo 16 años", 16], // "trabajo" cerca NO la salva: podría ser una menor
+      // Casos ADVERSARIALES del revisor (NO-APTO 1ª vuelta): mencionar una agencia justo antes de
+      // "tengo N" NO puede eximir — la exención solo aplica a la rama "N años" pelada (ancla al dígito).
+      ["estuve en una agencia tengo 16 años", 16],
+      ["en la agencia tengo 16 años", 16],
+      ["trabajo para una empresa tengo 17", 17],
+      ["respondo a tu agencia edad 16", 16],
+      ["estuve ahi y tengo 16 años", 16], // "estuve" lejos del número tampoco exime
+      ["en la agencia 16 añitos", 16] // "añitos" es diminutivo de EDAD: la exención no aplica (nota revisor)
+    ] as Array<[string, number]>) {
+      const u = await provider.understand({ inboundMessage: msg, recentMessages: [] } as never);
+      expect((u.extractedData as { age?: number }).age, msg).toBe(expected);
+    }
+  });
+
+  it("'estuve 2 años en una agencia' es ANTIGÜEDAD (riesgo del revisor): no cierra a una adulta", async () => {
+    for (const msg of ["estuve 2 años en una agencia", "estuve 16 años en esa empresa y ahora quiero algo nuevo"]) {
+      const u = await provider.understand({ inboundMessage: msg, recentMessages: [] } as never);
+      expect((u.extractedData as { age?: number }).age, msg).toBeUndefined();
+    }
+  });
+
   it("las negaciones DIRECTAS siguen siendo false (no se debilita)", async () => {
     expect((await extractOF("No")).hasOnlyFans).toBe(false);
     expect((await extractOF("nunca la hice")).hasOnlyFans).toBe(false);

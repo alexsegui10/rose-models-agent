@@ -39,6 +39,29 @@ interface Persona {
 
 const PERSONAS: Persona[] = [
   {
+    // Réplica de la conversación REAL de Daiana (18-jul): la que destapó el OF preguntado 4 veces.
+    id: "daiana-real",
+    ficha:
+      "Te llamas Daiana, 34, de Argentina. Movil: un Samsung ('pero saca bien las fotos', 'apenas pueda compro un iphone'; si insisten: podes usar el iPhone 17 de tu hermana). Historia REAL: hace 3 meses entraste a una agencia que supuestamente era para OnlyFans pero te metieron en stripchat y lo dejaste; te hiciste TU cuenta de OF, la verificaste, pero nunca la usaste (sin metodo de pago, 'limpia'); tu hermana hace OnlyFans y por eso queres arrancar.",
+    persona:
+      "Contas tu historia en RAFAGAS de mensajes cortos con faltas ('cuebta', 'wueria', 'x ahi') y NUNCA con un si/no claro: siempre con la historia entera mezclando la agencia, stripchat y la cuenta. Si te preguntan algo que YA contestaste te quejas ('disculpame pero ya te dije'). En algun momento preguntas 'y q m pides para comenzar' y 'cual seria el perfil q valoran?'."
+  },
+  {
+    // Réplica de Bianca (18-jul): la respuesta rica tras la que el bot SE CALLO.
+    id: "bianca-real",
+    ficha:
+      "Te llamas Bianca, 30, iPhone 15 Pro Max. Trabajaste con una agencia 3 años; tenes una cuenta de OF de 600 seguidores que no tenes tiempo de manejar, pero SI tenes tiempo para crear contenido.",
+    persona:
+      "Vas directa y das TODA tu situacion en un solo mensaje largo ('trabaje con una agencia 3 años y ahora tengo una cuenta de 600 seguidores pero no tengo tiempo para manejarla, tengo tiempo para crear contenido'). Despues esperas respuesta; si no te contestan bien, insistis una vez."
+  },
+  {
+    // Réplica de Ale (18-jul): la pregunta de contenido a la que el bot respondió REPITIENDO el pitch.
+    id: "ale-real",
+    ficha: "Te llamas Ale, 44, Samsung S21, nunca tuviste OnlyFans.",
+    persona:
+      "Sos escueta y directa. Tras la explicacion de como trabajan preguntas: 'Cuanto contenido debo enviarte? Que tipo de contenido?'. Si contestan bien, seguis con otra duda de proceso ('y como me pagan?')."
+  },
+  {
     id: "laura-completa-pregunta",
     ficha: "Te llamas Laura, 29, no tenes OnlyFans, iPhone 14.",
     persona:
