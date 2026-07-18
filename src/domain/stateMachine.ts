@@ -4,19 +4,54 @@ import type { Candidate, CandidateState, StateTransition } from "./candidate";
 // cualquier momento desde el CRM (decision humana terminal, invariante 4). CLOSED sigue siendo el
 // unico estado del que no se sale.
 export const allowedTransitions: Record<CandidateState, CandidateState[]> = {
+  // CALL_SCHEDULED tambien desde los estados de arranque (18-jul, revisor de la feature manual): el caso
+  // de uso es "Alex toma el control DONDE SEA y agenda"; sin la arista, agendar a una candidata aun en
+  // perfil/acceso reventaba. Igual que las demas aristas manuales: solo las cruza la ruta manual de Alex.
   NEW_LEAD: [
     "WAITING_PROFILE_ACCESS",
     "PROFILE_READY_FOR_REVIEW",
     "QUALIFYING",
+    "CALL_SCHEDULED",
     "REJECTED",
     "HUMAN_INTERVENTION_REQUIRED",
     "CLOSED"
   ],
-  WAITING_PROFILE_ACCESS: ["PROFILE_READY_FOR_REVIEW", "QUALIFYING", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
-  PROFILE_READY_FOR_REVIEW: ["QUALIFYING", "WAITING_HUMAN_REVIEW", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
-  QUALIFYING: ["PROFILE_READY_FOR_REVIEW", "WAITING_HUMAN_REVIEW", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
-  WAITING_HUMAN_REVIEW: ["APPROVED", "REJECTED", "QUALIFYING", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
-  APPROVED: ["COLLECTING_CALL_DETAILS", "READY_TO_SCHEDULE", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
+  WAITING_PROFILE_ACCESS: [
+    "PROFILE_READY_FOR_REVIEW",
+    "QUALIFYING",
+    "CALL_SCHEDULED",
+    "REJECTED",
+    "HUMAN_INTERVENTION_REQUIRED",
+    "CLOSED"
+  ],
+  PROFILE_READY_FOR_REVIEW: [
+    "QUALIFYING",
+    "WAITING_HUMAN_REVIEW",
+    "CALL_SCHEDULED",
+    "REJECTED",
+    "HUMAN_INTERVENTION_REQUIRED",
+    "CLOSED"
+  ],
+  // CALL_SCHEDULED directo desde QUALIFYING/WAITING_HUMAN_REVIEW/APPROVED (18-jul): SOLO lo dispara el
+  // agendado MANUAL de Alex desde la web (pausa el bot, termina la conversacion a mano y agenda el la
+  // llamada). Ningun camino automatico usa estas aristas: la decision es humana (invariante 4).
+  QUALIFYING: [
+    "PROFILE_READY_FOR_REVIEW",
+    "WAITING_HUMAN_REVIEW",
+    "CALL_SCHEDULED",
+    "REJECTED",
+    "HUMAN_INTERVENTION_REQUIRED",
+    "CLOSED"
+  ],
+  WAITING_HUMAN_REVIEW: ["APPROVED", "REJECTED", "QUALIFYING", "CALL_SCHEDULED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
+  APPROVED: [
+    "COLLECTING_CALL_DETAILS",
+    "READY_TO_SCHEDULE",
+    "CALL_SCHEDULED",
+    "REJECTED",
+    "HUMAN_INTERVENTION_REQUIRED",
+    "CLOSED"
+  ],
   REJECTED: ["CLOSED", "HUMAN_INTERVENTION_REQUIRED"],
   COLLECTING_CALL_DETAILS: ["READY_TO_SCHEDULE", "CALL_SCHEDULED", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],
   READY_TO_SCHEDULE: ["CALL_SCHEDULED", "COLLECTING_CALL_DETAILS", "REJECTED", "HUMAN_INTERVENTION_REQUIRED", "CLOSED"],

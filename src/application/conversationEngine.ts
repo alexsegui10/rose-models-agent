@@ -1011,6 +1011,96 @@ export class ConversationEngine {
   }
 
   /**
+   * Agendado MANUAL desde la web (peticion de Alex 18-jul): cuando el bot va mal, Alex lo pausa, termina
+   * la conversacion A MANO y fija aqui el dia/hora REAL de la llamada para cualquier candidata activa.
+   * Es una decision humana explicita: cuenta como Encaja (humanFitDecision APPROVED) y arma el
+   * auto-marcador via scheduledCallStartMs (invariante 4 intacto: la dispara Alex, jamas el bot).
+   * NO envia ningun mensaje de IG (Alex ya cerro la conversacion a mano como quiso).
+   */
+  async scheduleCallManually(input: {
+    candidateId: string;
+    startMsUtc: number;
+    phone?: string;
+  }): Promise<{ candidate: Candidate; transitions: StateTransition[]; blockedReason?: string }> {
+    const existing = await this.dependencies.repository.findCandidateById(input.candidateId);
+    if (!existing) {
+      throw new Error("Candidate not found.");
+    }
+    if (existing.currentState === "CLOSED" || existing.currentState === "REJECTED") {
+      return {
+        candidate: existing,
+        transitions: [],
+        blockedReason: "La conversacion esta cerrada o descartada: no se puede agendar una llamada."
+      };
+    }
+    const phone = input.phone?.trim() || existing.phone?.trim();
+    if (!phone) {
+      return {
+        candidate: existing,
+        transitions: [],
+        blockedReason: "Falta el numero de telefono de la candidata: escribelo en el formulario o pideselo antes de agendar."
+      };
+    }
+    if (!Number.isFinite(input.startMsUtc) || input.startMsUtc <= Date.now()) {
+      return { candidate: existing, transitions: [], blockedReason: "La hora tiene que ser valida y futura." };
+    }
+    // Invariante 2, defensa en profundidad: jamas se agenda una llamada de pago a una menor conocida.
+    if (typeof existing.age === "number" && existing.age < 18) {
+      return { candidate: existing, transitions: [], blockedReason: "La candidata es menor de edad: no se agenda." };
+    }
+    // Guard de grafo (revisor de la feature): un estado sin arista a CALL_SCHEDULED (p.ej. una llamada YA
+    // en curso) devuelve motivo en vez de reventar con 500. Fail-closed: no se muta nada.
+    if (existing.currentState !== "CALL_SCHEDULED" && !canTransition(existing.currentState, "CALL_SCHEDULED")) {
+      return {
+        candidate: existing,
+        transitions: [],
+        blockedReason: `No se puede agendar desde el estado actual (${existing.currentState}).`
+      };
+    }
+    const labelEs = candidateLabelFromMs(input.startMsUtc, "ES");
+    const labelCandidate = candidateLabelFromMs(input.startMsUtc, candidateZoneFromPhone(phone));
+    // El agendado manual ES el Encaja: Alex decidio llamarla, no tiene sentido dejarla "sin revisar".
+    const approved: Candidate = {
+      ...existing,
+      phone,
+      humanFitDecision: "APPROVED",
+      humanProfileReviewStatus:
+        existing.humanProfileReviewStatus === "NOT_REVIEWED" ? "POTENTIAL_FIT" : existing.humanProfileReviewStatus
+    };
+    // Reagendado: ya esta en CALL_SCHEDULED -> solo se actualiza la hora (createTransition lanzaria por
+    // transicion al mismo estado); ciclo de reintentos nuevo igualmente.
+    if (existing.currentState === "CALL_SCHEDULED") {
+      const rescheduled: Candidate = {
+        ...approved,
+        scheduledCallSlot: labelEs,
+        scheduledCallStartMs: input.startMsUtc,
+        callAttempts: 0,
+        updatedAt: new Date()
+      };
+      await this.dependencies.repository.saveCandidate(rescheduled);
+      return { candidate: rescheduled, transitions: [] };
+    }
+    const { candidate: scheduledRaw, transition } = applyCallScheduled(approved, {
+      labelEs,
+      startMsUtc: input.startMsUtc,
+      trigger: "HUMAN_MANUAL_SCHEDULE",
+      reason: `Alex agendo la llamada manualmente: ${labelEs} (Espana) / ${labelCandidate} (hora de la candidata).`,
+      proposedMessage: ""
+    });
+    // A diferencia del agendado automatico, aqui NO se reactiva el bot de IG (nota 3 del revisor): Alex
+    // tomo la conversacion a mano y la pausa que puso se CONSERVA — si la llamada acaba en "mal momento" o
+    // sin respuesta, el bot no vuelve a escribirle solo; lo decide Alex (puede reactivar con su boton).
+    const candidate: Candidate = {
+      ...scheduledRaw,
+      manualControlActive: existing.manualControlActive,
+      automationPaused: existing.automationPaused
+    };
+    await this.dependencies.repository.saveCandidate(candidate);
+    await this.dependencies.repository.addTransition(transition);
+    return { candidate, transitions: [transition] };
+  }
+
+  /**
    * Auto-agendado determinista dentro del turno: parsea la hora propuesta (en hora Argentina), comprueba
    * que no choque con otra llamada ya reservada y, si esta libre, pasa a CALL_SCHEDULED confirmando a la
    * candidata. El llamante ya verifico el gate de invariante 4 (estado + fit aprobado). Devuelve null si

@@ -35,6 +35,16 @@ describe("state machine", () => {
     expect(canTransition("CLOSED", "REJECTED")).toBe(false);
   });
 
+  it("agendado MANUAL de Alex (18-jul): CALL_SCHEDULED alcanzable desde cualquier conversacion activa", () => {
+    // Alex pausa el bot, termina la conversacion a mano y agenda la llamada desde la web: la transicion
+    // la dispara SOLO la ruta manual (decision humana, invariante 4 intacto), pero el grafo debe permitirla.
+    for (const state of ["QUALIFYING", "WAITING_HUMAN_REVIEW", "APPROVED"] as const) {
+      expect(canTransition(state, "CALL_SCHEDULED"), state).toBe(true);
+    }
+    // Terminal sigue terminal.
+    expect(canTransition("CLOSED", "CALL_SCHEDULED")).toBe(false);
+  });
+
   it("cubre el ciclo de la llamada (bot de voz) desde CALL_SCHEDULED", () => {
     // La llamada arranca, termina, no contesta o se transfiere a Alex.
     expect(canTransition("CALL_SCHEDULED", "CALL_IN_PROGRESS")).toBe(true);

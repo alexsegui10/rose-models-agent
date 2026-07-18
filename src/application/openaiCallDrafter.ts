@@ -130,6 +130,11 @@ function describeContext(context: CallContext): string {
   if (context.country) parts.push(context.country);
   if (context.concerns.length > 0) parts.push(`dudas previas: ${context.concerns.join(", ")}`);
   if (context.dmSummary) parts.push(`resumen del chat: ${context.dmSummary}`);
+  // Conversacion ENTERA de Instagram (peticion de Alex 18-jul): el bot llama sabiendo lo hablado — no
+  // re-pregunta lo que ella ya conto ni contradice lo prometido. YO = el propio bot (Alex) en el DM.
+  if (context.dmTranscript) {
+    parts.push(`\nCONVERSACION DE INSTAGRAM (leela: no re-preguntes lo que ya conto ahi):\n${context.dmTranscript}`);
+  }
   return parts.join("; ") || "una candidata cualificada por Instagram";
 }
 

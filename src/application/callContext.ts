@@ -23,6 +23,13 @@ export interface CallContext {
   scheduledSlot?: string;
   /** Resumen de lo hablado por Instagram (para no repetir y poder referenciarlo: "como te dije por Insta"). */
   dmSummary?: string;
+  /**
+   * TRANSCRIPT compacto de la conversacion de Instagram (peticion de Alex 18-jul): el bot de voz se lee
+   * la conversacion ENTERA antes de llamar — como se llama, que conto, que se le prometio — no solo el
+   * resumen. Lo carga el servidor de la llamada por candidateId (no viaja por dynamic vars: limite de
+   * tamano de ElevenLabs). Acotado (ultimos mensajes, recortados) por buildDmTranscript.
+   */
+  dmTranscript?: string;
   /** Dudas/objeciones que planteó en el DM (para abordarlas con tacto en la llamada). */
   concerns: string[];
   /** Nivel de interés detectado en el DM (UNKNOWN/LOW/MEDIUM/HIGH). */
@@ -66,4 +73,29 @@ export function summarizeCallContext(context: CallContext): string {
 
 function dedupe(values: string[]): string[] {
   return [...new Set(values.map((v) => v.trim()).filter((v) => v.length > 0))];
+}
+
+/**
+ * Transcript compacto del DM para la llamada: ultimos `maxMessages` mensajes, cada uno recortado a
+ * `maxCharsPerMessage`, con el rol en claro (ELLA/YO — el bot de voz ES Alex, 1ª persona). Determinista y
+ * acotado: una conversacion larga no revienta el prompt de voz.
+ */
+export function buildDmTranscript(
+  messages: Array<{ role: string; content: string }>,
+  options: { maxMessages?: number; maxCharsPerMessage?: number } = {}
+): string | undefined {
+  const maxMessages = options.maxMessages ?? 40;
+  const maxChars = options.maxCharsPerMessage ?? 220;
+  const relevant = messages.filter(
+    (m) => (m.role === "candidate" || m.role === "agent" || m.role === "alex") && m.content.trim()
+  );
+  if (relevant.length === 0) return undefined;
+  return relevant
+    .slice(-maxMessages)
+    .map((m) => {
+      const text = m.content.replace(/\s+/g, " ").trim();
+      const clipped = text.length > maxChars ? `${text.slice(0, maxChars)}…` : text;
+      return `${m.role === "candidate" ? "ELLA" : "YO"}: ${clipped}`;
+    })
+    .join("\n");
 }

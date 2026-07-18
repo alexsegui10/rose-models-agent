@@ -235,6 +235,13 @@ export default function Home() {
   const [testCallPhone, setTestCallPhone] = useState("");
   const [testCallBusy, setTestCallBusy] = useState(false);
   const [testCallResult, setTestCallResult] = useState<string | null>(null);
+  // Agendado MANUAL de llamada (Alex 18-jul): buscador de candidata + día/hora real + teléfono.
+  const [manualCallSearch, setManualCallSearch] = useState("");
+  const [manualCallCandidateId, setManualCallCandidateId] = useState<string | null>(null);
+  const [manualCallWhen, setManualCallWhen] = useState("");
+  const [manualCallPhone, setManualCallPhone] = useState("");
+  const [manualCallBusy, setManualCallBusy] = useState(false);
+  const [manualCallResult, setManualCallResult] = useState<string | null>(null);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [transitions, setTransitions] = useState<StateTransition[]>([]);
@@ -1128,6 +1135,54 @@ export default function Home() {
       setTestCallResult(`❌ Error de red: ${error instanceof Error ? error.message : "desconocido"}`);
     } finally {
       setTestCallBusy(false);
+    }
+  }
+
+  // Agendado MANUAL (Alex 18-jul): Alex terminó la conversación a mano y fija aquí el día/hora real de la
+  // llamada. El picker es hora LOCAL de Alex (España); se convierte a instante UTC para el auto-marcador.
+  async function doManualSchedule() {
+    if (!manualCallCandidateId) {
+      setManualCallResult("⚠️ Busca y elige una candidata primero.");
+      return;
+    }
+    const startMsUtc = manualCallWhen ? new Date(manualCallWhen).getTime() : Number.NaN;
+    if (!Number.isFinite(startMsUtc) || startMsUtc <= Date.now()) {
+      setManualCallResult("⚠️ Elige un día y una hora futuros.");
+      return;
+    }
+    setManualCallBusy(true);
+    setManualCallResult("📅 Agendando…");
+    try {
+      const response = await fetch("/api/call/schedule-manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidateId: manualCallCandidateId,
+          startMsUtc,
+          phone: manualCallPhone.trim() || undefined
+        })
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        candidate?: Candidate;
+        blockedReason?: string | null;
+        error?: unknown;
+      };
+      if (response.ok && !data.blockedReason) {
+        setManualCallResult(
+          `✅ Llamada agendada ${data.candidate?.scheduledCallSlot ?? ""}. El bot la llamará a esa hora, leída toda la conversación.`
+        );
+        setManualCallCandidateId(null);
+        setManualCallSearch("");
+        setManualCallWhen("");
+        setManualCallPhone("");
+        await refreshCandidates();
+      } else {
+        setManualCallResult(`❌ ${data.blockedReason ?? `No se pudo agendar (error ${response.status}).`}`);
+      }
+    } catch (error) {
+      setManualCallResult(`❌ Error de red: ${error instanceof Error ? error.message : "desconocido"}`);
+    } finally {
+      setManualCallBusy(false);
     }
   }
 
@@ -2493,6 +2548,139 @@ export default function Home() {
                           <span style={{ width: "100%", fontSize: 13, color: "var(--text2)", fontWeight: 300 }}>
                             {testCallResult}
                           </span>
+                        ) : null}
+                      </div>
+
+                      {/* Agendado MANUAL (Alex 18-jul): pausaste el bot y terminaste tú la conversación ->
+                          elige la candidata, fija día/hora y el bot de voz la llama leída toda la conversación. */}
+                      <div
+                        style={{
+                          margin: "0 0 22px",
+                          padding: "14px 18px",
+                          borderRadius: 16,
+                          border: "1px solid rgba(185,139,201,.24)",
+                          background: "rgba(185,139,201,.06)"
+                        }}
+                      >
+                        <div style={{ fontFamily: "var(--font-jost)", fontSize: 13, color: "var(--text2)", marginBottom: 10 }}>
+                          📅 Agendar llamada manual (cuando acabas tú la conversación): el bot la llamará a esa hora sabiendo todo
+                          lo hablado por Instagram.
+                        </div>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                          <input
+                            type="text"
+                            placeholder="Buscar candidata (nombre o @usuario)…"
+                            value={manualCallSearch}
+                            onChange={(event) => {
+                              setManualCallSearch(event.target.value);
+                              setManualCallCandidateId(null);
+                            }}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 20,
+                              border: "1px solid rgba(var(--line-rgb),.14)",
+                              background: "rgba(var(--s3),.6)",
+                              color: "var(--text)",
+                              minWidth: 220,
+                              fontFamily: "var(--font-jost)",
+                              fontSize: 13,
+                              outline: "none"
+                            }}
+                          />
+                          <input
+                            type="datetime-local"
+                            value={manualCallWhen}
+                            onChange={(event) => setManualCallWhen(event.target.value)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 20,
+                              border: "1px solid rgba(var(--line-rgb),.14)",
+                              background: "rgba(var(--s3),.6)",
+                              color: "var(--text)",
+                              fontFamily: "var(--font-jost)",
+                              fontSize: 13,
+                              outline: "none"
+                            }}
+                          />
+                          <input
+                            type="tel"
+                            placeholder="Teléfono (si falta en la ficha)"
+                            value={manualCallPhone}
+                            onChange={(event) => setManualCallPhone(event.target.value)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 20,
+                              border: "1px solid rgba(var(--line-rgb),.14)",
+                              background: "rgba(var(--s3),.6)",
+                              color: "var(--text)",
+                              minWidth: 190,
+                              fontFamily: "var(--font-jost)",
+                              fontSize: 13,
+                              outline: "none"
+                            }}
+                          />
+                          <button
+                            type="button"
+                            disabled={manualCallBusy || !manualCallCandidateId}
+                            onClick={() => void doManualSchedule()}
+                            style={{
+                              padding: "9px 18px",
+                              borderRadius: 20,
+                              border: "none",
+                              cursor: manualCallBusy ? "wait" : manualCallCandidateId ? "pointer" : "not-allowed",
+                              opacity: manualCallCandidateId ? 1 : 0.55,
+                              background: "linear-gradient(135deg,#B98BC9,#9A6DB4)",
+                              color: "#1c1020",
+                              fontFamily: "var(--font-jost)",
+                              fontWeight: 600,
+                              fontSize: 12.5
+                            }}
+                          >
+                            {manualCallBusy ? "Agendando…" : "Agendar llamada"}
+                          </button>
+                        </div>
+                        {manualCallSearch.trim().length > 0 && manualCallCandidateId === null ? (
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                            {candidates
+                              .filter((item) => item.currentState !== "CLOSED" && item.currentState !== "REJECTED")
+                              .filter((item) => {
+                                const needle = manualCallSearch.trim().toLowerCase();
+                                return (
+                                  (item.firstName ?? "").toLowerCase().includes(needle) ||
+                                  item.instagramUsername.toLowerCase().includes(needle)
+                                );
+                              })
+                              .slice(0, 8)
+                              .map((item) => (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setManualCallCandidateId(item.id);
+                                    setManualCallSearch(`${item.firstName?.trim() || "@" + item.instagramUsername}`);
+                                    setManualCallPhone(item.phone ?? "");
+                                  }}
+                                  style={{
+                                    padding: "6px 12px",
+                                    borderRadius: 16,
+                                    border: "1px solid rgba(185,139,201,.35)",
+                                    background: "rgba(var(--s3),.6)",
+                                    color: "var(--text)",
+                                    fontFamily: "var(--font-jost)",
+                                    fontSize: 12.5,
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  {item.firstName?.trim() || "@" + item.instagramUsername} · {item.currentState}
+                                  {item.phone ? " · 📱" : " · sin tel."}
+                                </button>
+                              ))}
+                          </div>
+                        ) : null}
+                        {manualCallResult ? (
+                          <div style={{ marginTop: 10, fontSize: 13, color: "var(--text2)", fontWeight: 300 }}>
+                            {manualCallResult}
+                          </div>
                         ) : null}
                       </div>
 

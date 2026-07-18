@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { respondToCall, type CallChatMessage, type RespondToCallInput } from "@/application/callTurnResponder";
-import type { CallContext } from "@/application/callContext";
+import { buildDmTranscript, type CallContext } from "@/application/callContext";
 import { getCallDrafter } from "@/application/openaiCallDrafter";
 import { bearerMatches } from "@/server/bearerAuth";
+import { getSimulatorRepository } from "@/server/simulatorStore";
 
 /**
  * Handler del endpoint "Custom LLM" OpenAI-compatible que llama la plataforma de voz (ElevenLabs/Vapi/
@@ -32,6 +33,7 @@ const ContextSchema = z
     worksWithAnotherAgency: z.boolean().optional(),
     scheduledSlot: z.string().optional(),
     dmSummary: z.string().optional(),
+    dmTranscript: z.string().optional(),
     concerns: z.array(z.string()).optional(),
     interestLevel: z.string().optional()
   })
@@ -148,8 +150,25 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
   // outbound como dynamic_variables). Aceptamos ambos para que el bot SIEMPRE sepa con quién habla.
   const rawMeta = (meta ?? {}) as Record<string, unknown>;
   const nestedContext = meta?.context ? { ...meta.context, concerns: meta.context.concerns ?? [] } : undefined;
-  const context = nestedContext ?? contextFromFlatVars(rawMeta);
+  let context = nestedContext ?? contextFromFlatVars(rawMeta);
   const candidateName = meta?.candidateName ?? context?.candidateName ?? asMetaString(rawMeta.candidate_name);
+  // CONVERSACION ENTERA del DM (peticion de Alex 18-jul): se carga en servidor por candidate_id (ya viaja
+  // en las dynamic vars) — asi el bot de voz llama sabiendo todo lo hablado, no solo el resumen de la
+  // ficha. Best-effort: la llamada esta EN VIVO y un fallo aqui jamas la rompe (se sigue sin transcript).
+  const candidateId = asMetaString(rawMeta.candidate_id);
+  if (candidateId && !context?.dmTranscript) {
+    try {
+      const dmMessages = await getSimulatorRepository().listMessages(candidateId, 60);
+      const dmTranscript = buildDmTranscript(dmMessages);
+      if (dmTranscript) {
+        context = { ...(context ?? { concerns: [] }), dmTranscript };
+      }
+    } catch (error) {
+      console.warn("[call-llm] no se pudo cargar el transcript del DM", {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
 
   // Redactor LLM: ACTIVO por defecto con clave (redacción natural); CALL_LLM_REDACTION=off -> guion fijo.
   const drafter = getCallDrafter();
