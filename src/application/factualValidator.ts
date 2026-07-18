@@ -29,8 +29,13 @@ const serviceClaims = [
 // 17-jul (revisor): "te llamo en un rato/enseguida" es un COMPROMISO de llamada aunque no lleve fecha, y se
 // colaba por este guard. En el camino determinista solo se dice con el Encaja dado, pero al entrar en el
 // vocabulario del bot el redactor puede imitarlo con una candidata SIN aprobar: aquí lo para la red.
+// 18-jul (barrido Daiana en HIR): el redactor pidio "dime dia y hora y lo apunto" y CONFIRMO "si, mañana a
+// las 17 arg entonces" sin Encaja — fraseos que el patron no cubria. Se añaden la peticion de dia/hora en
+// imperativo y la CONFIRMACION de una franja concreta ("manana a las N ... entonces", "quedamos manana...").
+// + orden INVERTIDO y variantes que la sonda del revisor cazó ("el lunes te llamo", "lo dejamos para el
+// viernes a las 5", "hablamos manana a las 17", "anotame para manana", "te marco el lunes", "te va bien").
 const schedulingProposalPattern =
-  /\bque dia y (?:a que )?hora\b|\bte la dejo apuntada\b|\bla agendamos\b|\bqueda agendada\b|\bagendamos la llamada\b|\bte llamo (?:hoy|manana|el \w+|a las \d|en un rato|en breve|ahora|enseguida|luego)\b|\bte llamamos (?:en un rato|en breve|ahora|enseguida|lo antes posible)\b|\bcuadramos la llamada (?:para|el|hoy|manana)\b|\bme va bien\b[^.!?]{0,25}\bllamada\b|\bllamada\b[^.!?]{0,25}\bme va bien\b/;
+  /\bque dia y (?:a que )?hora\b|\bdime (?:el )?dia y (?:la )?hora\b|\bpasame (?:el )?dia y (?:la )?hora\b|\bte la dejo apuntada\b|\blo apunto\b[^.!?]{0,10}[?]|\bla agendamos\b|\bqueda agendada\b|\bagendamos la llamada\b|\bte (?:llamo|marco) (?:hoy|manana|el \w+|a las \d|en un rato|en breve|ahora|enseguida|luego)\b|\b(?:el\s+)?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|hoy)\b[^.!?]{0,20}\bte (?:llamo|marco)\b|\bte llamamos (?:en un rato|en breve|ahora|enseguida|lo antes posible)\b|\bcuadramos la llamada (?:para|el|hoy|manana)\b|\blo dejamos para\b[^.!?]{0,25}\b(?:las \d{1,2}|lunes|martes|miercoles|jueves|viernes|sabado|domingo|manana|hoy)\b|\bhablamos\b[^.!?]{0,20}\ba las?\s+\d{1,2}\b|\banotame para\b|\bconfirmado[,.]?\s+(?:manana|hoy|el \w+)\b|\b(?:me|te) va bien\b[^.!?]{0,25}\b(?:llamada|a las \d{1,2})\b|\bllamada\b[^.!?]{0,25}\b(?:me|te) va bien\b|\b(?:manana|hoy|pasado manana)\s+a las?\s+\d{1,2}\b[^.!?]{0,25}\b(?:entonces|te va bien)\b|\bentonces\b[^.!?]{0,25}\b(?:manana|hoy)\s+a las?\s+\d{1,2}\b|\bquedamos\s+(?:para\s+)?(?:manana|hoy|el\s+\w+)\b[^.!?]{0,20}\ba las?\s+\d{1,2}\b/;
 
 // 17-jul (2a prueba real de Alex, caso "Laura"): con el Encaja YA dado, el redactor seguia soltando "Lo hablo
 // con mi socio y te digo para la llamada" a una candidata aprobada. Es MENTIRA (la decision ya esta tomada) y

@@ -47,19 +47,22 @@ async function seedAwaiting(engine: ConversationEngine, repository: InMemoryCand
   return seeded;
 }
 
-describe("PAUSA TOTAL tras el socio (Alex 6-jul): visto a todo hasta el Encaja", () => {
-  it("preguntas, datos, despedidas y acuses -> TODO en visto ('' y nada de 'Sin prisa')", async () => {
+describe("Pausa tras el socio (Alex 6-jul, AJUSTADA 18-jul: las preguntas cubiertas se responden UNA vez)", () => {
+  it("datos, despedidas, acuses y llamada -> en visto; la pregunta CUBIERTA se responde una vez (Alex 18-jul)", async () => {
     const { engine, repository } = createEngine();
     const seeded = await seedAwaiting(engine, repository);
-    for (const msg of [
-      "y tengo que pagar algo para empezar?",
-      "soy de madrid",
-      "pues mañana a las 6",
-      "chau, saludos",
-      "ok",
-      "?",
-      "me podeis llamar?"
-    ]) {
+    // Pregunta CUBIERTA (coste): ya no queda en visto — se responde una sola vez (decision de Alex 18-jul).
+    const covered = await engine.handleIncomingMessage({
+      candidateId: seeded.id,
+      instagramUsername: seeded.instagramUsername,
+      message: "y tengo que pagar algo para empezar?"
+    });
+    // Comportamiento anclado: RESPONDE (ya no visto). El texto exacto depende del orden de relevancia
+    // (raiz conocida, Fase 2 por IA), asi que no se anca la ficha concreta.
+    expect(covered.response.trim().length).toBeGreaterThan(0);
+    expect(covered.candidate.currentState).toBe("WAITING_HUMAN_REVIEW");
+    // Todo lo demas (datos, horas, despedidas, acuses, llamada) sigue en visto hasta el Encaja.
+    for (const msg of ["soy de madrid", "pues mañana a las 6", "chau, saludos", "ok", "?", "me podeis llamar?"]) {
       const result = await engine.handleIncomingMessage({
         candidateId: seeded.id,
         instagramUsername: seeded.instagramUsername,

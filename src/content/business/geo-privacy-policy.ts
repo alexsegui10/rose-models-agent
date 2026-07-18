@@ -12,7 +12,11 @@ const entries: KnowledgeEntryInput[] = [
       "Dentro de OnlyFans si se puede bloquear el acceso por paises, incluso con enlace directo."
     ],
     approvedAnswerPoints: [
-      "En Instagram no se puede bloquear el pais, pero la cuenta va con identidad espanola, es como otra identidad pero con tu imagen.",
+      // Respuesta DIRECTA al "¿iria con otro nombre?" (confirmada por Alex 18-jul: "si, iria con otro
+      // nombre"). Va PRIMERA: en el chat real de Daiana la ficha salia sin contestar el nombre y ella se
+      // quejo ("me estas contestando otra cosa").
+      "Si, la cuenta va con otro nombre: una identidad espanola que creamos nosotros, pero siempre con tu imagen.",
+      "En Instagram no se puede bloquear el pais, pero al ir con esa identidad es como otra identidad pero con tu imagen.",
       "Si los que entran son de Argentina los redirigimos a una pagina como Pinterest.",
       "Dentro del of si que se puede bloquear por pais, incluso con enlace directo.",
       "Quiero que trabajemos comodos tanto por tu parte como por la nuestra."
@@ -43,10 +47,10 @@ const entries: KnowledgeEntryInput[] = [
     ],
     tags: ["geo-privacy", "privacy", "country-block", "instagram", "onlyfans", "objection"],
     requiresHumanReview: false,
-    version: "geo-privacy-three-layers-2026-06-12.1",
+    version: "geo-privacy-three-layers-2026-07-18.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-12"
+    updatedAt: "2026-07-18"
   }
 ];
 

@@ -38,7 +38,7 @@ import { promptRegistry } from "./promptRegistry";
 import { evaluateQualificationReadiness, onboardingBlockersFor } from "./qualificationPolicy";
 import { candidateLabelFromMs, candidateZoneFromPhone, conflictsWithBooked, parseProposedCallTime } from "./callScheduling";
 import type { CallTranscriptFacts } from "./callTranscriptAnalysis";
-import { buildResponsePlan, PHONE_QUESTION, proposesConcreteTime } from "./responsePlanner";
+import { buildResponsePlan, minorsMentionPattern, PHONE_QUESTION, proposesConcreteTime } from "./responsePlanner";
 import { safeFallbackResponse, validateAgentResponse } from "./responseValidator";
 import { buildStyleContext, immediateObjectiveFor, type BuiltStyleContext } from "./styleContextBuilder";
 import { DeterministicResponseStyleEvaluator, type ResponseStyleEvaluator } from "./styleEvaluator";
@@ -1686,28 +1686,38 @@ export class ConversationEngine {
     const inboundLooksLikeTextualQuestion =
       /[?¿]/.test(groupedMessage.content) || /^\s*(que|como|cuanto|quien|donde|cuando|y que)\b/i.test(groupedMessage.content);
     // Los facts de fichas de SEGURIDAD (tag "safety": el NO rotundo de menores en contenido) se repiten las
-    // veces que haga falta — filtrarlos convertia el NO en "sigue pendiente con mi socio", como si salir con
-    // su hija se estuviera valorando (bloqueante del revisor 18-jul; decision de Alex 10-jul: jamas se defiere).
+    // veces que haga falta CUANDO ella menciona menores — filtrarlos convertia el NO en "sigue pendiente con
+    // mi socio", como si salir con su hija se estuviera valorando (bloqueante del revisor 18-jul; decision de
+    // Alex 10-jul: jamas se defiere). Gate por mencion: sin el, la exencion hacia la ficha inmortal cuando
+    // se colaba en el plan y el NO salia en bucle como ruido en preguntas de contenido inocentes.
+    const inboundMentionsMinors = minorsMentionPattern.test(normalizeText(groupedMessage.content));
     const safetyFacts = new Set(
-      knowledgeEntries.filter((entry) => entry.tags.includes("safety")).flatMap((entry) => entry.approvedAnswerPoints)
+      inboundMentionsMinors
+        ? knowledgeEntries.filter((entry) => entry.tags.includes("safety")).flatMap((entry) => entry.approvedAnswerPoints)
+        : []
     );
-    const hirResponsePlan =
-      projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" && !inboundLooksLikeTextualQuestion
-        ? {
-            ...responsePlan,
-            answerFacts: responsePlan.answerFacts.filter((fact) => {
-              if (/\b70\s?%|30\s?%|70\/30\b/.test(fact) || safetyFacts.has(fact)) return true;
-              // El acuse inicial del fact ("Vale pues,") puede haberse alternado al emitirlo (swap
-              // anti-repeticion), asi que se compara SIN el (nota 1 del revisor 18-jul); si al quitarlo
-              // queda demasiado corto para ser distintivo, se compara entero.
-              const bare = normalizeText(fact).replace(/^(?:vale pues|okeyy|perfecto|entiendo|bien bien)[,.\s]+/, "");
-              const needle = bare.length >= 12 ? bare : normalizeText(fact);
-              return !pitchLookbackHistory.some(
-                (message) => message.role === "agent" && normalizeText(message.content).includes(needle)
-              );
-            })
-          }
-        : responsePlan;
+    // El filtro tambien aplica en la PAUSA del socio, y ahi SIEMPRE (tambien a preguntas): es lo que
+    // convierte el "responde" en "responde UNA vez" (decision de Alex 18-jul) — la re-pregunta llega con
+    // los facts ya dichos filtrados y vuelve al visto. Safety y 70/30 siguen exentos.
+    const repeatFilterApplies =
+      (projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" && !inboundLooksLikeTextualQuestion) ||
+      (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" && alreadyAwaitingPartner);
+    const hirResponsePlan = repeatFilterApplies
+      ? {
+          ...responsePlan,
+          answerFacts: responsePlan.answerFacts.filter((fact) => {
+            if (/\b70\s?%|30\s?%|70\/30\b/.test(fact) || safetyFacts.has(fact)) return true;
+            // El acuse inicial del fact ("Vale pues,") puede haberse alternado al emitirlo (swap
+            // anti-repeticion), asi que se compara SIN el (nota 1 del revisor 18-jul); si al quitarlo
+            // queda demasiado corto para ser distintivo, se compara entero.
+            const bare = normalizeText(fact).replace(/^(?:vale pues|okeyy|perfecto|entiendo|bien bien)[,.\s]+/, "");
+            const needle = bare.length >= 12 ? bare : normalizeText(fact);
+            return !pitchLookbackHistory.some(
+              (message) => message.role === "agent" && normalizeText(message.content).includes(needle)
+            );
+          })
+        }
+      : responsePlan;
     const deterministicResponse = generateResponse(
       projectedCandidate,
       understanding,
@@ -1872,9 +1882,9 @@ export class ConversationEngine {
     const hirEntrySubstantiallySaid = (entry: KnowledgeEntry): boolean => {
       const points = entry.approvedAnswerPoints;
       if (points.length === 0) return false;
-      // Una ficha de SEGURIDAD (tag "safety") jamas se retira: su NO debe poder repetirse siempre
-      // (bloqueante del revisor 18-jul, mismo criterio que la exencion en el filtro del plan).
-      if (entry.tags.includes("safety")) return false;
+      // Una ficha de SEGURIDAD (tag "safety") jamas se retira cuando ella menciona menores: su NO debe
+      // poder repetirse siempre (bloqueante del revisor 18-jul, mismo gate que la exencion del plan).
+      if (entry.tags.includes("safety") && inboundMentionsMinors) return false;
       if (points.some((fact) => /\b70\s?%|30\s?%|70\/30\b/.test(fact))) return false;
       const saidCount = points.filter((fact) => {
         const bare = normalizeText(fact).replace(/^(?:vale pues|okeyy|perfecto|entiendo|bien bien)[,.\s]+/, "");
@@ -2142,6 +2152,48 @@ export class ConversationEngine {
     if (dedupedResponse !== response) {
       response = dedupedResponse;
       draft = { ...draft, response };
+    }
+    // En REVISION el bot NO improvisa preguntas (Alex 18-jul: "¿metodo de pago?", "¿trafico español?" —
+    // preguntas que el guion no pide, inventadas por el redactor o coladas por una ficha mal ruteada, que
+    // reabren la cualificacion en un caso que espera decision humana). Se recortan las burbujas FINALES con
+    // pregunta, salvo la pregunta del PLAN (guion) y el guion del movil. Solo quita texto: factual-safe.
+    if (projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" && response.trim().length > 0) {
+      const allowedQuestion = hirResponsePlan.questionToAsk ? normalizeText(hirResponsePlan.questionToAsk) : null;
+      let bubbles = response
+        .split(/\n{2,}/)
+        .map((bubble) => bubble.trim())
+        .filter((bubble) => bubble.length > 0);
+      // En un turno SIN pregunta textual, tampoco se re-emiten burbujas YA DICHAS: el redactor COPIA del
+      // historial reciente ("transparentes / el dinero pasa primero por ti" x3 en el barrido) y los filtros
+      // del plan/fichas no gobiernan ese copie. Exentas la cifra (siempre se re-responde pedida) y el NO de
+      // menores cuando ella los menciona. Suelo de 15 chars: los acuses cortos no cuentan como "dicho".
+      if (!inboundLooksLikeTextualQuestion) {
+        bubbles = bubbles.filter((bubble) => {
+          if (/\b70\s?%|30\s?%|70\/30\b/.test(bubble)) return true;
+          const normalizedBubble = normalizeText(bubble);
+          if (inboundMentionsMinors && [...safetyFacts].some((fact) => normalizedBubble.includes(normalizeText(fact))))
+            return true;
+          if (normalizedBubble.length < 15) return true;
+          return !pitchLookbackHistory.some(
+            (message) => message.role === "agent" && normalizeText(message.content).includes(normalizedBubble)
+          );
+        });
+      }
+      while (bubbles.length > 0) {
+        const last = bubbles[bubbles.length - 1];
+        if (!last.endsWith("?")) break;
+        const normalizedLast = normalizeText(last);
+        const whitelisted =
+          (allowedQuestion !== null && normalizedLast.includes(allowedQuestion)) ||
+          normalizedLast.includes("no has pensado en cambiarte el movil");
+        if (whitelisted) break;
+        bubbles.pop();
+      }
+      const withoutImprovisedQuestions = bubbles.join("\n\n");
+      if (withoutImprovisedQuestions !== response) {
+        response = withoutImprovisedQuestions;
+        draft = { ...draft, response };
+      }
     }
     // Ritmo determinista (decision de Alex 14-jun): el codigo, no el LLM, evita el patron robotico de
     // abrir CADA mensaje con acuse o repetir el nombre. Solo recorta el saludo de apertura.
@@ -2828,19 +2880,47 @@ function generateResponse(
     // mensaje; si no hay nada que responder, va el cierre a secas. A partir de ahi, pausa total (arriba).
     const partnerReviewClose =
       "Voy a comentar tu perfil con mi socio para valorarlo bien y te digo algo en cuanto lo hayamos revisado.";
-    const answerThenPartnerClose = (answer: string): string => {
-      // Vamos a PAUSAR con el socio, asi que una pregunta-puente colada al final ("...¿cuanto tiempo le
-      // dedicas?") queda incoherente (pregunta + "lo comento con mi socio" a la vez). Se quitan las burbujas
-      // finales que sean pregunta; el resto de la respuesta se conserva (Alex 14-jul, fleco de la sim de Sofia).
+    // Quita las burbujas finales que sean pregunta: una pregunta-puente colada al final queda incoherente
+    // tanto con el cierre del socio como con la vuelta al visto (Alex 14-jul, fleco de la sim de Sofia).
+    const withoutTrailingQuestionBubbles = (answer: string): string => {
       const bubbles = answer
         .split(/\n{2,}/)
         .map((bubble) => bubble.trim())
         .filter((bubble) => bubble.length > 0);
       while (bubbles.length > 0 && bubbles[bubbles.length - 1].endsWith("?")) bubbles.pop();
-      const cleaned = bubbles.join("\n\n");
+      return bubbles.join("\n\n");
+    };
+    const answerThenPartnerClose = (answer: string): string => {
+      const cleaned = withoutTrailingQuestionBubbles(answer);
       return cleaned.length > 0 ? `${cleaned}\n\n${partnerReviewClose}` : partnerReviewClose;
     };
+    const inboundAsksQuestion =
+      /[?¿]/.test(inboundMessage) || understanding.intent === "REQUESTS_INFORMATION" || understanding.intent.startsWith("ASKS_");
+    const planTouchesCall =
+      understanding.intent === "REQUESTS_CALL" ||
+      understanding.requestsCall ||
+      responsePlan.knowledgeEntryIds.some((id) => id.startsWith("call-"));
     if (alreadyAwaitingPartner) {
+      // RESPONDER-1-VEZ EN PAUSA (decision de Alex 18-jul, sustituye la pausa TOTAL del 6-jul): una PREGUNTA
+      // CUBIERTA se responde UNA sola vez — sin pregunta-puente, sin reabrir el guion y sin repetir el cierre
+      // del socio — y se vuelve al visto. Mismas guardas que la regla 5-jul de abajo: solo turnos-pregunta,
+      // conocimiento de LLAMADA excluido (invariante 4), negociacion/escalada fuera (requiresHumanReview) y
+      // lo no cubierto sigue en visto. El "UNA vez" lo garantiza el caller: en pausa el plan llega con los
+      // facts YA DICHOS filtrados (ventana ancha), asi que insistir con la misma pregunta cae aqui con los
+      // facts vacios y vuelve al visto.
+      if (
+        inboundAsksQuestion &&
+        !planTouchesCall &&
+        responsePlan.answerFacts.length > 0 &&
+        !responsePlan.requiresHumanReview &&
+        !responsePlan.uncoveredQuestion &&
+        isBusinessAnswerIntent(understanding, responsePlan)
+      ) {
+        const pausedAnswer = withoutTrailingQuestionBubbles(
+          businessResponseFromPlan(responsePlan, countQuestionMarks(inboundMessage) >= 2, faceRaisedIn(inboundMessage))
+        );
+        if (pausedAnswer.length > 0) return pausedAnswer;
+      }
       return "";
     }
     // Defensa P0 (Alex 22-jun): SOLO si la candidata hace una pregunta de % o de contrato estando YA en
@@ -2879,12 +2959,6 @@ function generateResponse(
     // holds deliberados: (a) solo turnos-PREGUNTA (un dato/afirmacion no reabre nada); (b) el conocimiento
     // de LLAMADA/agenda queda excluido (agendar sin el OK de Alex se difiere, invariante 4); (c) la
     // negociacion/escalada nunca entra (requiresHumanReview) y lo no cubierto tampoco (uncoveredQuestion).
-    const inboundAsksQuestion =
-      /[?¿]/.test(inboundMessage) || understanding.intent === "REQUESTS_INFORMATION" || understanding.intent.startsWith("ASKS_");
-    const planTouchesCall =
-      understanding.intent === "REQUESTS_CALL" ||
-      understanding.requestsCall ||
-      responsePlan.knowledgeEntryIds.some((id) => id.startsWith("call-"));
     if (
       inboundAsksQuestion &&
       !planTouchesCall &&

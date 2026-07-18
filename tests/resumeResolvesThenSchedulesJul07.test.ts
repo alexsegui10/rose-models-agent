@@ -30,34 +30,25 @@ async function toSocioPause(engine: ConversationEngine, u: string) {
   return of.candidate.id;
 }
 
-describe("Reanudar: primero resuelve la duda de la pausa, luego agenda (Alex 7-jul)", () => {
-  it("tras el Encaja, la duda escrita en la pausa se RESPONDE y se PROPONE la llamada", async () => {
+describe("Reanudar tras la pausa (actualizado 18-jul: la duda cubierta ya se respondio EN la pausa)", () => {
+  it("la duda del % en la pausa se responde AL MOMENTO (una vez) y el Encaja va directo al proactivo de la llamada", async () => {
+    // ACTUALIZADO 18-jul (decision de Alex, sustituye la pausa TOTAL del 6-jul): la pregunta cubierta ya no
+    // espera al Encaja — se responde una vez durante la pausa. Al aprobar, no queda duda pendiente que
+    // reprocesar y sale el proactivo fijo proponiendo la llamada.
     const { engine } = mk();
     const u = "resume_" + Math.random().toString().slice(2, 6);
     const candidateId = await toSocioPause(engine, u);
 
-    // Escribe una duda DURANTE la pausa -> pausa total (silencio), queda pendiente.
+    // Escribe una duda del % DURANTE la pausa -> se responde una vez (antes: visto hasta el Encaja).
     const paused = await engine.handleIncomingTurn({
       instagramUsername: u,
       messages: [{ content: "oye y cuanto me pagais? que porcentaje?" }]
     });
-    expect(paused.response.trim()).toBe(""); // silencio: no le contesta hasta el Encaja
+    expect(paused.response).toMatch(/70|30/);
 
-    // Alex da el Encaja.
+    // Alex da el Encaja: la duda ya esta respondida, asi que no hay reproceso y sale el proactivo fijo.
     const decision = await engine.applyHumanDecision({ candidateId, decision: "APPROVE" });
-    // Al haber duda en la pausa, el proactivo fijo se anula y se reprocesa su mensaje.
-    expect(decision.reprocessTrailingInbound?.length).toBeGreaterThan(0);
-
-    // El reproceso: responde la duda (%) Y propone la llamada.
-    const resumed = await engine.handleIncomingTurn({
-      instagramUsername: u,
-      messages: (decision.reprocessTrailingInbound ?? []).map((content) => ({ content })),
-      reprocessExisting: true
-    });
-    const lower = resumed.response.toLowerCase();
-    // Resuelve la duda del %.
-    expect(lower).toMatch(/70|30|porcentaje|reparto/);
-    // Y agenda (propone dia/hora/llamada).
-    expect(lower).toMatch(/dia|hora|llamada|te llamo/);
+    expect(decision.reprocessTrailingInbound ?? null).toBeNull();
+    expect((decision.proposedMessage ?? "").toLowerCase()).toMatch(/llamada|dia|hora|llamar/);
   });
 });

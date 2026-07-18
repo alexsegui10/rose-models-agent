@@ -259,13 +259,25 @@ const entries: KnowledgeEntryInput[] = [
       "Sugerir que terceros o menores podrian aparecer en algun caso."
     ],
     mandatoryNuances: ["La respuesta sobre menores es un NO categorico inmediato; jamas se defiere ni se matiza."],
-    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED", "HUMAN_INTERVENTION_REQUIRED"],
-    tags: ["minors-content", "only-her", "content", "safety"],
+    // Tambien en WAITING_HUMAN_REVIEW (18-jul): el NO de menores no puede quedarse en visto ni durante la
+    // pausa del socio — "jamas se defiere" aplica en todos los estados conversacionales.
+    allowedStates: [
+      "NEW_LEAD",
+      "WAITING_PROFILE_ACCESS",
+      "QUALIFYING",
+      "WAITING_HUMAN_REVIEW",
+      "APPROVED",
+      "HUMAN_INTERVENTION_REQUIRED"
+    ],
+    // SIN el tag generico "content" (18-jul, barrido real): con el, cualquier pregunta de contenido
+    // ("¿que tipo de contenido?") arrastraba esta ficha y el NO de menores salia como ruido ("eso ni se
+    // me cruzo", candidata simulada). La ruta de menores del retriever empuja "minors-content"/"only-her".
+    tags: ["minors-content", "only-her", "safety"],
     requiresHumanReview: false,
-    version: "content-only-her-no-minors-2026-07-10.1",
+    version: "content-only-her-no-minors-2026-07-18.2",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-07-10"
+    updatedAt: "2026-07-18"
   }
 ];
 

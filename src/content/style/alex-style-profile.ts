@@ -42,7 +42,8 @@ export const alexStyleProfile = {
     "Okeyy",
     "Vale pues",
     "Bien bien",
-    "Sisi",
+    // "Sisi" ELIMINADO (decision de Alex 18-jul): el redactor lo combinaba raro en los chats reales
+    // ("sisi jajaj ya me quedo claro" + re-pregunta, caso Daiana) y Alex pidio quitarlo del perfil.
     "sin compromiso",
     "cualquier duda me dices sin problema",
     "Lo hablo con mi socio y te digo",

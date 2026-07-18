@@ -74,7 +74,10 @@ describe("Tras el pitch: responde la duda Y cierra con el socio, luego pausa (Al
     expect(r.response).toMatch(SOCIO);
   });
 
-  it("una SEGUNDA duda, ya dicho el socio, queda EN VISTO (pausa total, Alex 14-jul)", async () => {
+  it("una SEGUNDA duda cubierta, ya dicho el socio, se responde UNA vez sin re-cerrar con el socio (Alex 18-jul)", async () => {
+    // ACTUALIZADO 18-jul (decision explicita de Alex, sustituye la pausa TOTAL del 6-jul que fijaba este
+    // test): en pausa, una pregunta CUBIERTA se responde UNA sola vez y se vuelve al visto. Antes: Ale
+    // pregunto "¿como me pagan?" 5 veces y recibio 5 vistos (barrido real).
     const { engine } = mk();
     const u = "sp_pausa_" + Math.random().toString().slice(2, 6);
     await toJustAfterPitch(engine, u);
@@ -83,11 +86,31 @@ describe("Tras el pitch: responde la duda Y cierra con el socio, luego pausa (Al
     const first = await engine.handleIncomingTurn({ instagramUsername: u, messages: [{ content: "oye y cuanto me llevo yo?" }] });
     expect(first.response).toMatch(SOCIO);
 
-    // 2a duda (ya se dijo el socio): queda EN VISTO, no se responde. Se contestara al dar Alex el Encaja.
+    // 2a duda (ya en pausa), de OTRO tema cubierto: se responde (sin repetir el cierre del socio) y
+    // re-preguntar lo mismo NUNCA repite lo dicho — va agotando lo no dicho y converge al visto.
     const second = await engine.handleIncomingTurn({
       instagramUsername: u,
       messages: [{ content: "y la cuenta quien la abre?" }]
     });
-    expect(second.response.trim()).toBe("");
+    expect(second.response.trim().length).toBeGreaterThan(0);
+    expect(second.response).not.toMatch(SOCIO);
+
+    const seenBubbles = new Set(second.response.split(/\n{2,}/).map((b) => b.trim()));
+    let last = second.response;
+    for (let i = 0; i < 8 && last.trim().length > 0; i += 1) {
+      const again = await engine.handleIncomingTurn({
+        instagramUsername: u,
+        messages: [{ content: "y la cuenta quien la abre?" }]
+      });
+      last = again.response;
+      for (const bubble of last
+        .split(/\n{2,}/)
+        .map((b) => b.trim())
+        .filter(Boolean)) {
+        expect(seenBubbles.has(bubble), `burbuja repetida: ${bubble}`).toBe(false);
+        seenBubbles.add(bubble);
+      }
+    }
+    expect(last.trim()).toBe(""); // converge al visto: el "una vez" es real
   });
 });

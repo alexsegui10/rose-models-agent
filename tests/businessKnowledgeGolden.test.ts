@@ -157,9 +157,16 @@ describe("business knowledge golden tests", () => {
   it("escalates a new Rose Models question without official coverage", async () => {
     const { engine } = createKnowledgeEngine();
 
-    const result = await engine.handleIncomingMessage({
+    // 18-jul: en el PRIMER turno el opener gana a lo uncovered (se saluda siempre); la escalada por falta
+    // de cobertura se pina desde el segundo turno.
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "uncovered_case",
       profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "uncovered_case",
       message: "La agencia se encarga tambien de mis impuestos?"
     });
 

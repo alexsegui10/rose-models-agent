@@ -179,9 +179,15 @@ describe("CONVERSATIONAL_QUALITY_EVALUATION", () => {
 
   it("escalates a non-literal uncovered business question", async () => {
     const { engine } = createEngine();
-    const result = await engine.handleIncomingMessage({
+    // 18-jul: el opener gana en el primer turno; la escalada uncovered se pina desde el segundo.
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "new_uncovered_question",
       profileVisibility: "PUBLIC",
+      message: "Hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "new_uncovered_question",
       message: "Me preparais tambien la declaracion de impuestos?"
     });
 

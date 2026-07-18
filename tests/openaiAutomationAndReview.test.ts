@@ -519,9 +519,15 @@ describe("OpenAI adapter, automation and review", () => {
 
   it("escalates a new uncovered knowledge question", async () => {
     const { engine } = createEngine();
-    const result = await engine.handleIncomingMessage({
+    // 18-jul: el opener gana en el primer turno; la escalada uncovered se pina desde el segundo.
+    const opener = await engine.handleIncomingMessage({
       instagramUsername: "uncovered_question",
       profileVisibility: "PUBLIC",
+      message: "hola"
+    });
+    const result = await engine.handleIncomingMessage({
+      candidateId: opener.candidate.id,
+      instagramUsername: "uncovered_question",
       message: "La agencia se encarga tambien de mis impuestos?"
     });
 

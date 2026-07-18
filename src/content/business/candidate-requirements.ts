@@ -80,7 +80,10 @@ const entries: KnowledgeEntryInput[] = [
       // pero suave y caso a caso. La franja NO toca el corte de mayoria de edad (invariante 2: <18 -> CLOSED
       // lo gobierna candidate-requirements-adult, aqui solo se describe el publico objetivo del proyecto).
       "Buscamos sobre todo perfiles maduros, a partir de los 30 aproximadamente, pero lo valoramos caso a caso.",
-      "La revision final del perfil la hace Alex."
+      // 1ª PERSONA (18-jul, barrido real): el bot de texto SE PRESENTA como Alex; "la hace Alex" en 3ª
+      // persona rompia la identidad ("pensé q vos eras alex jaja", candidata simulada). La voz ya lo
+      // mapeaba a 1ª persona (callRedaction); ahora la ficha nace en 1ª y vale para ambos canales.
+      "La revision final del perfil la hago yo."
     ],
     prohibitedClaims: [
       "Puntuar atractivo.",
@@ -93,10 +96,10 @@ const entries: KnowledgeEntryInput[] = [
     allowedStates: ["NEW_LEAD", "QUALIFYING", "WAITING_PROFILE_ACCESS", "WAITING_HUMAN_REVIEW", "HUMAN_INTERVENTION_REQUIRED"],
     tags: ["target-profile", "physical-review", "followers", "experience", "age", "selection", "faq"],
     requiresHumanReview: false,
-    version: "candidate-requirements-target-profile-2026-06-20.1",
+    version: "candidate-requirements-target-profile-2026-07-18.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-20"
+    updatedAt: "2026-07-18"
   },
   {
     // Decision de Alex (10-jul, sweep R9): un OF previo abandonado/sin usar NO es problema y se responde al

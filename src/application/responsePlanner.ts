@@ -191,18 +191,21 @@ const OBJECTION_TAGS = new Set([
 // "nen[ea]s?" a secas ("la nena sale conmigo"): el retriever ya surfacea la ficha para nena/nene sin el
 // posesivo, y exigir "mi" aqui la bloqueaba (sonda del revisor). hijita/sobrina/beba quedan pendientes de
 // unificar los 3 patrones de menores desincronizados (backlog, gap preexistente del retriever).
-const minorsMentionPattern = /\b(hij[oa]s?|nin[oa]s?|menor(?:es)?|bebes?|beba|nen[ea]s?|sobrin[oa]s?)\b/;
+export const minorsMentionPattern = /\b(hij[oa]s?|nin[oa]s?|menor(?:es)?|bebes?|beba|nen[ea]s?|sobrin[oa]s?)\b/;
 
 export function buildResponsePlan(input: BuildResponsePlanInput): ResponsePlan {
   const respondable = respondableEntries(input);
   const answerFacts = respondable.flatMap((entry) => entry.approvedAnswerPoints);
   const prohibitedClaims = input.knowledgeEntries.flatMap((entry) => entry.prohibitedClaims);
   const mandatoryNuances = input.knowledgeEntries.flatMap((entry) => entry.mandatoryNuances);
+  // Una pregunta SIN cobertura en el PRIMER turno del lead NO escala (barrido 18-jul: el primer mensaje de
+  // Daiana traia su historia + una pregunta rara y el bot salto a revision SIN NI SALUDAR — el opener es
+  // "siempre, pase lo que pase"). Se saluda, el guion arranca, y si la re-pregunta despues escala normal.
+  // Solo se difiere lo UNCOVERED: una ficha que exige revision, la negociacion (invariante 3) y las
+  // escaladas del understanding (menor, inyeccion, distrust corroborado) siguen ganando al opener.
+  const uncoveredQuestion = isBusinessQuestionWithoutCoverage(input) && !input.isOpenerTurn;
   const requiresHumanReview =
-    input.knowledgeEntries.some((entry) => entry.requiresHumanReview) ||
-    isBusinessQuestionWithoutCoverage(input) ||
-    isCommercialEscalation(input);
-  const uncoveredQuestion = isBusinessQuestionWithoutCoverage(input);
+    input.knowledgeEntries.some((entry) => entry.requiresHumanReview) || uncoveredQuestion || isCommercialEscalation(input);
 
   // La pregunta personal/social solo se inyecta si el turno NO escala ni tiene respuesta de NEGOCIO ni es de
   // una MENOR: la seguridad (invariantes 2/3/4) y el conocimiento de negocio siempre ganan. Invariante 2: si la

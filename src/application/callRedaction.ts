@@ -680,7 +680,8 @@ const VOICE_FIRST_PERSON: ReadonlyMap<string, string> = new Map([
     "El chatbot recopila datos y pasa el perfil a revision humana.",
     "Te voy preguntando lo básico y luego reviso yo tu perfil con calma."
   ],
-  ["La revision final del perfil la hace Alex.", "La revisión final del perfil la hago yo."],
+  // ("La revision final del perfil la hace Alex." se elimino del mapa 18-jul: la ficha ya nace en 1ª
+  // persona — "la hago yo" — tras el barrido de texto donde la 3ª persona rompia la identidad.)
   // escalation-immediate-human-intervention: es JUSTO la entrada que se recupera cuando ella sospecha /
   // se enfada / pregunta si habla con un bot — la que más delata si se vocea en 3ª persona (revisor 16-jul).
   [

@@ -118,7 +118,13 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
   if (/\b(70\/30|quien recibe|quien se queda)\b/.test(message)) tags.push("percentage", "revenue-share");
   if (/\b(por que.*70|porque.*70|porcentaje.*alto|os quedais.*70)\b/.test(message)) tags.push("why-70", "percentage", "services");
-  if (/\b(skrill|liquidacion|liquidar?|cada 14|14 dias|neto|comision de la plataforma)\b/.test(message))
+  // "liquidan"/"transferencia"/"como hacen los pagos" (barrido 18-jul: la pregunta del METODO de pago
+  // quedaba sin ruta y recibia un "Perfecto"): misma respuesta de settlement/pagos.
+  if (
+    /\b(skrill|liquidacion|liquidar?|liquidan|cada 14|14 dias|neto|comision de la plataforma|transferencia|como (?:me )?(?:hacen|haceis|hacés) los pagos|los pagos como)\b/.test(
+      message
+    )
+  )
     tags.push("settlement", "skrill", "payment", "revenue-share");
   // LATAM/coloquial del cobro ("¿cómo me llega la plata?"): misma respuesta de settlement/pagos.
   // (Barrido 3-jul: acababa en "mi socio" con la respuesta documentada delante.)
@@ -173,9 +179,18 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // aparecer ("tengo dos hijos, ¿cuantas fotos al dia?"), el calendario responde con normalidad.
   const MINORS_SUBJECT = "(?:mis?\\s+)?(?:hijos?|hijas?|nenes?|nenas?|ninos?|ninas?|bebes?|familia|pareja|novio|marido)";
   const APPEAR_VERB = "(?:salen?|salgan?|saldran?|saldria|van?\\s+a\\s+salir|salir|aparec\\w*)";
+  // Tambien verbos de CREACION ("¿puedo grabar contenido con mi hija?") — bloqueante del revisor 18-jul:
+  // al quitarle a la ficha del NO el tag generico "content" (que la hacia salir como ruido), estos fraseos
+  // sin verbo de aparecer perdian la red y el bot contestaba responsabilidades ("tu grabas y lo mandas"),
+  // un SI implicito. La ruta dedicada cubre ahora ambos ordenes tambien para crear/grabar/mandar.
+  const CREATE_VERB = "(?:grab\\w*|hac\\w*|hag[oa]|cre[oa]\\w*|mand\\w*|envi\\w*|sub\\w*)";
   const minorsAppearQuestion =
     new RegExp(`\\b${MINORS_SUBJECT}\\b[^.!?]{0,30}\\b${APPEAR_VERB}\\b`).test(message) ||
     new RegExp(`\\b${APPEAR_VERB}\\b[^.!?]{0,30}\\b${MINORS_SUBJECT}\\b`).test(message) ||
+    new RegExp(
+      `\\b${CREATE_VERB}\\b[^.!?]{0,30}\\b(?:contenido|fotos?|videos?)\\b[^.!?]{0,30}\\bcon\\s+${MINORS_SUBJECT}\\b`
+    ).test(message) ||
+    new RegExp(`\\bcon\\s+${MINORS_SUBJECT}\\b[^.!?]{0,30}\\b(?:contenido|fotos?|videos?)\\b`).test(message) ||
     /\bsolo salgo yo\b|\bsale alguien mas\b|\baparece alguien mas\b/.test(message);
   // Guard de EDICION y de MENORES (Lote C 10-jul): "¿las fotos las edito yo o vosotros?" pregunta por la
   // EDICION y "¿mis hijos salen en las fotos?" por los MENORES — sin los guards, los tags de calendario
@@ -372,13 +387,35 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("geo-privacy", "privacy", "objection");
   // Nombre artístico / no usar su nombre real ("¿puedo usar otro nombre?"): la identidad de las cuentas
   // la crea la agencia (española) — misma respuesta de privacidad (barrido 3-jul).
-  if (/\b(otro nombre|nombre falso|nombre artistico|mi nombre real|sin mi nombre|con mi nombre)\b/.test(message))
+  // "otra historia/identidad con mis fotos" (caso real Daiana 18-jul): misma respuesta de identidad.
+  // "otra historia" SOLO con contexto de identidad cerca (fotos/imagen/cuenta/nombre): el modismo
+  // "eso ya es otra historia" soltaba la politica de identidad sin venir a cuento (revisor 18-jul).
+  if (
+    /\b(otro nombre|nombre falso|nombre artistico|mi nombre real|sin mi nombre|con mi nombre|otra identidad|identidad falsa)\b/.test(
+      message
+    ) ||
+    /\botra historia\b[^.!?]{0,30}\b(?:fotos?|imagen|cara|cuenta|nombre|perfil|mia?)\b/.test(message) ||
+    /\b(?:fotos?|imagen|cuenta|nombre|perfil)\b[^.!?]{0,30}\botra historia\b/.test(message)
+  )
     tags.push("geo-privacy", "privacy");
   if (/\b(cara|rostro|anonima|sin mostrarme|sin ensenarme)\b/.test(message)) tags.push("face", "anonymity", "requirement");
   // Solo si la mencion no es negada: "no trabajo con otra agencia" es un dato, no una objecion.
+  // Y solo si NO es el relato en PASADO de una agencia que dejo (barrido 18-jul, caso Daiana: "la otra
+  // agencia me chamuyo con only... lo deje" disparaba la ficha de multi-agencia y el bot le preguntaba
+  // "¿son de trafico espanol las otras agencias?" a alguien SIN agencias). Los verbos de pasado van
+  // ANCLADOS a "agencia" en ambos ordenes (revisor 18-jul: "entre"/"estuve" sueltos mataban casos
+  // PRESENTES como "trabajo con dos agencias, entre ellas una de mexico").
+  const pastAgencyStory =
+    /\b(?:deje|sali de|me fui de|no segui|entre a|estuve en|me metieron en|me mandaron a|me chamuy\w*|me engan\w*|me estafaron)\b[^.!?]{0,30}\bagencias?\b/.test(
+      message
+    ) ||
+    /\bagencias?\b[^.!?]{0,40}\b(?:la deje|lo deje|deje al toque|me chamuy\w*|me metieron|me mandaron|me engan\w*|me estafaron|hace \d+ (?:mes|meses|semanas?|anos?))\b/.test(
+      message
+    );
   if (
     /\b(otra agencia|otras agencias|dos agencias|multi ?agencia|otra empresa)\b/.test(message) &&
-    !/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\bagencias?\b/.test(message)
+    !/\b(?:no|nunca|jamas)\b[^.!?]{0,30}\bagencias?\b/.test(message) &&
+    !pastAgencyStory
   )
     tags.push("multi-agency", "agencies", "market-conflict");
   if (/\b(no uso instagram|no tengo instagram|no subo fotos|no uso redes)\b/.test(message))

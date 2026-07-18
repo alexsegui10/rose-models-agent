@@ -25,8 +25,10 @@ describe("nº2: en la LLAMADA el bot habla en 1ª persona, no como un chatbot (b
     expect(byId("candidate-requirements-target-profile").mandatoryNuances).toContain(
       "El chatbot recopila datos y pasa el perfil a revision humana."
     );
+    // 18-jul: "La revision final del perfil la hace Alex" salio del mapa de voz — la ficha ya nace en 1ª
+    // persona ("la hago yo", el bot ES Alex tambien en texto), asi que no necesita reescritura.
     expect(byId("candidate-requirements-target-profile").approvedAnswerPoints).toContain(
-      "La revision final del perfil la hace Alex."
+      "La revision final del perfil la hago yo."
     );
     expect(byId("call-post-summary").approvedAnswerPoints).toContain(
       "Despues de la llamada, el resumen queda para Alex y el proceso pasa a revision manual."
