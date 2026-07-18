@@ -178,8 +178,17 @@ const CONFORMITY =
 
 // Muletillas de "continúa" ("¿y?", "¿y qué más?", "sigue", "cuenta", "y luego"): NO son preguntas a
 // deferir, son "dale, avanza". Se evalúan ANTES que QUESTION para que no se interpreten como duda.
+// Ronda 3 (spec de Alex: el defer JAMÁS para lo que el bot sabe): "contame", "¿qué sería?", "¿cómo
+// arrancamos?", "¿qué me pedirían hacer?" son peticiones de que el bot SIGA CONTANDO — la agenda las
+// responde avanzando. Antes caían en asks-unknown -> "te lo confirmo por WhatsApp" (inadmisible). El guard
+// (?!...porcentaje|cara...) evita robar peticiones que tienen ruta propia (cifra del reparto, cara, impuestos).
 const CONTINUATION =
-  /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuentame\b|como viene la mano/;
+  /^¿?\s*y\s*\??$|^¿?\s*y\s+que(\s+mas|\s+es)?\s*\??$|^¿?\s*que\s+mas\s*\??$|\by\s+(luego|despues|que\s+mas)\b|\bsigue\b|\bcontinua\b|\bcuentame\b|como viene la mano|\bcontame\b|\bque seria\s*\??\s*$|\bcomo (?:arrancamos|empezamos|arranco|empiezo)\b|\bque (?:me )?pedirian?\b(?:\s+hacer)?/;
+// Temas con RUTA PROPIA que un "contame/qué sería/cómo empezamos" jamás puede robar (revisor Ronda 3): si el
+// mensaje los nombra, CONTINUATION no aplica y la petición cae a su ruta (cifra del reparto, cara, impuestos,
+// "cuánto se llevan"). Sin esto, "¿cómo empezamos? igual antes decime cuánto se llevan" avanzaba la agenda
+// IGNORANDO la cifra pedida — la familia evasiva que ya mordió el 16-jul.
+const CONTINUATION_ROUTED_TOPICS = /\b(?:porcentaje|reparto|comision|cifra|cara|impuest\w*)\b|\bcuant[oa]s?\b/;
 
 // Pregunta de IDENTIDAD ("¿quién eres?", "¿de dónde llamas?", "¿de qué agencia?", "¿cómo te llamas?"): NO se
 // defiere; el bot dice quién es. Incluye preguntas personales al bot ("¿cuántos años tienes?"): deferirlas a
@@ -287,7 +296,16 @@ const IDENTITY_CONFIRM =
 // escalón vigente), JAMÁS se defiere (jul-2026, barrido: "¿cuánto os lleváis?" acababa en "te lo mando por
 // WhatsApp", evasivo). Solo formas en 2ª/3ª persona (la agencia); "¿cuánto gano YO?" sigue siendo earnings.
 const ASKS_SHARE_FIGURE =
-  /\bcuanto (?:os|se|te) (?:llevais|llevas|lleva|llevan|quedais|quedas|queda|quedan|cobrais|cobran)\b|\bcuanto cobr(?:ais|as|an)\b(?!\s+(?:las|los|una|un|otras)\b)|\bque (?:porcentaje|comision)\b|\bcomo (?:es|era|va|iba|funciona|queda) (?:el|lo del) reparto\b|\bel reparto como (?:es|era|va|iba|queda)\b|\bcual (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\bcuanto (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b/;
+  /\bcuanto (?:os|se|te) (?:llevais|llevas|lleva|llevan|quedais|quedas|queda|quedan|cobrais|cobran)\b|\bcuanto cobr(?:ais|as|an)\b(?!\s+(?:las|los|una|un|otras)\b)|\bque (?:porcentaje|comision)\b|\bcomo (?:es|era|va|iba|funciona|queda) (?:el|lo del) reparto\b|\bel reparto como (?:es|era|va|iba|queda)\b|\bcual (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\bcuanto (?:es|era) (?:el|la) (?:reparto|porcentaje|comision)\b|\b(?:el |la )?(?:porcentaje|reparto|comision)\b[^.?!]{0,12}\bque seria\b|\bque seria\b[^.?!]{0,12}\b(?:el |la )?(?:porcentaje|reparto|comision)\b/;
+
+// CONFIRMAR la cifra ("o sea de lo que paguen me queda el 30, ¿no?"): ella repite el reparto para verificar
+// que lo entendió. El bot LO SABE (spec de Alex: jamás deferir lo que se sabe) -> asks-share-figure re-dice
+// la cifra autorizada vigente. Solo cifras de la escalera (30/35/40 los de ella): otra cifra NO confirma
+// nada aquí (una petición del 50 la cazan las quejas antes).
+const CONFIRMS_SHARE_FIGURE =
+  /\b(?:me (?:queda|toca|llevo|corresponde)|para mi(?: es| seria| queda)?)\s+(?:el\s+|un\s+)?(?:30|35|40|treinta|treinta y cinco|cuarenta)\b(?!\s+de\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre))[^.?!]{0,12}\b(?:no|verdad|cierto|si)\s*\?/;
+// (El lookahead de meses evita que "la llamada me toca el 30 de julio, ¿no?" — una FECHA — dispare el
+// reparto: revisor Ronda 3.)
 
 // Pedir la cifra en IMPERATIVO ("decime/explicame/repetime/pasame ... el porcentaje/reparto"): es la MISMA
 // petición reactiva que la forma pregunta -> se responde el escalón AUTORIZADO vigente (invariante 3), jamás
@@ -362,6 +380,23 @@ function isClarificationOfLastUtterance(text: string, lastBotUtterance?: string)
   // "y eso pa/para que?" retrospectivo: pregunta el para-qué de lo que el bot ACABA de decir -> aclarar (no
   // deferir a WhatsApp algo que él mismo narró). Solo si hay una última frase del bot que aclarar (guard).
   if (/^\s*¿?\s*(?:y\s+)?(?:eso|esto)?\s*(?:pa|para)\s+que\b/.test(text)) return true;
+  // ECO-CONFIRMACIÓN (Ronda 3, spec de Alex): repite lo que el bot ACABA de decir y pide confirmación con
+  // coletilla ("sí, ahí entendí... o sea yo no hablo con nadie, ¿no?"). Antes caía en asks-unknown -> "te lo
+  // confirmo por WhatsApp": el bot DIFERÍA LO QUE ÉL MISMO ACABABA DE DECIR (inadmisible). Si su frase acaba
+  // en coletilla de confirmación y solapa con la última frase del bot (2+ palabras con chicha, o 1 + un
+  // marcador de reformulación tipo "o sea/entendí/entonces"), es una aclaración: se le confirma en simple.
+  const tagQuestionEnd = /(?:,|\s)(?:no|si|verdad|cierto|asi)\s*\?\s*$/;
+  if (tagQuestionEnd.test(text)) {
+    const contentWords = text
+      .replace(tagQuestionEnd, "")
+      .split(/[^a-z0-9ñ]+/i)
+      .filter((word) => word.length > 3);
+    // Palabra ENTERA (\b), no substring: con includes(), genéricas como "para"/"esta" puntuaban dentro de
+    // otras palabras y metían ruido (nota del revisor Ronda 3).
+    const hits = contentWords.filter((word) => new RegExp(`\\b${word}\\b`).test(lastBot)).length;
+    const restates = /\b(?:o sea|osea|entendi|entonces|es decir|asi que)\b/.test(text);
+    if (hits >= 2 || (hits >= 1 && restates)) return true;
+  }
   for (const pattern of CLARIFY_WITH_TERM) {
     const match = pattern.exec(text);
     if (match?.[1]) {
@@ -452,7 +487,7 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   // "¿y qué más?" / "sigue, cuéntame" es pedir MÁS (asks-more): a media llamada avanza la agenda igual que
   // un asentimiento, pero tras el CIERRE no es un ack — se responde el remate ("nada más por mi parte...")
   // una vez en lugar de silencio (fleco de la re-sim R9: "¿y qué más me tienes que contar?" quedaba mudo).
-  if (CONTINUATION.test(text)) return "asks-more";
+  if (CONTINUATION.test(text) && !CONTINUATION_ROUTED_TOPICS.test(text)) return "asks-more";
   // Aclaración de lo que el bot ACABA de decir ("¿qué significa se liquida?", "¿límite de qué?"): se
   // reformula en simple, jamás "mi socio". Antes que repeat/QUESTION (todas contienen "que").
   if (isClarificationOfLastUtterance(text, input.lastBotUtterance)) return "asks-clarification";
@@ -460,7 +495,11 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (ASKS_BOT_REPEAT.test(text)) return "asks-bot-to-repeat";
   // Pregunta la CIFRA del reparto (sin quejarse: las quejas ya se evaluaron antes) -> responderla (inv. 3
   // reactivo), nunca deferir. Antes que QUESTION/earnings ("cuánto os lleváis" contiene "cuanto").
-  if (ASKS_SHARE_FIGURE.test(text) || (ASKS_SHARE_FIGURE_IMPERATIVE.test(text) && !SHARE_FIGURE_NOT_REQUESTED.test(text))) {
+  if (
+    ASKS_SHARE_FIGURE.test(text) ||
+    (ASKS_SHARE_FIGURE_IMPERATIVE.test(text) && !SHARE_FIGURE_NOT_REQUESTED.test(text)) ||
+    CONFIRMS_SHARE_FIGURE.test(text)
+  ) {
     return "asks-share-figure";
   }
   // Pregunta VAGA por el dinero -> presentar el reparto (misma señal; el director presenta MONEY si falta o

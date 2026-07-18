@@ -300,6 +300,13 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     ) ||
       /\b(cuenta|onlyfans)\b[^.!?]{0,25}\b(la abro|la creo|me la abr|me la cre|me la mont|me la arm|me la prepar|quien la abre|tengo que abrir|hay que abrir|la abro o)\b/.test(
         message
+      ) ||
+      // Ronda 3 (18-jul, spec de Alex — el defer jamás para lo que se sabe): "yo NO TENGO OnlyFans, ¿eso
+      // cómo sería?" preguntaba justo esto (cómo se arranca sin cuenta) y acababa en "te lo confirmo por
+      // WhatsApp" porque ninguna ruta casaba sin verbo de crear. La respuesta está aprobada (la creas tú,
+      // te guiamos).
+      /\b(?:no tengo|nunca tuve|nunca he tenido|todavia no tengo|aun no tengo)\b[^.!?]{0,15}\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,40}\b(?:como (?:seria|funciona|se hace|hago|arranco|empiezo)|que (?:hago|tengo que hacer)|eso como)\b/.test(
+        message
       ))
   )
     tags.push("of-account", "account-setup", "onboarding", "faq");
