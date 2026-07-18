@@ -376,7 +376,9 @@ describe("OpenAI adapter, automation and review", () => {
       message: "Que hace la agencia exactamente?"
     });
 
-    expect(result.response.toLowerCase()).toContain("estrategia");
+    // 18-jul: "¿que hace la agencia?" responde ahora con el pitch de servicios (antes se colaba la ficha
+    // del porque-70 y su "estrategia"). Se ancla el COMPORTAMIENTO (respuesta oficial de servicios), no la palabra.
+    expect(result.response.toLowerCase()).toMatch(/monetizacion|trafico|gestion|estrategia/);
     expect(result.response.toLowerCase()).not.toContain("fotograf");
   });
 

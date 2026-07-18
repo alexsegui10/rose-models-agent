@@ -163,14 +163,17 @@ const entries: KnowledgeEntryInput[] = [
     ],
     prohibitedClaims: ["Dar una explicacion excesivamente larga.", "Prometer resultados concretos."],
     allowedStates: ["NEW_LEAD", "QUALIFYING", "APPROVED", "COLLECTING_CALL_DETAILS", "HUMAN_INTERVENTION_REQUIRED"],
-    tags: ["percentage", "why-70", "services"],
+    // SIN el tag "services" (18-jul, caso real Ale): con el, "¿como trabajan?" recuperaba esta ficha y la
+    // respuesta arrancaba "Porque..." (contesta un por-que que nadie pregunto) desplazando el pitch. La ruta
+    // del porque-70 (businessKnowledgeRetriever) empuja "why-70"/"percentage", que se mantienen.
+    tags: ["percentage", "why-70"],
     mandatoryNuances: ["Responder breve.", "No prometer ingresos."],
     escalationConditions: ["La candidata discute o negocia condiciones."],
     requiresHumanReview: false,
-    version: "commercial-why-agency-70-2026-06-12.1",
+    version: "commercial-why-agency-70-2026-07-18.1",
     status: "ACTIVE",
     approvedByAlex: true,
-    updatedAt: "2026-06-12"
+    updatedAt: "2026-07-18"
   },
   {
     id: "commercial-non-payment",

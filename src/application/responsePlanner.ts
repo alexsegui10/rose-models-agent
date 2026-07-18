@@ -184,6 +184,15 @@ const OBJECTION_TAGS = new Set([
   "boundaries"
 ]);
 
+// SEGURIDAD (18-jul, bloqueante del revisor): el NO de menores debe salir tambien ante una AFIRMACION
+// ("estaba pensando en salir con mi hija") — su ficha manda "jamas se defiere"; sin esto el turno caia al
+// holding del socio, que suena a que se esta valorando. SOLO si el mensaje menciona menores/familia: la
+// ficha comparte el tag generico "content" y hacerla respondible siempre la soltaba ante mensajes inocentes.
+// "nen[ea]s?" a secas ("la nena sale conmigo"): el retriever ya surfacea la ficha para nena/nene sin el
+// posesivo, y exigir "mi" aqui la bloqueaba (sonda del revisor). hijita/sobrina/beba quedan pendientes de
+// unificar los 3 patrones de menores desincronizados (backlog, gap preexistente del retriever).
+const minorsMentionPattern = /\b(hij[oa]s?|nin[oa]s?|menor(?:es)?|bebes?|beba|nen[ea]s?|sobrin[oa]s?)\b/;
+
 export function buildResponsePlan(input: BuildResponsePlanInput): ResponsePlan {
   const respondable = respondableEntries(input);
   const answerFacts = respondable.flatMap((entry) => entry.approvedAnswerPoints);
@@ -245,9 +254,13 @@ export function buildResponsePlan(input: BuildResponsePlanInput): ResponsePlan {
  * "no tengo fotos en el feed" con la politica de lanzamiento (volcado no solicitado).
  */
 function respondableEntries(input: BuildResponsePlanInput): KnowledgeEntry[] {
-  if (looksLikeQuestion(normalize(input.inboundMessage))) return input.knowledgeEntries;
+  const message = normalize(input.inboundMessage);
+  if (looksLikeQuestion(message)) return input.knowledgeEntries;
   if (ANSWER_WITH_FACTS_INTENTS.has(input.understanding.intent)) return input.knowledgeEntries;
-  return input.knowledgeEntries.filter((entry) => entry.tags.some((tag) => OBJECTION_TAGS.has(tag)));
+  const mentionsMinors = minorsMentionPattern.test(message);
+  return input.knowledgeEntries.filter(
+    (entry) => entry.tags.some((tag) => OBJECTION_TAGS.has(tag)) || (mentionsMinors && entry.tags.includes("minors-content"))
+  );
 }
 
 function objectiveFor(

@@ -172,7 +172,7 @@ describe("CONVERSATIONAL_QUALITY_EVALUATION", () => {
       message: "Vosotros ayudais con estrategia para monetizar mejor la cuenta?"
     });
 
-    expect(result.response.toLowerCase()).toContain("estrategia");
+    // 18-jul: la respuesta ahora es el pitch de servicios (sin la ficha del porque-70 y su "estrategia").
     expect(result.response.toLowerCase()).toContain("monetizacion");
     expect(result.responsePlan.knowledgeEntryIds).toContain("services-agency-management");
   });

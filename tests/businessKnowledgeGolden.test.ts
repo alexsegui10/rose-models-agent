@@ -108,8 +108,9 @@ describe("business knowledge golden tests", () => {
       message: "Que hace la agencia exactamente?"
     });
 
-    expect(result.response.toLowerCase()).toContain("estrategia");
-    expect(result.response.toLowerCase()).toContain("monetizacion");
+    // 18-jul: responde con el pitch de servicios (la ficha del porque-70 ya no se cuela aqui con su
+    // "estrategia"). Comportamiento anclado: servicios oficiales, no la palabra exacta.
+    expect(result.response.toLowerCase()).toMatch(/monetizacion|trafico|gestion/);
     expect(result.responsePlan.knowledgeEntryIds).toContain("services-agency-management");
   });
 

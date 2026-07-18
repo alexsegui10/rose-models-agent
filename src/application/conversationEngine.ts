@@ -1677,10 +1677,41 @@ export class ConversationEngine {
       pitchLookbackHistory.filter(
         (message) => message.role === "agent" && /lo hablo con mi socio|sigue pendiente con mi socio/i.test(message.content)
       ).length >= 2;
+    // Anti-"ya te lo dije" en la espera de HIR (caso real Daiana 18-jul): el modelo etiquetaba imperativos
+    // sin pregunta ("cuando puedas decime...") como peticion de info y la MISMA ficha se re-emitia turno
+    // tras turno hasta el "Te lo vuelvo a decir: vale pues...". Si el turno NO es una pregunta textual, los
+    // facts que YA salieron por el agente (ventana ancha) se filtran y el turno cae al holding/visto.
+    // Una pregunta REAL ("¿y como trabajais?") se responde siempre, aunque repita (decision Alex 7-jul), y
+    // los facts con la cifra del reparto NUNCA se filtran (la cifra pedida se contesta: invariante 3 reactivo).
+    const inboundLooksLikeTextualQuestion =
+      /[?¿]/.test(groupedMessage.content) || /^\s*(que|como|cuanto|quien|donde|cuando|y que)\b/i.test(groupedMessage.content);
+    // Los facts de fichas de SEGURIDAD (tag "safety": el NO rotundo de menores en contenido) se repiten las
+    // veces que haga falta — filtrarlos convertia el NO en "sigue pendiente con mi socio", como si salir con
+    // su hija se estuviera valorando (bloqueante del revisor 18-jul; decision de Alex 10-jul: jamas se defiere).
+    const safetyFacts = new Set(
+      knowledgeEntries.filter((entry) => entry.tags.includes("safety")).flatMap((entry) => entry.approvedAnswerPoints)
+    );
+    const hirResponsePlan =
+      projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" && !inboundLooksLikeTextualQuestion
+        ? {
+            ...responsePlan,
+            answerFacts: responsePlan.answerFacts.filter((fact) => {
+              if (/\b70\s?%|30\s?%|70\/30\b/.test(fact) || safetyFacts.has(fact)) return true;
+              // El acuse inicial del fact ("Vale pues,") puede haberse alternado al emitirlo (swap
+              // anti-repeticion), asi que se compara SIN el (nota 1 del revisor 18-jul); si al quitarlo
+              // queda demasiado corto para ser distintivo, se compara entero.
+              const bare = normalizeText(fact).replace(/^(?:vale pues|okeyy|perfecto|entiendo|bien bien)[,.\s]+/, "");
+              const needle = bare.length >= 12 ? bare : normalizeText(fact);
+              return !pitchLookbackHistory.some(
+                (message) => message.role === "agent" && normalizeText(message.content).includes(needle)
+              );
+            })
+          }
+        : responsePlan;
     const deterministicResponse = generateResponse(
       projectedCandidate,
       understanding,
-      responsePlan,
+      hirResponsePlan,
       approvedNegotiationDecision,
       groupedMessage.content,
       isOpenerTurn,
@@ -1716,11 +1747,14 @@ export class ConversationEngine {
     // Turno de ESPERA (en revision humana o intervencion humana, sin nada que responder ni preguntar): el
     // mensaje de espera lo pone el codigo (variado, sin bucle), no OpenAI — que repetia "lo hablo con mi
     // socio" turno tras turno (fallo real del spot-check de Alex).
+    // Se mira el plan FILTRADO de HIR (revisor 18-jul, RIESGO 2): si el filtro anti-"ya te lo dije" vacio
+    // los facts, el turno ES de espera y lo pone el codigo — con el plan original iba a OpenAI, que
+    // re-redactaba la ficha repetida parafraseada y el filtro no gobernaba el path de produccion.
     const isAwaitingHoldingTurn =
       !useCanonicalOpenerTemplate &&
       agencyExplanation === null &&
-      responsePlan.answerFacts.length === 0 &&
-      responsePlan.questionToAsk === null &&
+      hirResponsePlan.answerFacts.length === 0 &&
+      hirResponsePlan.questionToAsk === null &&
       (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" ||
         projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED");
     // Turnos DENTRO de revision (menos el del pitch): los pone el CODIGO, nunca OpenAI (que repetia el pitch
@@ -1825,10 +1859,36 @@ export class ConversationEngine {
     if (reportsOfSetupProblem(groupedMessage.content)) {
       suppressedFramings.push(OF_ONBOARDING_FRAMING);
     }
-    const draftKnowledgeEntries =
+    const baseDraftKnowledgeEntries =
       suppressedFramings.length === 0
         ? knowledgeEntries
         : knowledgeEntries.map((entry) => stripSuppressedFraming(entry, suppressedFramings));
+    // En un turno de HIR SIN pregunta textual, el redactor tampoco ve las fichas SUSTANCIALMENTE ya dichas
+    // (barrido 18-jul: con el plan filtrado pero las fichas enteras, gpt re-redactaba la ficha de
+    // transparencia parafraseada — turnos 30/70 de Daiana, "sisi eso ya me lo repetiste"). "Sustancialmente"
+    // = >=2 puntos dichos y al menos la mitad: el punto de empatia suele salir parafraseado y no cuenta,
+    // y una ficha emitida a MEDIAS (p.ej. el pitch capado a 2 burbujas de 6) conserva lo no dicho.
+    // Misma exencion del filtro del plan: una ficha con la cifra del reparto nunca se retira.
+    const hirEntrySubstantiallySaid = (entry: KnowledgeEntry): boolean => {
+      const points = entry.approvedAnswerPoints;
+      if (points.length === 0) return false;
+      // Una ficha de SEGURIDAD (tag "safety") jamas se retira: su NO debe poder repetirse siempre
+      // (bloqueante del revisor 18-jul, mismo criterio que la exencion en el filtro del plan).
+      if (entry.tags.includes("safety")) return false;
+      if (points.some((fact) => /\b70\s?%|30\s?%|70\/30\b/.test(fact))) return false;
+      const saidCount = points.filter((fact) => {
+        const bare = normalizeText(fact).replace(/^(?:vale pues|okeyy|perfecto|entiendo|bien bien)[,.\s]+/, "");
+        const needle = bare.length >= 12 ? bare : normalizeText(fact);
+        return pitchLookbackHistory.some(
+          (message) => message.role === "agent" && normalizeText(message.content).includes(needle)
+        );
+      }).length;
+      return saidCount >= 2 && saidCount * 2 >= points.length;
+    };
+    const draftKnowledgeEntries =
+      projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" && !inboundLooksLikeTextualQuestion
+        ? baseDraftKnowledgeEntries.filter((entry) => !hirEntrySubstantiallySaid(entry))
+        : baseDraftKnowledgeEntries;
     let draft =
       pauseMessage !== null
         ? deterministicDraftOutput(pauseMessage)
@@ -1848,7 +1908,10 @@ export class ConversationEngine {
                   projectedCandidate,
                   recentMessages,
                   knowledgeEntries: draftKnowledgeEntries,
-                  responsePlan,
+                  // En HIR el redactor ve el plan FILTRADO (revisor 18-jul): sin esto re-redactaba la ficha
+                  // ya dicha parafraseada y el anti-repeticion byte-a-byte no la cazaba. Fuera de HIR son
+                  // el mismo objeto.
+                  responsePlan: hirResponsePlan,
                   retrievedExamples,
                   styleContext,
                   approvedNegotiationDecision
@@ -1895,24 +1958,27 @@ export class ConversationEngine {
         understanding.intent === "REQUESTS_CALL" ||
         understanding.requestsCall ||
         responsePlan.knowledgeEntryIds.some((id) => id.startsWith("call-")));
+    // El self-check rellena desde el plan FILTRADO de HIR (revisor 18-jul, RIESGO 1): con el plan original
+    // deshacia el filtro anti-"ya te lo dije" y el disco rayado de Daiana reaparecia por esta via
+    // ("Como te decia: vale pues, te voy a explicar...") en los HIR sin "lo comento" en el historial.
     const planCanAnswer =
-      responsePlan.answerFacts.length > 0 &&
-      !responsePlan.requiresHumanReview &&
-      !responsePlan.uncoveredQuestion &&
+      hirResponsePlan.answerFacts.length > 0 &&
+      !hirResponsePlan.requiresHumanReview &&
+      !hirResponsePlan.uncoveredQuestion &&
       !intentionalReviewSilence;
     const responseDefersUnnecessarily =
       /\blo (?:hablo|comento|consulto|miro|reviso|veo|confirmo) con mi socio\b|\bdejame que lo hable con mi socio\b|\bprefiero confirmarlo con mi socio\b|\bse lo (?:comento|digo|paso) a mi socio\b/i.test(
         response
       );
     if (planCanAnswer && (response.trim().length === 0 || responseDefersUnnecessarily)) {
-      const answeredFromPlan = rewriteFromPlan(responsePlan, approvedNegotiationDecision);
+      const answeredFromPlan = rewriteFromPlan(hirResponsePlan, approvedNegotiationDecision);
       if (
         answeredFromPlan.trim().length > 0 &&
         answeredFromPlan !== response &&
-        validateFactualResponse(answeredFromPlan, responsePlan).valid
+        validateFactualResponse(answeredFromPlan, hirResponsePlan).valid
       ) {
         response = answeredFromPlan;
-        factualValidation = validateFactualResponse(response, responsePlan);
+        factualValidation = validateFactualResponse(response, hirResponsePlan);
         draft = { ...draft, response, usedFallback: true, error: "coherence-self-check-answered-from-plan" };
       }
     }
@@ -2064,13 +2130,15 @@ export class ConversationEngine {
       groupedMessage.content.includes("?") ||
       understanding.intent.startsWith("ASKS_") ||
       understanding.intent === "REQUESTS_INFORMATION";
-    const dedupedResponse = withoutVerbatimRepetition(
-      response,
-      lastAgentMsg,
-      responsePlan,
-      projectedCandidate.currentState,
-      inboundIsQuestion
-    );
+    // Con el plan FILTRADO de HIR (nota del revisor 18-jul): la variante "responder desde el plan" no debe
+    // re-emitir facts ya dichos que el filtro acaba de quitar. Fuera de HIR es el mismo objeto.
+    // EXCEPCION de SEGURIDAD: si la respuesta lleva un fact "safety" (el NO de menores), se repite tal cual
+    // aunque sea identica al ultimo mensaje — degradarla a un "Okeyy" ante "estaba pensando en salir con mi
+    // hija" sonaba a aceptacion (bloqueante del revisor 18-jul; el NO es categorico y se repite lo que haga falta).
+    const responseCarriesSafetyFact = response.trim().length > 0 && [...safetyFacts].some((fact) => response.includes(fact));
+    const dedupedResponse = responseCarriesSafetyFact
+      ? response
+      : withoutVerbatimRepetition(response, lastAgentMsg, hirResponsePlan, projectedCandidate.currentState, inboundIsQuestion);
     if (dedupedResponse !== response) {
       response = dedupedResponse;
       draft = { ...draft, response };
@@ -4345,8 +4413,9 @@ export function withoutVerbatimRepetition(
     // La respuesta autorizada TAMBIÉN repite verbatim: ante una PREGUNTA se re-explica con variación
     // (lanzamiento real 3-jul: Mayra preguntó 'Qué porcentaje' TRES veces, recibió 'Okeyy' dos y se
     // perdió el lead). Solo re-emite hechos YA autorizados por el plan (factual-safe).
+    // "Como te decia:" (18-jul): el "Te lo vuelvo a decir:" sonaba a reproche justo cuando ella insiste.
     if (inboundIsQuestion) {
-      return `Te lo vuelvo a decir: ${planAnswer.charAt(0).toLowerCase()}${planAnswer.slice(1)}`;
+      return `Como te decia: ${planAnswer.charAt(0).toLowerCase()}${planAnswer.slice(1)}`;
     }
   }
 
@@ -4380,7 +4449,14 @@ function escapeRegExp(value: string): string {
 // Pitch operativo confirmado por Alex, entregado VERBATIM (su voz exacta) desde el conocimiento.
 const agencyPitchEntry = businessKnowledgeEntries.find((entry) => entry.id === "services-agency-management");
 const AGENCY_PITCH_TEXT = agencyPitchEntry ? agencyPitchEntry.approvedAnswerPoints.join("\n\n") : null;
-const agencyExplanationGivenPattern = /chatters|cuentas de instagram|cuentas con ubicaciones/i;
+// Cuenta como "pitch ya dado" tanto el pitch canonico (chatters/cuentas de instagram) como su NUCLEO dado
+// en RESPUESTAS ("tu mandas el contenido y nosotros hacemos el resto", parafraseos del redactor incluidos).
+// Caso real Alejandra 18-jul: sus preguntas cubrieron el como-trabajamos por partes y el beat resucitaba el
+// pitch entero despues (hasta contestando a un "👍") = "repite la forma de trabajar". Si el nucleo ya salio,
+// el detalle del trafico queda para la llamada ("En la llamada te lo explico todo mejor"). Solo mensajes del
+// AGENTE (el caller filtra por role), asi que una candidata no puede marcar el pitch como dado.
+const agencyExplanationGivenPattern =
+  /chatters|cuentas de instagram|cuentas con ubicaciones|de mandar el contenido|hacemos el resto|nos encargamos del resto/i;
 // Dinero / negociacion (Alex 15-jul): una candidata que pregunta por cifras o negocia ("cuanto cobro",
 // "cuanto gano", "quiero ganar mas", "el 50 para mi", "70/30", "%") NUNCA se difiere por el pitch — cae en
 // revision como siempre (invariante 3). El pitch proactivo solo se difiere para una pregunta de PROCESO
