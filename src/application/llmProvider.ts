@@ -54,6 +54,18 @@ export const ModelConversationOutputSchema = z.object({
   requestsHuman: z.boolean().default(false),
   isNegotiation: z.boolean().default(false),
   requestedModelPercentage: z.number().min(0).max(100).nullable().default(null),
+  // CAPA 2 (19-jul): clasificacion DEDICADA del mensaje cuando toca el DINERO/reparto. Un campo propio con
+  // prompt afilado clasifica LIMPIO (probe: 28/28 con gpt-5.4-mini), al reves que `intent`/`isNegotiation`, que
+  // estan sobrecargados y son ruido para esta distincion. El planner la usa para decidir cifra vs escalado vs
+  // modelo-de-pago, SIEMPRE con red determinista: la negociacion determinista puede VETAR una cifra (nunca
+  // forzar una insegura) y, si la IA no esta (fallback/tests), se deriva de los mismos regex. Invariante 3: la
+  // cifra solo sale si FIGURE y ademas NO hay negociacion/modelo-pago por ninguna via. Default NONE.
+  //   FIGURE = pregunta CUANTO es el reparto/su parte/la comision (quiere el numero) -> se da el 70/30.
+  //   NEGOTIATE = pide mas/menos, propone otra cifra, regatea u OBJETA el precio -> revision humana.
+  //   PAYMENT_MODEL = "fijo o porcentaje?" (estructura, sin pedir numero) -> respuesta general sin cifra.
+  //   TIMING = cuando/como se cobra (fechas/metodo) -> ficha de settlement.
+  //   NONE = no toca la cifra del reparto.
+  moneyTopic: z.enum(["FIGURE", "NEGOTIATE", "PAYMENT_MODEL", "TIMING", "NONE"]).default("NONE"),
   // Senal ORTOGONAL (no es un intent): la candidata hizo una pregunta PERSONAL/SOCIAL dirigida al bot
   // ("y tu?", "quien eres?", "como estas?") que no es de negocio ni de seguridad. Informa al planner para
   // responderla primero y reconducir; NUNCA decide estado/flujo (invariante 1). Default null.

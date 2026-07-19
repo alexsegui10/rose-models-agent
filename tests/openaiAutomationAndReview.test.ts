@@ -51,6 +51,7 @@ function validUnderstanding(intent: ModelConversationOutput["intent"] = "CONFIRM
     requestsHuman: false,
     isNegotiation: false,
     requestedModelPercentage: null,
+    moneyTopic: "NONE",
     suggestedStateTransition: null,
     requiresHumanReview: false,
     humanReviewReason: null,

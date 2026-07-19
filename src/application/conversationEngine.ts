@@ -5230,6 +5230,7 @@ function skippedResult(
     requestsHuman: false,
     isNegotiation: false,
     requestedModelPercentage: null,
+    moneyTopic: "NONE",
     pendingPersonalQuestion: null,
     relevantTopics: [],
     suggestedStateTransition: null,

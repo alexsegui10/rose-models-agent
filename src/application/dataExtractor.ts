@@ -1044,6 +1044,10 @@ function baseOutput(
     requestsHuman: intent === "REQUESTS_HUMAN",
     isNegotiation: humanReviewReason?.includes("negociacion") ?? false,
     requestedModelPercentage: extractedData.requestedModelPercentage ?? null,
+    // El extractor determinista NO clasifica moneyTopic (lo hace la IA en produccion con su campo dedicado).
+    // Queda NONE: el planner cae a su deteccion determinista por regex, identica al comportamiento previo. Asi
+    // el fallback y los tests son estables y la IA solo AÑADE cobertura en produccion (Capa 2).
+    moneyTopic: "NONE",
     pendingPersonalQuestion,
     relevantTopics: [],
     suggestedStateTransition: null,

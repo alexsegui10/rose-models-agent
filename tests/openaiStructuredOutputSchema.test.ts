@@ -51,6 +51,7 @@ function apiUnderstanding(overrides: Partial<ApiConversationUnderstanding> = {})
     requestsHuman: false,
     isNegotiation: false,
     requestedModelPercentage: null,
+    moneyTopic: "NONE",
     suggestedStateTransition: null,
     requiresHumanReview: false,
     humanReviewReason: null,

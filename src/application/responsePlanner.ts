@@ -546,33 +546,119 @@ function looksLikeQuestion(message: string): boolean {
 function negotiatesRevenueShare(message: string): boolean {
   // Verbos de REGATEO inequivocos (negocian en cualquier contexto, no hace falta anclarlos).
   if (/\b(negoci\w+|regate\w+|rebaj\w+|descuent\w+|abarat\w+)\b/.test(message)) return true;
-  // El resto solo cuenta si la frase TOCA el reparto/parte/porcentaje/comision de la agencia.
+  // Un reparto EXPLICITO con barra/guion que no sea 70/30 ("40/60", "50-50") es una propuesta = negociacion,
+  // sin necesitar mas contexto (la barra entre dos numeros de 1-2 cifras es un reparto casi siempre).
+  if (/\b\d{1,2}\s*[\/-]\s*\d{1,2}\b/.test(message) && !/\b(70\s*[\/-]\s*30|30\s*[\/-]\s*70)\b/.test(message)) return true;
+  // PEDIR MAS para si misma anclado al dinero ("quiero ganar mas", "mas plata/dinero/porcentaje para mi", "un
+  // poco mas para mi", "la mitad para mi"): negociacion aunque tambien pregunte la cifra en el mismo turno
+  // (compuestos que cazo el revisor). Anclado a dinero para no chocar con "quiero saber mas / mas info".
+  if (
+    /\b(ganar|llevarme|quedarme con|sacar|cobrar|llevar) mas\b|\bmas (?:plata|dinero|porcentaje|guita|pasta)\b|\b(?:un poco |algo |bastante )?mas para mi\b|\b(?:quiero|pido|dame|denme|deme|me quedo con|prefiero|quisiera|me gustaria|exijo|pretendo) (?:al menos |como minimo |minimo )?la mitad\b|\bla mitad para mi\b/.test(
+      message
+    )
+  )
+    return true;
+  // El resto solo cuenta si la frase TOCA el reparto/parte/porcentaje/comision de la agencia. Incluye la parte
+  // de la agencia en 3a persona ("lo que SE llevan / SE quedan"), no solo 2a ("os llevais"), y los sinonimos
+  // "split" / "division de la plata" / "como se reparte" (si no, una contrapropuesta formulada con "split" no
+  // anclaba y filtraba la cifra por la via determinista: compuestos del revisor "como es el split, dejenme 40").
   const shareTerm =
-    /\b(la parte (?:de la agencia|vuestra|suya)|mi parte|el porcentaje|del porcentaje|el reparto|del reparto|vuestra comision|su comision|la comision|os qued\w+|os llev\w+)\b/;
+    /\b(la parte (?:de la agencia|vuestra|suya)|mi parte|el porcentaje|del porcentaje|el reparto|del reparto|vuestra comision|su comision|la comision|os qued\w+|os llev\w+|se qued\w+|se llev\w+|split|division de (?:la plata|el dinero|lo que se gana)|como se reparte)\b/;
   if (!shareTerm.test(message)) return false;
+  // PROPONER numeros concretos del reparto que no sean 70/30 ("me dejan el 40 y se quedan con 60", "50 y 50",
+  // "50 50"): negociacion aunque venga como pregunta y la IA la clasifique FIGURE. Ya dentro del contexto de
+  // reparto (shareTerm), un par de numeros adyacentes (con "y", espacio o pegados) es una propuesta de reparto.
+  const proposesNonStandardSplit =
+    (/\b\d{1,2}(?:\s+y\s+|\s+)\d{1,2}\b/.test(message) && !/\b(70(?:\s+y\s+|\s+)30|30(?:\s+y\s+|\s+)70)\b/.test(message)) ||
+    ((message.match(/\b\d{1,2}\b/g) ?? []).some((x) => x !== "70" && x !== "30") &&
+      /\b(me (?:dejan|dejen|dejaban|dan|daban|den|dais|deis|quedo|quede|llevo|lleve|quedaria|daria|dejaria|das|da|dejas|dejais)|dejenme|denme|deme|dame|dejarme|darme|se quedan con|se lleven|se lleve|para mi|nos quedamos|me quedo con)\b/.test(
+        message
+      ));
+  if (proposesNonStandardSplit) return true;
   // Verbos/comparativos de subir o bajar el importe: son ACCIONES sobre la cifra, no adjetivos ambiguos, asi
   // que son seguros anclados al reparto. "mejor" solo en forma con flexion (mejora/mejorar/mejores), nunca el
   // ADVERBIO suelto ("explicame mejor el reparto" es aclaracion -> se responde). "menor" (no "menos", que casa
   // la muletilla "mas o menos" = aproximadamente -> falso positivo del revisor).
   if (/\b(baj\w+|sub\w+|reduc\w+|aument\w+|increment\w+|mejor(?:a|e)\w*|menor|mas para mi|mas alt\w*)\b/.test(message))
     return true;
-  // OBJECION DE PRECIO: adjetivos "caro/mucho/alto/excesivo/abusivo" SOLO en contexto de precio (copula o
-  // intensificador delante), para que NO disparen "la cara" (=rostro, colision car[oa]/cara del revisor) ni
-  // "muchas gracias". "mas o menos" tampoco casa (no hay adjetivo de precio tras "mas").
+  // OBJECION DE PRECIO: "es/parece + (caro/mucho/demasiado/alto/excesivo/abusivo/injusto/un abuso/una locura)".
+  // Se exige la COPULA/verbo delante (es/son/me parece/...) para NO disparar "la cara" (=rostro, colision
+  // car[oa]/cara) ni "muchas gracias"; y solo cuenta tras el shareTerm (arriba). "demasiado/mucho" cuentan como
+  // objecion por si solos ("es demasiado lo que se llevan"), no solo como intensificador (fuga del fuzz IA).
   if (
-    /\b(?:es|son|sale|salen|resulta\w*|parece|parecen|se me hace|muy|demasiad\w+|bastante|tan|super|re)\s+(?:car[oa]s?|much[oa]|alt[oa]s?|elevad[oa]s?|exager\w+|abusiv\w+|excesiv\w+)\b/.test(
+    /\b(?:es|son|me parece|parece|parecen|se me hace|sale|salen|resulta\w*)\s+(?:re |muy |super |tan |bastante |medio |un |una )?(?:car[oa]s?|much[oa]|muchisim\w+|demasiad\w+|alt[oa]s?|elevad[oa]s?|exager\w+|abusiv\w+|excesiv\w+|carisim\w+|injust\w+|abuso|locura|robo|monton|montonazo)\b/.test(
       message
-    )
+    ) ||
+    /\b(?:muy|super|re|tan|bastante)\s+(?:car[oa]s?|alt[oa]s?|elevad[oa]s?|much[oa]|exager\w+|abusiv\w+|excesiv\w+)\b/.test(
+      message
+    ) ||
+    /\b(?:un abuso|una locura|un robo|un monton|un montonazo)\b/.test(message) ||
+    // "que se llevan/quedan TANTO", "por que se llevan tanto": objecion al importe en 3a persona (fuzz revisor).
+    /\bse (?:llevan|quedan|lleva|queda)[^.?!]{0,15}\btant[oa]s?\b/.test(message)
   )
     return true;
   return false;
 }
 
+// Pregunta del MODELO de pago ("es fijo o porcentaje?", "cobro fijo o comision?", "salario o por venta?"):
+// pregunta la ESTRUCTURA, no el NUMERO -> respuesta general SIN la cifra (invariante 3 conservador). Backstop
+// determinista de la clasificacion moneyTopic=PAYMENT_MODEL de la IA.
+function isPaymentModelQuestion(message: string): boolean {
+  return (
+    /\b(fijo|salario|sueldo|mensual)\b[^.?!]{0,20}\bo\b[^.?!]{0,25}\b(porcentaje|comision|reparto|variable|por venta|por lo que venda|a comision)\b/.test(
+      message
+    ) ||
+    /\b(porcentaje|comision|reparto|variable|por venta|por lo que venda|a comision)\b[^.?!]{0,20}\bo\b[^.?!]{0,20}\b(fijo|salario fijo|sueldo fijo)\b/.test(
+      message
+    ) ||
+    /\bes (un |una )?(sueldo|salario|pago|cobro) fijo\b/.test(message)
+  );
+}
+
 function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
   const message = normalize(input.inboundMessage);
 
+  // CAPA 2: la IA marco el mensaje como NEGOCIACION del reparto (campo dedicado moneyTopic, limpio en la probe).
+  // Escala SIEMPRE (fail-safe: como mucho sobre-escala hacia Alex, jamas libera la cifra). Cubre las
+  // negociaciones que el regex no pilla ("no me pueden dar un poco mas a mi?").
+  if (input.understanding.moneyTopic === "NEGOTIATE") return true;
+
   // La negociacion por fraseo escala SIEMPRE, aunque el intent no sea ASKS_ABOUT_PERCENTAGE (invariante 3).
   if (negotiatesRevenueShare(message)) return true;
+
+  // GUARD DE COMPUESTO (revisor 19-jul): "pregunta la cifra + NEGOCIA/OBJETA en el mismo turno" ("cuanto me
+  // toca? me merezco mas", "de cuanto es el split? es una miseria", "cuanto saco? prefiero mitad y mitad"). En
+  // vez de perseguir conjugaciones (whack-a-mole), se detecta ESTRUCTURALMENTE: si el mensaje tiene una PISTA de
+  // pregunta-de-cifra Y ademas (a) una demanda de MAS/la mitad, o (b) una OBJECION al importe (poco/bajo/caro/
+  // injusto/miseria/no me alcanza/mitad y mitad) -> es negociacion -> escala (y veta la cifra). Fail-safe: como
+  // mucho sobre-escala hacia Alex, jamas libera la cifra. La clase de objecion es acotada (demasiado / muy poco /
+  // injusto / no compensa); la pista de cifra evita que "no puedo mas hoy" o "es lo que mas me interesa" disparen.
+  const figureCue =
+    /\b(cuanto|de cuanto|cual es|que porcentaje|el split|el reparto|del reparto|la parte de la agencia|os quedais|os llevais|me toca|me queda|me llevo|me lleva|mi parte|mi porcentaje|la comision|division de la plata|como se reparte)\b/.test(
+      message
+    );
+  const moreDemand =
+    /\bla mitad\b/.test(message) ||
+    (/\bmas\b/.test(message) &&
+      !/\bmas o menos\b/.test(message) &&
+      // "lo que mas / me gusta mas / mas me interesa / cada vez mas" = superlativo/preferencia, no demanda.
+      !/\b(lo que mas|me (?:gusta|interesa|atrae|llama|copa|encanta|conviene) mas|mas me (?:gusta|interesa|atrae|llama|copa)|cada vez mas)\b/.test(
+        message
+      ) &&
+      !/\b(cuenta\w*|conta\w*|explica\w*|dime|deci\w*|decir|saber|sepa|aclara\w*|pregunta\w*|habla\w*|contar\w*)\b[^.?!]{0,14}\bmas\b/.test(
+        message
+      ) &&
+      !/\b(algo|alguna cosa|nada|una cosa|cualquier cosa)\s+mas\b/.test(message) &&
+      !/\bmas\b[^.?!]{0,12}\b(info|informacion|detalle|adelante|tarde)\b/.test(message));
+  const objectionCue =
+    /\b(?:es|son|me parece|parece|resulta\w*|lo veo|me queda|me sale|seria)\s+(?:re |muy |demasiado |bastante |medio |un |una )?(?:poc[oa]|baj[oa]s?|injust\w+|miseria|car[oa]s?|much[oa]|abusiv\w+|excesiv\w+|porqueria|cagada|chot[oa]|mierda)\b/.test(
+      message
+    ) ||
+    /\b(no me (?:alcanza|sirve|conviene|compensa|cierra)|me quedo cort[oa]|(?:me )?espera\w+ (?:mas|algo mejor|otra cosa|mucho mas))\b/.test(
+      message
+    ) ||
+    /\bmitad y mitad\b/.test(message);
+  if (figureCue && (moreDemand || objectionCue)) return true;
 
   return (
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
@@ -621,8 +707,18 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
   // el patron general ("me pagan", "cuanto gano") puede colarse en una frase-afirmacion y por eso sigue
   // exigiendo el intent; estos otros no. NO afecta a la pregunta del MODELO de pago ("sueldo fijo o
   // porcentaje?"), que no casa ninguno de estos.
+  // Clase semantica "pregunta CUANTO es la parte / el reparto / lo que se lleva cada uno". Se AMPLIO (Capa 2,
+  // 19-jul) con los fraseos que el fuzz vio perder el lead ("el split", "cuanto porciento me toca", "que se
+  // llevan", "cual seria mi parte", "la division de la plata"...). Es DETERMINISTA (invariante 1: el % lo decide
+  // el codigo, no el modelo) y va gateado por looksLikeFigureQuestion; una propuesta con numero ("que se quedan
+  // con 60") la VETA isCommercialEscalation (proposesNonStandardSplit), asi que no filtra.
+  // Las adiciones de Capa 2 (fraseos que el fuzz perdia) van SOLO en forma de pregunta ANCLADA a un interrogativo
+  // (cuanto/cual/de cuanto/como es): un sustantivo suelto ("split", "division", "lo que se llevan") tambien
+  // aparece en CONTRAPROPUESTAS ("el split 50 50 se puede?") y OBJECIONES ("es un monton lo que se quedan"), que
+  // NO deben soltar la cifra por la via determinista (bloqueante del revisor 19-jul). Los verbos en 1a persona
+  // ("cuanto me toca/queda/llevo") no solapan con negociaciones. La negociacion sigue vetando via isCommercialEscalation.
   const asksExactFigureUnambiguous =
-    /\b(cual es (el|mi|su|la) (porcentaje|reparto|comision)|de cuanto (seria|es|va a ser|sera|estamos hablando)( (el|un))? ?(porcentaje|reparto)|de cuanto (porcentaje|reparto)|cuanto (seria|es) (el|mi) (porcentaje|reparto)|(cuanto|que porcentaje) os (quedais|qued|llevais|llev)|(cual|cuanto|de cuanto)[^.?!]{0,20}\bla parte (de la agencia|vuestra|suya|que se queda|que os quedais)|la parte de la agencia)\b/;
+    /\b(cual es (el|mi|su|la) (porcentaje|reparto|comision)|cual seria (mi parte|el reparto|mi porcentaje)|de cuanto (seria|es|va a ser|sera|estamos hablando)( (el|un))? ?(porcentaje|reparto)|de cuanto (porcentaje|reparto)|cuanto (seria|es) (el|mi) (porcentaje|reparto)|cuanto (me toca|me queda|me llevo|me lleva|agarro|saco|gano yo|cobro yo)|porciento me toca|(?:de cuanto es|cuanto es|como es|como queda|como funciona)( el| del| un)? split|split (?:como es|como queda|de cuanto|como funciona)|(?:de cuanto es|cuanto es|como es|como queda)( la)? division de (?:la plata|el dinero|lo que se gana)|division de (?:la plata|el dinero|lo que se gana) (?:como es|como queda|de cuanto)|cuanto se (?:queda|lleva) la agencia|(cuanto|que porcentaje) os (quedais|qued|llevais|llev)|(cual|cuanto|de cuanto)[^.?!]{0,20}\bla parte (de la agencia|vuestra|suya|que se queda|que os quedais)|la parte de la agencia)\b/;
   // La rama "sin intent" es un detector de SUBCADENA, asi que "la parte de la agencia" tambien casa dentro de
   // una AFIRMACION ("me parece cara la parte de la agencia") o una NEGOCIACION ("quiero que sea menor la parte
   // de la agencia") -> soltaria el 70/30 sin que sea una pregunta y sin escalar (fuga del invariante 3 que cazo
@@ -634,14 +730,26 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
     /^\s*(?:y |ok |okey |vale |pero |oye |che |ah |mmm |a ver )*(?:de\s+cuanto|con\s+cuanto|a\s+cuanto|cuanto|cual|que\s+porcentaje|como\s+es)\b/.test(
       message
     );
-  const exactPercentageQuestion =
-    // Una NEGOCIACION nunca libera la cifra (gana el escalado): aunque el mensaje tambien parezca pregunta
-    // de pago ("cuanto me pagan? quiero el 50 para mi"), se trata como negociacion -> revision (invariante 3).
-    !isCommercialEscalation(input) &&
-    ((input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" && asksExactFigurePattern.test(message)) ||
-      (asksExactFigureUnambiguous.test(message) && looksLikeFigureQuestion));
+  // Deteccion DETERMINISTA de "pide la cifra" (fallback cuando la IA no esta y red de seguridad cuando si).
+  const deterministicFigureQuestion =
+    (input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" && asksExactFigurePattern.test(message)) ||
+    (asksExactFigureUnambiguous.test(message) && looksLikeFigureQuestion);
+  // CAPA 2 (19-jul, corregido tras el revisor): INVARIANTE 1 innegociable — el % lo decide CODIGO determinista,
+  // JAMAS la salida del modelo. Por eso la CIFRA se dispara SOLO por deteccion determinista (regex); moneyTopic
+  // =FIGURE NO libera la cifra (eso seria la IA gateando el %, prohibido: el revisor demostro que fugaba 42/50
+  // negociaciones forzando FIGURE). La IA solo puede volver el trato MAS SEGURO (fail-safe), nunca soltar una
+  // cifra que el codigo no autorice:
+  //  - moneyTopic=NEGOTIATE -> escala (mas supervision humana; via isCommercialEscalation). Caza negociaciones
+  //    cuyo fraseo el regex no pilla, SIN riesgo (escalar es conservador).
+  //  - moneyTopic=PAYMENT_MODEL -> veta la cifra (mas conservador).
+  // moneyTopic=TIMING/NONE no tocan la decision de la cifra. En fallback (NONE) el comportamiento es EXACTO al
+  // determinista de siempre. La cobertura de fraseos de la CIFRA se gana ampliando el regex determinista, no la IA.
+  const figureRequested = deterministicFigureQuestion;
+  const isPaymentModel = input.understanding.moneyTopic === "PAYMENT_MODEL" || isPaymentModelQuestion(message);
+  const exactPercentageQuestion = figureRequested && !isCommercialEscalation(input) && !isPaymentModel;
   const generalCommercialQuestion =
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" ||
+    input.understanding.moneyTopic !== "NONE" ||
     /\b(salario|sueldo|porcentaje|reparto|cuanto cobra|comision|skrill|liquidacion)\b/.test(message);
 
   if (exactPercentageQuestion) {
