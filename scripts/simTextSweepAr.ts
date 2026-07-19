@@ -144,7 +144,8 @@ REGLAS: Escribis en espaniol RIOPLATENSE coloquial de DM real (che, dale, posta,
   ];
   try {
     const resp = await client.responses.create(
-      { model: "gpt-5.4", input, temperature: 1, max_output_tokens: 60 },
+      // Candidata FALSA en mini (barato): no es lo que probamos, solo simula a la persona.
+      { model: "gpt-5.4-mini", input, temperature: 1, max_output_tokens: 60 },
       { signal: AbortSignal.timeout(20000) }
     );
     const text = (resp.output_text ?? "").trim().replace(/^["']|["']$/g, "");
@@ -171,7 +172,9 @@ async function runChat(engine: ConversationEngine, client: OpenAI, p: Persona, o
     );
     candidateId = result.candidate.id;
     const botMsg = result.response?.trim() ? result.response.replace(/\n+/g, " / ") : "(en visto)";
-    out.push(`BOT [${result.candidate.currentState}]: ${botMsg}`);
+    // Muestra de que TUBERIA salio el texto: 'openai-subscription' (tu sub, gratis) u 'openai' (API de red).
+    const via = result.draft?.actualProvider ?? "?";
+    out.push(`BOT [${result.candidate.currentState}] (${via}): ${botMsg}`);
     if (result.response?.trim()) history.push({ role: "assistant", content: result.response });
     if (result.candidate.currentState === "CLOSED") break;
     her = await candidateSays(client, p, history);

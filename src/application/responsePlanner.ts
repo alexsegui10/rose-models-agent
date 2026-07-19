@@ -537,8 +537,42 @@ function looksLikeQuestion(message: string): boolean {
   return /[?¿]/.test(message) || /^\s*(que|como|cuanto|quien|donde|cuando|y que)\b/.test(message);
 }
 
+// NEGOCIACION del reparto detectada por el FRASEO, independiente del intent del LLM (revisor 19-jul): el gate
+// viejo exigia intent === "ASKS_ABOUT_PERCENTAGE", pero el clasificador determinista etiqueta "se puede negociar
+// la parte de la agencia?" o "no podeis bajar la parte de la agencia?" como UNCLEAR/OTHER -> se colaban como
+// pregunta de cifra y recibian el 70/30 SIN escalar (fuga del invariante 3: negociacion -> revision humana). Un
+// "?" no distingue "pregunta la cifra" de "pide negociarla". Se detectan verbos de REGATEO inequivocos, y
+// terminos direccionales/de objecion de precio ANCLADOS a la parte/reparto/porcentaje/comision.
+function negotiatesRevenueShare(message: string): boolean {
+  // Verbos de REGATEO inequivocos (negocian en cualquier contexto, no hace falta anclarlos).
+  if (/\b(negoci\w+|regate\w+|rebaj\w+|descuent\w+|abarat\w+)\b/.test(message)) return true;
+  // El resto solo cuenta si la frase TOCA el reparto/parte/porcentaje/comision de la agencia.
+  const shareTerm =
+    /\b(la parte (?:de la agencia|vuestra|suya)|mi parte|el porcentaje|del porcentaje|el reparto|del reparto|vuestra comision|su comision|la comision|os qued\w+|os llev\w+)\b/;
+  if (!shareTerm.test(message)) return false;
+  // Verbos/comparativos de subir o bajar el importe: son ACCIONES sobre la cifra, no adjetivos ambiguos, asi
+  // que son seguros anclados al reparto. "mejor" solo en forma con flexion (mejora/mejorar/mejores), nunca el
+  // ADVERBIO suelto ("explicame mejor el reparto" es aclaracion -> se responde). "menor" (no "menos", que casa
+  // la muletilla "mas o menos" = aproximadamente -> falso positivo del revisor).
+  if (/\b(baj\w+|sub\w+|reduc\w+|aument\w+|increment\w+|mejor(?:a|e)\w*|menor|mas para mi|mas alt\w*)\b/.test(message))
+    return true;
+  // OBJECION DE PRECIO: adjetivos "caro/mucho/alto/excesivo/abusivo" SOLO en contexto de precio (copula o
+  // intensificador delante), para que NO disparen "la cara" (=rostro, colision car[oa]/cara del revisor) ni
+  // "muchas gracias". "mas o menos" tampoco casa (no hay adjetivo de precio tras "mas").
+  if (
+    /\b(?:es|son|sale|salen|resulta\w*|parece|parecen|se me hace|muy|demasiad\w+|bastante|tan|super|re)\s+(?:car[oa]s?|much[oa]|alt[oa]s?|elevad[oa]s?|exager\w+|abusiv\w+|excesiv\w+)\b/.test(
+      message
+    )
+  )
+    return true;
+  return false;
+}
+
 function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
   const message = normalize(input.inboundMessage);
+
+  // La negociacion por fraseo escala SIEMPRE, aunque el intent no sea ASKS_ABOUT_PERCENTAGE (invariante 3).
+  if (negotiatesRevenueShare(message)) return true;
 
   return (
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
@@ -574,20 +608,38 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
   // exige el "me"/primera persona a proposito: la pregunta VAGA "cuanto pagan?" (sin "me") sigue dando la
   // respuesta sin-cifra (invariante 3 conservador). La negociacion (pedir mas, regatear, cifra no estandar)
   // escala antes via isCommercialEscalation -> requiresHumanReview, asi que esto no la toca.
+  // Preguntar la CIFRA del reparto, del lado agencia ("os quedais") o del PROPIO ("mi porcentaje",
+  // "lo que gano yo", "cual es mi porcentaje"). + "de cuanto seria/es el porcentaje" y "la parte de la
+  // agencia" / "de cuanto porcentaje estamos" (barrido 19-jul, Ale: se perdio el lead porque preguntaba la
+  // parte de la agencia y no se le daba la cifra).
+  const asksExactFigurePattern =
+    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro|mi porcentaje|porcentaje (para mi|mio)|el que (ganare|gano|gane|voy a ganar) yo|lo que (ganare|gano|voy a ganar|me llevo|me queda|me toca)|que me queda a mi|que me llevo yo|q(ue)? porcentaje|de cuanto (seria|es|va a ser|sera|estamos hablando)( (el|un))? ?(porcentaje|reparto)?|cuanto (seria|es) (el|mi) (porcentaje|reparto)|(cual|cuanto|de cuanto)[^.?!]{0,20}\bla parte (de la agencia|vuestra|suya|que se queda|que os quedais)|la parte de la agencia|porcentaje[^.?!]{0,15}para (mi|ustedes|vosotros)|mi ganancia|su comision|cual es (su|la) comision)\b/;
+  // Fraseos que SIEMPRE son una pregunta directa por la CIFRA (nunca aparecen en una frase-afirmacion), asi
+  // que disparan el 70/30 AUNQUE el modelo de comprension etiquete mal el intent (barrido 19-jul, Ale: mini
+  // la clasifico como algo distinto de ASKS_ABOUT_PERCENTAGE y el gate por intent la dejaba caer en la rama
+  // evasiva -> lead perdido). Es un SUBCONJUNTO de alta precision del patron de arriba, no toda su amplitud:
+  // el patron general ("me pagan", "cuanto gano") puede colarse en una frase-afirmacion y por eso sigue
+  // exigiendo el intent; estos otros no. NO afecta a la pregunta del MODELO de pago ("sueldo fijo o
+  // porcentaje?"), que no casa ninguno de estos.
+  const asksExactFigureUnambiguous =
+    /\b(cual es (el|mi|su|la) (porcentaje|reparto|comision)|de cuanto (seria|es|va a ser|sera|estamos hablando)( (el|un))? ?(porcentaje|reparto)|de cuanto (porcentaje|reparto)|cuanto (seria|es) (el|mi) (porcentaje|reparto)|(cuanto|que porcentaje) os (quedais|qued|llevais|llev)|(cual|cuanto|de cuanto)[^.?!]{0,20}\bla parte (de la agencia|vuestra|suya|que se queda|que os quedais)|la parte de la agencia)\b/;
+  // La rama "sin intent" es un detector de SUBCADENA, asi que "la parte de la agencia" tambien casa dentro de
+  // una AFIRMACION ("me parece cara la parte de la agencia") o una NEGOCIACION ("quiero que sea menor la parte
+  // de la agencia") -> soltaria el 70/30 sin que sea una pregunta y sin escalar (fuga del invariante 3 que cazo
+  // el revisor 19-jul). Se gatea a CONTEXTO INTERROGATIVO: hay "?"/"¿" o el mensaje ARRANCA con un interrogativo
+  // (de cuanto / cuanto / cual / que porcentaje / como es). Los fraseos de Ale ("de cuanto seria la parte de la
+  // agencia?", "de cuanto porcentaje estamos hablando?") lo cumplen; las afirmaciones/negociaciones no.
+  const looksLikeFigureQuestion =
+    /[?¿]/.test(message) ||
+    /^\s*(?:y |ok |okey |vale |pero |oye |che |ah |mmm |a ver )*(?:de\s+cuanto|con\s+cuanto|a\s+cuanto|cuanto|cual|que\s+porcentaje|como\s+es)\b/.test(
+      message
+    );
   const exactPercentageQuestion =
-    input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
     // Una NEGOCIACION nunca libera la cifra (gana el escalado): aunque el mensaje tambien parezca pregunta
     // de pago ("cuanto me pagan? quiero el 50 para mi"), se trata como negociacion -> revision (invariante 3).
     !isCommercialEscalation(input) &&
-    // Preguntar la CIFRA del reparto, del lado agencia ("os quedais") o del PROPIO ("mi porcentaje",
-    // "lo que gano yo", "cual es mi porcentaje"). jul-2026 (prueba E2E de Alba): "cual es mi porcentaje"
-    // y "el que ganare yo" se clasificaban ASKS_ABOUT_PERCENTAGE pero el regex no los pillaba -> caian en
-    // la rama general que REPETIA "no salario fijo" en vez de dar el 70/30 (antinatural, evasivo).
-    // + "de cuanto seria/es el porcentaje" (barrido 18-jul noche: Ale lo pregunto SEIS veces con ese fraseo
-    // natural, el detector no lo casaba y jamas recibio la cifra — el mismo modo de fallo de Mayra).
-    /\b(cual es el (porcentaje|reparto)|como es el reparto|exacto|70\/30|quien recibe|quien se queda|os quedais|os qued|os llevais|os llev|cuanto os|que os qued|cuanto me llevo|cuanto me qued|cuanto me toca|cuanto saco|que me llevo|que me qued|cual es mi parte|cuanto es mi parte|cuanto gano|cuanto es para mi|me pagan|me pagarian|me pagaria|cuanto dinero me|cuanto cobro|mi porcentaje|porcentaje (para mi|mio)|el que (ganare|gano|gane|voy a ganar) yo|lo que (ganare|gano|voy a ganar|me llevo|me queda|me toca)|que me queda a mi|que me llevo yo|q(ue)? porcentaje|de cuanto (seria|es|va a ser|sera) (el )?(porcentaje|reparto)|cuanto (seria|es) (el|mi) (porcentaje|reparto)|porcentaje[^.?!]{0,15}para (mi|ustedes|vosotros)|mi ganancia|su comision|cual es (su|la) comision)\b/.test(
-      message
-    );
+    ((input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" && asksExactFigurePattern.test(message)) ||
+      (asksExactFigureUnambiguous.test(message) && looksLikeFigureQuestion));
   const generalCommercialQuestion =
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" ||
     /\b(salario|sueldo|porcentaje|reparto|cuanto cobra|comision|skrill|liquidacion)\b/.test(message);

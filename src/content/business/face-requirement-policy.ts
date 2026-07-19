@@ -34,14 +34,26 @@ const entries: KnowledgeEntryInput[] = [
       "La candidata propone condiciones especiales, como mostrar la cara solo en parte del contenido.",
       "La candidata vuelve mas tarde aceptando mostrar la cara: Alex decide si se retoma el proceso."
     ],
-    allowedStates: ["NEW_LEAD", "WAITING_PROFILE_ACCESS", "QUALIFYING", "APPROVED"],
+    // Incluye las PAUSAS (WAITING_HUMAN_REVIEW / HUMAN_INTERVENTION_REQUIRED): en el barrido 19-jul la
+    // candidata (Priscila) preguntaba "se puede tapar?" YA en pausa y, al no ser respondible ahi, el bot
+    // rotaba fichas ajenas (identidad/Pinterest). Con la ficha disponible en pausa da la respuesta de frente
+    // ("la cara es imprescindible, no es posible sin mostrarla") una vez y, si insiste, la red de seguridad
+    // escala. Ampliar DONDE se responde no relaja el requisito (sigue igual de firme), solo evita la rotacion.
+    allowedStates: [
+      "NEW_LEAD",
+      "WAITING_PROFILE_ACCESS",
+      "QUALIFYING",
+      "WAITING_HUMAN_REVIEW",
+      "HUMAN_INTERVENTION_REQUIRED",
+      "APPROVED"
+    ],
     tags: ["face", "anonymity", "boundaries", "requirement", "rejection-script"],
     requiresHumanReview: false,
     // 2026-07-08 (Alex, revision total voz): ante DUDA/verguenza NO se ofrece dejarlo -> se tranquiliza e insiste
     // con tacto ("no queremos que lo deje nunca, hay que intentarlo"); el rechazo educado SOLO ante rechazo EN
     // FIRME. Se reencuadran facts/answerPoints/nuances para liderar con tranquilizacion; misma politica de fondo
     // (la cara sigue siendo imprescindible, sin anonimato).
-    version: "face-requirement-mandatory-2026-07-08.1",
+    version: "face-requirement-mandatory-2026-07-19.1",
     status: "ACTIVE",
     approvedByAlex: true,
     updatedAt: "2026-07-08"

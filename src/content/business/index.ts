@@ -11,6 +11,7 @@ import { objectionHandlingEntries } from "./objection-handling";
 import { servicesPolicyEntries } from "./services-policy";
 import { faceRequirementPolicyEntries } from "./face-requirement-policy";
 import { geoPrivacyPolicyEntries } from "./geo-privacy-policy";
+import { glossaryTermEntries } from "./glossary-terms";
 import { launchTimelineEntries } from "./launch-timeline";
 import { multiAgencyPolicyEntries } from "./multi-agency-policy";
 // secondary-traffic-policy ELIMINADA (orden de Alex 6-jul, caso Constanza): Telegram/Twitter/
@@ -35,6 +36,7 @@ export const businessKnowledgeEntries = [
   ...servicesPolicyEntries,
   ...faceRequirementPolicyEntries,
   ...geoPrivacyPolicyEntries,
+  ...glossaryTermEntries,
   ...launchTimelineEntries,
   ...multiAgencyPolicyEntries,
   ...selectionProcessFaqEntries

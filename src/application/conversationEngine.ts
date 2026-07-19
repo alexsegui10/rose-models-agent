@@ -1808,13 +1808,16 @@ export class ConversationEngine {
           })
         }
       : responsePlan;
-    // En PAUSA, una PREGUNTA REPETIDA no "drena" conocimiento ajeno (barrido 18-jul noche: cada re-pregunta
-    // de Ale por el porcentaje soltaba el siguiente lote de fichas sin relacion — identidad española,
-    // Pinterest...). Si ella YA hizo esta misma pregunta antes, solo se re-responden los facts EXENTOS
-    // (cifra del reparto / safety); si no quedan, el turno vuelve al visto. La 1ª vez responde normal.
+    // CAPA 1 — RED DE SEGURIDAD (decision de Alex 19-jul): en la pausa/revision, cuando el bot NO acierta la
+    // ficha, en vez de rotar fichas raras (privacidad, Pinterest, trafico...) turno tras turno, ESCALA LIMPIO
+    // a Alex. Es la garantia de que la candidata NUNCA ve la espiral (barrido 19-jul: cara, desconfiada,
+    // "que me pides"). Dispara en DOS casos: (a) ella REPITE una pregunta (sigue insatisfecha); (b) el bot ya
+    // solto >=3 respuestas sustanciales en este tramo y ella sigue preguntando (topa el "dar vueltas"). Al
+    // dispararse, se vacian los facts NO exentos -> el turno cae al holding del socio ("lo veo y te digo") y,
+    // tras un par, a visto. EXENTOS SIEMPRE: la cifra del reparto (invariante 3 reactivo) y el NO de menores.
     if (
-      projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" &&
-      alreadyAwaitingPartner &&
+      (projectedCandidate.currentState === "HUMAN_INTERVENTION_REQUIRED" ||
+        (projectedCandidate.currentState === "WAITING_HUMAN_REVIEW" && alreadyAwaitingPartner)) &&
       hirResponsePlan.answerFacts.length > 0
     ) {
       const currentTokens = [
@@ -1831,9 +1834,33 @@ export class ConversationEngine {
           if (message.role !== "candidate" || idx === lastCandidateIdx) return false;
           const haystack = normalizeText(message.content);
           const matched = currentTokens.filter((token) => haystack.includes(token)).length;
-          return matched / currentTokens.length >= 0.8;
+          return matched / currentTokens.length >= 0.6;
         });
-      if (repeatsEarlierQuestion) {
+      // Nº de respuestas SUSTANCIALES (fichas, no holdings ni visto ni opener) que el bot ya dio DENTRO del
+      // tramo de pausa/revision, si ya son muchas y ella sigue preguntando, esta "dando vueltas" -> escala.
+      // ACOTADO al segmento: se cuenta SOLO despues del ancla de la pausa (primer "comento/mi socio/lo veo y
+      // te digo"), que va DESPUES del pitch y de la cualificacion — sin acotar, el propio pitch (varias
+      // burbujas largas) ya sumaba >=3 y vaciaba los facts en la PRIMERA pregunta de la pausa (nunca respondia).
+      const pauseAnchorIdx = pitchLookbackHistory.findIndex(
+        (message) =>
+          message.role === "agent" &&
+          /comentar tu perfil|lo comento|comentarlo|lo hablo con mi socio|sigue pendiente con mi socio|lo veo y te digo/i.test(
+            message.content
+          )
+      );
+      const substantiveAnswers =
+        pauseAnchorIdx < 0
+          ? 0
+          : pitchLookbackHistory.filter(
+              (message, idx) =>
+                idx > pauseAnchorIdx &&
+                message.role === "agent" &&
+                message.content.trim().length > 45 &&
+                !/lo hablo con mi socio|sigue pendiente con mi socio|lo veo y te digo|comentar tu perfil con mi socio|soy alex de rose models/i.test(
+                  message.content
+                )
+            ).length;
+      if (repeatsEarlierQuestion || substantiveAnswers >= 3) {
         hirResponsePlan = {
           ...hirResponsePlan,
           answerFacts: hirResponsePlan.answerFacts.filter(
@@ -3601,7 +3628,9 @@ const SUPPRESSED_TOPICS: SuppressedTopic[] = [
       /\b(salario|sueldo|nomina|porcentaje|reparto|comision\w*|skrill|liquidaci\w*|dinero|euros?|paga\w*|cobr\w*|gano|gana|ganar\w*|ganaria|pagan)\b/.test(
         m
       ) ||
-      /\b(os qued\w*|os llev\w*|me llev\w*|me qued\w*|me toca|mi parte|cuanto saco)\b/.test(m) ||
+      /\b(os qued\w*|os llev\w*|me llev\w*|me qued\w*|me toca|mi parte|la parte (?:de la agencia|vuestra|suya)|de cuanto (?:porcentaje|reparto)|cuanto saco)\b/.test(
+        m
+      ) ||
       /\b\d{1,3}\s?%|\b\d{1,2}\/\d{1,2}\b|\b(me dais|dame)\b/.test(m),
     framing: /\b(salario|sueldo|porcentaje|reparto|comision|70\s?%|30\s?%|70\/30|liquidaci|skrill)\b/i
   },

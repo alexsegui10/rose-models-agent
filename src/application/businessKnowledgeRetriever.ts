@@ -116,6 +116,11 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   )
     tags.push("no-cost", "cost", "faq");
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
+  // La CIFRA preguntada sin la palabra "porcentaje/reparto" (barrido 19-jul, Ale: "de cuanto seria la parte de
+  // la agencia?"): sin esto el retriever no traia la ficha comercial -> se marcaba "sin cobertura" y escalaba
+  // en vez de dar el 70/30. El planner ya la reconoce como pregunta de cifra (asksExactFigureUnambiguous).
+  if (/\b(la parte (de la agencia|vuestra|suya)|de cuanto (porcentaje|reparto))\b/.test(message))
+    tags.push("percentage", "revenue-share", "commercial");
   if (/\b(70\/30|quien recibe|quien se queda)\b/.test(message)) tags.push("percentage", "revenue-share");
   if (/\b(por que.*70|porque.*70|porcentaje.*alto|os quedais.*70)\b/.test(message)) tags.push("why-70", "percentage", "services");
   // "liquidan"/"transferencia"/"como hacen los pagos" (barrido 18-jul: la pregunta del METODO de pago
@@ -146,6 +151,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("percentage", "revenue-share", "sensitive", "negotiation");
   if (/\b(que haceis|que hace la agencia|servicios|trafico|estrategia|monetizacion)\b/.test(message))
     tags.push("services", "agency", "strategy", "traffic", "monetization");
+  // GLOSARIO (barrido 19-jul, Marta 45: "que es monetizar? y que es un chatter?" -> el bot le re-soltaba el
+  // pitch entero sin DEFINIR el termino). Cuando pide el SIGNIFICADO de una palabra de la jerga, se sirve la
+  // definicion llana (ficha glossary-*), no el pitch. Se exige una PISTA definitoria ("que es/significa", "no
+  // entiendo", "a que te refieres") para no disparar el glosario cada vez que la palabra aparezca en contexto.
+  const asksDefinition =
+    /\b(que es|que son|que significa|que quiere decir|a que (?:te )?refieres|no se que (?:es|significa)|no entiendo (?:que es|lo de|eso de)|que es eso de)\b/.test(
+      message
+    ) || /\bno (?:te )?entiendo\b/.test(message);
+  if (asksDefinition) {
+    if (/\bmonetiz\w*/.test(message)) tags.push("glossary-monetizar");
+    if (/\bchatt?ers?\b|\bchatting\b/.test(message)) tags.push("glossary-chatter");
+    if (/\btrafico\b/.test(message)) tags.push("glossary-trafico");
+  }
   // El pitch operativo ("cual es su forma de trabajar?", "como me promocionan?") es la pregunta
   // mas matadora de leads cuando se deriva al socio: debe recuperar SIEMPRE la entrada de servicios.
   if (
@@ -398,7 +416,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     /\b(?:fotos?|imagen|cuenta|nombre|perfil)\b[^.!?]{0,30}\botra historia\b/.test(message)
   )
     tags.push("geo-privacy", "privacy");
-  if (/\b(cara|rostro|anonima|sin mostrarme|sin ensenarme)\b/.test(message)) tags.push("face", "anonymity", "requirement");
+  // Fraseos que piden OCULTAR el rostro SIN nombrar "cara" (barrido 19-jul, Priscila: "se puede tapar?",
+  // "no hay forma de taparla", "difuminar" — el retriever los perdia porque no llevan "cara/rostro" y rotaba
+  // fichas ajenas en bucle turno tras turno). La ficha ya responde de frente ("no es posible trabajar sin
+  // mostrar la cara") y el guard factual prohibe prometer taparla, asi que servirla aqui es lo correcto, no un
+  // "sermon de la cara": la candidata lo esta pidiendo. Los verbos de ocultacion en un DM de captacion
+  // conciernen al rostro; "no mostrar/no se vea" se ancla a cara/rostro para no confundir con otros datos.
+  if (
+    /\b(cara|rostro|anonima|anonimo|sin mostrarme|sin ensenarme)\b/.test(message) ||
+    /\b(tapar|taparla|taparme|taparse|taparlo|ocultar\w*|disimular|difumin\w*|pixel\w*|desenfocar)\b/.test(message) ||
+    /\bno (?:mostrar|ensenar)(?:me)?(?: la cara| el rostro| mi cara)\b/.test(message) ||
+    /\b(?:que )?no se (?:me )?vea (?:la cara|el rostro|mi cara)\b/.test(message)
+  )
+    tags.push("face", "anonymity", "requirement");
   // Solo si la mencion no es negada: "no trabajo con otra agencia" es un dato, no una objecion.
   // Y solo si NO es el relato en PASADO de una agencia que dejo (barrido 18-jul, caso Daiana: "la otra
   // agencia me chamuyo con only... lo deje" disparaba la ficha de multi-agencia y el bot le preguntaba
