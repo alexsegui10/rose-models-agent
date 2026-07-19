@@ -810,10 +810,14 @@ export function extractDeterministicUnderstanding(
     // agencia (nunca "tu/vuestra agencia": entrar a la NUESTRA es justo lo que quiere). EXCLUYE los verbos de
     // CONSIDERACION tras "estuve" (bloqueante del revisor 18-jul): "estuve pensando/mirando/viendo/buscando en
     // una agencia" es DESEO, no militancia pasada — marcaba experta a una inexperta y le cambiaba el pitch.
-    /\b(?:entre|entrado|habia entrado|me meti|me metieron|me mandaron)\b[^.!?]{0,20}\b(?:una|otra|la|esa|dos|varias)\s+agencias?\b/.test(
+    // El determinante admite comillas/puntuacion antes de "agencia" (barrido terra 18-jul: Daiana escribio
+    // una "agencia" ENTRECOMILLADA -> el \s+ pegado no casaba y el bot re-preguntaba agencias otra vez).
+    // SIN el "." en la charclass (nota del revisor): incluirlo puenteaba un limite de frase
+    // ("entre a una. Agencia tributaria me llamo" -> falso positivo). Comillas/coma/guion si, punto no.
+    /\b(?:entre|entrado|habia entrado|me meti|me metieron|me mandaron)\b[^.!?]{0,20}\b(?:una|otra|la|esa|dos|varias)[\s"'`«»,-]{1,4}agencias?\b/.test(
       normalized
     ) ||
-    (/\b(?:estuve|estado)\b[^.!?]{0,20}\b(?:una|otra|la|esa|dos|varias)\s+agencias?\b/.test(normalized) &&
+    (/\b(?:estuve|estado)\b[^.!?]{0,20}\b(?:una|otra|la|esa|dos|varias)[\s"'`«»,-]{1,4}agencias?\b/.test(normalized) &&
       !/\b(?:estuve|estado)\s+(?:pensando|mirando|viendo|buscando|dudando|interesad|consideran|valorando|barajando)/.test(
         normalized
       ))

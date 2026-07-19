@@ -534,15 +534,19 @@ export function estimateCostUsd(model: string, inputTokens: number | null, outpu
   const lowerModel = model.toLowerCase();
   // OJO al orden: "gpt-5.4-mini".includes("gpt-5.4") es true, asi que mini/nano se comprueban ANTES que
   // el modelo completo. Tarifas gpt-5.4 completo: $2.5/M in, $15/M out (pricing OpenAI, jul-2026).
+  // gpt-5.6-terra (redaccion de texto desde 18-jul): mismo precio que gpt-5.4 completo (Alex: "vale lo
+  // mismo"). Sin esta linea el coste del texto quedaba en null y no se veia en el CRM (nota del revisor).
   const rates = lowerModel.includes("gpt-5.4-mini")
     ? { inputPerMillion: 0.75, outputPerMillion: 4.5 }
     : lowerModel.includes("gpt-5.4-nano")
       ? { inputPerMillion: 0.2, outputPerMillion: 1.25 }
       : lowerModel.includes("gpt-5.4")
         ? { inputPerMillion: 2.5, outputPerMillion: 15 }
-        : lowerModel.includes("gpt-4.1-mini")
-          ? { inputPerMillion: 0.4, outputPerMillion: 1.6 }
-          : null;
+        : lowerModel.includes("gpt-5.6-terra") || lowerModel.includes("gpt-5.6-sol") || lowerModel.includes("gpt-5.6-luna")
+          ? { inputPerMillion: 2.5, outputPerMillion: 15 }
+          : lowerModel.includes("gpt-4.1-mini")
+            ? { inputPerMillion: 0.4, outputPerMillion: 1.6 }
+            : null;
 
   if (!rates) return null;
 

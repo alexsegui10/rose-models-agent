@@ -16,6 +16,12 @@ describe("estimateCostUsd", () => {
     expect(estimateCostUsd("gpt-4.1-mini", 1_000_000, 1_000_000)).toBeCloseTo(2.0, 6);
   });
 
+  it("gpt-5.6-terra/sol/luna cobran como gpt-5.4 completo (redaccion de texto desde 18-jul)", () => {
+    for (const model of ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"]) {
+      expect(estimateCostUsd(model, 1_000_000, 1_000_000), model).toBeCloseTo(17.5, 6);
+    }
+  });
+
   it("devuelve null para modelos desconocidos en vez de inventarse un coste", () => {
     expect(estimateCostUsd("modelo-inventado", 1000, 1000)).toBeNull();
   });

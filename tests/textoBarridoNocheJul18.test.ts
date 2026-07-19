@@ -3,6 +3,9 @@ import { ConversationEngine } from "@/application/conversationEngine";
 import { DeterministicUnderstandingProvider } from "@/application/dataExtractor";
 import { LocalBusinessKnowledgeRetriever } from "@/application/businessKnowledgeRetriever";
 import { LocalExampleRetriever } from "@/application/exampleRetriever";
+import { buildResponsePlan } from "@/application/responsePlanner";
+import { ModelConversationOutputSchema } from "@/application/llmProvider";
+import { createCandidate, normalizeCandidate, type Candidate } from "@/domain/candidate";
 import { InMemoryCandidateRepository } from "@/infrastructure/repositories/inMemoryCandidateRepository";
 
 // Barrido nocturno 18-jul (panel de 15 jueces): 3 raices de los 2 ERRORES_GRAVES restantes.
@@ -150,5 +153,54 @@ describe("3. 'entre a una agencia y me metieron en stripchat' rellena el slot de
       const u = await provider.understand({ inboundMessage: msg, recentMessages: [] } as never);
       expect((u.extractedData as { worksWithAnotherAgency?: boolean }).worksWithAnotherAgency, msg).not.toBe(true);
     }
+  });
+
+  it("la agencia ENTRECOMILLADA tambien cuenta (barrido terra: Daiana escribio una 'agencia')", async () => {
+    const provider = new DeterministicUnderstandingProvider();
+    for (const msg of [
+      'ya estuve con una "agencia" q me vendio onlyfans y me mandaron a stripchat',
+      "entre a una 'agencia' rara y me fui"
+    ]) {
+      const u = await provider.understand({ inboundMessage: msg, recentMessages: [] } as never);
+      expect((u.extractedData as { worksWithAnotherAgency?: boolean }).worksWithAnotherAgency, msg).toBe(true);
+    }
+  });
+});
+
+describe("6. el acuse de edad no se repite si YA se dijo (barrido terra: doble '34 perfecto')", () => {
+  const candidate = normalizeCandidate({
+    ...createCandidate({ instagramUsername: "edad_doble" }),
+    currentState: "QUALIFYING"
+  } as unknown as Candidate);
+
+  function planWithAge(recentAgentMessages: string[]) {
+    const understanding = ModelConversationOutputSchema.parse({
+      intent: "OTHER",
+      extractedData: { age: 34 },
+      confidence: 0.9,
+      suggestedStateTransition: null,
+      requiresHumanReview: false,
+      humanReviewReason: null,
+      response: ""
+    });
+    return buildResponsePlan({
+      candidate,
+      understanding,
+      inboundMessage: "tengo un samsung",
+      knowledgeEntries: [],
+      hasApprovedNegotiationDecision: false,
+      recentAgentMessages,
+      isOpenerTurn: false
+    });
+  }
+
+  it("si un mensaje reciente ya dijo '34 perfecto, por la edad', NO se re-inyecta el acuse de edad", () => {
+    const plan = planWithAge(["34 perfecto, por la edad sin problema", "Y que movil tienes?"]);
+    expect(plan.acknowledgedFacts.join(" ")).not.toMatch(/acaba de decir su edad/);
+  });
+
+  it("si NO se ha reconocido antes, el acuse de edad si se inyecta (no se pierde)", () => {
+    const plan = planWithAge(["Y que movil tienes?"]);
+    expect(plan.acknowledgedFacts.join(" ")).toMatch(/acaba de decir su edad/);
   });
 });

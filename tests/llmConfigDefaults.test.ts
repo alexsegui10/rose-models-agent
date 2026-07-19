@@ -6,12 +6,12 @@ function buildEnv(vars: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 describe("getLlmRuntimeConfig", () => {
-  it("defaults: REDACCION de texto y VOZ en gpt-5.4 grande; comprension en mini", () => {
+  it("defaults: REDACCION de texto en gpt-5.6-terra; VOZ en gpt-5.4; comprension en mini", () => {
     const config = getLlmRuntimeConfig(buildEnv());
 
-    // Texto en gpt-5.4 (Alex 6-jul) y VOZ tambien en gpt-5.4 (medicion de latencia 7-jul: ~1.4s/turno,
-    // cabe de sobra en la ventana de 3.5s y suena mas natural). La comprension (extraccion) sigue en mini.
-    expect(config.writingModel).toBe("gpt-5.4");
+    // Texto sube a gpt-5.6-terra (Alex 18-jul, comparacion con Daiana: mejor empatia/contexto al mismo
+    // precio). La VOZ sigue en gpt-5.4 (latencia medida 7-jul, ~1.4s/turno) y la comprension en mini.
+    expect(config.writingModel).toBe("gpt-5.6-terra");
     expect(config.understandingModel).toBe("gpt-5.4-mini");
     expect(config.callWritingModel).toBe("gpt-5.4");
   });

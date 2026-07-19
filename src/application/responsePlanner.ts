@@ -285,7 +285,16 @@ function acknowledgedFactsFor(input: BuildResponsePlanInput): string[] {
   // responder a TODO lo que dijo, en orden; p.ej. "tengo 30 / os sirve? / cuanto pagais?" -> "genial, con 30
   // perfecto" antes del reparto). Ortogonal al % (no menciona cifras), no afecta a la validacion factual.
   const age = input.understanding.extractedData.age;
-  if (typeof age === "number" && age >= 18 && age <= 99) {
+  // Solo se reconoce la edad si NO se ha reconocido YA en un mensaje reciente del agente (barrido terra
+  // 18-jul: el bot soltaba "34 perfecto, por la edad sin problema" DOS veces — la 2ª cuando el modelo
+  // re-extraia la edad del contexto). Si ya se aco, no se re-inyecta el ack.
+  const ageAlreadyAcked =
+    typeof age === "number" &&
+    (input.recentAgentMessages ?? []).some((message) => {
+      const m = normalize(message);
+      return m.includes(`${age}`) && /\b(perfecto|sin problema|por (la )?edad|genial)\b/.test(m);
+    });
+  if (typeof age === "number" && age >= 18 && age <= 99 && !ageAlreadyAcked) {
     acks.push(
       `La candidata acaba de decir su edad (${age}) y es valida: confirmaselo brevemente y con calidez antes de responder lo demas.`
     );

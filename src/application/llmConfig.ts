@@ -18,13 +18,12 @@ export interface LlmRuntimeConfig {
 // COMPRENSION en mini a proposito: es extraccion estructurada (rapida y barata) y va fusionada con el
 // extractor determinista; subirla no mejora la voz del bot y si la latencia. Va antes que la redaccion.
 const defaultUnderstandingModel = "gpt-5.4-mini";
-// REDACCION de texto en gpt-5.4 COMPLETO (Alex 6-jul): suena mas natural, empatiza mejor y sostiene el
-// contexto -> es la mayor palanca de "estar vivo", justo lo que Alex pedia. Antes se creia que en Vercel
-// HOBBY el techo por funcion era ~10s y el gpt-5.4 (lento, ~3-5s) se pasaba del timeout -> fallback
-// robotico. FALSO: Hobby permite maxDuration hasta 60s (300s con Fluid Compute). El cuello real era
-// NUESTRO tope interno de 4s (ver timeoutMs abajo) + los presupuestos de rafaga de ~9s del webhook,
-// calibrados para aquel 10s viejo. Subidos ambos, el grande cabe de sobra tambien en Hobby.
-const defaultWritingModel = "gpt-5.4";
+// REDACCION de texto en gpt-5.6-terra (Alex 18-jul, comparacion lado-a-lado con Daiana): empatiza y
+// contextualiza NOTABLEMENTE mejor que gpt-5.4 al MISMO precio ("Entiendo que despues de que te cambiaran
+// lo de Only por Stripchat quieras mirarlo bien" vs el generico del 5.4). La COMPRENSION sigue en mini
+// (extraccion estructurada barata; los bugs de bucle/contexto son de codigo, no del modelo). Overridable
+// por OPENAI_WRITING_MODEL: si esa var esta puesta en Vercel gana al default, hay que actualizarla alli.
+const defaultWritingModel = "gpt-5.6-terra";
 // La LLAMADA de voz sube a gpt-5.4 COMPLETO (medicion 7-jul): el banco de latencia (mini vs gpt-5.4 en turnos
 // reales de llamada) dio gpt-5.4 en ~1.4s de mediana / ~1.6s el peor caso, MUY por debajo del tope de 3.5s por
 // turno, y con una redaccion bastante mas natural y viva. No hizo falta streaming del LLM ni cambiar de
