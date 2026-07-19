@@ -13,7 +13,8 @@ export type OperatorNotificationKind =
   | "stop-request"
   | "follow-request"
   | "call-watchdog"
-  | "delivery-failed";
+  | "delivery-failed"
+  | "proxy-down";
 
 // isStopRequest vive ahora en domain (funcion pura) para que la compartan infra y application sin cruzar
 // capas; se re-exporta aqui para no romper los imports existentes (webhook).
@@ -157,6 +158,11 @@ export function formatOperatorMessage(notification: OperatorNotification): strin
   }
   if (notification.kind === "error") {
     return `Rose Models ⚠️ Error procesando un mensaje en el webhook${notification.detail ? `: ${notification.detail}` : "."} Revisa los logs.`;
+  }
+  // Proxy de la suscripcion caido: el bot SIGUE FUNCIONANDO por la API (sin cortes); solo hay que revisar
+  // el VPS. Mensaje propio para no confundirlo con un fallo del webhook (nota del revisor 19-jul).
+  if (notification.kind === "proxy-down") {
+    return `Rose Models 🔌 El proxy de tu suscripcion (VPS) ha fallado. El bot sigue respondiendo con la API de reserva, SIN cortes.${notification.detail ? `\n${notification.detail}` : ""}\nRevisa el VPS o re-loguea Codex cuando puedas.`;
   }
   if (notification.kind === "call-watchdog") {
     const who = notification.conversationId ? `\nConversación: ${notification.conversationId}` : "";

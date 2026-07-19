@@ -7,8 +7,10 @@ paths:
 
 - Puede importar de `domain/` y `content/`. Prohibido importar de `app/` o de implementaciones
   concretas de `infrastructure/` (usa las interfaces de `repositories/types.ts`).
-- El SDK de OpenAI solo se toca dentro del adaptador (`openaiProvider.ts`). El resto del código usa
-  los contratos `ConversationUnderstandingProvider` / `ResponseDraftingProvider`.
+- El SDK de OpenAI solo se toca dentro de los adaptadores (`openaiProvider.ts` y
+  `subscriptionDraftingProvider.ts`, este último para el proxy de la suscripción, aislado tras la
+  interfaz `SubscriptionChatClient`). El resto del código usa los contratos
+  `ConversationUnderstandingProvider` / `ResponseDraftingProvider`.
 - Toda operación con LLM necesita fallback determinista y metadatos de traza honestos
   (requestedProvider/actualProvider, usedFallback, motivo, tokens, coste). Nunca presentar una
   respuesta determinista como si viniera de OpenAI.

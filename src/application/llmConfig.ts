@@ -12,6 +12,14 @@ export interface LlmRuntimeConfig {
   callWritingModel: string;
   timeoutMs: number;
   maxRetries: number;
+  /**
+   * REDACCION VIA SUSCRIPCION (opcional, decision de Alex 19-jul): si esta la URL del proxy del VPS, la
+   * redaccion de texto la intenta PRIMERO por ahi (terra por la cuota plana de ChatGPT, coste 0) y cae a la
+   * API ante cualquier fallo. Ausente = comportamiento actual 100% API. Nunca afecta a la comprension ni a la voz.
+   */
+  subscriptionBaseUrl?: string;
+  subscriptionApiKey?: string;
+  subscriptionModel?: string;
 }
 
 // gpt-4.1-mini fue deslistado por OpenAI (su variante nano se apaga el 23-oct-2026).
@@ -48,7 +56,13 @@ export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRu
     // 3.5s aparte (openaiCallDrafter) y la comprension-mini es rapida y no gasta este tope; el peor caso
     // (ambas llamadas colgadas) ~24s sigue bajo los 60s. 0 reintentos: un fallo ya cae al fallback determinista.
     timeoutMs: positiveNumber(env.OPENAI_TIMEOUT_MS, 12000),
-    maxRetries: nonNegativeNumber(env.OPENAI_MAX_RETRIES, 0)
+    maxRetries: nonNegativeNumber(env.OPENAI_MAX_RETRIES, 0),
+    // Vacio/ausente = apagado (100% API). Se activa poniendo la URL del proxy del VPS en Vercel.
+    subscriptionBaseUrl: env.OPENAI_SUBSCRIPTION_BASE_URL?.trim() || undefined,
+    // El proxy suele aceptar cualquier token (la auth real es el OAuth del VPS); "sk-proxy" por defecto.
+    subscriptionApiKey: env.OPENAI_SUBSCRIPTION_API_KEY?.trim() || "sk-proxy-placeholder",
+    // Modelo a pedir al proxy; por defecto el mismo que la redaccion de API (terra) -> misma calidad.
+    subscriptionModel: env.OPENAI_SUBSCRIPTION_MODEL?.trim() || undefined
   };
 }
 

@@ -8,6 +8,7 @@ import { createLlmProviders } from "@/application/llmFactory";
 import { InMemoryConversationFeedbackRepository } from "@/application/responseFeedback";
 import { isDatabaseUnavailableError } from "@/application/transientErrors";
 import { getDb } from "@/infrastructure/db/client";
+import { getOperatorNotifier } from "@/infrastructure/integrations/operatorNotifier";
 import {
   createDebouncedPersister,
   loadSnapshot,
@@ -343,7 +344,15 @@ export function getSimulatorRepository(): CandidateRepository {
 
 export function getSimulatorEngine(): ConversationEngine {
   if (!globalForSimulator.roseSimulatorEngine) {
-    const providers = createLlmProviders();
+    // Aviso por WhatsApp si el proxy de la suscripcion (VPS) falla: el bot ya cayo a la API sin cortes, esto
+    // solo es para que Alex sepa que hay que revisar/re-loguear el VPS. Fire-and-forget, nunca bloquea el turno.
+    const providers = createLlmProviders(process.env, (message) => {
+      void getOperatorNotifier()
+        .notify({ kind: "proxy-down", detail: message })
+        .catch(() => {
+          /* un fallo del aviso jamas afecta al bot */
+        });
+    });
     // Detector de privada/publica para el opener: solo si hay APIFY_TOKEN (es quien da el flag). Sin el,
     // se deja undefined -> el opener es el neutro (la deteccion no se intenta). Lleva su propio timeout.
     const profilePrivacyProvider = process.env.APIFY_TOKEN?.trim() ? new InstagramOpenerPrivacyProvider() : undefined;
