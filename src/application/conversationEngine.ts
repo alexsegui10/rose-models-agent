@@ -1848,18 +1848,23 @@ export class ConversationEngine {
             message.content
           )
       );
-      const substantiveAnswers =
-        pauseAnchorIdx < 0
-          ? 0
-          : pitchLookbackHistory.filter(
-              (message, idx) =>
-                idx > pauseAnchorIdx &&
-                message.role === "agent" &&
-                message.content.trim().length > 45 &&
-                !/lo hablo con mi socio|sigue pendiente con mi socio|lo veo y te digo|comentar tu perfil con mi socio|soy alex de rose models/i.test(
-                  message.content
-                )
-            ).length;
+      // Si NO hay ancla de socio (pauseAnchorIdx = -1), la candidata entro en HIR DIRECTO (desconfianza/
+      // inyeccion/uncovered) SIN pitch normal previo -> se cuenta desde el principio (idx > -1 = todo). Antes
+      // se forzaba a 0 y la anti-rotacion no disparaba nunca para estas (caso Rocio "inspectora de AFIP": rotaba
+      // transparencia/edicion/agencia ante "pasame el nombre legal/web"). Una candidata con pitch normal SI
+      // tiene ancla de socio y sigue acotada tras el (no cuenta el pitch). Sobre-disparar en HIR es fail-safe.
+      // Excluye tambien las burbujas del PITCH (nota del revisor 20-jul): una candidata que recibio el pitch y
+      // luego entra en HIR-directo sin holding de socio no debe ver su PRIMERA duda vaciada porque el pitch ya
+      // sumaba >=3 — el pitch no es rotacion. Se excluyen sus frases fijas ademas de holdings y opener.
+      const pitchOrHoldingMarker =
+        /lo hablo con mi socio|sigue pendiente con mi socio|lo veo y te digo|comentar tu perfil con mi socio|soy alex de rose models|te voy a explicar de forma breve|nosotros hacemos el resto|el trafico lo hacemos con cuentas|empezamos a monetizar con el equipo de chatters|en la llamada te lo explico todo mejor|si tienes cualquier duda me preguntas/i;
+      const substantiveAnswers = pitchLookbackHistory.filter(
+        (message, idx) =>
+          idx > pauseAnchorIdx &&
+          message.role === "agent" &&
+          message.content.trim().length > 45 &&
+          !pitchOrHoldingMarker.test(message.content)
+      ).length;
       if (repeatsEarlierQuestion || substantiveAnswers >= 3) {
         hirResponsePlan = {
           ...hirResponsePlan,
