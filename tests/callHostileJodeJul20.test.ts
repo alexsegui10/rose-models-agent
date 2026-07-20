@@ -10,7 +10,10 @@ describe("'me jode' (me molesta) NO es agresión; los insultos reales SÍ", () =
     "mandar contenido a Drive no me jode tanto", // Malena
     "me jode un poco el porcentaje la verdad",
     "es lo que más me jode de todo esto",
-    "no me jode para nada, es solo una duda"
+    "no me jode para nada, es solo una duda",
+    "che boludo, dale, contame nomás", // "boludo" afectuoso AR, NO es insulto
+    "ay boluda, qué copado eso", // idem
+    "me rompe las pelotas que me pidan tanto contenido" // OBJECIÓN (me fastidia), no ataque al bot
   ];
   for (const u of NO_HOSTIL) {
     it(`NO es hostil: "${u}"`, () => {
@@ -23,7 +26,13 @@ describe("'me jode' (me molesta) NO es agresión; los insultos reales SÍ", () =
     "no me jodas, sois unos estafadores", // "no me jodas" + insulto
     "sois una mierda", // insulto
     "jodete", // insulto
-    "sois unos ladrones" // acusación directa
+    "sois unos ladrones", // acusación directa
+    // Insultos rioplatenses (barrido 20-jul, Yanina):
+    "sos un chanta", // AR: con-artist
+    "sos un pelotudo", // AR: insulto
+    "dejate de joder", // AR: imperativo agresivo
+    "andá a cagar", // AR: mandar a la mierda
+    "no me rompas las pelotas" // AR: hostil
   ];
   for (const u of HOSTIL) {
     it(`SÍ es hostil: "${u}"`, () => {
