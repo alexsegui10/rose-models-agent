@@ -55,6 +55,8 @@ export interface RunCallTurnInput {
   directiveRepeats?: Partial<Record<CallDirective["type"], number>>;
   /** Lo último que DIJO EL BOT (del transcript): para repetirlo si ella no lo oyó ("¿qué decías?"). */
   lastBotUtterance?: string;
+  /** Últimos turnos del BOT en la llamada (del transcript): para que el redactor NO repita lo mismo. */
+  recentBotUtterances?: string[];
 }
 
 /** Ejecuta un turno del cerebro de la llamada. */
@@ -87,7 +89,8 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
     pendingTopics: topicLabels(CALL_AGENDA.map((s) => s.id).filter((id) => !nextState.coveredStages.includes(id))),
     callFacts: input.callFacts,
     repetitionIndex: input.directiveRepeats?.[directive.type] ?? 0,
-    lastBotUtterance: input.lastBotUtterance
+    lastBotUtterance: input.lastBotUtterance,
+    recentBotUtterances: input.recentBotUtterances
   });
   return { signal, directive, utterancePlan, nextState };
 }

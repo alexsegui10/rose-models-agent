@@ -93,6 +93,12 @@ export function buildDraftPrompt(request: CallDraftRequest): string {
     lines.push("LO QUE ELLA YA HA DICHO EN ESTA LLAMADA (no se lo vuelvas a preguntar; referéncialo si viene a cuento):");
     for (const fact of brief.callFacts) lines.push(`- ${fact}`);
   }
+  if (brief.recentBotUtterances && brief.recentBotUtterances.length > 0) {
+    lines.push(
+      "LO QUE TÚ YA HAS DICHO en tus últimos turnos (NO lo repitas con las mismas palabras). Si ella insiste en lo mismo, dilo MÁS CORTO y de otra forma, referéncialo con naturalidad ('como te decía', 'eso mismo') o AVANZA al siguiente punto en vez de recitarlo igual:"
+    );
+    for (const prev of brief.recentBotUtterances) lines.push(`- «${prev}»`);
+  }
   if (brief.coveredTopics && brief.coveredTopics.length > 0) {
     lines.push(`TEMAS YA TRATADOS (no los repitas salvo que ella pregunte): ${brief.coveredTopics.join(", ")}.`);
   }

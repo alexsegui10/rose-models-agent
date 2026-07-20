@@ -46,6 +46,11 @@ export interface CallDraftingBrief {
   pendingTopics?: string[];
   /** Hechos que ELLA ya dijo en ESTA llamada (extraídos determinista): no re-preguntar, referenciar. */
   callFacts?: string[];
+  /**
+   * Lo que el BOT ya dijo en sus últimos turnos de ESTA llamada (20-jul): para que NO repita lo mismo cuando
+   * ella re-pregunta — que lo referencie ("como te decía...") o avance, en vez de recitar igual (tell de IA).
+   */
+  recentBotUtterances?: string[];
 }
 
 export interface CallUtterancePlan {
@@ -80,6 +85,8 @@ export interface PlanCallUtteranceInput {
   repetitionIndex?: number;
   /** Lo último que DIJO EL BOT (del transcript), para REPEAT_LAST_UTTERANCE ("¿qué decías?"). */
   lastBotUtterance?: string;
+  /** Últimos turnos del BOT en la llamada (del transcript): para que el redactor NO repita lo mismo. */
+  recentBotUtterances?: string[];
 }
 
 // ANTI-BUCLE (jul-2026, feedback de Alex "está lleno de bucles"): las directivas que pueden repetirse
@@ -570,16 +577,21 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
  */
 function briefExtras(
   input: PlanCallUtteranceInput
-): Pick<CallDraftingBrief, "candidateUtterance" | "coveredTopics" | "pendingTopics" | "callFacts"> {
+): Pick<CallDraftingBrief, "candidateUtterance" | "coveredTopics" | "pendingTopics" | "callFacts" | "recentBotUtterances"> {
   // Saneo defensivo (R2 jul-2026): la cita entra a un PROMPT — se colapsan saltos de línea (que no
   // "rompan" la estructura del prompt) y se acota a 200 chars (una frase de voz real; menos superficie
   // de inyección). El validador + fallback siguen detrás de todo.
   const utterance = input.utterance?.replace(/\s+/g, " ").trim().slice(0, 200);
+  // Lo que el bot ya dijo (mismo saneo): cada uno a 220 chars, para el aviso de "no repitas".
+  const recentBot = input.recentBotUtterances
+    ?.map((u) => u.replace(/\s+/g, " ").trim().slice(0, 220))
+    .filter((u) => u.length > 0);
   return {
     candidateUtterance: utterance && utterance.length > 0 ? utterance : undefined,
     coveredTopics: input.coveredTopics?.length ? input.coveredTopics : undefined,
     pendingTopics: input.pendingTopics?.length ? input.pendingTopics : undefined,
-    callFacts: input.callFacts?.length ? input.callFacts : undefined
+    callFacts: input.callFacts?.length ? input.callFacts : undefined,
+    recentBotUtterances: recentBot?.length ? recentBot : undefined
   };
 }
 

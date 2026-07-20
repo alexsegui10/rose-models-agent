@@ -314,6 +314,11 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   // Lo último que DIJO EL BOT (para "¿qué decías?"/aclaraciones): ya lo dejó calculado el barrido de
   // mensajes de arriba (es el último assistant no vacío del transcript).
   const lastBotUtterance = lastAssistant;
+  // Últimos turnos del bot (20-jul): para que el redactor NO repita lo mismo cuando ella re-pregunta.
+  const recentBotUtterances = input.messages
+    .filter((m) => m.role === "assistant" && (m.content ?? "").trim().length > 0)
+    .slice(-2)
+    .map((m) => m.content as string);
 
   // ANTI-LORO tras el final (jul-2026, llamada real de Alex: 8 MINUTOS repitiendo "te paso con mi socio"
   // cada 15s al ASR mandando "..."): con la llamada YA transferida o cerrada ANTES de este turno, un turno
@@ -436,7 +441,8 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // para que el redactor no re-pregunte y pueda referenciarlo. No decide nada (solo informa).
     callFacts: extractCallFacts(userUtterances),
     directiveRepeats,
-    lastBotUtterance
+    lastBotUtterance,
+    recentBotUtterances
   });
 
   const plan = result.utterancePlan;
