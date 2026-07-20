@@ -367,7 +367,7 @@ const ASKS_MONEY_MODEL =
 // (soy Alex, el de Rose Models), sin afirmar ni negar ser humano (el validador veta "soy una persona").
 // El RECHAZO a la máquina ("no quiero hablar con un robot") lo caza antes REJECT_MACHINE (wants-human).
 const BOT_CHECK =
-  /\beres (?:un |una )?(?:robot|bot|ia|maquina|inteligencia artificial|grabacion|contestador)\b|\bhablo con (?:un |una )?(?:robot|bot|maquina|ia|grabacion)\b|\beres (?:real|de verdad|una persona|humano|humana)\b|\bsos (?:un |una )?(?:robot|bot|ia|maquina)\b/;
+  /\beres (?:un |una )?(?:robot|bot|ia|maquina|inteligencia artificial|grabacion|contestador)\b|\bhablo con (?:un |una )?(?:robot|bot|maquina|ia|grabacion|persona|humano|humana)\b|\beres (?:real|de verdad|una persona|humano|humana)\b|\bsos (?:un |una )?(?:robot|bot|ia|maquina|humano|humana|persona)\b|\bsos (?:real|de verdad|una persona real)\b/;
 
 // Pregunta PERSONAL/charla dirigida al bot ("¿estás soltero? jaja", "¿tú también tienes OnlyFans?",
 // "¿qué hora es allí?"): se gestiona como IDENTIDAD (el brief ya manda salir del paso con humor, sin
