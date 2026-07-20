@@ -164,7 +164,13 @@ const RECONDUCT_FACE_TEXTS = [
   "A muchas al principio les da un poco de corte, es de lo más normal. Pero la cara es justo lo que da confianza al cliente y trae el tráfico, por eso es imprescindible, y nosotros te acompañamos para que lo lleves con naturalidad. ¿Seguimos?",
   "Te entiendo, de verdad, pero es que la cara es imprescindible para que esto funcione, y estamos contigo en todo el proceso. ¿Le damos una oportunidad?",
   "Ya, entiendo que te dé reparo, es de lo más normal al principio. Pero la cara es justo lo que genera confianza y hace que la cuenta funcione, no es algo que podamos quitar; lo bueno es que no vas sola, vamos contigo en todo. ¿Lo intentamos?",
-  "Te noto la duda y la respeto. Aun así, mostrar la cara es imprescindible en esto, es parte de cómo funciona; eso sí, te acompañamos en cada paso para que lo lleves con la mayor naturalidad posible. ¿Seguimos y te cuento el resto?"
+  "Te noto la duda y la respeto. Aun así, mostrar la cara es imprescindible en esto, es parte de cómo funciona; eso sí, te acompañamos en cada paso para que lo lleves con la mayor naturalidad posible. ¿Seguimos y te cuento el resto?",
+  // Variantes añadidas (barrido de voz 20-jul): con la persona muy insistente en la cara, el pool de 4 se
+  // repetía clavado a la 5ª (tell de IA). Misma política (cara imprescindible, acompañamiento), otro fraseo;
+  // NUNCA prometen ocultarla (lo veta promisesFaceConcealment) ni suavizan el requisito.
+  "Sé que al principio impone un poco, es de lo más normal. Pero la cara es lo que genera la confianza del cliente y hace que la cuenta despegue, así que es imprescindible; eso sí, vamos contigo de cerca en todo. ¿Vamos viendo?",
+  "Te entiendo, a casi todas les pasa al arrancar. Pero la cara es la base de que esto funcione, es lo que le da confianza al cliente; y no vas sola, estamos contigo en cada paso. ¿Le damos una vuelta?",
+  "Veo que te frena y lo respeto, es normal. Aun así, mostrar la cara es imprescindible para que la cuenta funcione de verdad; lo que hacemos es acompañarte para que salga lo más natural posible. ¿Seguimos con el resto?"
 ] as const;
 // Rechazo educado por negarse EN FIRME a la cara (tras reconducir). Cierre con la PUERTA ABIERTA (script
 // aprobado de Alex, condensado para voz). NO valoraciones personales; el rechazo se limita a la política.
