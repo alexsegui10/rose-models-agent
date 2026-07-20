@@ -546,9 +546,12 @@ function looksLikeQuestion(message: string): boolean {
 function negotiatesRevenueShare(message: string): boolean {
   // Verbos de REGATEO inequivocos (negocian en cualquier contexto, no hace falta anclarlos).
   if (/\b(negoci\w+|regate\w+|rebaj\w+|descuent\w+|abarat\w+)\b/.test(message)) return true;
-  // Un reparto EXPLICITO con barra/guion que no sea 70/30 ("40/60", "50-50") es una propuesta = negociacion,
-  // sin necesitar mas contexto (la barra entre dos numeros de 1-2 cifras es un reparto casi siempre).
-  if (/\b\d{1,2}\s*[\/-]\s*\d{1,2}\b/.test(message) && !/\b(70\s*[\/-]\s*30|30\s*[\/-]\s*70)\b/.test(message)) return true;
+  // Un reparto EXPLICITO con barra/guion que no sea 70/30 ("40/60", "50-50", "85/15") es una propuesta =
+  // negociacion. Se comprueba CADA par por separado: antes se excluia si "70/30" aparecia en CUALQUIER parte del
+  // mensaje, asi que "el 70/30 me parece un monton, haceme 85/15" se escapaba porque llevaba "70/30" (fuga inv 3
+  // del /loop 20-jul, caso Vanina). Ahora escala si ALGUN par propuesto no es 70/30.
+  const slashSplits = message.match(/\b\d{1,2}\s*[\/-]\s*\d{1,2}\b/g) ?? [];
+  if (slashSplits.some((s) => !/^70\s*[\/-]\s*30$/.test(s.trim()) && !/^30\s*[\/-]\s*70$/.test(s.trim()))) return true;
   // PEDIR MAS para si misma anclado al dinero ("quiero ganar mas", "mas plata/dinero/porcentaje para mi", "un
   // poco mas para mi", "la mitad para mi"): negociacion aunque tambien pregunte la cifra en el mismo turno
   // (compuestos que cazo el revisor). Anclado a dinero para no chocar con "quiero saber mas / mas info".
@@ -634,7 +637,7 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
   // mucho sobre-escala hacia Alex, jamas libera la cifra. La clase de objecion es acotada (demasiado / muy poco /
   // injusto / no compensa); la pista de cifra evita que "no puedo mas hoy" o "es lo que mas me interesa" disparen.
   const figureCue =
-    /\b(cuanto|de cuanto|cual es|que porcentaje|el split|el reparto|del reparto|la parte de la agencia|os quedais|os llevais|me toca|me queda|me llevo|me lleva|mi parte|mi porcentaje|la comision|division de la plata|como se reparte)\b/.test(
+    /\b(cuanto|de cuanto|cual es|que porcentaje|el split|el reparto|del reparto|la parte de la agencia|os quedais|os llevais|me toca|me queda|me llevo|me lleva|mi parte|mi porcentaje|la comision|division de la plata|como se reparte|el 70|del 70|70\/30|70 30)\b/.test(
       message
     );
   const moreDemand =
@@ -651,7 +654,7 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
       !/\b(algo|alguna cosa|nada|una cosa|cualquier cosa)\s+mas\b/.test(message) &&
       !/\bmas\b[^.?!]{0,12}\b(info|informacion|detalle|adelante|tarde)\b/.test(message));
   const objectionCue =
-    /\b(?:es|son|me parece|parece|resulta\w*|lo veo|me queda|me sale|seria)\s+(?:re |muy |demasiado |bastante |medio |un |una )?(?:poc[oa]|baj[oa]s?|injust\w+|miseria|car[oa]s?|much[oa]|abusiv\w+|excesiv\w+|porqueria|cagada|chot[oa]|mierda)\b/.test(
+    /\b(?:es|son|me parece|parece|resulta\w*|lo veo|me queda|me sale|seria)\s+(?:re |muy |demasiado |bastante |medio |un |una )?(?:poc[oa]|baj[oa]s?|injust\w+|miseria|car[oa]s?|much[oa]|abus\w+|excesiv\w+|robo|afano|choreo|porqueria|cagada|chot[oa]|mierda|monton|montonazo)\b/.test(
       message
     ) ||
     /\b(no me (?:alcanza|sirve|conviene|compensa|cierra)|me quedo cort[oa]|(?:me )?espera\w+ (?:mas|algo mejor|otra cosa|mucho mas))\b/.test(
