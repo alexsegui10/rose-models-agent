@@ -139,4 +139,10 @@ describe("Fase 1a: falsos positivos NO reintroducidos (barrido adversarial 20-ju
       "faq-who-opens-of-account"
     );
   });
+
+  // "me cuesta caro EL IPHONE que me piden" es coste de un ÍTEM (dispositivo), no el coste de entrar (no-cost).
+  // El boost autoritario de no-cost (Fase 1b) NO debe voltear esto (nota del revisor 20-jul).
+  it("'me cuesta caro el iphone que me piden' NO va a no-cost (es device)", async () => {
+    expect(await ids("me cuesta caro el iphone que me piden, tengo que comprarlo?")).not.toContain("faq-no-cost-to-join");
+  });
 });

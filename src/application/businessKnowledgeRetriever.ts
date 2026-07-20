@@ -90,6 +90,12 @@ function scoreEntry(entry: KnowledgeEntry, input: BusinessKnowledgeRetrievalInpu
     if (tag.startsWith("glossary-") && entry.tags.includes(tag)) score += 5;
   }
 
+  // NO-COST autoritario (Fase 1b, medición OpenAI 20-jul): "¿me cuesta algo / caro para arrancar / invertir
+  // plata?" tiene UNA respuesta clara (no hay coste para ti). La señal GRUESA de la IA (relevantTopics=COMMERCIAL,
+  // que marca a veces por error para preguntas de coste) NO debe pisarla surfaceando el reparto. El detector de
+  // coste ya está bien acotado (adversarial: no dispara con iphone/alquiler caros). Boost para que sea autoritario.
+  if (tags.includes("no-cost") && entry.tags.includes("no-cost")) score += 3;
+
   // Boost ADITIVO por la relevancia que marco la IA (Pieza 1): si la categoria de la entrada esta entre las
   // relevantTopics del understanding, suma score suficiente para surfacearla aunque ningun regex de tags la
   // haya pillado (cubre fraseos que las keywords no captan). NO salta isUsableEntry: sensitive/DRAFT/estados
@@ -158,16 +164,24 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   if (paymentTiming) tags.push("settlement", "payment", "revenue-share");
   // Hueco jun-2026: "esto me cuesta algo?" / "tengo que pagar o invertir?" pregunta si la CANDIDATA paga
   // (distinto de "cuanto me pagais", que es salary). Respuesta: no hay coste para ella -> faq-no-cost-to-join.
+  // Guard (revisor 20-jul): si el coste es de un ÍTEM concreto (el iphone/móvil que le piden, un editor, el
+  // alquiler, el pasaje...), NO es la pregunta de "¿me cuesta a mí ENTRAR?" -> lo lleva su ficha (device, etc.),
+  // no no-cost. "me cuesta caro el iphone que me piden" iba a no-cost por la rama genérica "me cuesta".
+  const costAboutSpecificItem =
+    /\b(iphone|i phone|movil|celu|celular|telefono|samsung|galaxy|programa|editor|software|camara|alquiler|pasaje|contador)\b/.test(
+      message
+    );
   if (
-    /\b(me cuesta|cuesta algo|cuesta dinero|tengo que pagar|tengo que poner|hay que pagar|hay que poner|debo pagar|pagar para (?:entrar|empezar|trabajar)|invertir|inversion|es gratis|sale gratis|cuota|matricula|inscripcion|me cobrais|cobrais algo|me cobras|tengo que invertir|poner dinero|coste para mi)\b/.test(
+    (/\b(me cuesta|cuesta algo|cuesta dinero|tengo que pagar|tengo que poner|hay que pagar|hay que poner|debo pagar|pagar para (?:entrar|empezar|trabajar)|invertir|inversion|es gratis|sale gratis|cuota|matricula|inscripcion|me cobrais|cobrais algo|me cobras|tengo que invertir|poner dinero|coste para mi)\b/.test(
       message
     ) ||
-    // "¿no me sale muy caro (para arrancar)?" = miedo a un coste de entrada -> faq-no-cost-to-join. Anclado
-    // ESTRICTAMENTE a "caro para arrancar/entrar/sumarme/esto...": el barrido adversarial 20-jul mostró que
-    // "me sale caro" suelto disparaba con alquiler/iphone/pasaje/contador/editor (coste de OTRA cosa) y con
-    // "el 70/30 es caro" (objeción de reparto, la maneja el planner). Así solo salta el miedo al coste de ENTRAR.
-    (/\bcaro para (?:arrancar|empezar|entrar|meterme|unirme|sumarme|sumar|esto|entrada|hacer esto)\b/.test(message) &&
-      !/\b(70|30|reparto|porcentaje|comision|split)\b/.test(message))
+      // "¿no me sale muy caro (para arrancar)?" = miedo a un coste de entrada -> faq-no-cost-to-join. Anclado
+      // ESTRICTAMENTE a "caro para arrancar/entrar/sumarme/esto...": el barrido adversarial 20-jul mostró que
+      // "me sale caro" suelto disparaba con alquiler/iphone/pasaje/contador/editor (coste de OTRA cosa) y con
+      // "el 70/30 es caro" (objeción de reparto, la maneja el planner). Así solo salta el miedo al coste de ENTRAR.
+      (/\bcaro para (?:arrancar|empezar|entrar|meterme|unirme|sumarme|sumar|esto|entrada|hacer esto)\b/.test(message) &&
+        !/\b(70|30|reparto|porcentaje|comision|split)\b/.test(message))) &&
+    !costAboutSpecificItem
   )
     tags.push("no-cost", "cost", "faq");
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
@@ -187,8 +201,12 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   )
     tags.push("settlement", "skrill", "payment", "revenue-share");
   // LATAM/coloquial del cobro ("¿cómo me llega la plata?"): misma respuesta de settlement/pagos.
-  // (Barrido 3-jul: acababa en "mi socio" con la respuesta documentada delante.)
-  if (/\b(plata|me llega (?:la plata|el dinero|el pago)|como (?:me llega|recibo) )\b|\bcomo me llega\b/.test(message))
+  // (Barrido 3-jul: acababa en "mi socio" con la respuesta documentada delante.) Guard 20-jul: "invertir/
+  // poner/gastar plata" es el GASTO de la candidata (-> no-cost), no el cobro; no dispara liquidación.
+  if (
+    /\b(plata|me llega (?:la plata|el dinero|el pago)|como (?:me llega|recibo) )\b|\bcomo me llega\b/.test(message) &&
+    !/\b(invertir|poner|gastar|meter|aportar|desembols\w*)\b[^.!?]{0,10}\b(plata|dinero|guita)\b/.test(message)
+  )
     tags.push("settlement", "payment", "salary");
   // Negociacion del reparto -> % + sensitive + revision humana (invariante 3). OJO: "me dais"/"dame" eran un
   // FALSO POSITIVO grave con "me dais info" / "dame info / detalles" (peticion GENERICA de info, el primer
