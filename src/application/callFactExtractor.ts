@@ -30,8 +30,13 @@ function isNonPlace(captured: string): boolean {
   );
 }
 
-const HAS_ONLYFANS = /\b(?:ya )?tengo (?:una )?(?:cuenta de )?only ?fans\b|\bmi only ?fans\b|\bya estoy en only ?fans\b/;
-const NO_ONLYFANS = /\bno tengo only ?fans\b|\bnunca (?:he )?(?:tenido|use|usado) only ?fans\b|\btodavia no tengo only ?fans\b/;
+// Guard de negación (20-jul): "ni/no/tampoco tengo OnlyFans" contiene "tengo OnlyFans"; sin el lookbehind
+// disparaba HAS_ONLYFANS y se guardaba el hecho OPUESTO ("Ya tiene"). El lookbehind lo impide y NO_ONLYFANS
+// (abajo, que se evalúa ANTES) captura el negado correctamente.
+const HAS_ONLYFANS =
+  /(?<!\b(?:no|ni|tampoco)\s)\b(?:ya )?tengo (?:una )?(?:cuenta de )?only ?fans\b|\bmi only ?fans\b|\bya estoy en only ?fans\b/;
+const NO_ONLYFANS =
+  /\b(?:no|ni|tampoco) teng[oa] (?:una )?(?:cuenta de )?only ?fans\b|\bnunca (?:he )?(?:tenido|use|usado) only ?fans\b|\btodavia no tengo only ?fans\b/;
 const NO_FACE =
   /\bsin (?:ensenar|mostrar|sacar) (?:la |mi )?cara\b|\bno (?:quiero|pienso|suelo)? ?(?:ensenar|mostrar|sacar) (?:la |mi )?cara\b|\bcon la cara no\b|\bla cara no\b/;
 const CONTENT_LIMIT = /\bno (?:hago|haria|quiero hacer|me siento comoda (?:con|haciendo))\s+([^,.!?]{3,45})/;
