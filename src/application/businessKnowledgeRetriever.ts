@@ -109,18 +109,65 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   const message = normalize(input.question);
   const tags: string[] = [];
 
+  // --- Señales de desambiguación (Fase 1a, barrido 20-jul): se calculan arriba porque varias reglas de
+  // abajo las consultan para no pisarse por solapamiento de palabras (mismo léxico, temas distintos). ---
+  // "trafico" es jerga del negocio (tráfico de compradores) pero también el TRÁNSITO vehicular en smalltalk
+  // ("uff el trafico en el centro estaba imposible"): ahí NO enruta al pitch de servicios (sería no-sequitur).
+  // "trafico DE CLIENTES/compradores" o "el trafico que traeis/generais" es NEGOCIO aunque aparezca una
+  // palabra de tránsito (barrido adversarial 20-jul: "el trafico de clientes que traen va por la ciudad").
+  const trafficBusiness =
+    /\btrafico\b[^.!?]{0,18}\b(?:de (?:clientes|compradores|gente|seguidores|visitas|usuarios|fans)|que (?:traeis|traen|gener\w+|me tra\w+|hacen|mandan|mandais))\b/.test(
+      message
+    ) || /\b(?:traeis|traen|gener\w+|me tra\w+|mandan|mandais)\b[^.!?]{0,12}\btrafico\b/.test(message);
+  const trafficTransit =
+    /\btrafico\b/.test(message) &&
+    !trafficBusiness &&
+    /\b(en el centro|la calle|la ciudad|autos?|coches?|camion\w*|colectivo|bondi|subte|micro|hora pico|embotell\w*|atasco|congestion|la ruta|autopista|panamericana|avenida|peaje|transito|semaforo|choque|accidente|esquina|cortad[oa]|manej\w*|conduc\w*|para llegar|llegar (?:al|a la|tarde)|estaba imposible|esta imposible|un caos|una hora (?:parada|clavada)|media hora (?:parada|clavada))\b/.test(
+      message
+    );
+  // TIMING del pago ("cada cuanto me pagan", "cuanto tarda en caerme la plata", "cuando me depositan") ->
+  // liquidación (cada 14 días), NO "no hay salario fijo" (misma familia de palabras) ni el lanzamiento
+  // (comparten "cuanto tarda"). Anclado a DINERO explícito (barrido adversarial 20-jul: "cada cuanto entra
+  // gente", "cuando llega el frio", "cuanto tarda en caerse una cuenta" NO son el pago). "entra/llega/cae la
+  // plata de mi laburo" tampoco (es SU sueldo de otro lado).
+  const paymentTiming =
+    (/\b(cada cuanto|cuando|cuanto tarda|cuanto tardan|cuanto demora|cuanto demoran|en cuanto tiempo)\b[^.!?]{0,22}\b(?:pag\w*|cobr\w*|deposit\w*|acredit\w*|liquid\w*|plata|dinero|guita|la paga)\b/.test(
+      message
+    ) ||
+      /\b(?:cae|caer|caerme|caen|llega|llegar|entra|entran)\b[^.!?]{0,15}\b(?:la plata|el dinero|el pago|la guita)\b/.test(
+        message
+      )) &&
+    !/\b(mi laburo|mi trabajo|mi sueldo|del laburo|de otro lado|otro laburo)\b/.test(message);
+  // ¿Pide el SIGNIFICADO de un término de la jerga? (glosario). Se calcula aquí para que el pitch de
+  // servicios NO se dispare cuando es una pregunta de definición ("qué es el tráfico" ≠ "cómo trabajáis").
+  // OJO (barrido adversarial 20-jul): "que es LO QUE hacen/ofrecen" = PITCH, no definición -> se excluye con
+  // lookahead para que NO suprima servicios ni empuje el glosario.
+  const asksDefinition =
+    /\b(que es(?! (?:lo que|todo lo|eso que|lo de que))|que son|que significa|que quiere decir|a que (?:te )?refieres|no se que (?:es|significa)|no entiendo (?:que es|lo de|eso de)|que es eso de|ni idea (?:de )?que es|no lo cacho|no lo pillo|no cacho)\b/.test(
+      message
+    ) || /\bno (?:te )?entiendo\b/.test(message);
+
   if (
     /\b(sueldo|salario|fijo|paga|pagan|pagais|pagais|pagaria|pagariais|me pagariais|pagarian|pagaran|pagos|cobro|cobrar|cobraria|cobrarias|ganaria|cuanto se gana|cuanto gano|cuando (?:me )?pag|cuando (?:cobro|cobraria|se cobra|se paga)|cada cuanto (?:cobro|pagais|se paga|me pagais)|como (?:cobro|me pag|me pagais|se cobra))\b/.test(
       message
-    )
+    ) &&
+    !paymentTiming
   )
     tags.push("salary", "payment", "commercial");
+  // Timing del pago -> liquidación (ver comentario de `paymentTiming` arriba).
+  if (paymentTiming) tags.push("settlement", "payment", "revenue-share");
   // Hueco jun-2026: "esto me cuesta algo?" / "tengo que pagar o invertir?" pregunta si la CANDIDATA paga
   // (distinto de "cuanto me pagais", que es salary). Respuesta: no hay coste para ella -> faq-no-cost-to-join.
   if (
     /\b(me cuesta|cuesta algo|cuesta dinero|tengo que pagar|tengo que poner|hay que pagar|hay que poner|debo pagar|pagar para (?:entrar|empezar|trabajar)|invertir|inversion|es gratis|sale gratis|cuota|matricula|inscripcion|me cobrais|cobrais algo|me cobras|tengo que invertir|poner dinero|coste para mi)\b/.test(
       message
-    )
+    ) ||
+    // "¿no me sale muy caro (para arrancar)?" = miedo a un coste de entrada -> faq-no-cost-to-join. Anclado
+    // ESTRICTAMENTE a "caro para arrancar/entrar/sumarme/esto...": el barrido adversarial 20-jul mostró que
+    // "me sale caro" suelto disparaba con alquiler/iphone/pasaje/contador/editor (coste de OTRA cosa) y con
+    // "el 70/30 es caro" (objeción de reparto, la maneja el planner). Así solo salta el miedo al coste de ENTRAR.
+    (/\bcaro para (?:arrancar|empezar|entrar|meterme|unirme|sumarme|sumar|esto|entrada|hacer esto)\b/.test(message) &&
+      !/\b(70|30|reparto|porcentaje|comision|split)\b/.test(message))
   )
     tags.push("no-cost", "cost", "faq");
   if (/\b(porcentaje|comision|reparto|cuanto os quedais)\b/.test(message)) tags.push("percentage", "revenue-share", "commercial");
@@ -157,16 +204,20 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     !/\b(reparto|porcentaje|comision|negociar|excepcion|sub[ei]\w*|mejor|me llevo|para mi)\b/.test(message);
   if ((/\b(me dais|dame|negociar|negociamos|excepcion)\b/.test(message) && !giveMeIsInfoRequest) || /\b\d{1,3}\s?%/.test(message))
     tags.push("percentage", "revenue-share", "sensitive", "negotiation");
-  if (/\b(que haceis|que hace la agencia|servicios|trafico|estrategia|monetizacion)\b/.test(message))
+  // El pitch de servicios salta por "servicios/que haceis/estrategia", o por "trafico"/"monetizacion" SOLO
+  // si no es tránsito (trafficTransit) ni una pregunta de definición (asksDefinition = glosario). Barrido
+  // 20-jul: "eso del trafico que es" recibía el pitch (5 tags) en vez de la definición; "el trafico en el
+  // centro" (tránsito) también. Ambos casos ya no disparan el pitch.
+  if (
+    /\b(que haceis|que hace la agencia|servicios|estrategia)\b/.test(message) ||
+    (!asksDefinition && ((/\btrafico\b/.test(message) && !trafficTransit) || /\bmonetizacion\b/.test(message)))
+  )
     tags.push("services", "agency", "strategy", "traffic", "monetization");
   // GLOSARIO (barrido 19-jul, Marta 45: "que es monetizar? y que es un chatter?" -> el bot le re-soltaba el
   // pitch entero sin DEFINIR el termino). Cuando pide el SIGNIFICADO de una palabra de la jerga, se sirve la
-  // definicion llana (ficha glossary-*), no el pitch. Se exige una PISTA definitoria ("que es/significa", "no
-  // entiendo", "a que te refieres") para no disparar el glosario cada vez que la palabra aparezca en contexto.
-  const asksDefinition =
-    /\b(que es|que son|que significa|que quiere decir|a que (?:te )?refieres|no se que (?:es|significa)|no entiendo (?:que es|lo de|eso de)|que es eso de)\b/.test(
-      message
-    ) || /\bno (?:te )?entiendo\b/.test(message);
+  // definicion llana (ficha glossary-*), no el pitch. `asksDefinition` se calcula arriba (lo consulta también
+  // el pitch de servicios). Se exige esa PISTA definitoria para no disparar el glosario cada vez que la
+  // palabra aparezca en contexto.
   if (asksDefinition) {
     if (/\bmonetiz\w*/.test(message)) tags.push("glossary-monetizar");
     if (/\bchatt?ers?\b|\bchatting\b/.test(message)) tags.push("glossary-chatter");
@@ -222,24 +273,51 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // EDICION y "¿mis hijos salen en las fotos?" por los MENORES — sin los guards, los tags de calendario
   // enterraban esas respuestas y se contestaba un volcado de dias/reels (R9-3; el de menores era el peor:
   // a una madre se le respondia "2 o 3 fotos diarias" en vez del NO rotundo — bloqueante del revisor).
+  // Reutilizar material ANTIGUO ("fotos viejas que ya tengo") vs volumen DIARIO de produccion ("cuantas
+  // fotos nuevas subo por dia"): comparten "fotos". Si hay pista de VOLUMEN, gana produccion; si no, y hay
+  // pista de material viejo, gana material-antiguo (barrido adversarial 20-jul: "aunque tenga fotos viejas,
+  // cuantas nuevas subo por dia" es volumen, no reutilizacion).
+  const oldMaterialCue =
+    /\b(viejas|antiguas|viejos|antiguos|que ya tengo|que tengo hech\w*|reutilizar|ya cread[oa]s?|ya hech[oa]s?|material viejo|contenido viejo)\b/.test(
+      message
+    );
+  const volumeQuestion =
+    /\b(cuantas|cuantos)\b[^.!?]{0,25}\b(fotos|reels|videos|subo|subir|nuevas|nuevos|al dia|por dia|diari\w*)\b/.test(message) ||
+    /\b(por dia|al dia|diari\w*|a la semana|semanal\w*)\b/.test(message);
   if (
     /\b(reels|fotos|dias iniciales|cuantas fotos|cuantos reels)\b/.test(message) &&
     !/\bedit\w*|\bedicion\b|\bretoc\w*|\bretoques?\b/.test(message) &&
-    !minorsAppearQuestion
+    !minorsAppearQuestion &&
+    (!oldMaterialCue || volumeQuestion)
   )
     tags.push("production", "reels", "photos", "warmup");
   // Tiempo de dedicacion / compaginar / media jornada: se responde SOLO si pregunta (decision de Alex):
-  // "con unas horas al dia es suficiente, lo importante es cumplir el contenido".
+  // "con unas horas al dia es suficiente, lo importante es cumplir el contenido". Guard: "cuanto tiempo"
+  // tambien aparece en el plazo de LANZAMIENTO ("en cuanto tiempo estaria lanzada la cuenta"): ahi es
+  // launch-timeline, no dedicacion (barrido 20-jul). Se excluye el contexto de lanzamiento.
+  // DEDICACIÓN (horas/jornada) vs LANZAMIENTO (plazo hasta estar lista) comparten "cuanto tiempo". La pista
+  // fuerte de dedicación (horas/dedicar/jornada) manda: "una vez LANZADA la cuenta, cuantas horas dedico" es
+  // dedicación; "en cuanto tiempo estaria lanzada" es lanzamiento (barrido adversarial 20-jul).
+  const dedicationCue = /\b(horas|cuantas horas|dedic\w*|le dedico|jornada|compaginar|media jornada|al dia)\b/.test(message);
+  const launchContext =
+    /\b(lanzad\w*|lanzamiento|se lanza|este? lista|cuenta (?:lista|activa|en marcha|funcionando)|dejar (?:todo )?listo|listo para arrancar|tardan? en (?:dejar|tener|estar))\b/.test(
+      message
+    );
   if (
     /\b(media jornada|jornada completa|cuanto tiempo|cuantas horas|horas al dia|horas a la semana|compaginar|otro trabajo|otro curro|cuanto hay que dedicar|cuanto tengo que dedicar|cuanto le dedico|le puedo dedicar|tiempo le dedico)\b/.test(
       message
-    )
+    ) &&
+    // Solo se suprime la dedicación si es contexto de lanzamiento SIN pista de dedicación (si pregunta por
+    // horas/dedicar aunque mencione "lanzada", sigue siendo dedicación).
+    !(launchContext && !dedicationCue)
   )
     tags.push("availability", "time-commitment");
   if (
-    /\b(publicado antes|publicar antes|nuevo|material antiguo|contenido antiguo|ya creado|reutilizar|sexting|viejos videos)\b/.test(
+    /\b(publicado antes|publicar antes|nuevo|material antiguo|contenido antiguo|ya creado|reutilizar|sexting|viejos videos|fotos viejas|fotos antiguas|material viejo|videos viejos|contenido viejo|fotos que ya tengo|que ya tengo hech\w*|fotos que tengo)\b/.test(
       message
-    )
+    ) &&
+    // Si la pregunta es de VOLUMEN diario ("cuantas nuevas subo por dia"), gana produccion, no reutilizacion.
+    !volumeQuestion
   ) {
     tags.push("old-material", "new-content", "onlyfans", "instagram");
   }
@@ -295,14 +373,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     tags.push("followers", "results", "faq");
   // Sin "requirement": esa etiqueta tambien marca la politica de cara y provocaba volcadas de
   // conocimiento no pedidas (sermon de la cara ante "tengo iPhone 14 Pro").
-  if (/\b(iphone|i phone|android|movil|telefono necesito|samsung|galaxy|s23|s24|s25)\b/.test(message))
+  if (/\b(iphone|i phone|android|movil|celu|celular|telefono necesito|samsung|galaxy|s23|s24|s25)\b/.test(message))
     tags.push("iphone", "galaxy", "device", "quality");
   if (/\b(ia|inteligencia artificial|bot|asistente virtual)\b/.test(message)) tags.push("ai", "identity", "transparency");
   if (/\b(no responde|seguimiento|volver a escribir|insistir)\b/.test(message)) tags.push("follow-up", "decline", "limited");
   if (
-    /\b(lanzamiento|lanzar|lanzais|cuando empiezo|cuando empezamos|cuando empezariamos|cuando empezaria|cuando arrancamos|cuando se lanza|cuanto tarda|30 dias|semanas)\b/.test(
+    /\b(lanzamiento|lanzar|lanzais|lanzad\w*|cuando empiezo|cuando empezamos|cuando empezariamos|cuando empezaria|cuando arrancamos|cuando se lanza|cuanto tarda|tardan? en (?:dejar|tener|estar)|dejar (?:todo )?listo|listo para arrancar|30 dias|semanas)\b/.test(
       message
-    )
+    ) &&
+    // "cuanto tarda" también aparece en el TIMING del pago ("cuanto tarda en caerme la plata"): ahí es
+    // liquidación, no lanzamiento. paymentTiming (calculado arriba) evita ese cruce (barrido 20-jul).
+    !paymentTiming &&
+    // Y si hay pista de DEDICACIÓN (horas/dedicar aunque mencione "lanzada"), es dedicación, no lanzamiento.
+    !dedicationCue
   )
     tags.push("launch", "timeline", "warmup");
   if (/\b(paises|que pais|vendeis|venden|mercado|compradores|poder adquisitivo)\b/.test(message))
@@ -346,7 +429,9 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
       // cómo sería?" preguntaba justo esto (cómo se arranca sin cuenta) y acababa en "te lo confirmo por
       // WhatsApp" porque ninguna ruta casaba sin verbo de crear. La respuesta está aprobada (la creas tú,
       // te guiamos).
-      /\b(?:no tengo|nunca tuve|nunca he tenido|todavia no tengo|aun no tengo)\b[^.!?]{0,15}\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,40}\b(?:como (?:seria|funciona|se hace|hago|arranco|empiezo)|que (?:hago|tengo que hacer)|eso como)\b/.test(
+      // "ni idea"/"no se como" anclado a CÓMO FUNCIONA (barrido adversarial 20-jul: "no tengo OF y ni idea de
+      // que precio ponerle" NO es onboarding, es precio de suscripción). Se exige "como va/funciona/se hace...".
+      /\b(?:no tengo|nunca tuve|nunca he tenido|todavia no tengo|aun no tengo)\b[^.!?]{0,15}\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,40}\b(?:como (?:seria|funciona|se hace|hago|arranco|empiezo|va)|que (?:hago|tengo que hacer)|eso como|no se (?:como|por donde)|ni idea de como)\b/.test(
         message
       ))
   )
@@ -452,10 +537,15 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     /\b(?:deje|sali de|me fui de|no segui|entre a|estuve en|me metieron en|me mandaron a|me chamuy\w*|me engan\w*|me estafaron)\b[^.!?]{0,30}\bagencias?\b/.test(
       message
     ) ||
-    /\bagencias?\b[^.!?]{0,40}\b(?:la deje|lo deje|deje al toque|me chamuy\w*|me metieron|me mandaron|me engan\w*|me estafaron|hace \d+ (?:mes|meses|semanas?|anos?))\b/.test(
+    /\bagencias?\b[^.!?]{0,45}\b(?:la deje|lo deje|deje al toque|me chamuy\w*|me metieron|me mandaron|me engan\w*|me estafaron|me dejaron tirad\w*|me dejo tirad\w*|me trataron mal|me cagaron|un horror|hace \d+ (?:mes|meses|semanas?|anos?))\b/.test(
       message
     ) ||
     /\b(?:otra |la |una |esa )agencias?\b[^.!?]{0,45}\b(?:era un\w*|fue un\w*|me tenia\w* abandonad\w*|no me (?:traia\w*|trajo|trajeron)|se llevaba|me prometi\w*|me chamuy\w*|me engan\w*|un desastre|un afano|un asco|un espanto|un choreo|una porqueria)\b/.test(
+      message
+    ) ||
+    // La QUEJA en pasado tambien PRECEDE a "agencia" ("fue una experiencia horrible con la otra agencia, me
+    // dejaron tirada"): barrido adversarial 20-jul.
+    /\b(?:experiencia (?:horrible|mala|pesima|nefasta|de terror|espantosa)|un horror|me dejaron tirad\w*|me trataron (?:re )?mal|me cagaron|una estafa|un afano|un desastre)\b[^.!?]{0,45}\bagencias?\b/.test(
       message
     );
   if (
@@ -480,7 +570,7 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // OF previo abandonado/sin usar ("tengo of pero abandonado, ¿cuenta igual?") -> sin problema, se retoma.
   if (
     // Anclado a OF/cuenta (revisor Lote C): "mi INSTAGRAM lo tengo parado" no es el OF abandonado.
-    /\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\babandonad\w*|\babandonad\w*\b[^.!?]{0,25}\b(?:of|onlyfans|cuenta)\b|\b(?:el of|el onlyfans|la cuenta)\b[^.!?]{0,15}\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b|\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b(?=[^.!?]{0,20}\b(?:of|onlyfans|cuenta)\b)|\bcuenta (?:vieja|parada|muerta|abandonada)\b|\b(?:of|onlyfans)\b[^.!?]{0,20}\b(?:parad[oa]|muert[oa]|sin usar|sin tocar)\b/.test(
+    /\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\babandonad\w*|\babandonad\w*\b[^.!?]{0,25}\b(?:of|onlyfans|cuenta)\b|\b(?:el of|el onlyfans|la cuenta)\b[^.!?]{0,15}\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b|\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b(?=[^.!?]{0,20}\b(?:of|onlyfans|cuenta)\b)|\bcuenta (?:vieja|parada|muerta|abandonada)\b|\b(?:of|onlyfans)\b[^.!?]{0,20}\b(?:parad[oa]|muert[oa]|sin usar|sin tocar)\b|\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\b(?:lo|la)\s+(?:deje|abandone|deje de lado|deje tirad\w+|deje colgad\w+|deje muert[oa])\b/.test(
       message
     )
   )
@@ -550,12 +640,15 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     // AI-transparency (la del "¿eres un bot?"), que escala a HIR — y "de qué agencia sos" NO debe escalar. La
     // pregunta de bot la surfacea su propio regex (línea ~236). (auditoría 15-jul: "identity" colaba HIR aquí.)
     tags.push("agency", "rose-models");
-  // Verificación de la cuenta de OnlyFans ("¿me verifico con mi DNI?"): proceso documentado de apertura.
+  // Verificación de la cuenta de OnlyFans ("¿me verifico con mi DNI?", "no pude verificar mi OF, me da
+  // error"): ficha DEDICADA de ayuda a la verificación (faq-of-verification-help), no la de quién abre la
+  // cuenta. Se empujan sus tags propios "verification"/"reassurance" para que gane a faq-who-opens-of-account,
+  // que comparte of-account/onboarding y antes se colaba por word-overlap (barrido 20-jul).
   if (
     /\b(verificar|verificacion|verificarme|dni|documento de identidad)\b[^.!?]{0,30}\b(onlyfans|of|cuenta)\b/.test(message) ||
     /\b(onlyfans|of)\b[^.!?]{0,30}\b(verificar|verificacion|dni)\b/.test(message)
   )
-    tags.push("of-account", "account-setup", "onboarding", "faq");
+    tags.push("of-account", "account-setup", "onboarding", "verification", "reassurance", "faq");
   if (/\b(pruebas|demostrar|demuestren|demuestra|resultados de otras|otras modelos|garantias)\b/.test(message))
     tags.push("distrust", "objection");
   // PETICION DE PRUEBAS sensibles (capturas del panel de ganancias, backend, "muestrame cuentas que
@@ -582,6 +675,63 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     );
   if (paymentControl) tags.push("payment-control", "human-intervention");
   if (/\b(telegram|twitter|videollamadas|otras redes)\b/.test(message)) tags.push("traffic", "telegram", "twitter", "services");
+
+  // --- Fase 1a batch 2 (barrido 20-jul): tipos de pregunta REALES que quedaban sin ficha (nulo -> el
+  // motor los trataba como "sin cobertura" y deferia). Todos enrutan a fichas YA aprobadas; no se inventa
+  // contenido. Anclados para no crear falsos positivos. ---
+  // "¿tengo que viajar/desplazarme/mudarme a Espana?" -> todo es online, no hay que moverse.
+  if (
+    // Anclado a CONTEXTO de trabajo/lugar: "viajar/desplazarme/mudarme" a España / la oficina / para
+    // trabajar. NO el smalltalk "me gusta viajar" (sería un no-sequitur -> ficha de "todo online").
+    /\b(viajar|desplaz\w+|mudar\w+|mudarme|trasladar\w*)\b[^.!?]{0,25}\b(a espana|en espana|alla|a la oficina|para (?:trabajar|el trabajo|laburar)|por (?:el )?(?:trabajo|laburo)|ahi|alli)\b/.test(
+      message
+    ) ||
+    /\b(?:tengo que|hay que|debo|hace falta)\b[^.!?]{0,20}\b(?:viajar|desplaz\w+|mudar\w+|ir a espana|estar (?:ahi|alli|en espana)|presentarme|ir presencial\w*|ir a la oficina)\b/.test(
+      message
+    ) ||
+    /\b(ir|estar|presentarme|presencia)\b[^.!?]{0,20}\b(a espana|en espana|a la oficina|en persona|presencial\w*)\b/.test(message)
+  )
+    tags.push("location", "online", "agency");
+  // "¿me dan un adelanto/anticipo para arrancar?" -> no hay salario fijo ni adelantos, va por reparto.
+  // "adelanto/anticipo" ES un sustantivo ambiguo (verbo "me adelanto", "el adelanto" de una serie, "por
+  // adelantado" de cortesía): el barrido adversarial 20-jul cazó 6 falsos positivos. Se exige contexto de
+  // DINERO/pago o el verbo "me dan/pagan/hay ... un adelanto".
+  if (
+    /\b(?:adelanto|anticipo)\b[^.!?]{0,15}\b(?:plata|dinero|guita|sueldo|paga|pagar|cobrar|para arrancar|para empezar|inicial|mensual|de guita|de plata)\b/.test(
+      message
+    ) ||
+    /\b(?:plata|dinero|guita|sueldo|un fijo|paga|algo)\b[^.!?]{0,12}\b(?:de |como )?(?:adelanto|anticipo)\b/.test(message) ||
+    /\b(?:me (?:dais|dan|darian|dieran)|hay|pagan|dan un)\b[^.!?]{0,10}\b(?:adelanto|anticipo)\b/.test(message) ||
+    /\bpaga inicial\b/.test(message) ||
+    /\bun fijo para (?:arrancar|empezar)\b/.test(message)
+  )
+    tags.push("salary", "commercial", "payment");
+  // "¿necesito experiencia previa?" -> no hace falta experiencia (perfil objetivo).
+  if (
+    /\b(experiencia previa|hace falta experiencia|tener experiencia|sin experiencia|con experiencia|nunca (?:hice|he hecho) esto|soy primeriza|soy novata|nunca trabaje (?:de |en )esto)\b/.test(
+      message
+    )
+  )
+    tags.push("target-profile", "selection", "faq");
+  // "¿necesito (tener muchos) seguidores?" -> no hace falta, el trafico lo pone la agencia (perfil objetivo).
+  if (/\b(necesito|hace falta|tengo que tener|hay que tener|debo tener|se necesitan?)\b[^.!?]{0,20}\bseguidores\b/.test(message))
+    tags.push("target-profile", "selection", "faq");
+  // "¿puedo monetizar/usar mi Instagram personal?" -> la agencia crea cuentas propias para el trafico; su
+  // IG personal es aparte. Ancla "personal/propio/mio" + IG (no pisa "monetizar" a secas, que es glosario/pitch).
+  if (
+    /\b(?:monetizar|usar|usa|aprovechar|con)\b[^.!?]{0,20}\b(?:mi )?(?:instagram|insta|ig|cuenta)\b[^.!?]{0,15}\b(personal|propi[oa]|mi[oa]|que ya tengo|actual)\b/.test(
+      message
+    ) ||
+    /\bmi (?:instagram|insta) personal\b/.test(message)
+  )
+    tags.push("agency-responsibilities", "instagram", "operations", "services");
+  // "¿qué proceso hacen para ELEGIR/escoger a las chicas?" -> proceso de seleccion (no el generico how-it-works).
+  if (
+    /\b(elegir|escoger|seleccionar|eligen|escogen|elegis|para elegir|como eligen)\b[^.!?]{0,25}\b(chicas|modelos|candidatas|mujeres|gente|a quien)\b/.test(
+      message
+    )
+  )
+    tags.push("selection", "process", "faq");
 
   if (input.intent === "ASKS_ABOUT_PERCENTAGE") tags.push("percentage", "revenue-share");
   // FIX 2 + 3 (Alex 22-jun): el modelo en vivo a veces etiqueta como ASKS_ABOUT_CONTRACT una pregunta
