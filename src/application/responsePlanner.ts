@@ -661,7 +661,26 @@ function isCommercialEscalation(input: BuildResponsePlanInput): boolean {
       message
     ) ||
     /\bmitad y mitad\b/.test(message);
-  if (figureCue && (moreDemand || objectionCue)) return true;
+  // "quiero/deberia ser MENOS lo que se quedan / ojala (sea) POCO / no sea tanto / parte CHICA / ACHIQUEN su
+  // parte": es una CONTRAPROPUESTA a la baja (que la agencia se lleve menos) -> negociacion -> escala, NO suelta
+  // la cifra. `negotiatesRevenueShare` solo cubria "menor". Fugas cazadas por el revisor 20-jul: "cuanto se
+  // quedan ustedes menos" y "achiquen su parte / parte chica". EXCLUIDOS: "mas o menos / por lo menos / al
+  // menos / menos de" (ahi "menos" es aproximacion/idiomatico/tiempo, es una pregunta de cifra LEGITIMA).
+  const wantsLess =
+    (/\bmenos\b/.test(message) && !/\b(?:mas o menos|por lo menos|al menos|cuando menos|menos de|ni menos)\b/.test(message)) ||
+    /\bno (?:sea|vaya a ser)\s+tanto\b/.test(message) ||
+    /\bno quiero que sea tanto\b/.test(message) ||
+    /\b(?:ojala|espero|espero que|que sea|que fuera|deberia ser|deberian|tendria que ser|tendrian|me gustaria que (?:sea|fuera))\b[^.!?]{0,22}\b(?:poco|poquito|menos|tanto)\b/.test(
+      message
+    ) ||
+    // "que su parte sea CHICA/pequeña" / "ACHIQUEN/recorten/reduzcan su parte": pedir a la baja. Anclado a un
+    // termino de reparto para no disparar con "una chica" (persona).
+    /\b(?:parte|comision|tajada|porcion)\b[^.!?]{0,12}\b(?:chic[oa]s?|pequen[oa]s?|reducid[oa]s?)\b/.test(message) ||
+    /\b(?:chic[oa]s?|pequen[oa]s?)\b[^.!?]{0,12}\b(?:parte|comision|tajada|porcion)\b/.test(message) ||
+    /\b(?:achic\w+|achiqu\w+|recort\w+|reduzc\w+|reduc\w+)\b[^.!?]{0,18}\b(?:su parte|la parte|vuestra parte|comision|parte|lo que se (?:llevan|quedan)|su tajada)\b/.test(
+      message
+    );
+  if (figureCue && (moreDemand || objectionCue || wantsLess)) return true;
 
   return (
     input.understanding.intent === "ASKS_ABOUT_PERCENTAGE" &&
@@ -721,7 +740,7 @@ function filterCommercialAnswerFacts(input: BuildResponsePlanInput, facts: strin
   // NO deben soltar la cifra por la via determinista (bloqueante del revisor 19-jul). Los verbos en 1a persona
   // ("cuanto me toca/queda/llevo") no solapan con negociaciones. La negociacion sigue vetando via isCommercialEscalation.
   const asksExactFigureUnambiguous =
-    /\b(cual es (el|mi|su|la) (porcentaje|reparto|comision)|cual seria (mi parte|el reparto|mi porcentaje)|de cuanto (seria|es|va a ser|sera|estamos hablando)( (el|un))? ?(porcentaje|reparto)|de cuanto (porcentaje|reparto)|cuanto (seria|es) (el|mi) (porcentaje|reparto)|cuanto (me toca|me queda|me llevo|me lleva|agarro|saco|gano yo|cobro yo)|porciento me toca|(?:de cuanto es|cuanto es|como es|como queda|como funciona)( el| del| un)? split|split (?:como es|como queda|de cuanto|como funciona)|(?:de cuanto es|cuanto es|como es|como queda)( la)? division de (?:la plata|el dinero|lo que se gana)|division de (?:la plata|el dinero|lo que se gana) (?:como es|como queda|de cuanto)|cuanto se (?:queda|lleva) la agencia|(cuanto|que porcentaje) os (quedais|qued|llevais|llev)|(cual|cuanto|de cuanto)[^.?!]{0,20}\bla parte (de la agencia|vuestra|suya|que se queda|que os quedais)|la parte de la agencia)\b/;
+    /\b(cual es (el|mi|su|la) (porcentaje|reparto|comision)|cual seria (mi parte|el reparto|mi porcentaje)|de cuanto (seria|es|va a ser|sera|estamos hablando)( (el|un))? ?(porcentaje|reparto)|de cuanto (porcentaje|reparto)|cuanto (seria|es) (el|mi) (porcentaje|reparto)|(el |mi )?porcentaje cuanto (es|sale|seria|queda)|cuanto (me toca|me queda|me llevo|me lleva|agarro|saco|gano yo|cobro yo)|porciento me toca|(?:de cuanto es|cuanto es|como es|como queda|como funciona)( el| del| un)? split|split (?:como es|como queda|de cuanto|como funciona)|(?:de cuanto es|cuanto es|como es|como queda)( la)? division de (?:la plata|el dinero|lo que se gana)|division de (?:la plata|el dinero|lo que se gana) (?:como es|como queda|de cuanto)|cuanto se (?:queda|lleva) la agencia|cuanto se (?:quedan|llevan) (?:ustedes|uds|vosotros)|(cuanto|que porcentaje) os (quedais|qued|llevais|llev)|(cual|cuanto|de cuanto)[^.?!]{0,20}\bla parte (de la agencia|vuestra|suya|que se queda|que os quedais)|la parte de la agencia)\b/;
   // La rama "sin intent" es un detector de SUBCADENA, asi que "la parte de la agencia" tambien casa dentro de
   // una AFIRMACION ("me parece cara la parte de la agencia") o una NEGOCIACION ("quiero que sea menor la parte
   // de la agencia") -> soltaria el 70/30 sin que sea una pregunta y sin escalar (fuga del invariante 3 que cazo
