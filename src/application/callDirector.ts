@@ -228,7 +228,10 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
       // La CARA tras el cierre (1a llamada real 17-jul: "¿puedo taparla en un video?" se IGNORABA y se
       // repetia el cierre): se reconduce con el conocimiento de la cara, sin tocar el estado (ya esta
       // cerrada; no cuenta hacia ningun cierre nuevo). Responder a lo que pregunta > repetir el cierre.
-      if (signal === "face-refusal" || signal === "face-doubt") {
+      // EXCEPCIÓN (Alex 20-jul): tras un CIERRE POR RECHAZO DE LA CARA, se mantiene FIRME (no reconduce):
+      // reconducir sonaba incoherente ("¿seguimos?" tras "no podríamos seguir"). Cae al cierre firme de abajo
+      // (repite el cierre una vez y luego silencio); tras OTRO cierre (contrato/soft) sí reconduce.
+      if ((signal === "face-refusal" || signal === "face-doubt") && state.closeDirective !== "CLOSE_FACE_REJECTED") {
         return { directive: { type: "RECONDUCT_FACE" }, nextState: state };
       }
       // Queja del reparto o pregunta no cubierta tras el cierre: se defiere (sin cifras y sin reabrir la
