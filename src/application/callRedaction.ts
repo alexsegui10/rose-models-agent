@@ -550,7 +550,12 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       // validador de voz sigue vetando cifras/promesas/despedidas por si el LLM se pasa.
       return planFromKnowledge(directive.type, input, {
         instruction:
-          "Ella acaba de contarte o comentarte algo que NO es una pregunta ni una objeción (una respuesta a lo que le preguntaste, o charla). Reacciona con naturalidad e interés en UNA frase corta y sigue la conversación con calidez. NO le pidas que repita, NO digas que se oye mal, y no añadas datos ni cifras." +
+          "Ella acaba de contarte o comentarte algo que NO es una pregunta ni una objeción (una respuesta a lo " +
+          "que le preguntaste, o algo de su vida/trabajo). Acúsalo con naturalidad y calidez en UNA frase corta " +
+          "y RECONDUCE con suavidad hacia lo vuestro (el proyecto, cómo trabajáis, el siguiente paso). NO abras " +
+          "una charla larga sobre su vida ni encadenes preguntas personales (nada de '¿y qué haces?, ¿y qué " +
+          "disfrutas?'): un comentario cálido y seguís con lo importante. NO le pidas que repita, NO digas que " +
+          "se oye mal, y no añadas datos ni cifras." +
           repeatHint(input),
         referenceInstagram: false,
         emptyFallback: variantFor(ACKNOWLEDGE_FALLBACK_TEXTS, input.repetitionIndex ?? 0)
