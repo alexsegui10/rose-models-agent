@@ -3346,22 +3346,26 @@ function humanInterventionResponse(
     if (reportsBetterDevice) {
       return "Genial que te hayas cambiado de movil, eso cambia la cosa.\n\nDejame que lo valore con mi socio y te confirmo, no te preocupes.";
     }
-    // Ya se le explico antes lo del movil: no repetir el mismo rechazo en bucle (coherencia).
-    if (alreadyToldDeviceIssue) {
-      // Si solo acusa/se despide (nada que responder ni preguntar), se queda en VISTO en vez de repetir el
-      // rechazo (auditoria 15-jul, monosilabica: 5x la misma plantilla). Si pregunta algo, se le recuerda breve.
-      if (responsePlan.answerFacts.length === 0 && responsePlan.questionToAsk === null) return "";
-      return "Como te decia, en cuanto tengas un movil mejor lo retomamos encantados. Cualquier cosa me dices.";
+    // PRIORIZA RESPONDER lo cubierto (glosario/cara/pagos): el rechazo del movil NO debe tapar sus preguntas ni
+    // repetirse en bucle (loop iteracion 1, caso Susana: preguntaba "que es un chatter / la cara" y recibia 7
+    // veces "ese movil..."). Solo se emite el rechazo/recordatorio cuando NO hay nada cubierto que responder.
+    if (responsePlan.answerFacts.length === 0) {
+      if (alreadyToldDeviceIssue) {
+        if (responsePlan.questionToAsk === null) return "";
+        return "Como te decia, en cuanto tengas un movil mejor lo retomamos encantados. Cualquier cosa me dices.";
+      }
+      return "Lamentablemente con ese movil no podemos trabajar, es muy importante la calidad de fotos y videos.\n\nNo has pensado en cambiarte el movil? Si lo consigues estariamos encantados.";
     }
-    return "Lamentablemente con ese movil no podemos trabajar, es muy importante la calidad de fotos y videos.\n\nNo has pensado en cambiarte el movil? Si lo consigues estariamos encantados.";
+    // answerFacts > 0: cae a las ramas de abajo que responden lo cubierto.
   }
 
   if (candidate.deviceEligibility === "PENDING_QUALITY_TEST") {
-    // Ya avisado + solo acuse (nada que responder) -> visto, no repetir en bucle (auditoria 15-jul).
-    if (alreadyToldDeviceIssue && responsePlan.answerFacts.length === 0 && responsePlan.questionToAsk === null) {
-      return "";
+    // Igual que arriba: si pregunta algo CUBIERTO se RESPONDE (cae abajo); el aviso del movil solo cuando no hay
+    // nada cubierto que responder, y sin repetirlo si solo acusa (visto).
+    if (responsePlan.answerFacts.length === 0) {
+      if (alreadyToldDeviceIssue && responsePlan.questionToAsk === null) return "";
+      return "Ese movil lo tendriamos que valorar bien, Instagram penaliza mucho la calidad de las fotos.\n\nPodemos seguir viendo tu perfil igualmente y lo miramos.";
     }
-    return "Ese movil lo tendriamos que valorar bien, Instagram penaliza mucho la calidad de las fotos.\n\nPodemos seguir viendo tu perfil igualmente y lo miramos.";
   }
 
   if (candidate.deviceEligibility === "PENDING_UPGRADE") {

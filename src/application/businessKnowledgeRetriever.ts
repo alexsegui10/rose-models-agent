@@ -82,6 +82,14 @@ function scoreEntry(entry: KnowledgeEntry, input: BusinessKnowledgeRetrievalInpu
     if (entry.tags.includes(tag)) score += 1.4;
   }
 
+  // GLOSARIO (fix /loop 20-jul): cuando pide el SIGNIFICADO de un termino (tag glossary-*, solo se empuja ante
+  // "que es/no entiendo X"), la DEFINICION debe GANAR al pitch de servicios, que comparte palabras (chatting/
+  // trafico/monetizacion) y por word-overlap le ganaba -> "que es un chatter?" recibia el pitch operativo en
+  // vez de la definicion simple (queja #4 de Alex). Boost fuerte para que la ficha glossary-* quede primera.
+  for (const tag of tags) {
+    if (tag.startsWith("glossary-") && entry.tags.includes(tag)) score += 5;
+  }
+
   // Boost ADITIVO por la relevancia que marco la IA (Pieza 1): si la categoria de la entrada esta entre las
   // relevantTopics del understanding, suma score suficiente para surfacearla aunque ningun regex de tags la
   // haya pillado (cubre fraseos que las keywords no captan). NO salta isUsableEntry: sensitive/DRAFT/estados
