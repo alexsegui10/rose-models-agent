@@ -442,7 +442,15 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       let last = input.lastBotUtterance?.trim() ?? "";
       while (last.startsWith(REPEAT_PREFIX)) last = last.slice(REPEAT_PREFIX.length).trim();
       last = stripSpokenPrefixes(last);
-      const safeToEcho = last.length > 0 && validateCallUtterance(last).valid;
+      // Si lo último fue el SALUDO/apertura, NO re-saludar palabra por palabra ("Sí, te decía: Hola X, soy
+      // Alex, hablamos por Instagram...") — eso suena a robot (barrido de voz 20-jul, distraida-nenes). Se usa
+      // el re-arranque corto y humano. El eco completo se reserva para repetir CONTENIDO real que no oyó.
+      // Marcadores EXCLUSIVOS de la apertura ("¿te pillo bien?" / "hablamos por Instagram hace poco"). NO se
+      // incluye "soy Alex el de Rose Models" porque también aparece en la variante de IDENTIDAD ("¿quién sos?"),
+      // que SÍ debe poder re-leerse (nota del revisor 20-jul); la identidad dice "el que te ESCRIBIÓ por
+      // Instagram", nunca "hablamos por Instagram" ni "te pillo bien".
+      const isOpenerEcho = /te pillo bien|hablamos por instagram/i.test(last);
+      const safeToEcho = last.length > 0 && validateCallUtterance(last).valid && !isOpenerEcho;
       const echo = safeToEcho ? `${REPEAT_PREFIX}${last}` : RETRY_FALLBACK;
       // "Repíteme LO DE X" (3-jul, llamada real): si pidió una PARTE concreta, el redactor repite SOLO esa
       // parte más despacio y simple (fallback: el eco completo). Sin tema -> eco determinista de siempre.
