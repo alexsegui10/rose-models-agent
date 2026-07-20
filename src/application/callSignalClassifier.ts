@@ -447,12 +447,15 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
     // Excepciones a la agresión: modismos rioplatenses que contienen "mierda"/"me jode" sin ser un ataque
     // (barrido de voz 16-jul, candidatas VÁLIDAS mandadas a handoff hostil por error):
     //  - "no escucho/entiendo una mierda" = mala señal ("no oigo nada"), no un insulto (Belen).
-    //  - "(es) lo que (más) me jode" = señalar el tema que le molesta (una objeción), no un ataque (Priscila).
+    //  - "me jode" (me molesta) = objeción/lo que le fastidia, NUNCA el insulto en sí ("lo que me jode", "no
+    //    me jode tanto", "me jode un poco el %"); el ataque real, si lo hay, está en OTRA palabra. Se neutraliza
+    //    "me jode" entero (barrido 16-jul Priscila + 20-jul Malena "a Drive no me jode tanto" → handoff falso).
+    //    OJO: "no me jodas" (imperativo = insulto) NO contiene "me jode\b", así que sigue siendo hostil.
     // Se degradan SOLO si el modismo era el ÚNICO disparador: se re-evalúa HOSTILE con el modismo neutralizado;
-    // si aún queda un insulto real ("sois una mierda, es lo que me jode de vosotros"), sigue siendo hostil.
+    // si aún queda un insulto real ("sois una mierda, y me jode"), sigue siendo hostil.
     const withoutIdioms = text
       .replace(/\b(?:escuch\w+|oig\w+|oye\w*|entiend\w+|entend\w+|pill\w+|capt\w+)\s+(?:ni\s+)?(?:una\s+)?mierda\b/g, " ")
-      .replace(/\blo que (?:mas )?me jode\b/g, " ")
+      .replace(/\bme jode\b/g, " ")
       // DUDA enmarcada, no acusación (Ronda 2, 17-jul): "¿cómo sé que NO me están estafando?" / "no sé si me
       // están timando" es una candidata PREOCUPADA — el "me están estafando" de dentro disparaba HOSTILE y se
       // la mandaba a handoff como agresiva. Neutralizado el marco de duda, DISTRUST la recoge ("como se que")
