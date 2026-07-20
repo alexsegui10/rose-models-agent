@@ -452,12 +452,15 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // Quien abre / como se abre la cuenta de OnlyFans ("¿la abro yo o vosotros?", "¿cómo abro la cuenta de OF?",
   // "¿me la creáis/montáis?"): la abre la candidata (Alex 23-jun). Antes escalaba a Alex por falta de cobertura.
   // Guard: una "cuenta de banco/bancaria" (sin OF) NO es esto -> no surfacea la respuesta de la cuenta de OF.
+  // Guard 2 (revisor 20-jul): "no me lo/la creo" = INCREDULIDAD (creer), no CREAR la cuenta -> el stem "cre"
+  // colisiona crear/creer; se excluye la incredulidad negada para no enrutar "no me lo creo" a quién-abre-OF.
   if (
     !/\bcuenta (?:de |del )?banc/.test(message) &&
+    !/\bno me l[ao] cre[eoy]/.test(message) &&
     (/\b(abr(?:o|ir|is|imos|e|en)|crea|crear|creais|crean|monta|montar|montais|montan|arma|armar|armais|arman|prepara|preparar|preparais|preparan|configura|configurar|configurais|configuran|quien abre|me la abr|me la cre|me la mont|me la arm|me la prepar)\b[^.!?]{0,25}\b(cuenta|onlyfans|of)\b/.test(
       message
     ) ||
-      /\b(cuenta|onlyfans)\b[^.!?]{0,25}\b(la abro|la creo|me la abr|me la cre|me la mont|me la arm|me la prepar|quien la abre|tengo que abrir|hay que abrir|la abro o)\b/.test(
+      /\b(cuenta|onlyfans|of)\b[^.!?]{0,25}\b(?:la abro|lo abro|la creo|lo creo|me (?:la|lo) (?:abr|arm|cre|mont|prepar|configur)\w*|quien (?:la|lo) abre|tengo que abrir|hay que abrir|la abro o)\b/.test(
         message
       ) ||
       // Ronda 3 (18-jul, spec de Alex — el defer jamás para lo que se sabe): "yo NO TENGO OnlyFans, ¿eso
