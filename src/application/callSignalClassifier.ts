@@ -83,6 +83,18 @@ const COMPLAINT_TERMS =
 // "mucho"/"reducir" que podrían referirse al contenido/ritmo y regalarían un escalón sin queja real).
 const FOLLOWUP_SHARE_COMPLAINT =
   /\bbaj[ae]\w*|\bpodeis bajar\b|\bsubirlo\b|\bsubir (?:un poco|algo|mas|mi parte)\b|\b(?:dar|dame|darme|darnos|dais|deis|dan|das)\b(?:me|nos|le)?\s*(?:un poco|algo)?\s*mas\b(?:\s+(?:porfa|porfi|porfis|por favor|please|plis|eh|anda))?(?!\s*\w)|no hay manera de subir|\bno me compensa\b|\bno me sale a cuenta\b|sigue siendo (?:muy )?(?:mucho|demasiad[oa]|car[oa]|alto|injusto|abusivo|un robo|un pico|poc[oa]|poquit[oa])|(?:es |hay )?mucha comision|demasiada comision|un poco menos|algo menos|me (?:quedo|queda|llevo|sigue quedando) (?:con )?(?:muy )?(?:poc\w*|poquit\w*)|\bno me hago\b|necesito mas (?:plata|dinero)|\bes un pico\b|\bes harto\b|me parece (?:mucho|demasiad[oa]|car[oa]|abusivo|injusto|un robo|un monton)|(?<!no )(?<!tampoco )(?<!para nada )me parece (?:mal|fatal)(?=\s*[.,!¡]*\s*$)|me parece (?:mal|fatal)\b[^.?!]{0,25}\b(?:reparto|porcentaje|comision)|(?:es|son|me parece) (?:mucho|demasiad[oa]|bastante|un monton) para (?:vosotros|ustedes|la agencia|vos)|os llevais (?:mucho|demasiad[oa]|bastante|un monton)|es bastante para|(?:otra agencia|mi agencia|la otra)[^,.!?]{0,25}(?:mejor|me dejan|me dan|me quedo con|el \d{2})|me dejan (?:el |un )?\d{2}\b|quiero (?:algo )?mas para mi|mas para mi(?: parte)?|me gustaria (?:quedarme )?(?:con )?mas|mitad y mitad|\b50\s*\/?\s*50\b|\b50\s*y\s*50\b|el (?:50|cincuenta)(?:\s*por\s*ciento)?\b|\bo nada\b|deberia ser (?:mas|50|mitad)|\b(?:no\s+)?(?:me\s+|nos\s+)?(?:lo\s+|la\s+)?(?:podeis|puedes|podes|pueden|puede|podrias|podriais|podrian)\s+mejorar(?:me|lo|la)?(?:\s+(?:eso|esto|el reparto|el porcentaje|la oferta|las condiciones|mi parte))?(?:\s+(?:un poco|algo))?\s*\??\s*$|\b(?:me\s+)?mejoras?\s+(?:el reparto|el porcentaje|la oferta|las condiciones|mi parte)\b/;
+// Extensión 20-jul (barrido de negociación dura de Alex): más cues de INSATISFACCIÓN/EMPUJE con el reparto en
+// moneyContext que se escapaban a asks-more/unclear (el bot AVANZABA el guion en vez de seguir negociando o
+// escalar a Alex en el suelo). SOLO insatisfacción/empuje, NUNCA aceptación ("40 está bien" NO entra). Es
+// SEGURO: la respuesta es la escalera DETERMINISTA (jamás filtra la cifra que ella pide, solo concede el
+// escalón autorizado o escala en el suelo); el único coste de sobre-cazar es conceder de más, acotado por el
+// gate moneyContext. Cubre: "me queda corto/flojo/escaso/justito", "sigue abajo/corto/flojo", "un puntito
+// medio", "partir la diferencia", una cifra 40-69 que ELLA EMPUJA con verbo ("subime a 45", "dame 50",
+// "necesito 50", "mejorame a 45") o coletilla ("45 aunque sea", "50 y cerramos", "50 para mi"), y "con el
+// %/porcentaje ... flojo/corto/no me convence". Excluye cifras de CONTENIDO (fotos/reels/días...).
+const FOLLOWUP_SHARE_COMPLAINT_EXTRA =
+  /\b(?:me\s+(?:quedo|queda|llevo|deja\w*)|sigue(?:\s+siendo)?)\s+(?:con\s+)?(?:muy\s+|medio\s+|re\s+)?(?:cort\w*|floj\w*|escas\w*|justit\w*|abajo|baj[oa])\b|\bun(?:\s+puntito|\s+punto|\s+termino)?\s+medio\b|\bpart\w*\s+la\s+diferencia\b|\b(?:subi\w*|dame|darme|ponme|dejame\w*|mejora\w*(?:me|lo)?|necesito)\s+(?:me\s+|nos\s+|hasta\s+|a\s+|en\s+|el\s+|un\s+|aunque\s+sea\s+)*(?:4\d|5\d|6\d)\b(?!\s*(?:fotos?|reels?|dias?|videos?|minutos?|horas?|semanas?|mes(?:es)?|anos?|seguidor))|\b(?:4\d|5\d|6\d)\s+(?:aunque\s+sea|y\s+(?:cerramos|arreglamos|listo)|para\s+mi\b(?![^.?!]{0,15}\b(?:bien|perfecto|genial|joya|barbaro|listo|ok|me\s+sirve|me\s+vale)\b))|\bcon\s+el\s+(?:%|porcentaje)\b[^.?!]{0,25}\b(?:floj\w*|cort\w*|poc\w*|convenc\w*)\b/;
+
 // (R9 10-jul, endurecido tras NO-APTO del revisor) "mejorar" solo cuenta como queja en forma de PETICION
 // dirigida a la agencia: "¿(no) (me lo) podeis/puedes mejorar (eso|el porcentaje...)?" anclada a fin de
 // frase, o "me mejoras la oferta". Un COMPROMISO de ELLA ("voy a mejorar", "se que tengo que mejorar",
@@ -467,8 +479,12 @@ export function classifyCallSignal(input: CallSignalInput): CallCandidateSignal 
   if (SHARE_TERMS.test(text) && COMPLAINT_TERMS.test(text)) return "complains-about-share";
   // Quejas inequívocas del reparto (mitad y mitad, más para mí, otra agencia me da X): valen sin moneyContext.
   if (DIRECT_SHARE_COMPLAINT.test(text)) return "complains-about-share";
-  // Queja de seguimiento durante la negociación (frase dirigida al dinero, sin repetir "reparto").
-  if (input.moneyContext && FOLLOWUP_SHARE_COMPLAINT.test(text)) return "complains-about-share";
+  // Queja de seguimiento durante la negociación (frase dirigida al dinero, sin repetir "reparto"). El EXTRA
+  // (20-jul) suma cues de insatisfacción/empuje que se escapaban a asks-more/unclear (el bot avanzaba en vez
+  // de seguir negociando/escalar). Ambos SOLO en moneyContext (la respuesta es la escalera determinista).
+  if (input.moneyContext && (FOLLOWUP_SHARE_COMPLAINT.test(text) || FOLLOWUP_SHARE_COMPLAINT_EXTRA.test(text))) {
+    return "complains-about-share";
+  }
   // Rechazo EN FIRME de la cara / anonimato: antes que DISTRUST/NOT_INTERESTED/QUESTION (una duda de cara
   // "me da corte" NO entra aquí: no lleva señal de negativa explícita, así que se tranquiliza como duda).
   // "anonim" cuenta como rechazo SOLO si ella QUIERE anonimato; NO si lo NIEGA ("no busco nada anonimo", que
