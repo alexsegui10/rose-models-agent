@@ -29,7 +29,7 @@ import {
   type CallDirectorState
 } from "./callDirector";
 import { validateCallUtterance } from "./callRedactionValidator";
-import { classifyCallSignal } from "./callSignalClassifier";
+import { classifyCallSignal, isTaxDeferTopic } from "./callSignalClassifier";
 import { resolveRefinedSignal, type CallUnderstander } from "./callUnderstander";
 import { getCallUnderstander } from "./openaiCallUnderstander";
 import { LocalBusinessKnowledgeRetriever, type BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
@@ -370,6 +370,43 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       }
       // "smalltalk" -> signal "acknowledge" (via resolveRefinedSignal, arriba en kind "signal"): la comprension
       // entendio que es charla/respuesta, se acusa con naturalidad. "none"/null -> se queda `unclear` (repetir).
+    } else if (
+      signal === "asks-unknown" &&
+      understander &&
+      !isUnintelligibleUtterance(lastUtterance) &&
+      !terminalBeforeTurn &&
+      // Deferencia FISCAL deliberada (decisión de Alex, MEMORY nº7): los impuestos se DEFIEREN aunque el
+      // retriever los "cubra" (el bot soltaría el sinsentido de las cuotas). El rescate NO los toca (revisor 20-jul).
+      !isTaxDeferTopic(lastUtterance)
+    ) {
+      // OPCIÓN A "MÁS IA" (Alex 20-jul): antes de DIFERIR a WhatsApp, la IA intenta ENTENDER la intención
+      // (rescate de over-defer: "responde lo que pregunta"). SEGURIDAD replay: solo se aplica el rescate si el
+      // estado resultante es IDÉNTICO al del `asks-unknown` determinista -> en la reproducción el oído
+      // re-deriva asks-unknown y, si el efecto de estado coincide, NO hay divergencia (mismo patrón que #2).
+      // Un rescate que MUTA estado (p. ej. cara -> faceObjectionCount) se DESCARTA y el turno sigue difiriendo
+      // (seguro). El %/negociación/edad NO llegan aquí (el oído los resuelve antes); la IA solo rescata
+      // relevancia, nunca decide dinero (invariante 1). Coste: 1 llamada IA en un turno que ya iba a diferir.
+      const intent = await understander.understand({ utterance: lastUtterance, lastBotUtterance, context: input.context });
+      const resolution = resolveRefinedSignal(intent);
+      let rescued: CallCandidateSignal | undefined;
+      let rescuedCovering: typeof coveringEntries | undefined;
+      if (resolution.kind === "signal") {
+        rescued = resolution.signal;
+      } else if (resolution.kind === "time-concern" && TIME_KNOWLEDGE_ENTRY) {
+        rescued = "asks-covered";
+        rescuedCovering = [TIME_KNOWLEDGE_ENTRY];
+      }
+      // NOTA: la rama "question -> asks-covered" se quitó (revisor 20-jul): para una pregunta normal cubierta el
+      // oído ya devuelve asks-covered (no llega aquí); solo era alcanzable en el caso fiscal, que se DEFIERE.
+      // face-concern / question / none -> NO se rescata (se queda asks-unknown = defer seguro).
+      if (rescued) {
+        const deterministicNext = JSON.stringify(decideCallDirective({ state, signal: "asks-unknown" }).nextState);
+        const rescuedNext = JSON.stringify(decideCallDirective({ state, signal: rescued }).nextState);
+        if (rescuedNext === deterministicNext) {
+          signal = rescued; // replay-safe: mismo efecto de estado que el asks-unknown determinista
+          if (rescuedCovering) liveCoveringEntries = rescuedCovering;
+        }
+      }
     }
     liveSignal = signal;
   }

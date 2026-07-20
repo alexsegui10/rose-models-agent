@@ -238,6 +238,13 @@ const GREETING =
 const TAX_TOPIC =
   /\bimpuesto\w*|\bafip\b|\bmonotribut\w*|\bhacienda\b|\bfiscal\w*|(?<!\b(?:me|te|se|nos)\s)\bdeclar(?!(?:ar|ando)?(?:me|te|se|nos)\b)\w*|\btribut\w*|\biva\b(?!\s+a\s)/;
 
+// Deferencia FISCAL DELIBERADA (decisión de Alex, MEMORY nº7): los impuestos se DEFIEREN a Alex aunque el
+// retriever los dé por "cubiertos" (la FAQ de cuotas hace que el bot suelte un sinsentido). Se expone para que
+// el rescate IA del over-defer (callTurnResponder) NO los rescate y respete esa deferencia (revisor 20-jul).
+export function isTaxDeferTopic(utterance: string): boolean {
+  return TAX_TOPIC.test(normalize(utterance));
+}
+
 // ¿Es una pregunta? OJO: la conjunción causal "porque" (junta, "hago changas PORQUE no tengo fijo") NO va en
 // el patrón — se confundía con el interrogativo y se difería un "detalle" inexistente al WhatsApp (auditoría
 // 15-jul, voz). El interrogativo real "¿por qué...?" lleva "?" (lo caza el `?$`) o se escribe "por que" con
