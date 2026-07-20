@@ -201,7 +201,9 @@ const DEFEND_SHARE_TEXT =
 // "¿como lo ves?" calcado (el panel del 17-jul cazo esa coletilla repetida en turnos consecutivos).
 const NO_SALARY_TEXTS = [
   "Te entiendo, pero sueldo fijo no manejamos: va a porcentaje, así los dos ganamos cuando la cuenta funciona. Y el dinero te lo paga la plataforma a ti directamente, cada 14 días. Dime qué te ronda y lo vemos.",
-  "Ya, pero es que no trabajamos con sueldo: es a porcentaje, y cobras tú directamente de la plataforma cada 14 días. Si lo que te preocupa es la cifra, lo hablamos sin problema."
+  "Ya, pero es que no trabajamos con sueldo: es a porcentaje, y cobras tú directamente de la plataforma cada 14 días. Si lo que te preocupa es la cifra, lo hablamos sin problema.",
+  // 3ª variante (20-jul): NO_SALARY solo tenía 2 y a la 3ª insistencia se repetía clavada. Misma política.
+  "Un fijo no te lo puedo prometer porque no trabajamos así: es todo a porcentaje y cobras tú directa de la plataforma cada 14 días. Cuando la cuenta rinde, ganamos los dos. ¿Qué es lo que más te preocupa del dinero?"
 ];
 // No se entendió bien lo que dijo (ruido/STT): pedir que lo repita, sin asumir asentimiento.
 const ASK_REPEAT_TEXTS = [
@@ -432,7 +434,9 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
         ? variantFor(
             [
               `Claro, te lo digo exacto: un ${offer.modelShare}% para ti y un ${offer.agencyShare}% para la agencia. Y el dinero lo cobras tú primero en tu cuenta y luego nos pasas nuestra parte, ¿vale?`,
-              `Que sí, tranquila, te lo repito: ${offer.modelShare}% para ti, ${offer.agencyShare}% para la agencia. Y cobras tú primero, ¿vale?`
+              `Que sí, tranquila, te lo repito: ${offer.modelShare}% para ti, ${offer.agencyShare}% para la agencia. Y cobras tú primero, ¿vale?`,
+              // 3ª variante (20-jul): el pool tenía 2 y a la 3ª pregunta de la cifra se repetía clavada. Misma cifra.
+              `Te lo dejo claro otra vez: un ${offer.modelShare}% para ti y un ${offer.agencyShare}% para la agencia. El dinero entra primero en tu cuenta y luego nos pasas lo nuestro, ¿te cuadra?`
             ],
             input.repetitionIndex ?? 0
           )
