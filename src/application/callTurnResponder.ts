@@ -157,6 +157,24 @@ function isUnintelligibleUtterance(utterance: string): boolean {
   return tokens.every((token) => !SPANISH_VOWEL.test(token));
 }
 
+// ¿La respuesta del bot a un turno indica que EN VIVO se quedó en `unclear`? (replay-safe, 20-jul). El
+// transcript es la verdad: si a un turno inteligible-no-entendido el bot respondió PIDIENDO REPETIR
+// (ASK_REPEAT) o PASANDO LA LLAMADA (HANDOFF), la comprensión NO lo mapeó y la racha de `unclear` SÍ subió
+// (pudo llegar al handoff). Sirve para NO reiniciar esa racha en la reproducción y no OLVIDAR un handoff real.
+function botStayedUnclearLive(botResponse: string | undefined): boolean {
+  if (!botResponse) return false;
+  const n = botResponse.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  // ASK_REPEAT (determinista -> firma fiable).
+  if (/no te he pillado|se oye entrecortado|cobertura esta fatal/.test(n)) return true;
+  // HANDOFF (redactado por LLM -> firma AMPLIA que cubre lo que empuja el brief: "se pondrá en contacto con
+  // ella / la contacta / te contacta / te llama / le paso el testigo / te paso con mi socio"). NO colisiona
+  // con DEFER (dice "por WhatsApp" / "te lo confirmo"). Un handoff de más sería fail-safe (escala a humano);
+  // olvidar uno rompe el invariante 4, así que se prefiere pecar de detectar (revisor 20-jul).
+  return /en contacto|te (?:contacta|contactara|llama|llamara|escribe|escribira)|le paso el testigo|te paso con mi socio|que (?:te|se) (?:llame|contacte|escriba|ponga)/.test(
+    n
+  );
+}
+
 export async function respondToCall(input: RespondToCallInput): Promise<CallResponderResult> {
   // Turnos de la candidata + lo ÚLTIMO que dijo el BOT antes de cada uno (para las señales de
   // aclaración/repetición: "¿qué significa X?" solo es aclaración si X está en la frase previa del bot).
@@ -269,7 +287,13 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
         understander &&
         !isUnintelligibleUtterance(userUtterances[i]) &&
         !state.closed &&
-        !state.handedOff
+        !state.handedOff &&
+        // Solo se reinicia la racha si la comprensión SÍ mapeó el turno EN VIVO. La verdad está en el
+        // transcript: si el bot respondió a ESTE turno pidiendo repetir o pasando la llamada, en vivo se
+        // quedó `unclear` y la racha subió (pudo haber handoff) -> NO se reinicia; cae a decideCallDirective
+        // abajo para reproducir el incremento/handoff. Sin esto, un handoff real por audio ininteligible se
+        // OLVIDABA al turno siguiente (invariante 4; barrido 20-jul).
+        !botStayedUnclearLive(botBefore[i + 1])
       ) {
         if (state.unclearStreak !== 0 || state.repeatRequestStreak !== 0) {
           state = { ...state, unclearStreak: 0, repeatRequestStreak: 0 };
