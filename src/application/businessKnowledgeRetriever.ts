@@ -500,7 +500,31 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     // geografica (Alex 22-jun) que antes se ignoraba y se trataba como simple "mirarlo con calma".
     /\bno quiero que\b[^.!?]{0,30}\bme\s+vea/.test(message) ||
     /\bme\s+vean?\b[^.!?]{0,15}\b(en|aqui|mi pais|argentin|colombi|mexic|venezol|chile|peru)\b/.test(message) ||
-    /\b(en|aqui|mi pais)\b[^.!?]{0,15}\bme\s+vea/.test(message)
+    /\b(en|aqui|mi pais)\b[^.!?]{0,15}\bme\s+vea/.test(message) ||
+    // Caso REAL Lilly (prod, 20-jul): "mi perfil solo muestra AFUERA? no me gustaria ACCESO de LATAM" -> vacio
+    // -> el bot rellenaba con chatter/pitch. No quiere ser accesible/visible en su region (latam/su pais); la
+    // quiere solo visible AFUERA (publico español). Es geo-privacy-three-layers (el trafico se dirige a España).
+    // acceso anclado a término geo (no "aca/aqui" sueltos: "no tengo acceso a internet aca" NO es esto).
+    /\bacceso\b[^.!?]{0,15}\b(latam|latinoamerica|argentin|mi pais|mi region|de aca|de aqui|desde aca|desde mi pais)\b/.test(
+      message
+    ) ||
+    /\bno (?:me gustaria|quiero|querria|me gusta)\b[^.!?]{0,18}\bacceso\b/.test(message) ||
+    // "no quiero que se vea EN <región>" -> geo. Anclado a objeto geo (revisor 20-jul: "no quiero que se vea
+    // mi cara" NO es geo, es la ficha de la CARA; sin este ancla geo se la robaba).
+    /\bno (?:me gustaria|quiero|querria|me gusta)\b[^.!?]{0,25}\b(?:se vea|se muestre|me vean|visible|llegue|aparezca)\b[^.!?]{0,15}\b(en |aqui|aca|mi pais|mi region|latam|argentin|de aca|por aca)\b/.test(
+      message
+    ) ||
+    // "(perfil/cuenta/contenido) solo <VISIBILIDAD> afuera" -> geo. Exige verbo de VISIBILIDAD (no "solo la
+    // uso fuera de casa" / "solo se sube fuera de horario", revisor 20-jul).
+    /\b(perfil|cuenta|contenido)\b[^.!?]{0,18}\b(solo|unicamente|nada mas)\b[^.!?]{0,18}\b(muestr\w*|se vea|se vean|vean|visible|aparec\w*)\b[^.!?]{0,10}\b(afuera|fuera|exterior|espana)\b/.test(
+      message
+    ) ||
+    /\bmuestr\w*\b[^.!?]{0,10}\b(afuera|fuera|exterior)\b/.test(message) ||
+    // "mi zona" quitado (colisión con "fuera de mi zona de confort", revisor 20-jul).
+    /\bfuera de (?:latam|mi pais|argentin|mi region|aca)\b/.test(message) ||
+    /\b(se vea|me vean|me vea|lo vean|vean)\b[^.!?]{0,15}\b(en espana|solo afuera|solo fuera|nada mas afuera|unicamente afuera)\b/.test(
+      message
+    )
   )
     tags.push("geo-privacy", "privacy", "country-block", "objection");
   // Miedo a que la RECONOZCA gente concreta (familia, conocidos, pareja, jefe): es una duda de privacidad,
