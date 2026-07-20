@@ -21,6 +21,17 @@ export interface OpenAiCallDrafterConfig {
   apiKey: string;
   model: string;
   timeoutMs: number;
+  /** Solo para modelos de RAZONAMIENTO (familia 5.6 terra/luna): none|low|medium|high. Por defecto "low". */
+  reasoningEffort?: "none" | "low" | "medium" | "high";
+}
+
+/**
+ * La familia gpt-5.6 (terra/luna) y posteriores son modelos de RAZONAMIENTO: rechazan `temperature` (400) y
+ * aceptan `reasoning.effort`. Se detecta por nombre para construir la petición correcta. Un modelo clásico
+ * (gpt-5.4/mini) mantiene EXACTAMENTE la petición de antes (temperature 0.7, sin reasoning): cero regresión.
+ */
+export function isReasoningCallModel(model: string): boolean {
+  return /terra|luna/i.test(model) || /gpt-5\.[6-9]\b/i.test(model) || /gpt-[6-9](?:[.-]|$)/i.test(model);
 }
 
 export class OpenAiCallDrafter implements CallUtteranceDrafter {
@@ -35,19 +46,25 @@ export class OpenAiCallDrafter implements CallUtteranceDrafter {
 
   async draft(request: CallDraftRequest): Promise<string | null> {
     try {
-      const response = await this.client.responses.create(
-        {
-          model: this.config.model,
-          input: [{ role: "system", content: buildDraftPrompt(request) }],
-          // 0.7 (sube de 0.5): mas variacion entre turnos = menos robotico. Seguro porque es la ruta de VOZ
-          // (texto plano) y `validateCallUtterance` protege cifras/promesas. NUNCA subir asi la ruta de TEXTO
-          // (usa salida estructurada JSON -> mas temperatura = mas riesgo de parse fallido).
-          temperature: 0.7,
-          max_output_tokens: 220,
-          truncation: "auto"
-        },
-        { signal: AbortSignal.timeout(this.config.timeoutMs) }
-      );
+      const reasoning = isReasoningCallModel(this.config.model);
+      const params: OpenAI.Responses.ResponseCreateParamsNonStreaming = {
+        model: this.config.model,
+        input: [{ role: "system", content: buildDraftPrompt(request) }],
+        // Razonamiento: los tokens de razonamiento cuentan en max_output_tokens -> holgura para no truncar la
+        // frase hablada (una frase cortada suena fatal en voz). Clásico: 220 como siempre.
+        max_output_tokens: reasoning ? 400 : 220,
+        truncation: "auto"
+      };
+      if (reasoning) {
+        // effort "low" (bench 20-jul): ~2x más rápido y consistente que gpt-5.4, misma o mejor calidad.
+        params.reasoning = { effort: this.config.reasoningEffort ?? "low" };
+      } else {
+        // 0.7 (sube de 0.5): mas variacion entre turnos = menos robotico. Seguro porque es la ruta de VOZ
+        // (texto plano) y `validateCallUtterance` protege cifras/promesas. NUNCA subir asi la ruta de TEXTO
+        // (usa salida estructurada JSON -> mas temperatura = mas riesgo de parse fallido).
+        params.temperature = 0.7;
+      }
+      const response = await this.client.responses.create(params, { signal: AbortSignal.timeout(this.config.timeoutMs) });
       const text = (response.output_text ?? "").trim();
       return text.length > 0 ? text : null;
     } catch {
@@ -154,11 +171,21 @@ export function getCallDrafter(env: NodeJS.ProcessEnv = process.env): CallUttera
   // OPENAI_CALL_TIMEOUT_MS por si en produccion se ven fallbacks por picos de latencia.
   const rawCallTimeout = Number(env.OPENAI_CALL_TIMEOUT_MS);
   const callTimeoutMs = Number.isFinite(rawCallTimeout) && rawCallTimeout > 0 ? rawCallTimeout : 3500;
+  // Esfuerzo de razonamiento para los modelos 5.6 (terra/luna). "low" por defecto (bench 20-jul: el punto
+  // dulce latencia/calidad). Overridable por OPENAI_CALL_REASONING_EFFORT; ignorado por modelos clásicos.
+  const effortRaw = env.OPENAI_CALL_REASONING_EFFORT?.trim().toLowerCase();
+  const reasoningEffort = (["none", "low", "medium", "high"].includes(effortRaw ?? "") ? effortRaw : "low") as
+    | "none"
+    | "low"
+    | "medium"
+    | "high";
   return new OpenAiCallDrafter({
     apiKey: config.openaiApiKey,
-    // Modelo de la voz: gpt-5.4 COMPLETO (medicion 7-jul: cabe de sobra en la ventana de turno y suena mas
-    // natural). Overridable por OPENAI_CALL_MODEL.
+    // Modelo de la voz: gpt-5.6-luna con reasoning=low (bench 20-jul, API directa): ~2x más rápido y
+    // consistente que gpt-5.4 (sin picos de 4-7s), misma o mejor calidad y más conciso. Overridable por
+    // OPENAI_CALL_MODEL (los 5.6 no aceptan temperature; el redactor lo adapta solo, ver isReasoningCallModel).
     model: config.callWritingModel,
-    timeoutMs: callTimeoutMs
+    timeoutMs: callTimeoutMs,
+    reasoningEffort
   });
 }

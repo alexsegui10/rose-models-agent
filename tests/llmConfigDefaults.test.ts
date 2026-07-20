@@ -6,14 +6,14 @@ function buildEnv(vars: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 describe("getLlmRuntimeConfig", () => {
-  it("defaults: REDACCION de texto en gpt-5.6-terra; VOZ en gpt-5.4; comprension en mini", () => {
+  it("defaults: REDACCION de texto en gpt-5.6-terra; VOZ en gpt-5.6-luna; comprension en mini", () => {
     const config = getLlmRuntimeConfig(buildEnv());
 
-    // Texto sube a gpt-5.6-terra (Alex 18-jul, comparacion con Daiana: mejor empatia/contexto al mismo
-    // precio). La VOZ sigue en gpt-5.4 (latencia medida 7-jul, ~1.4s/turno) y la comprension en mini.
+    // Texto en gpt-5.6-terra (Alex 18-jul). La VOZ baja a gpt-5.6-luna reasoning=low (bench 20-jul: ~2x más
+    // rápida y consistente que gpt-5.4). La comprension sigue en mini.
     expect(config.writingModel).toBe("gpt-5.6-terra");
     expect(config.understandingModel).toBe("gpt-5.4-mini");
-    expect(config.callWritingModel).toBe("gpt-5.4");
+    expect(config.callWritingModel).toBe("gpt-5.6-luna");
   });
 
   it("timeout por defecto holgado (12s) para que el gpt-5.4 de redaccion no se corte", () => {
@@ -24,9 +24,9 @@ describe("getLlmRuntimeConfig", () => {
   it("se puede bajar la redaccion a mini por entorno (p. ej. para ahorrar o si Hobby diera guerra)", () => {
     const config = getLlmRuntimeConfig(buildEnv({ OPENAI_WRITING_MODEL: "gpt-5.4-mini" }));
     expect(config.writingModel).toBe("gpt-5.4-mini");
-    // La voz NO hereda de OPENAI_WRITING_MODEL: sigue con su default (gpt-5.4) salvo OPENAI_CALL_MODEL.
+    // La voz NO hereda de OPENAI_WRITING_MODEL: sigue con su default (gpt-5.6-luna) salvo OPENAI_CALL_MODEL.
     // La comprension sigue en mini.
-    expect(config.callWritingModel).toBe("gpt-5.4");
+    expect(config.callWritingModel).toBe("gpt-5.6-luna");
     expect(config.understandingModel).toBe("gpt-5.4-mini");
   });
 

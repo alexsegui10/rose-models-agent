@@ -32,11 +32,13 @@ const defaultUnderstandingModel = "gpt-5.4-mini";
 // (extraccion estructurada barata; los bugs de bucle/contexto son de codigo, no del modelo). Overridable
 // por OPENAI_WRITING_MODEL: si esa var esta puesta en Vercel gana al default, hay que actualizarla alli.
 const defaultWritingModel = "gpt-5.6-terra";
-// La LLAMADA de voz sube a gpt-5.4 COMPLETO (medicion 7-jul): el banco de latencia (mini vs gpt-5.4 en turnos
-// reales de llamada) dio gpt-5.4 en ~1.4s de mediana / ~1.6s el peor caso, MUY por debajo del tope de 3.5s por
-// turno, y con una redaccion bastante mas natural y viva. No hizo falta streaming del LLM ni cambiar de
-// proveedor. Overridable por OPENAI_CALL_MODEL; el tope de tiempo por turno es OPENAI_CALL_TIMEOUT_MS (def 3500).
-const defaultCallWritingModel = "gpt-5.4";
+// La LLAMADA de voz usa gpt-5.6-luna con reasoning=low (bench 20-jul, API DIRECTA, medido en turnos reales):
+// ~2x más rápido que gpt-5.4 (no-stream ~1.1s vs ~2.1s de mediana) y MUCHO más consistente (sin los picos de
+// 4-7s que daba gpt-5.4 en el pitch largo), con redacción igual o mejor y más concisa (mejor para voz), cero
+// emojis. Es un modelo de RAZONAMIENTO: rechaza `temperature` y usa `reasoning.effort` (lo adapta el redactor,
+// ver isReasoningCallModel). Overridable por OPENAI_CALL_MODEL / OPENAI_CALL_REASONING_EFFORT; tope por turno
+// OPENAI_CALL_TIMEOUT_MS (def 3500, de sobra). En Vercel: si OPENAI_CALL_MODEL está puesto, gana al default.
+const defaultCallWritingModel = "gpt-5.6-luna";
 
 export function getLlmRuntimeConfig(env: NodeJS.ProcessEnv = process.env): LlmRuntimeConfig {
   const requestedMode = env.LLM_MODE === "OPENAI" ? "OPENAI" : "DETERMINISTIC";
