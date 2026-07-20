@@ -526,14 +526,21 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
     case "ANSWER_FROM_KNOWLEDGE":
       return planFromKnowledge(directive.type, input, {
         instruction:
-          "Responde a su pregunta de forma directa, breve y cercana, apoyándote solo en estos hechos." + repeatHint(input),
+          "Responde a su pregunta de forma directa, breve y cercana, apoyándote solo en estos hechos. QUÉDATE EN " +
+          "SU TEMA: al terminar, comprueba con naturalidad si le queda claro o si tiene alguna otra duda de ESTO " +
+          "(p. ej. '¿te queda claro?', '¿alguna otra duda de esto?'). NO empujes tú al siguiente tema — deja que " +
+          "sea ELLA quien lo dé por cerrado. Como una persona real: primero que lo entienda bien, luego se avanza." +
+          repeatHint(input),
         referenceInstagram: false,
         emptyFallback: variantFor(DEFER_TEXTS, input.repetitionIndex ?? 0)
       });
     case "REASSURE":
       return planFromKnowledge(directive.type, input, {
         instruction:
-          "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar, y retoma la conversación." + repeatHint(input),
+          "Tranquiliza su desconfianza con cercanía y naturalidad, sin presionar. QUÉDATE en SU preocupación: " +
+          "comprueba si se queda más tranquila o si le sigue rondando algo de esto, en vez de empujar tú al " +
+          "siguiente tema. Deja que sea ella quien decida seguir cuando esté tranquila." +
+          repeatHint(input),
         referenceInstagram: false,
         emptyFallback: variantFor(REASSURE_FALLBACK_TEXTS, input.repetitionIndex ?? 0)
       });

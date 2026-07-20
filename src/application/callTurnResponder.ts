@@ -123,7 +123,7 @@ function draftBufferWord(directive: CallDirectiveType, turnIndex: number): strin
 // de la lista se mutilaba ("¿Te viene bien?" -> "¿Te viene.", "¿Tienes OnlyFans o no?" -> "...o."). Una
 // coletilla de verdad siempre llega como frase aparte (", ¿vale?" / ". ¿Me sigues?" / " ¿te va?").
 const TRAILING_CHECK_CLOSER =
-  /(?:[.,;!…—-]\s*¿?|\s¿)\b(?:vale|va|s[ií]|no|eh|bien|ok(?:ey)?|de acuerdo|me sigues|te va(?: bien)?|te parece(?: bien)?|te cuadra(?: as[ií])?|c[oó]mo lo ves|qu[eé] te parece|te encaja(?: as[ií])?|mejor(?: as[ií])?|seguimos|sigo|hasta ah[ií] bien|me explico|lo ves|verdad|sabes)\s*\?\s*$/i;
+  /(?:[.,;!…—-]\s*¿?|\s¿)\b(?:vale|va|s[ií]|no|eh|bien|ok(?:ey)?|de acuerdo|me sigues|te va(?: bien)?|te parece(?: bien)?|te cuadra(?: as[ií])?|c[oó]mo lo ves|qu[eé] te parece|te encaja(?: as[ií])?|mejor(?: as[ií])?|seguimos|sigo|hasta ah[ií] bien|me explico|lo ves|verdad|sabes|te queda(?: m[aá]s)? claro[^?]{0,35}|alguna (?:otra )?duda[^?]{0,25})\s*\?\s*$/i;
 
 /**
  * Quita la coletilla-check final si la hay (y remata con puntuación limpia). Si la coletilla ERA todo el
