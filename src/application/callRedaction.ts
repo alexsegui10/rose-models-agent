@@ -631,7 +631,7 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
   // transición corta y natural — sin sonar a índice ni a lista. Solo naturalidad: el orden es del director.
   const transitionHint =
     (input.coveredTopics?.length ?? 0) > 0
-      ? ` ESTÁS CAMBIANDO DE TEMA a "${stage.label}": arranca con una transición corta y natural que lo anuncie (p. ej. "vale, y ahora ${stage.label.toLowerCase()}"), sin sonar a lista.`
+      ? ` ESTÁS CAMBIANDO DE TEMA a "${stage.label}": arranca con una transición corta y natural que lo anuncie (p. ej. "oye, y ahora lo de ${stage.label.toLowerCase()}"), sin sonar a lista. NO empieces con "vale".`
       : ' Es el PRIMER tema tras el saludo: enmárcalo con una frase corta antes de entrar (p. ej. "pues mira, primero te cuento cómo trabajamos").';
 
   const brief: CallDraftingBrief = {

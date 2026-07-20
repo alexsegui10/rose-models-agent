@@ -21,6 +21,15 @@ function normalize(text: string): string {
   return text.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 }
 
+// "estoy en X" capturado por CITY que NO es una ciudad: lleva determinante (una reunion, el trabajo, mi casa)
+// o es una actividad/lugar-no-ciudad frecuente. Evita el hecho falso "Es de / está en una reunion" (20-jul).
+function isNonPlace(captured: string): boolean {
+  return (
+    /^(?:un|una|el|la|mi|tu|su|los|las|unos|unas)\b/.test(captured) ||
+    /^(?:casa|reunion|clase|cama|ducha|bano|trabajo|curro|gym|gimnasio|oficina|misa|cita|ello|eso)\b/.test(captured)
+  );
+}
+
 const HAS_ONLYFANS = /\b(?:ya )?tengo (?:una )?(?:cuenta de )?only ?fans\b|\bmi only ?fans\b|\bya estoy en only ?fans\b/;
 const NO_ONLYFANS = /\bno tengo only ?fans\b|\bnunca (?:he )?(?:tenido|use|usado) only ?fans\b|\btodavia no tengo only ?fans\b/;
 const NO_FACE =
@@ -59,7 +68,9 @@ export function extractCallFacts(utterances: readonly string[]): string[] {
       facts.push(`Ha dicho que tiene ${age[1]} años.`);
     }
     const city = text.match(CITY);
-    if (city) {
+    // "estoy en X" no siempre es lugar ("estoy en una reunión", "en el trabajo", "en clase"): se descarta si
+    // el capturado va con determinante (un/una/el/la/mi...) o es una actividad común, no una ciudad (20-jul).
+    if (city && !isNonPlace(city[1].trim())) {
       facts.push(`Es de / está en ${city[1].trim()}.`);
     }
   }

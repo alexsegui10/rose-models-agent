@@ -232,7 +232,11 @@ const GREETING =
 // reconocer el TEMA y pasárselo a Alex. NO se persiguen fraseos exóticos ("facturar", "en negro", "darse de
 // alta", "cotizar"...): daban falsos positivos reales ("las fotos las hago en negro" = color) y no aportan.
 // Guard de "iva": el STT escribe a veces "iva" por "iba" ("yo iva a preguntarte..."), que no es el impuesto.
-const TAX_TOPIC = /\bimpuesto\w*|\bafip\b|\bmonotribut\w*|\bhacienda\b|\bfiscal\w*|\bdeclar\w*|\btribut\w*|\biva\b(?!\s+a\s)/;
+// declar\w*: solo el sentido FISCAL. Se EXCLUYE el reflexivo de IDENTIDAD ("declararme/declararte/declararse",
+// "me declaro") que pisaba preguntas de privacidad/identidad cubiertas por el retriever (over-defer, 20-jul).
+// Sigue cazando "declarar", "declararlo", "quién lo declara", "declaración" (money-referent, no reflexivo).
+const TAX_TOPIC =
+  /\bimpuesto\w*|\bafip\b|\bmonotribut\w*|\bhacienda\b|\bfiscal\w*|(?<!\b(?:me|te|se|nos)\s)\bdeclar(?!(?:ar|ando)?(?:me|te|se|nos)\b)\w*|\btribut\w*|\biva\b(?!\s+a\s)/;
 
 // ¿Es una pregunta? OJO: la conjunción causal "porque" (junta, "hago changas PORQUE no tengo fijo") NO va en
 // el patrón — se confundía con el interrogativo y se difería un "detalle" inexistente al WhatsApp (auditoría
