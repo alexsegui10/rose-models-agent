@@ -443,11 +443,19 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // "¿son de trafico espanol las otras agencias?" a alguien SIN agencias). Los verbos de pasado van
   // ANCLADOS a "agencia" en ambos ordenes (revisor 18-jul: "entre"/"estuve" sueltos mataban casos
   // PRESENTES como "trabajo con dos agencias, entre ellas una de mexico").
+  // Tambien una QUEJA en PASADO de una agencia (comparacion: "la otra agencia era un afano/un desastre",
+  // "se llevaba una barbaria", "no me traian trafico", "me prometieron y no cumplieron") NO es una pregunta
+  // de multi-agencia: es su mal recuerdo (/loop 20-jul, caso Carla "con la otra agencia era un afano" ->
+  // recibia "puedes trabajar con dos agencias..."). Ancladas a PASADO ("era/fue/se llevaba/me prometieron")
+  // para no matar el caso PRESENTE ("ahora estoy con una agencia, me tienen abandonada"), que si es relevante.
   const pastAgencyStory =
     /\b(?:deje|sali de|me fui de|no segui|entre a|estuve en|me metieron en|me mandaron a|me chamuy\w*|me engan\w*|me estafaron)\b[^.!?]{0,30}\bagencias?\b/.test(
       message
     ) ||
     /\bagencias?\b[^.!?]{0,40}\b(?:la deje|lo deje|deje al toque|me chamuy\w*|me metieron|me mandaron|me engan\w*|me estafaron|hace \d+ (?:mes|meses|semanas?|anos?))\b/.test(
+      message
+    ) ||
+    /\b(?:otra |la |una |esa )agencias?\b[^.!?]{0,45}\b(?:era un\w*|fue un\w*|me tenia\w* abandonad\w*|no me (?:traia\w*|trajo|trajeron)|se llevaba|me prometi\w*|me chamuy\w*|me engan\w*|un desastre|un afano|un asco|un espanto|un choreo|una porqueria)\b/.test(
       message
     );
   if (
