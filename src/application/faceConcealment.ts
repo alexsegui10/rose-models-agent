@@ -13,9 +13,10 @@ export function promisesFaceConcealment(response: string): boolean {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "");
 
-  // "cara" y su sinonimo "rostro" son intercambiables: el resto del codigo ya trata "rostro" como cara, y un
-  // modelo lo usa para no repetir; el guard DEBE cubrir ambos en todas las ramas (hueco grave del revisor).
-  const FACE = "(?:cara|rostro)";
+  // "cara"/"rostro" (+ coloquiales "carita"/"careto") son intercambiables: el resto del codigo trata "rostro"
+  // como cara y un modelo los alterna para no repetir; el guard DEBE cubrir todos en cada rama (huecos del
+  // revisor y barrido 20-jul: "careto"/"carita" se colaban). "morro"/"jeta" se dejan fuera (ambiguos).
+  const FACE = "(?:cara|carita|careto|rostro)";
 
   // A. ANONIMATO / INCOGNITO / ocultar la IDENTIDAD / que no se sepa/vea quien eres (anonimato de facto sin la
   //    palabra "cara"). Se veta aunque vaya negado ("no es posible el anonimato" cae al fallback SEGURO).
@@ -51,7 +52,8 @@ export function promisesFaceConcealment(response: string): boolean {
   // B. VERBO DE OCULTAMIENTO (difuminar/pixelar/tapar/recortar/oscurecer/borrar/ocultar/cubrir/esconder/
   //    disimular) junto a cara/rostro, en cualquier orden. Ademas: pixelar/difuminar CON pronombre y clitico
   //    opcional ("te lo pixelamos", "te difuminamos") son ocultamiento de imagen aunque no digan "cara".
-  const CONCEAL = "difumin|pixel|tap|recort|oscurec|borr|ocult|cubr|escond|disimul";
+  // desenfoc(ar)/blur (barrido 20-jul): sinonimos realistas de difuminar la imagen que faltaban.
+  const CONCEAL = "difumin|desenfoc|blur|pixel|tap|recort|oscurec|borr|ocult|cubr|escond|disimul";
   if (new RegExp(`\\b(?:${CONCEAL})\\w*\\b[^.!?]{0,30}\\b${FACE}\\b`).test(normalized)) return true;
   if (new RegExp(`\\b${FACE}\\b[^.!?]{0,30}\\b(?:${CONCEAL})\\w*`).test(normalized)) return true;
   if (/\b(?:te|le|os|nos)\s+(?:l[oa]s?\s+)?(?:pixel|difumin)\w*/.test(normalized)) return true;
@@ -64,10 +66,16 @@ export function promisesFaceConcealment(response: string): boolean {
     return true;
   if (new RegExp(`\\b(?:emoji|emoticono|sticker|stiker|pegatina)\\b[^.!?]{0,20}\\b${FACE}\\b`).test(normalized)) return true;
   if (new RegExp(`\\b${FACE}\\b[^.!?]{0,20}\\b(?:emoji|emoticono|sticker|stiker|pegatina)\\b`).test(normalized)) return true;
+  // Avatar (digital) que sustituye la cara: ocultamiento de identidad de facto (barrido 20-jul). Solo con
+  // "cara" cerca para no cazar usos ajenos; el caso claro es "un avatar en vez de tu cara".
+  if (new RegExp(`\\bavatar\\b[^.!?]{0,20}\\b${FACE}\\b`).test(normalized)) return true;
+  if (new RegExp(`\\b${FACE}\\b[^.!?]{0,20}\\bavatar\\b`).test(normalized)) return true;
 
   // C. cara/rostro NO se ve / nota / reconoce / distingue (pronombre + perifrasis opcionales: "no se te
   //    llega a ver la cara", "no se te va a ver"); no sale / aparece.
-  const HIDDEN_VERB = "ve\\w*|nota\\w*|reconoc\\w*|reconozc\\w*|distingu\\w*|identifi\\w*";
+  // disting\\w* (no distingu\\w*): cubre el SUBJUNTIVO "distinga" ("que no se distinga tu cara"), no solo el
+  // indicativo "distingue" (hueco 20-jul). apreci/percib: "no se te aprecia/percibe la cara" (sinonimos de ver).
+  const HIDDEN_VERB = "ve\\w*|nota\\w*|reconoc\\w*|reconozc\\w*|disting\\w*|identifi\\w*|apreci\\w*|percib\\w*";
   const PERIPHRASIS =
     "(?:llega\\s+a\\s+|va\\s+a\\s+|vas\\s+a\\s+|puede[ns]?\\s+|pueda[ns]?\\s+|alcanza\\s+a\\s+|logra\\s+a?\\s*)?";
   if (
@@ -92,8 +100,8 @@ export function promisesFaceConcealment(response: string): boolean {
     new RegExp(`\\b${FACE}\\b[^.!?]{0,20}\\bno\\s+(?:te\\s+|le\\s+)?(?:saldra|sale|salga|aparece|aparecera)\\b`).test(normalized)
   )
     return true;
-  // "solo se te ve el cuerpo" (promete que solo el cuerpo, no la cara).
-  if (/\bsolo\s+se\s+(?:te\s+|le\s+)?ve\w*\s+(?:el|tu)\s+cuerpo\b/.test(normalized)) return true;
+  // "solo se te ve el cuerpo" (promete que solo el cuerpo, no la cara). Articulo opcional (20-jul: "solo cuerpo").
+  if (/\bsolo\s+se\s+(?:te\s+|le\s+)?ve\w*\s+(?:el\s+|tu\s+)?cuerpo\b/.test(normalized)) return true;
 
   // D. Que NADIE / NO te RECONOZCA (anonimato de facto). El bot NUNCA promete no-reconocimiento legitimo. Se
   //    admite pronombre PROCLITICO ("no TE reconocen") o ENCLITICO ("nadie va a reconocerTE"), con auxiliar
@@ -153,11 +161,26 @@ export function promisesFaceConcealment(response: string): boolean {
   // G. CARA PARCIAL que evita mostrarla (de espalda(s), media cara/medio rostro, solo el cuerpo, de(l) cuello
   //    para abajo). NO se incluye "de perfil"/"de lado" (ambiguos). "de espaldas NO" (reafirmacion) se excluye.
   if (
-    /\bde\s+espaldas?\b(?!\s+no\b)|\bmedi[ao]\s+(?:cara|rostro)\b|\bsolo\s+(?:el|tu)\s+cuerpo\b|\bde(?:l)?\s+cuello\s+(?:para|hacia)\s+abajo\b/.test(
+    /\bde\s+espaldas?\b(?!\s+no\b)|\bmedi[ao]\s+(?:cara|carita|careto|rostro)\b|\bsolo\s+(?:el\s+|tu\s+)?cuerpo\b|\bde(?:l)?\s+cuello\s+(?:para|hacia)\s+abajo\b/.test(
       normalized
     )
   )
     return true;
+
+  // H. CONCEDER trabajar sin la cara (draft acomodaticio del LLM: "apuntado lo de la cara, sin problema",
+  //    "sin cara, sin problema", "sin la cara no hay problema", "respeto que no quieras mostrar la cara").
+  //    Barrido 20-jul: el redactor, al recibir el rechazo de la cara como contexto, tendia a ACEPTARLO. Se
+  //    exige un marcador DURO e INEQUIVOCO de CONCESION (sin problema / no pasa nada / apuntado / dalo por
+  //    hecho) que la INSISTENCIA legitima ("la cara es imprescindible / sin ella no funciona / es la base")
+  //    NUNCA lleva. NO se usa "de acuerdo"/"vale" (revisor 20-jul): son tambien conectores de una insistencia
+  //    ("de acuerdo, PERO la cara es imprescindible") -> falsos positivos sobre reafirmaciones legitimas.
+  const NOFACE_REF = `(?:sin\\s+(?:la\\s+|tu\\s+)?${FACE}|lo\\s+de\\s+(?:la\\s+|tu\\s+)?${FACE})`;
+  const CONCESSION =
+    "sin\\s+problema|no\\s+hay\\s+(?:problema|drama|lio|pega)|no\\s+pasa\\s+nada|sin\\s+drama|apuntad\\w*|anotad\\w*|dalo\\s+por\\s+hecho";
+  if (new RegExp(`\\b${NOFACE_REF}\\b[^.!?]{0,25}\\b(?:${CONCESSION})`).test(normalized)) return true;
+  if (new RegExp(`\\b(?:${CONCESSION})\\b[^.!?]{0,25}\\b${NOFACE_REF}\\b`).test(normalized)) return true;
+  // "respeto/entiendo que NO QUIERAS mostrar/ensenar/dar la cara" = aceptar el rechazo (concesion explicita).
+  if (new RegExp(`\\brespet\\w*\\b[^.!?]{0,20}\\bno\\s+quier\\w*\\b[^.!?]{0,20}\\b${FACE}\\b`).test(normalized)) return true;
 
   return false;
 }

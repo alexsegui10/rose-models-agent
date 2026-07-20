@@ -70,7 +70,7 @@ describe("redactor OpenAI de voz", () => {
         candidateUtterance: "vale pero yo no quiero salir con la cara",
         coveredTopics: ["Cómo trabaja la agencia"],
         pendingTopics: ["Reparto y cobro", "Límites y consentimiento"],
-        callFacts: ["No quiere enseñar la cara."]
+        callFacts: ["Ya tiene cuenta de OnlyFans."]
       },
       directiveType: "COVER_STAGE"
     });
@@ -81,7 +81,7 @@ describe("redactor OpenAI de voz", () => {
     expect(p).toContain("Cómo trabaja la agencia");
     expect(p).toContain("TEMAS QUE QUEDAN");
     expect(p).toContain("NO los anuncies como lista");
-    expect(p).toContain("No quiere enseñar la cara.");
+    expect(p).toContain("Ya tiene cuenta de OnlyFans.");
     expect(p.toLowerCase()).toContain("no se lo vuelvas a preguntar");
   });
 });

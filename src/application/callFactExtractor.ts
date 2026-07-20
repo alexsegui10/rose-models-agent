@@ -1,13 +1,20 @@
 /**
  * Extractor DETERMINISTA de hechos que la candidata dice DURANTE la llamada ("ya tengo OnlyFans",
- * "no enseño la cara", "soy de Córdoba", "tengo 24"). Produce frases cortas en español que se inyectan
+ * "soy de Córdoba", "tengo 24"). Produce frases cortas en español que se inyectan
  * al brief del redactor para que:
  *  - NO le vuelva a preguntar lo que ya dijo (naturalidad: escuchar de verdad), y
- *  - pueda referenciarlo cuando toque ("como me decías, sin cara, sin problema").
+ *  - pueda referenciarlo cuando toque.
  *
  * Es regex puro (sin LLM) y NO decide nada de negocio: solo RECUERDA (invariante 1: la relevancia y el
  * flujo siguen siendo del director). La minoría de edad NO se trata aquí: la corta el clasificador
  * (señal `underage`) con prioridad máxima; este extractor solo registra edades adultas (>=18).
+ *
+ * LA CARA NO se recuerda como hecho (barrido 20-jul): guardar "No quiere enseñar la cara" y pasárselo al
+ * redactor como dato a "referenciar/no re-preguntar" EMPUJABA al LLM a ACEPTAR trabajar sin cara ("apuntado
+ * lo de la cara, sin problema") — lo contrario de la política. El rechazo de la cara lo gestiona el director
+ * de forma DETERMINISTA (RECONDUCT_FACE insiste; CLOSE_FACE_REJECTED cierra), que es la invariante DURA: la
+ * cara es imprescindible. Por eso aquí NO se registra. NO_FACE se conserva solo para NO colar un rechazo de
+ * cara como "límite de contenido" genérico.
  */
 
 function normalize(text: string): string {
@@ -38,9 +45,8 @@ export function extractCallFacts(utterances: readonly string[]): string[] {
     } else if (HAS_ONLYFANS.test(text)) {
       facts.push("Ya tiene cuenta de OnlyFans.");
     }
-    if (NO_FACE.test(text)) {
-      facts.push("No quiere enseñar la cara.");
-    }
+    // La CARA NO se guarda como hecho (ver cabecera): el director la gestiona determinista. NO_FACE solo
+    // evita que un rechazo de cara se cuele como "límite de contenido" genérico (guard de CONTENT_LIMIT abajo).
     const limit = text.match(CONTENT_LIMIT);
     if (limit && !NO_FACE.test(limit[0])) {
       facts.push(`Ha dicho un límite: no hace ${limit[1].trim()}.`);

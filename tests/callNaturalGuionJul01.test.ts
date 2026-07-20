@@ -84,7 +84,7 @@ describe("política de edad: se responde, JAMÁS se defiere (bug 'lo comento con
 });
 
 describe("extractor de hechos de la llamada (memoria determinista, no decide nada)", () => {
-  it("extrae OnlyFans, cara, límites, agencia, edad adulta y ciudad", () => {
+  it("extrae OnlyFans, límites, agencia, edad adulta y ciudad; la CARA NO se recuerda (combo CARA 20-jul)", () => {
     const facts = extractCallFacts([
       "hola, ya tengo OnlyFans",
       "pero no quiero enseñar la cara",
@@ -93,7 +93,9 @@ describe("extractor de hechos de la llamada (memoria determinista, no decide nad
       "tengo 24 años y soy de Córdoba"
     ]);
     expect(facts.join(" ")).toContain("Ya tiene cuenta de OnlyFans");
-    expect(facts.join(" ")).toContain("No quiere enseñar la cara");
+    // El rechazo de la cara NO se guarda como hecho: lo gestiona el director (RECONDUCT_FACE), y pasarlo al
+    // redactor le empujaba a ACEPTAR trabajar sin cara (barrido 20-jul).
+    expect(facts.join(" ")).not.toMatch(/cara/i);
     expect(facts.join(" ")).toContain("no hace contenido con otras personas");
     expect(facts.join(" ")).toContain("otra agencia");
     expect(facts.join(" ")).toContain("24 años");
@@ -117,21 +119,22 @@ describe("brief conversacional: el redactor recibe lo que necesita para sonar hu
     const result = runCallTurn({
       state,
       utterance: "vale, y yo no salgo con la cara eh",
-      callFacts: ["No quiere enseñar la cara."]
+      callFacts: ["Ya tiene cuenta de OnlyFans."]
     });
     const brief = result.utterancePlan.draftingBrief;
     expect(brief?.candidateUtterance).toContain("no salgo con la cara");
     expect(brief?.coveredTopics).toContain("Cómo trabaja la agencia");
     expect(brief?.pendingTopics).toContain("Reparto y cobro");
     expect(brief?.pendingTopics).not.toContain("Qué hace ella"); // la está cubriendo AHORA (no es pendiente)
-    expect(brief?.callFacts).toContain("No quiere enseñar la cara.");
+    expect(brief?.callFacts).toContain("Ya tiene cuenta de OnlyFans.");
   });
 
-  it("respondToCall extrae los hechos de TODOS sus turnos y los inyecta al redactor", async () => {
+  it("respondToCall inyecta los hechos al redactor y RECHAZA un draft que acepte trabajar sin cara (combo CARA 20-jul)", async () => {
     let captured: CallDraftRequest | undefined;
     const drafter = {
       draft: async (req: CallDraftRequest) => {
         captured = req;
+        // Draft acomodaticio (lo que el LLM tendía a redactar): ACEPTA trabajar sin cara -> DEBE rechazarse.
         return "Genial, apuntado lo de la cara, sin problema. Por tu parte es solo crear el contenido y subirlo al Drive, ¿vale?";
       }
     };
@@ -145,8 +148,12 @@ describe("brief conversacional: el redactor recibe lo que necesita para sonar hu
       drafter
     });
     expect(res.directiveType).toBe("COVER_STAGE");
-    expect(captured?.brief.callFacts?.join(" ")).toContain("No quiere enseñar la cara");
+    // La cara NO se recuerda como hecho (la gestiona el director, no la memoria acomodaticia del LLM).
+    expect(captured?.brief.callFacts?.join(" ") ?? "").not.toMatch(/cara/i);
     expect(captured?.brief.candidateUtterance).toBe("vale sigue");
+    // SEGURIDAD: el draft acomodaticio se descarta en el validador -> habla el fallback determinista.
+    expect(res.content).not.toMatch(/apuntado lo de la cara|sin problema/i);
+    expect(res.content.length).toBeGreaterThan(0);
   });
 });
 
