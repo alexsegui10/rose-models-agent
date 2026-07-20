@@ -612,7 +612,7 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
   // OF previo abandonado/sin usar ("tengo of pero abandonado, ¿cuenta igual?") -> sin problema, se retoma.
   if (
     // Anclado a OF/cuenta (revisor Lote C): "mi INSTAGRAM lo tengo parado" no es el OF abandonado.
-    /\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\babandonad\w*|\babandonad\w*\b[^.!?]{0,25}\b(?:of|onlyfans|cuenta)\b|\b(?:el of|el onlyfans|la cuenta)\b[^.!?]{0,15}\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b|\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b(?=[^.!?]{0,20}\b(?:of|onlyfans|cuenta)\b)|\bcuenta (?:vieja|parada|muerta|abandonada)\b|\b(?:of|onlyfans)\b[^.!?]{0,20}\b(?:parad[oa]|muert[oa]|sin usar|sin tocar)\b|\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\b(?:lo|la)\s+(?:deje|abandone|deje de lado|deje tirad\w+|deje colgad\w+|deje muert[oa])\b/.test(
+    /\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\babandonad\w*|\babandonad\w*\b[^.!?]{0,25}\b(?:of|onlyfans|cuenta)\b|\b(?:el of|el onlyfans|la cuenta)\b[^.!?]{0,15}\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b|\b(?:lo|la) tengo (?:parad[oa]|muert[oa]|abandonad[oa])\b(?=[^.!?]{0,20}\b(?:of|onlyfans|cuenta)\b)|\bcuenta (?:vieja|parada|muerta|abandonada)\b|\b(?:of|onlyfans)\b[^.!?]{0,20}\b(?:parad[oa]|muert[oa]|sin usar|sin tocar)\b|\b(?:of|onlyfans|only fans)\b[^.!?]{0,30}\b(?:lo|la)\s+(?:deje|abandone|deje de lado|deje tirad\w+|deje colgad\w+|deje muert[oa])\b|\b(?:abri|cree|hice|tengo|tenia|arme)\b[^.!?]{0,25}\b(?:of|onlyfans|only fans)\b[^.!?]{0,45}\bnunca\b[^.!?]{0,15}\b(?:subi|use|toque|publique|entre|active|la use|le puse)\w*\b|\b(?:of|onlyfans|only fans|cuenta de of|cuenta de onlyfans|mi of|el of)\b[^.!?]{0,20}\b(?:esta )?limpi[oa]\b/.test(
       message
     )
   )
