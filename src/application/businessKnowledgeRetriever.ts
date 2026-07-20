@@ -355,6 +355,23 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     );
   if (/\b(llamada|telefono|whatsapp)\b/.test(message) || (/\bllamar\b/.test(message) && !callIsNaming))
     tags.push("call", "schedule");
+  // PREGUNTA de FORMATO de la llamada ("¿es videollamada o telefono?", "¿cuanto dura?", "¿de que va?") -> ficha
+  // neutral call-format-neutral (Alex 20-jul: "es telefono"). Detector ESTRECHO: NO capta una PETICION de llamada
+  // ("podemos hacer una llamada?", "cuando me llamas?"), que sigue difiriendo al socio pre-aprobacion (inv. 4).
+  const callFormatQuestion =
+    /\bvideo ?llamada\b/.test(message) ||
+    /\bes por (?:video|telefono)\b/.test(message) ||
+    /\bla llamada es\b[^.!?]{0,25}\b(?:por )?(?:video|telefono|como)\b/.test(message) ||
+    (/\bllamada\b/.test(message) &&
+      (/\b(?:cuanto dura|cuanto tarda|es larga|es corta|dura mucho|cuanto tiempo dura)\b/.test(message) ||
+        /\b(?:de que|para que|sobre que|de q)\b[^.!?]{0,25}\b(?:va|trata|hablamos|me hablan|me van a hablar|hab)/.test(message)));
+  // Guard (revisor 20-jul): si hay un CUÁNDO/horario ("a que hora / cuando / el martes / mañana / ya mismo"),
+  // es una pregunta de AGENDA (no de formato) -> difiere al socio pre-aprobacion, no responde el formato.
+  const asksWhenSchedule =
+    /\b(cuando|a que hora|que hora|el (?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)|manana|hoy|ya mismo|esta (?:tarde|noche|semana)|el finde)\b/.test(
+      message
+    );
+  if (callFormatQuestion && !asksWhenSchedule) tags.push("call-format");
   if (/\b(grabar|grabacion|transcribir|transcripcion|retell)\b/.test(message))
     tags.push("retell", "recording", "transcript", "consent");
   if (/\b(contrato|legal|clausula|permanencia)\b/.test(message)) tags.push("contract", "legal", "human-review");

@@ -72,6 +72,42 @@ const entries: KnowledgeEntryInput[] = [
     updatedAt: "2026-07-17"
   },
   {
+    // Formato NEUTRAL de la llamada, respondible YA en la cualificacion (decision de Alex 20-jul: "es telefono").
+    // Contesta el DATO factual ("es telefono, cortita, para conocernos") cuando preguntan "es video o telefono? /
+    // cuanto dura? / de que me hablan?", pero SIN proponer agenda ni pedir el numero — eso lo abre siempre la
+    // aprobacion humana post-Encaja (invariante 4) y lo sirve call-details-after-review, que sigue gateado.
+    // allowedStates SOLO pre-Encaja: en post-Encaja gana call-details-after-review (con su CTA de agendar).
+    id: "call-format-neutral",
+    category: "CALL_POLICY",
+    title: "Formato de la llamada (neutral, sin agendar)",
+    facts: [
+      "La llamada es una llamada de telefono normal.",
+      "Es corta, de unos minutos.",
+      "Sirve para conocernos, explicar bien como trabaja Rose Models y resolver dudas."
+    ],
+    approvedAnswerPoints: [
+      "Es una llamada de telefono normal, cortita, de unos minutos, para conocernos y que te explique bien como trabajamos y resuelvas tus dudas."
+    ],
+    prohibitedClaims: [
+      "Proponer o dar por agendada la llamada antes de la aprobacion.",
+      "Pedir el numero de telefono antes de la aprobacion.",
+      "Prometer una llamada inmediata.",
+      "Mencionar videollamada (la agencia no hace videollamadas)."
+    ],
+    mandatoryNuances: ["No proponer agenda ni pedir el numero: eso es despues del Encaja."],
+    escalationConditions: [],
+    // SOLO pre-review (NEW_LEAD/QUALIFYING): en revision/HIR una peticion de llamada DIFIERE al socio (regla
+    // Alex 20-jun), no se responde el formato; y post-Encaja gana call-details-after-review (con CTA de agenda).
+    // Surge SOLO por el tag dedicado "call-format" (detector estrecho de PREGUNTA de formato), no por "call".
+    allowedStates: ["NEW_LEAD", "QUALIFYING"],
+    tags: ["call-format"],
+    requiresHumanReview: false,
+    version: "call-format-neutral-2026-07-20.2",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-20"
+  },
+  {
     id: "call-recording-retell-policy",
     category: "CALL_POLICY",
     title: "Grabacion y transcripcion de llamadas",
