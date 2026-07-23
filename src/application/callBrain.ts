@@ -57,6 +57,8 @@ export interface RunCallTurnInput {
   lastBotUtterance?: string;
   /** Últimos turnos del BOT en la llamada (del transcript): para que el redactor NO repita lo mismo. */
   recentBotUtterances?: string[];
+  /** true si `signal` la produjo la comprensión IA (no el oído): las señales de IA nunca mutan estado. */
+  signalRefinedByUnderstander?: boolean;
 }
 
 /** Ejecuta un turno del cerebro de la llamada. */
@@ -72,7 +74,11 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
       moneyContext,
       lastBotUtterance: input.lastBotUtterance
     });
-  const { directive, nextState } = decideCallDirective({ state: input.state, signal });
+  const { directive, nextState } = decideCallDirective({
+    state: input.state,
+    signal,
+    refinedByUnderstander: input.signalRefinedByUnderstander
+  });
   // Para las ACLARACIONES, el redactor se apoya en el conocimiento de la etapa que se estaba explicando.
   const lastStageId = input.state.coveredStages.filter((id) => id !== "CLOSE").at(-1);
   const knowledge = knowledgeForDirective(directive, coveringEntries, lastStageId);

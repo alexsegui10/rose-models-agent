@@ -149,7 +149,17 @@ export function initialCallDirectorState(): CallDirectorState {
   };
 }
 
-export function decideCallDirective(input: { state: CallDirectorState; signal: CallCandidateSignal }): CallTurnDecision {
+export function decideCallDirective(input: {
+  state: CallDirectorState;
+  signal: CallCandidateSignal;
+  /**
+   * true si la señal la produjo la COMPRENSIÓN IA (understander), no el oído determinista. Replay-crítico:
+   * la reproducción NO re-llama al LLM, así que una señal refinada por IA JAMÁS debe mutar estado (el efecto
+   * no se reconstruiría). Con el flag, asks-earnings NO adelanta la etapa MONEY (queda en GIVE_EARNINGS,
+   * sin estado); el adelanto solo ocurre cuando la señal viene del clasificador (idéntico en vivo y replay).
+   */
+  refinedByUnderstander?: boolean;
+}): CallTurnDecision {
   const { state, signal } = input;
 
   // Una vez transferida a Alex, el bot no retoma el guion: la persona tiene el control (invariante 4).
@@ -319,6 +329,18 @@ export function decideCallDirective(input: { state: CallDirectorState; signal: C
     case "asks-identity":
       return { directive: { type: "GIVE_IDENTITY" }, nextState: s };
     case "asks-earnings":
+      // 1ª LLAMADA REAL (Alba, 21-jul): "¿cuánto me vais a pagar?" → el bot esquivaba ("sería mentirte una
+      // cifra") y VOLVÍA a su guion, dejando el dinero para más tarde = robótico ("sigue su estructura sí o
+      // sí", Alex). Como con asks-share-figure: si el dinero AÚN no se presentó, se presenta AQUÍ (la
+      // conversación manda; el orden lo sigue decidiendo el código y la cifra es la autorizada del script).
+      // El matiz honesto (no prometer cantidades, depende de su constancia) vive en el brief del MONEY.
+      // SOLO con señal del oído determinista (replay-idéntico); refinada por IA -> GIVE_EARNINGS sin estado.
+      if (!input.refinedByUnderstander && !s.coveredStages.includes("MONEY")) {
+        return {
+          directive: { type: "COVER_STAGE", stageId: "MONEY", shareOffer: initialCallRevenueShareOffer() },
+          nextState: { ...s, coveredStages: [...s.coveredStages, "MONEY"] }
+        };
+      }
       return { directive: { type: "GIVE_EARNINGS" }, nextState: s };
     case "asks-age-policy":
       return { directive: { type: "GIVE_AGE_POLICY" }, nextState: s };

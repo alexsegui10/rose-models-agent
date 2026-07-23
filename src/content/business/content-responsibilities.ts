@@ -41,6 +41,34 @@ const entries: KnowledgeEntryInput[] = [
     updatedAt: "2026-07-18"
   },
   {
+    // 1ª LLAMADA REAL (Alba, 21-jul): "¿y el contenido por dónde se lo tengo que mandar?" no tenía ficha (el
+    // dato del Drive vive solo dentro del guion de etapa) y el retriever casó la de referencias-por-WhatsApp:
+    // el bot contestó otra cosa DOS veces. El dato es del guion de llamada que dictó Alex (carpeta de Drive).
+    // SOLO-VOZ: allowedStates=[CALL_IN_PROGRESS] — el texto la gatea fuera (orden de Alex 6-jul, caso
+    // Constanza: Drive/guiones NO se mencionan en el chat) y la llamada usa ignoreStateGating, así que ahí sí sale.
+    id: "content-delivery-drive-call",
+    category: "CONTENT_RESPONSIBILITIES",
+    title: "Por dónde se entrega el contenido (llamada): carpeta de Drive",
+    facts: [
+      "El contenido se entrega subiendolo a una carpeta de Drive que la agencia comparte con la modelo.",
+      "Los perfiles de referencia y los guiones se pasan por WhatsApp; son guias de estilo, no el canal de entrega."
+    ],
+    approvedAnswerPoints: [
+      "El contenido nos lo subes a una carpeta de Drive que te compartimos nosotros.",
+      "Por WhatsApp te paso aparte los perfiles de referencia y los guiones, pero el contenido va a esa carpeta de Drive."
+    ],
+    prohibitedClaims: ["Pedir que envie contenido intimo por Instagram o WhatsApp.", "Pedir contrasenas o accesos."],
+    mandatoryNuances: ["La carpeta se comparte al empezar; si no la tiene todavia, se le manda al colgar."],
+    escalationConditions: ["Problemas de acceso a la carpeta o dudas tecnicas persistentes."],
+    allowedStates: ["CALL_IN_PROGRESS"],
+    tags: ["content-delivery", "content", "drive"],
+    requiresHumanReview: false,
+    version: "content-delivery-drive-call-2026-07-23.1",
+    status: "ACTIVE",
+    approvedByAlex: true,
+    updatedAt: "2026-07-23"
+  },
+  {
     id: "content-agency-responsibilities",
     category: "CONTENT_RESPONSIBILITIES",
     title: "Responsabilidades de Rose Models",

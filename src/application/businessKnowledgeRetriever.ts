@@ -67,6 +67,15 @@ function isUsableEntry(entry: KnowledgeEntry, input: BusinessKnowledgeRetrievalI
   // mantiene (el % sigue sin salir por aqui).
   if (input.ignoreStateGating) return true;
 
+  // Fichas SOLO-VOZ (revisor 23-jul, RIESGO 1): allowedStates = [CALL_IN_PROGRESS] marca "conocimiento de la
+  // LLAMADA" (p. ej. la entrega por Drive). CALL_IN_PROGRESS también es un estado real del funnel de DM (y
+  // hay candidatas ATASCADAS ahí si se pierde el webhook de fin — por eso existe callWatchdog), así que sin
+  // esta exclusión un DM en ese estado mencionaría el Drive = rompe la orden de Alex 6-jul (caso Constanza).
+  // El camino de TEXTO (sin ignoreStateGating) las excluye SIEMPRE; solo la llamada las sirve.
+  if (entry.allowedStates.length > 0 && entry.allowedStates.every((state) => state === "CALL_IN_PROGRESS")) {
+    return false;
+  }
+
   // En HUMAN_INTERVENTION_REQUIRED el estado pausa DECISIONES, no respuestas documentadas (fallo
   // real: bucle "lo hablo con mi socio"), pero SIN saltarse el gating de estados: solo son
   // respondibles las entradas con allowedStates vacio o que incluyan HUMAN_INTERVENTION_REQUIRED.
@@ -484,6 +493,15 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("content", "what-to-send", "faq");
+  // 1ª LLAMADA REAL (Alba, 21-jul): "¿y el contenido POR DÓNDE se lo tengo que mandar?" -> la ficha de la
+  // ENTREGA (carpeta de Drive, solo-voz). Antes casaba la de referencias-por-WhatsApp y el bot contestaba
+  // otra cosa dos veces seguidas. Es el CANAL de entrega (por dónde / dónde lo subo), no el QUÉ enviar.
+  if (
+    /\b(?:por\s+)?donde\b[^.!?]{0,30}\b(?:paso|mando|envio|subo|entrego|dejo)\b[^.!?]{0,25}\b(?:contenido|fotos?|videos?|material)\b|\b(?:contenido|fotos?|videos?|material)\b[^.!?]{0,25}\bpor\s+donde\b[^.!?]{0,30}\b(?:pasar|mandar|enviar|subir|entregar|paso|mando|envio|subo|se lo|te lo)\b|\bdonde\s+(?:se\s+)?(?:sube|manda|envia|entrega)\b[^.!?]{0,20}\b(?:el\s+)?(?:contenido|material|las fotos|los videos)\b/.test(
+      message
+    )
+  )
+    tags.push("content-delivery", "content");
   // Hueco jun-2026: "que edad buscais?" -> franja objetivo (perfil maduro, ~30-50). Pregunta sobre la edad
   // del PUBLICO objetivo; no toca el corte de mayoria de edad (invariante 2 vive en candidate-requirements-adult).
   if (

@@ -84,9 +84,13 @@ describe("responder end-to-end: el replay cuenta las repeticiones y varía las f
   });
 
   it("dos preguntas de ingresos -> dos respuestas honestas DISTINTAS (ninguna con cifras)", async () => {
+    // (21-jul, Alba): la 1ª pregunta de dinero PRE-MONEY ahora presenta el reparto ahí; para probar la
+    // VARIACIÓN de GIVE_EARNINGS se cubre MONEY primero (pregunta de cifra) y luego las dos de ingresos.
     const base: CallChatMessage[] = [
       { role: "system", content: "p" },
-      { role: "assistant", content: "apertura..." }
+      { role: "assistant", content: "apertura..." },
+      { role: "user", content: "¿cuánto os lleváis vosotros exactamente?" },
+      { role: "assistant", content: "el reparto es un 30% para ti y un 70% para la agencia..." }
     ];
     const one = await respondToCall({ messages: [...base, { role: "user", content: "¿cuánto ganaría yo al mes?" }] });
     expect(one.directiveType).toBe("GIVE_EARNINGS");

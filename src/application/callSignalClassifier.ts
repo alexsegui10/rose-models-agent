@@ -95,8 +95,11 @@ const FOLLOWUP_SHARE_COMPLAINT =
 // medio", "partir la diferencia", una cifra 40-69 que ELLA EMPUJA con verbo ("subime a 45", "dame 50",
 // "necesito 50", "mejorame a 45") o coletilla ("45 aunque sea", "50 y cerramos", "50 para mi"), y "con el
 // %/porcentaje ... flojo/corto/no me convence". Excluye cifras de CONTENIDO (fotos/reels/días...).
+// + "(te/que/yo) quiero más" (1ª LLAMADA REAL 21-jul, Alba: tras el 30/70 dijo "Quiero más." y "Te quiero
+// más." —con el "te" fantasma del ASR— y el bot fingió sordera, luego "qué maja" y CERRÓ con la negociación
+// ABANDONADA). En moneyContext es inequívoco; excluye "quiero más información/detalles/fotos/tiempo...".
 const FOLLOWUP_SHARE_COMPLAINT_EXTRA =
-  /\b(?:me\s+(?:quedo|queda|llevo|deja\w*)|sigue(?:\s+siendo)?)\s+(?:con\s+)?(?:muy\s+|medio\s+|re\s+)?(?:cort\w*|floj\w*|escas\w*|justit\w*|abajo|baj[oa])\b|\bun(?:\s+puntito|\s+punto|\s+termino)?\s+medio\b|\bpart\w*\s+la\s+diferencia\b|\b(?:subi\w*|dame|darme|ponme|dejame\w*|mejora\w*(?:me|lo)?|necesito)\s+(?:me\s+|nos\s+|hasta\s+|a\s+|en\s+|el\s+|un\s+|aunque\s+sea\s+)*(?:4\d|5\d|6\d)\b(?!\s*(?:fotos?|reels?|dias?|videos?|minutos?|horas?|semanas?|mes(?:es)?|anos?|seguidor))|\b(?:4\d|5\d|6\d)\s+(?:aunque\s+sea|y\s+(?:cerramos|arreglamos|listo)|para\s+mi\b(?![^.?!]{0,15}\b(?:bien|perfecto|genial|joya|barbaro|listo|ok|me\s+sirve|me\s+vale)\b))|\bcon\s+el\s+(?:%|porcentaje)\b[^.?!]{0,25}\b(?:floj\w*|cort\w*|poc\w*|convenc\w*)\b/;
+  /\b(?:me\s+(?:quedo|queda|llevo|deja\w*)|sigue(?:\s+siendo)?)\s+(?:con\s+)?(?:muy\s+|medio\s+|re\s+)?(?:cort\w*|floj\w*|escas\w*|justit\w*|abajo|baj[oa])\b|\bun(?:\s+puntito|\s+punto|\s+termino)?\s+medio\b|\bpart\w*\s+la\s+diferencia\b|(?<!\bno\s)(?<!\bno\s\w{1,3}\s)(?:\bte\s+|\bque\s+|\byo\s+)?\bquiero\s+(?:un\s+poco\s+)?mas\b(?!\s*(?:que\s+nada|info\w*|detall\w*|foto\w*|video\w*|tiempo|contenido|contexto|saber|datos?|explicac\w*|vueltas?|rollos?|charla|historias?))|\b(?:subi\w*|dame|darme|ponme|dejame\w*|mejora\w*(?:me|lo)?|necesito)\s+(?:me\s+|nos\s+|hasta\s+|a\s+|en\s+|el\s+|un\s+|aunque\s+sea\s+)*(?:4\d|5\d|6\d)\b(?!\s*(?:fotos?|reels?|dias?|videos?|minutos?|horas?|semanas?|mes(?:es)?|anos?|seguidor))|\b(?:4\d|5\d|6\d)\s+(?:aunque\s+sea|y\s+(?:cerramos|arreglamos|listo)|para\s+mi\b(?![^.?!]{0,15}\b(?:bien|perfecto|genial|joya|barbaro|listo|ok|me\s+sirve|me\s+vale)\b))|\bcon\s+el\s+(?:%|porcentaje)\b[^.?!]{0,25}\b(?:floj\w*|cort\w*|poc\w*|convenc\w*)\b/;
 
 // (R9 10-jul, endurecido tras NO-APTO del revisor) "mejorar" solo cuenta como queja en forma de PETICION
 // dirigida a la agencia: "¿(no) (me lo) podeis/puedes mejorar (eso|el porcentaje...)?" anclada a fin de
@@ -164,7 +167,9 @@ const DIRECT_SHARE_COMPLAINT =
 // Pregunta de INGRESOS ("¿cuánto se gana?", "¿cuánto voy a ganar?", "¿se gana bien?"): respuesta HONESTA
 // (depende de ti, SIN cifras ni promesas), no se defiere. Se evalúa antes que QUESTION.
 const ASKS_EARNINGS =
-  /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|cobro|cobraria|cobrare|voy a cobrar|me llevo|me llevaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b|\bgarp[ao]\w*\b/;
+  /\bcuanto (?:se gana|gano|voy a ganar|ganaria|se saca|puedo ganar|ganan|dinero|sacaria|cobro|cobraria|cobrare|voy a cobrar|me llevo|me llevaria|se puede (?:ganar|sacar))\b|\bse gana bien\b|\bcuanto se gana al mes\b|\bgarp[ao]\w*\b|\bcuanto (?:me )?(?:vais|van|va) a pagar(?:me)?\b|\bcuanto (?:me )?paga(?:n|is|riais|rian)\b|\bcuanto (?:me )?pagas?\b/;
+// + "cuanto me vais/van a pagar(me)" / "cuanto me pagan/pagáis" (1ª llamada REAL 21-jul, Alba): no lo cazaba
+// el oído y llegaba por la comprensión IA (que no puede adelantar el MONEY por replay) -> ahora determinista.
 
 // Quiere terminar / colgar -> cerrar con contrato. Incluye despedidas sueltas ("chau chau", "bye"):
 // tras el cierre deben llevar a la despedida/silencio, no a repetir el discurso (barrido jul-2026).

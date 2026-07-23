@@ -139,6 +139,8 @@ export function buildDraftPrompt(request: CallDraftRequest): string {
       "- Ya ESTÁS hablando por teléfono con ella: jamás digas 'te lo explico en la llamada' ni propongas agendar una llamada.",
       "- Castellano de España, muletillas naturales (mira, oye, pues nada), sin sonar a folleto.",
       '- NO empieces la frase con "vale", "a ver", "ya" ni "pues" sueltos (a veces ya se antepone una muletilla automática).',
+      // 1ª llamada real (Alba, 21-jul): el bot arrancaba CADA turno con "Perfecto, Alba." — tell robótico.
+      "- NO arranques los turnos siempre igual: evita empezar con «Perfecto/Genial/Muy bien» + su nombre. Su NOMBRE úsalo muy de vez en cuando (una persona real casi nunca lo repite); la mayoría de turnos, sin nombre.",
       "- Responde SOLO con lo que diría el bot, sin comillas ni acotaciones."
     ].join("\n")
   );

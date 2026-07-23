@@ -655,7 +655,7 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
   // transición corta y natural — sin sonar a índice ni a lista. Solo naturalidad: el orden es del director.
   const transitionHint =
     (input.coveredTopics?.length ?? 0) > 0
-      ? ` ESTÁS CAMBIANDO DE TEMA a "${stage.label}": arranca con una transición corta y natural que lo anuncie (p. ej. "oye, y ahora lo de ${stage.label.toLowerCase()}"), sin sonar a lista. NO empieces con "vale".`
+      ? ` ESTÁS CAMBIANDO DE TEMA a "${stage.label}": arranca con una transición corta y natural que lo anuncie, DISTINTA en cada tema (varía: "oye, y otra cosa...", "te cuento también...", "ah, y sobre ${stage.label.toLowerCase()}..."), sin sonar a lista ni repetir la misma fórmula de transición que ya usaste. NO empieces con "vale".`
       : ' Es el PRIMER tema tras el saludo: enmárcalo con una frase corta antes de entrar (p. ej. "pues mira, primero te cuento cómo trabajamos").';
 
   const brief: CallDraftingBrief = {
@@ -668,7 +668,10 @@ function planCoverStage(input: PlanCallUtteranceInput): CallUtterancePlan {
       ? [
           ...gathered.prohibited,
           "Aplazar la cifra ('luego te lo explico', 'te lo cuento en la llamada'): la cifra se dice AHORA.",
-          "Decir 'se liquida' o 'liquidación' (jerga que no entiende): di siempre 'cobras cada 14 días'."
+          "Decir 'se liquida' o 'liquidación' (jerga que no entiende): di siempre 'cobras cada 14 días'.",
+          // (revisor 23-jul, NOTA 3): la pregunta "¿cuánto me vais a pagar?" ahora entra por aquí — el matiz
+          // honesto tiene que vivir EN el brief, no solo en la regla genérica del prompt.
+          "Prometer o estimar CANTIDADES de dinero (cuánto ganará al mes, medias, rangos): solo el reparto en porcentaje; lo que gane depende de su constancia y del contenido."
         ]
       : gathered.prohibited,
     mandatoryNuances: gathered.nuances,

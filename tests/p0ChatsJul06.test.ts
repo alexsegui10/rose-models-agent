@@ -123,10 +123,17 @@ describe("CONSTANZA: Telegram/Twitter/Drive/videollamadas/guiones eliminados del
     expect(businessKnowledgeEntries.some((entry) => entry.id === "services-secondary-traffic")).toBe(false);
   });
 
-  it("ninguna ficha ACTIVA menciona telegram/twitter/videollamadas/drive", () => {
+  it("ninguna ficha ACTIVA de TEXTO menciona telegram/twitter/videollamadas/drive", () => {
+    // Excepción (21-jul, 1ª llamada real): las fichas SOLO-LLAMADA (allowedStates = [CALL_IN_PROGRESS]) sí
+    // pueden hablar del Drive — en la llamada el guion YA lo dice ("lo subes a una carpeta de Drive"). El
+    // chat sigue protegido: el gateo por estado las excluye de todos los estados de texto (hay test aparte
+    // en callContentDeliveryJul23 que verifica que en QUALIFYING no se recupera).
+    const callOnly = (entry: (typeof businessKnowledgeEntries)[number]) =>
+      entry.allowedStates.length === 1 && entry.allowedStates[0] === "CALL_IN_PROGRESS";
     const offenders = businessKnowledgeEntries.filter(
       (entry) =>
         entry.status === "ACTIVE" &&
+        !callOnly(entry) &&
         [...entry.facts, ...entry.approvedAnswerPoints].some((line) => /telegram|twitter|videollamada|drive/i.test(line))
     );
     expect(offenders.map((entry) => entry.id)).toEqual([]);

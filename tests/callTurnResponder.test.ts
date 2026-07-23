@@ -64,9 +64,18 @@ describe("responder de turno de llamada (stateless por replay)", () => {
   // INGRESOS soltado al LLM (jul-2026): si el modelo cuela una CIFRA vendiendo "cuanto se gana", el validador
   // (noMoneyFigures) la tumba y sale el fallback determinista (sin numeros). "Nunca ir a menos": en el peor
   // caso, lo mismo que el texto fijo de antes.
+  // (21-jul, llamada real de Alba): una pregunta de dinero PRE-MONEY ahora presenta el reparto ahí
+  // (COVER_STAGE MONEY); GIVE_EARNINGS queda para cuando el dinero YA se presentó. El test cubre MONEY
+  // primero (pregunta de cifra) y conserva su propósito: la cifra del LLM se descarta en GIVE_EARNINGS.
   it("GIVE_EARNINGS: una cifra del modelo se DESCARTA y sale el fallback honesto (sin números)", async () => {
     const res = await respondToCall({
-      messages: [sys, { role: "assistant", content: "apertura..." }, { role: "user", content: "oye y cuanto se gana con esto?" }],
+      messages: [
+        sys,
+        { role: "assistant", content: "apertura..." },
+        { role: "user", content: "¿cuánto os lleváis vosotros exactamente?" },
+        { role: "assistant", content: "el reparto es un 30% para ti y un 70% para la agencia..." },
+        { role: "user", content: "oye y cuanto se gana con esto?" }
+      ],
       drafter: fixedDrafter("Algunas hacen 100 al dia, y hay chicas que llegan a 3000 al mes.")
     });
     expect(res.directiveType).toBe("GIVE_EARNINGS");
@@ -77,7 +86,13 @@ describe("responder de turno de llamada (stateless por replay)", () => {
   it("GIVE_EARNINGS: una respuesta del modelo SIN cifras (honesta) SÍ se usa (mejora natural, no va a menos)", async () => {
     const natural = "Uf, mira, con sinceridad eso depende mucho de ti y de la constancia; prometerte algo seria mentirte.";
     const res = await respondToCall({
-      messages: [sys, { role: "assistant", content: "apertura..." }, { role: "user", content: "oye y cuanto se gana con esto?" }],
+      messages: [
+        sys,
+        { role: "assistant", content: "apertura..." },
+        { role: "user", content: "¿cuánto os lleváis vosotros exactamente?" },
+        { role: "assistant", content: "el reparto es un 30% para ti y un 70% para la agencia..." },
+        { role: "user", content: "oye y cuanto se gana con esto?" }
+      ],
       drafter: fixedDrafter(natural)
     });
     expect(res.directiveType).toBe("GIVE_EARNINGS");

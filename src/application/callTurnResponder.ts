@@ -340,6 +340,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
   // no lo entiende, el turno se queda `unclear` (pedir que repita): fallback determinista (invariante 6).
   let liveSignal: CallCandidateSignal | undefined = botHasSpoken ? undefined : "none";
   let liveCoveringEntries = coveringEntries;
+  // true si la señal del turno la produjo la COMPRENSIÓN IA (no el oído). Replay-crítico: una señal de IA
+  // jamás muta estado (la reproducción no re-llama al LLM); el director lo garantiza con este flag.
+  let liveSignalRefined = false;
   if (botHasSpoken) {
     const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
     let signal = classifyCallSignal({
@@ -351,6 +354,7 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     if (signal === "unclear" && understander && !isUnintelligibleUtterance(lastUtterance) && !terminalBeforeTurn) {
       const intent = await understander.understand({ utterance: lastUtterance, lastBotUtterance, context: input.context });
       const resolution = resolveRefinedSignal(intent);
+      if (resolution.kind !== "none") liveSignalRefined = true;
       if (resolution.kind === "signal") {
         signal = resolution.signal;
       } else if (resolution.kind === "question") {
@@ -405,10 +409,15 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       // oído ya devuelve asks-covered (no llega aquí); solo era alcanzable en el caso fiscal, que se DEFIERE.
       // face-concern / question / none -> NO se rescata (se queda asks-unknown = defer seguro).
       if (rescued) {
+        // La comparación usa refinedByUnderstander:true (la señal ES de la IA): así asks-earnings, que con el
+        // flag no muta estado, sigue siendo rescatable a la respuesta honesta de ingresos.
         const deterministicNext = JSON.stringify(decideCallDirective({ state, signal: "asks-unknown" }).nextState);
-        const rescuedNext = JSON.stringify(decideCallDirective({ state, signal: rescued }).nextState);
+        const rescuedNext = JSON.stringify(
+          decideCallDirective({ state, signal: rescued, refinedByUnderstander: true }).nextState
+        );
         if (rescuedNext === deterministicNext) {
           signal = rescued; // replay-safe: mismo efecto de estado que el asks-unknown determinista
+          liveSignalRefined = true;
           if (rescuedCovering) liveCoveringEntries = rescuedCovering;
         }
       }
@@ -436,6 +445,7 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     context: input.context,
     // Señal ya resuelta arriba (oído determinista + comprensión). En apertura (el bot aún no habló): "none".
     signal: liveSignal,
+    signalRefinedByUnderstander: liveSignalRefined,
     resolveQuestion: () => liveCoveringEntries,
     // Memoria de la llamada (jul-2026): lo que ELLA ya dijo en cualquier turno (extractor determinista),
     // para que el redactor no re-pregunte y pueda referenciarlo. No decide nada (solo informa).
