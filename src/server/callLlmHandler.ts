@@ -112,6 +112,32 @@ export function contextFromFlatVars(raw: Record<string, unknown>): CallContext |
   return hasAny ? context : undefined;
 }
 
+/**
+ * MEMORIA DE LLAMADA (Fase 1, 23-jul): carga las señales resueltas de turnos previos y devuelve cómo
+ * persistir la del turno vivo. Best-effort en TODAS las patas (invariante 6): sin candidate_id, sin
+ * DATABASE_URL o con la DB caída -> undefined (el responder degrada al camino clásico); guardar es
+ * fire-and-forget dentro del responder y aquí el fallo solo se loguea. Una llamada JAMÁS se rompe por esto.
+ */
+async function loadCallTurnMemory(
+  candidateId: string | undefined,
+  callAlreadyStarted: boolean
+): Promise<RespondToCallInput["turnMemory"]> {
+  if (!candidateId || !process.env.DATABASE_URL) return undefined;
+  try {
+    const { getDb } = await import("@/infrastructure/db/client");
+    const { PostgresCallTurnMemoryStore } = await import("@/infrastructure/repositories/postgresCallTurnMemoryStore");
+    const { prepareCallTurnMemory } = await import("@/application/callTurnMemory");
+    // La lógica llamada-nueva -> clear + arranque vacío vive en application (prepareCallTurnMemory, con test
+    // de regresión); aquí solo el cableado best-effort.
+    return await prepareCallTurnMemory(new PostgresCallTurnMemoryStore(getDb()), candidateId, callAlreadyStarted);
+  } catch (error) {
+    console.warn("[call-llm] memoria de llamada no disponible (se sigue sin ella)", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+    return undefined;
+  }
+}
+
 export async function handleCallLlmRequest(request: Request): Promise<Response> {
   const apiKey = process.env.CALL_LLM_API_KEY;
   if (!apiKey) {
@@ -172,7 +198,12 @@ export async function handleCallLlmRequest(request: Request): Promise<Response> 
 
   // Redactor LLM: ACTIVO por defecto con clave (redacción natural); CALL_LLM_REDACTION=off -> guion fijo.
   const drafter = getCallDrafter();
-  const respondInput: RespondToCallInput = { messages, candidateName, recorded, context, drafter };
+  // MEMORIA DE LLAMADA (Fase 1, 23-jul): carga las señales resueltas de turnos previos (1 SELECT, fuera del
+  // hot-path del LLM) y da al responder cómo persistir la del turno vivo. Best-effort TOTAL: sin
+  // candidate_id, sin DATABASE_URL o con la DB caída -> undefined y el responder usa el camino clásico.
+  const callAlreadyStarted = messages.some((m) => m.role === "assistant" && (m.content ?? "").trim().length > 0);
+  const turnMemory = await loadCallTurnMemory(candidateId, callAlreadyStarted);
+  const respondInput: RespondToCallInput = { messages, candidateName, recorded, context, drafter, turnMemory };
 
   const model = parsed.data.model ?? "rose-models-call-brain";
   const created = Math.floor(Date.now() / 1000);

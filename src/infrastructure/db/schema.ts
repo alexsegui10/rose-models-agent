@@ -8,6 +8,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -325,4 +326,23 @@ export const evaluationSessions = pgTable(
       name: "evaluation_sessions_conversation_id_fk"
     }).onDelete("cascade")
   ]
+);
+
+// MEMORIA DE LLAMADA (Fase 1 del cambio de estructura, 23-jul): señal resuelta EN VIVO de cada turno de la
+// candidata durante una llamada de voz. Permite que la reproducción stateless use la señal REAL (incluidas
+// las de la comprensión IA) en vez de re-clasificar a ciegas — la pieza que desbloquea comprensión-IA-en-todos-
+// los-turnos. call_key = candidate_id (una llamada activa por candidata); las filas de llamadas pasadas se
+// invalidan solas por el candado de frase (el transcript de una llamada nueva no coincide) y pesan poco.
+export const callTurnMemory = pgTable(
+  "call_turn_memory",
+  {
+    callKey: text("call_key").notNull(),
+    turnIndex: integer("turn_index").notNull(),
+    // Frase saneada/truncada (candado de coincidencia): jamás se aplica una señal a la frase equivocada.
+    utterance: text("utterance").notNull(),
+    signal: text("signal").notNull(),
+    refinedByUnderstander: boolean("refined_by_understander").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [primaryKey({ columns: [table.callKey, table.turnIndex], name: "call_turn_memory_pk" })]
 );

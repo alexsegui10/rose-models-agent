@@ -30,6 +30,7 @@ import {
 } from "./callDirector";
 import { validateCallUtterance } from "./callRedactionValidator";
 import { classifyCallSignal, isTaxDeferTopic } from "./callSignalClassifier";
+import { turnMemoryUtteranceKey, type CallTurnMemoryInput, type StoredCallTurnSignal } from "./callTurnMemory";
 import { resolveRefinedSignal, type CallUnderstander } from "./callUnderstander";
 import { getCallUnderstander } from "./openaiCallUnderstander";
 import { LocalBusinessKnowledgeRetriever, type BusinessKnowledgeRetriever } from "./businessKnowledgeRetriever";
@@ -66,6 +67,13 @@ export interface RespondToCallInput {
    * (son instantáneos). El texto devuelto por respondToCall NO incluye la muletilla.
    */
   onDraftStart?: (bufferText: string) => void;
+  /**
+   * MEMORIA DE LLAMADA (Fase 1, 23-jul): señales ya resueltas de turnos previos (cargadas por el endpoint)
+   * + cómo persistir la del turno en vivo. OPCIONAL y best-effort: sin ella (simulador, tests, DB caída) el
+   * replay usa la re-clasificación de siempre. Un registro solo se aplica si su frase coincide EXACTA con la
+   * del transcript en ese índice (candado anti-descuadre); si no, ese turno cae al camino clásico.
+   */
+  turnMemory?: CallTurnMemoryInput;
 }
 
 export interface CallResponderResult {
@@ -256,11 +264,30 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       directiveRepeats[opening.directive.type] = (directiveRepeats[opening.directive.type] ?? 0) + 1;
       state = opening.nextState;
     }
+    // MEMORIA DE LLAMADA (Fase 1, 23-jul): señales de turnos previos resueltas EN VIVO (incluidas las de la
+    // comprensión IA) indexadas por turno. Un registro solo se usa si su frase coincide EXACTA con la del
+    // transcript en ese índice (candado anti-descuadre: si ElevenLabs re-fragmenta, cae al camino clásico).
+    const memoryByIndex = new Map<number, StoredCallTurnSignal>();
+    for (const record of input.turnMemory?.records ?? []) memoryByIndex.set(record.turnIndex, record);
     for (let i = 0; i < userUtterances.length - 1; i++) {
       // Espejo del atajo anti-loro EN VIVO (R1 jul-2026): un turno de ruido tras el estado terminal se
       // respondió con silencio SIN pasar por el director; el replay debe saltarlo igual, o incrementaría
       // un terminalRepeats fantasma y el cierre nunca llegaría a repetirse en vivo.
       if ((state.handedOff || state.closed) && isNoiseUtterance(userUtterances[i])) continue;
+      // Turno con señal RECORDADA: se reproduce EXACTA (misma señal + mismo flag de comprensión que en vivo)
+      // sin re-clasificar ni reconciliar — la memoria es la verdad. Con candado de frase; si no casa, el
+      // resto del camino clásico de abajo sigue intacto (paracaídas).
+      const remembered = memoryByIndex.get(i);
+      if (remembered && remembered.utterance === turnMemoryUtteranceKey(userUtterances[i])) {
+        const decision = decideCallDirective({
+          state,
+          signal: remembered.signal,
+          refinedByUnderstander: remembered.refinedByUnderstander
+        });
+        directiveRepeats[decision.directive.type] = (directiveRepeats[decision.directive.type] ?? 0) + 1;
+        state = decision.nextState;
+        continue;
+      }
       const moneyContext = state.coveredStages.includes("MONEY") || state.revenueShareStep > 0;
       // El replay clasifica con el MISMO conocimiento que el turno en vivo (riesgo del revisor jul-2026):
       // sin esto, una pregunta respondida en vivo (asks-covered) se re-contaba como DEFER y la primera
@@ -423,6 +450,17 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       }
     }
     liveSignal = signal;
+    // MEMORIA DE LLAMADA: persiste la señal resuelta EN VIVO (con su procedencia) para que el próximo turno
+    // la reproduzca exacta. Fire-and-forget: jamás añade latencia ni puede romper el turno (paracaídas).
+    if (input.turnMemory?.save && userUtterances.length > 0) {
+      const record: StoredCallTurnSignal = {
+        turnIndex: userUtterances.length - 1,
+        utterance: turnMemoryUtteranceKey(lastUtterance),
+        signal,
+        refinedByUnderstander: liveSignalRefined
+      };
+      void input.turnMemory.save(record).catch(() => {});
+    }
   }
 
   // ANTI-DISCO-RAYADO del "no te pillo" (sweep R9 10-jul): con la comprensión activa, el replay SALTA los
