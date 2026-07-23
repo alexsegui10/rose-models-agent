@@ -165,6 +165,26 @@ function isUnintelligibleUtterance(utterance: string): boolean {
   return tokens.every((token) => !SPANISH_VOWEL.test(token));
 }
 
+// FASE 2 (comprensión-primero, 23-jul): señales BLANDAS del oído que la comprensión IA puede re-examinar
+// (cazar la pregunta/objeción escondida en un "vale pero..." o en una desconfianza genérica). Las señales de
+// SEGURIDAD/NEGOCIO (menor, %, cara, hostilidad, pedir-persona, cierres, salario, cifra) NUNCA están aquí:
+// el código corta antes y la IA ni se consulta (invariantes 1/2/3).
+const COMPREHENSION_FIRST_BASE = new Set<CallCandidateSignal>(["follows-along", "asks-more", "acknowledge", "distrust"]);
+
+// Ack trivial ("sí", "dale", "vale"): no gastar una llamada de comprensión en esto (eficiencia; el avance
+// determinista es correcto). Cualquier frase con más contenido sí se re-examina.
+function isTrivialAck(utterance: string): boolean {
+  const n = utterance
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[.,!?¡¿\s]+/g, " ")
+    .trim();
+  return /^(?:si|ok|okey|dale|vale|claro|bueno|aja|ya|genial|perfecto|joya|listo)(?: (?:si|ok|okey|dale|vale|claro|bueno|aja|ya|genial|perfecto|joya|listo))*$/.test(
+    n
+  );
+}
+
 // ¿La respuesta del bot a un turno indica que EN VIVO se quedó en `unclear`? (replay-safe, 20-jul). El
 // transcript es la verdad: si a un turno inteligible-no-entendido el bot respondió PIDIENDO REPETIR
 // (ASK_REPEAT) o PASANDO LA LLAMADA (HANDOFF), la comprensión NO lo mapeó y la racha de `unclear` SÍ subió
@@ -448,6 +468,56 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
           if (rescuedCovering) liveCoveringEntries = rescuedCovering;
         }
       }
+    } else if (
+      // FASE 2 — COMPRENSIÓN-PRIMERO (Alex 23-jul, "los pilares: contexto, coherencia, natural"): la IA
+      // re-examina también los turnos BLANDOS (avance/acuse/desconfianza) para cazar la pregunta u objeción
+      // escondida que el oído aplanó ("¿quién me asegura que me pagan?" caía en REASSURE genérico evasivo).
+      // GATEADO A MEMORIA (input.turnMemory): la señal refinada se PERSISTE y el replay la reproduce exacta;
+      // sin memoria, el comportamiento es el clásico (cero divergencia). Seguridad/negocio ni se consultan
+      // (COMPREHENSION_FIRST_BASE excluye menor/%/cara/hostil/cierres — el código corta antes). Los acks
+      // triviales ("sí", "dale") no gastan comprensión. El tema FISCAL no se re-examina (deferencia deliberada).
+      COMPREHENSION_FIRST_BASE.has(signal) &&
+      understander &&
+      input.turnMemory &&
+      !isUnintelligibleUtterance(lastUtterance) &&
+      !terminalBeforeTurn &&
+      !isTrivialAck(lastUtterance) &&
+      !isTaxDeferTopic(lastUtterance)
+    ) {
+      const baseSignal = signal;
+      const intent = await understander.understand({ utterance: lastUtterance, lastBotUtterance, context: input.context });
+      const resolution = resolveRefinedSignal(intent);
+      if (resolution.kind === "question") {
+        // Pregunta escondida: se responde SOLO si el conocimiento la cubre (jamás degradar un avance a un
+        // defer — "dale, seguí" nunca debe acabar en "te lo confirmo por WhatsApp").
+        if (coveringEntries.length > 0) {
+          signal = "asks-covered";
+          liveSignalRefined = true;
+        }
+      } else if (resolution.kind === "face-concern") {
+        // Miedo de la cara escondido -> reconducción DETERMINISTA (el LLM no redacta sobre la cara).
+        signal = "face-doubt";
+        liveSignalRefined = true;
+      } else if (resolution.kind === "time-concern" && TIME_KNOWLEDGE_ENTRY) {
+        signal = "asks-covered";
+        liveCoveringEntries = [TIME_KNOWLEDGE_ENTRY];
+        liveSignalRefined = true;
+      } else if (resolution.kind === "signal") {
+        // Re-rutas específicas (identidad/ingresos/edad/aclaración/desconfianza). El "acknowledge" de la IA
+        // NO pisa un avance del oído ("vale genial" DEBE avanzar el guion: pilar "sin bucles").
+        const allowed: CallCandidateSignal[] = [
+          "distrust",
+          "asks-identity",
+          "asks-earnings",
+          "asks-age-policy",
+          "asks-clarification"
+        ];
+        if (resolution.signal !== baseSignal && allowed.includes(resolution.signal)) {
+          signal = resolution.signal;
+          liveSignalRefined = true;
+        }
+      }
+      // none/null o resultado no permitido -> se queda la señal del oído (fallback determinista, inv. 6).
     }
     liveSignal = signal;
     // MEMORIA DE LLAMADA: persiste la señal resuelta EN VIVO (con su procedencia) para que el próximo turno
@@ -572,6 +642,8 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       usedDrafter,
       deterministic: plan.deterministicText !== undefined,
       hasContext: Boolean(input.context),
+      // Procedencia de la señal (N2 revisor Fase 2): true = la resolvió la comprensión IA, no el oído.
+      refined: liveSignalRefined,
       handoffReason: result.directive.handoffReason ?? null
     })
   );

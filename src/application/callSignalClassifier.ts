@@ -174,7 +174,10 @@ const ASKS_EARNINGS =
 // Quiere terminar / colgar -> cerrar con contrato. Incluye despedidas sueltas ("chau chau", "bye"):
 // tras el cierre deben llevar a la despedida/silencio, no a repetir el discurso (barrido jul-2026).
 const WANTS_TO_END =
-  /(te dejo|te tengo que dejar|tengo que (irme|colgar|dejarlo|dejarte)|hablamos (luego|mas tarde|otro dia|en otro momento|manana)|ahora no puedo|no es buen momento|me tengo que ir|tengo prisa|me pillas (mal|liada)|adios|hasta luego|me voy|cuelgo|\bcha[ou]+\b|\bbye\b|\bnos vemos\b)/;
+  /(te dejo|te tengo que dejar|tengo que (irme|colgar|dejarlo|dejarte)|hablamos (luego|mas tarde|otro dia|en otro momento|manana)|ahora no puedo|no es buen momento|me tengo que ir|tengo prisa|me pillas (mal|liada)|adios|hasta luego|me voy|(?<!me )(?<!capaz )cuelgo|\bcha[ou]+\b|\bbye\b|\bnos vemos\b)/;
+// (?<!me )cuelgo (barrido Fase 2, Malena): "capaz ME CUELGO y después me quiero matar" es argentino por "me
+// despisto/me retraso" (+ hipérbole de rabia) — NO es colgar el teléfono; cerraba la llamada a mitad. "te
+// cuelgo"/"cuelgo ya" (colgar de verdad) siguen contando.
 
 // AVISO DE TIEMPO ("te aviso que solo tengo una hora", "tengo poco tiempo"): NO es pregunta ni querer
 // colgar — es "sigue, pero rapido". Antes caia en QUESTION (por el "que") -> defer absurdo a WhatsApp

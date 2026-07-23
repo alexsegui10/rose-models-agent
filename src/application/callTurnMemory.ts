@@ -83,6 +83,30 @@ export interface CallTurnMemoryStore {
 }
 
 /**
+ * Almacén in-memory (dev sin DATABASE_URL, harness de barridos y tests): misma semántica que el de Postgres.
+ * En serverless real NO sirve (instancias no pegajosas) — ahí manda el de Postgres.
+ */
+export class InMemoryCallTurnMemoryStore implements CallTurnMemoryStore {
+  private readonly byKey = new Map<string, Map<number, StoredCallTurnSignal>>();
+
+  async load(callKey: string): Promise<StoredCallTurnSignal[]> {
+    const rows = this.byKey.get(callKey);
+    if (!rows) return [];
+    return [...rows.values()].sort((a, b) => a.turnIndex - b.turnIndex);
+  }
+
+  async save(callKey: string, record: StoredCallTurnSignal): Promise<void> {
+    const rows = this.byKey.get(callKey) ?? new Map<number, StoredCallTurnSignal>();
+    rows.set(record.turnIndex, record);
+    this.byKey.set(callKey, rows);
+  }
+
+  async clear(callKey: string): Promise<void> {
+    this.byKey.delete(callKey);
+  }
+}
+
+/**
  * Prepara la memoria para un turno (lo llama el endpoint). LLAMADA NUEVA (el bot aún no habló = petición de
  * la apertura) -> se LIMPIA la memoria de la llamada anterior de esta candidata y se arranca vacía: sin esto,
  * una fila vieja podía coincidir por casualidad en el turno 0 (un "sí"/"hola" idéntico) y aplicar una señal

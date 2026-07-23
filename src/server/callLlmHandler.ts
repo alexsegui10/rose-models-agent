@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { respondToCall, type CallChatMessage, type RespondToCallInput } from "@/application/callTurnResponder";
+import { InMemoryCallTurnMemoryStore, prepareCallTurnMemory } from "@/application/callTurnMemory";
 import { buildDmTranscript, type CallContext } from "@/application/callContext";
 import { getCallDrafter } from "@/application/openaiCallDrafter";
 import { bearerMatches } from "@/server/bearerAuth";
@@ -122,20 +123,40 @@ async function loadCallTurnMemory(
   candidateId: string | undefined,
   callAlreadyStarted: boolean
 ): Promise<RespondToCallInput["turnMemory"]> {
-  if (!candidateId || !process.env.DATABASE_URL) return undefined;
+  if (!candidateId) return undefined;
   try {
-    const { getDb } = await import("@/infrastructure/db/client");
-    const { PostgresCallTurnMemoryStore } = await import("@/infrastructure/repositories/postgresCallTurnMemoryStore");
-    const { prepareCallTurnMemory } = await import("@/application/callTurnMemory");
     // La lógica llamada-nueva -> clear + arranque vacío vive en application (prepareCallTurnMemory, con test
-    // de regresión); aquí solo el cableado best-effort.
-    return await prepareCallTurnMemory(new PostgresCallTurnMemoryStore(getDb()), candidateId, callAlreadyStarted);
+    // de regresión); aquí solo el cableado best-effort. La DB solo se importa (dinámico) si hay DATABASE_URL.
+    if (process.env.DATABASE_URL) {
+      const { getDb } = await import("@/infrastructure/db/client");
+      const { PostgresCallTurnMemoryStore } = await import("@/infrastructure/repositories/postgresCallTurnMemoryStore");
+      return await prepareCallTurnMemory(new PostgresCallTurnMemoryStore(getDb()), candidateId, callAlreadyStarted);
+    }
+    // Dev/simulador SIN Postgres: in-memory de proceso. GUARD (revisor Fase 2, R2): en serverless de
+    // producción las instancias NO son pegajosas — un in-memory ahí haría divergencia sistemática y muda si
+    // DATABASE_URL se cayera por misconfig. En prod sin DB -> SIN memoria (Fase 2 apagada, clásico) + warn.
+    if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+      console.warn("[call-llm] sin DATABASE_URL en producción: memoria de llamada APAGADA (comprensión clásica)");
+      return undefined;
+    }
+    return await prepareCallTurnMemory(getInMemoryCallTurnMemory(), candidateId, callAlreadyStarted);
   } catch (error) {
     console.warn("[call-llm] memoria de llamada no disponible (se sigue sin ella)", {
       message: error instanceof Error ? error.message : String(error)
     });
     return undefined;
   }
+}
+
+// Singleton in-memory (patrón simulatorStore/getDb): sobrevive a recargas en dev.
+const globalForCallMemory = globalThis as typeof globalThis & {
+  roseCallTurnMemory?: InMemoryCallTurnMemoryStore;
+};
+function getInMemoryCallTurnMemory(): InMemoryCallTurnMemoryStore {
+  if (!globalForCallMemory.roseCallTurnMemory) {
+    globalForCallMemory.roseCallTurnMemory = new InMemoryCallTurnMemoryStore();
+  }
+  return globalForCallMemory.roseCallTurnMemory;
 }
 
 export async function handleCallLlmRequest(request: Request): Promise<Response> {

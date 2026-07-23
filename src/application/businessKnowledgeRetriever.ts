@@ -480,6 +480,16 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
       // que precio ponerle" NO es onboarding, es precio de suscripción). Se exige "como va/funciona/se hace...".
       /\b(?:no tengo|nunca tuve|nunca he tenido|todavia no tengo|aun no tengo)\b[^.!?]{0,15}\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,40}\b(?:como (?:seria|funciona|se hace|hago|arranco|empiezo|va)|que (?:hago|tengo que hacer)|eso como|no se (?:como|por donde)|ni idea de como)\b/.test(
         message
+      ) ||
+      // Barrido Fase 2 (23-jul, Romina/Florencia/Micaela — over-defer RECURRENTE): "¿ustedes LO CREAN de cero
+      // o cómo es?", "ni tengo cuenta y quieren que ARRANQUE DE CERO", "¿lo tengo que abrir antes o da igual?"
+      // preguntan lo mismo (quién abre la cuenta / empezar sin cuenta) y acababan en "te lo confirmo por
+      // WhatsApp". La conjugación "crean/montan/arman" y el "de cero" sin verbo de crear no casaban.
+      /\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,30}\bl[ao] (?:crean|montan|arman|preparan|abren)\b/.test(message) ||
+      /\b(?:arranc|empie|empez|comenz|comien)\w*\s+(?:de|desde)\s+cero\b/.test(message) ||
+      /\bni tengo (?:cuenta|onlyfans|only fans|of)\b/.test(message) ||
+      /\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,30}\b(?:lo tengo que abrir|la tengo que abrir|tengo que (?:abrirl[ao]|crearl[ao])|abrir antes|da igual o l[ao])\b/.test(
+        message
       ))
   )
     tags.push("of-account", "account-setup", "onboarding", "faq");
