@@ -95,7 +95,8 @@ const NUMBER_WORDS = new Set([
 // problema") que romperian respuestas honestas; y "un euro" ya lo caza la regla de moneda de mas abajo. Se hizo
 // autonoma (no reutiliza NUMBER_WORDS) porque ese set es incompleto en unidades/adolescentes (revisor 7-jul).
 const EARNINGS_NUMERAL_WORDS =
-  /\b(?:dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieci(?:seis|siete|ocho|nueve)|veinte|veinti\w+|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien(?:to)?s?|doscientos|trescientos|cuatrocientos|quinientos|seiscientos|setecientos|ochocientos|novecientos|mil(?:es)?|millon(?:es)?)\b/;
+  /\b(?:dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|dieci(?:seis|siete|ocho|nueve)|veinte|veinti\w+|treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa|cien(?:to)?s?|doscient[oa]s|trescient[oa]s|cuatrocient[oa]s|quinient[oa]s|seiscient[oa]s|setecient[oa]s|ochocient[oa]s|novecient[oa]s|mil(?:es)?|millon(?:es)?)\b/;
+// [oa]s en las centenas (23-jul): "quinientAs lucas / doscientAs lucas" (moneda femenina AR) se colaba.
 
 const MAX_UTTERANCE_LENGTH = 600;
 
@@ -174,6 +175,27 @@ export function validateCallUtterance(
   ) {
     return { valid: false, reason: "reparto invertido (la parte pequeña no es para la agencia)" };
   }
+  // PARÁFRASIS de la inversión (workflow 20-jul + revisor: "te quedas con el 70", "te llevas el setenta",
+  // "es tuyo el 70", "el 70 lo cobras vos"): la guarda de arriba solo cazaba "N para ti/vos". Ventana corta
+  // ({0,15}) para NO cazar el flujo de cobro legítimo ("...70% para la agencia... el dinero lo cobras tú",
+  // que queda lejos y sin cifra pegada). "te quedas con el 30" (dirección correcta) NO se toca.
+  if (
+    /\b(?:te\s+(?:quedas?|llevas?|tocas?)|es\s+tuyo|tu\s+parte\s+(?:es|seria))\b[^.!?]{0,15}\b(?:70|65|60|setenta|sesenta)\b/.test(
+      norm
+    ) ||
+    /\b(?:70|65|60|setenta|sesenta)\b[^.!?]{0,15}\b(?:te\s+(?:quedas?|llevas?)|lo\s+cobras\s+(?:tu|vos)|es\s+tuyo|es\s+para\s+tu\s+parte)\b/.test(
+      norm
+    )
+  ) {
+    return { valid: false, reason: "reparto invertido parafraseado (la parte grande no es para ella)" };
+  }
+  if (
+    /\b(?:nos\s+(?:quedamos|llevamos)|la\s+agencia\s+se\s+(?:queda|lleva))\b[^.!?]{0,15}\b(?:30|35|40|treinta|cuarenta)\b/.test(
+      norm
+    )
+  ) {
+    return { valid: false, reason: "reparto invertido parafraseado (la parte pequeña no es para la agencia)" };
+  }
 
   // Cifras del reparto FUERA del turno de dinero: si este turno no debía hablar de cifras (defer,
   // identidad, otras etapas), CUALQUIER porcentaje o reparto N/N invalida, aunque sea el autorizado.
@@ -214,6 +236,24 @@ export function validateCallUtterance(
   // Reparto al 50/50 expresado de otras formas.
   if (/\bfifty\b|\bmitad y mitad\b|\ba medias\b|\bal cincuenta\b|\bcincuenta y cincuenta\b/.test(norm)) {
     return { valid: false, reason: "reparto no autorizado (50/50)" };
+  }
+
+  // NUMERAL EN LETRA pegado a MONEDA ("quinientos euros al mes"): SIEMPRE inválido, en CUALQUIER turno
+  // (workflow 20-jul: el candado fuerte solo corría en GIVE_EARNINGS y un turno de REASSURE/etapa podía
+  // prometer "quinientos euros al mes" sin dígitos). Un numeral-en-letra junto a moneda jamás es cadencia
+  // de contenido legítima.
+  if (
+    new RegExp(`${EARNINGS_NUMERAL_WORDS.source}\\s+(?:euros?|dolar(?:es)?|pavos?|lucas?|palos?|mangos?|libras?|pesos?)\\b`).test(
+      norm
+    )
+  ) {
+    return { valid: false, reason: "cifra de dinero en letra (promesa de ingresos)" };
+  }
+
+  // Turno de DINERO (allowAuthorizedShare): ningún número de 3+ dígitos es legítimo presentando el reparto
+  // (revisor 23-jul: "algunas sacan entre 1000 y 3000" pasaba sin % ni moneda). Los autorizados son de 2.
+  if (options?.allowAuthorizedShare === true && /\b\d{3,}\b/.test(norm)) {
+    return { valid: false, reason: "número grande en el turno de dinero" };
   }
 
   // Turno de INGRESOS: barrera ABSOLUTA. Ningun numero es legitimo respondiendo "cuanto se gana" -> se rechaza
