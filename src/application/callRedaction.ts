@@ -420,7 +420,37 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };
     }
     case "DEFEND_SHARE":
-      return { directiveType: directive.type, deterministicText: DEFEND_SHARE_TEXT, fallbackText: DEFEND_SHARE_TEXT };
+      // FASE 3 (23-jul, "menos plantillas"): la defensa del 70 la redacta luna con los ARGUMENTOS de Alex
+      // como grounding (misma sustancia, otra piel en cada llamada — antes sonaba IDÉNTICA en todas, tell
+      // que Jesica escuchó clavado). La CIFRA no se toca: si el draft menciona el reparto, el validador solo
+      // admite la dirección y cifras autorizadas (allowAuthorizedShare en este turno); fallback = el texto
+      // de Alex de siempre. La DECISIÓN de defender la tomó el director (invariante 1).
+      return {
+        directiveType: directive.type,
+        draftingBrief: {
+          instruction:
+            "Se ha quejado de que el 70% para la agencia es mucho. Defiende el reparto con naturalidad y " +
+            "seguridad, SIN ceder ni ofrecer otra cifra: apóyate SOLO en los argumentos de los hechos. " +
+            "Reacciona primero a cómo lo ha dicho ella (sin repetir su queja literal) y no suenes a discurso " +
+            "aprendido." +
+            repeatHint(input),
+          groundingFacts: [
+            "El 70% de la agencia no es beneficio directo: de ahí sale todo lo que se le monta (las cuentas, la publicidad, el equipo de chatters vendiendo por ella a todas horas).",
+            "Ella no pone dinero de su bolsillo: pone el contenido, y su parte es limpia, sin gastos.",
+            "La agencia solo gana cuando ella gana (se cobra a porcentaje del resultado)."
+          ],
+          prohibitedClaims: [
+            "Ofrecer o insinuar OTRA cifra o subida del reparto (la concesión la decide el código, no tú).",
+            "Prometer ingresos o cantidades de dinero.",
+            "Criticar a otras agencias por su nombre."
+          ],
+          mandatoryNuances: [],
+          referenceInstagram: false,
+          context: input.context,
+          ...briefExtras(input)
+        },
+        fallbackText: DEFEND_SHARE_TEXT
+      };
     case "ASK_REPEAT": {
       const text = variantFor(ASK_REPEAT_TEXTS, input.repetitionIndex ?? 0);
       return { directiveType: directive.type, deterministicText: text, fallbackText: text };

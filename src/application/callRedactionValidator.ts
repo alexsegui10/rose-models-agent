@@ -255,6 +255,16 @@ export function validateCallUtterance(
   if (options?.allowAuthorizedShare === true && /\b\d{3,}\b/.test(norm)) {
     return { valid: false, reason: "número grande en el turno de dinero" };
   }
+  // Turno de DINERO: CONCESIÓN BLANDA sin cifra ("te lo puedo mejorar", "lo subimos si va bien") — la mejora
+  // del reparto la decide SOLO el código (escalera); un draft jamás la promete ni la insinúa (Fase 3, 24-jul).
+  if (
+    options?.allowAuthorizedShare === true &&
+    /\b(?:te\s+lo|lo|te)\s+(?:puedo|podemos|voy\s+a|vamos\s+a|podria(?:mos)?)\s+(?:mejorar|subir)\b|\blo\s+(?:mejoramos|subimos)\b|\bte\s+(?:subo|subimos|mejoro|mejoramos)\b/.test(
+      norm
+    )
+  ) {
+    return { valid: false, reason: "promesa de mejorar el reparto (la concesión la decide el código)" };
+  }
 
   // Turno de INGRESOS: barrera ABSOLUTA. Ningun numero es legitimo respondiendo "cuanto se gana" -> se rechaza
   // cualquier digito o magnitud de dinero (cierra "entre 1000 y 3000", "30 al dia", "50 pavos", numero desnudo).

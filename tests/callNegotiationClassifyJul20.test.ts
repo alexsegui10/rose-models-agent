@@ -56,3 +56,19 @@ describe("ADVERSARIAL: aceptación / contenido / tiempo NO cuentan como queja de
     });
   }
 });
+
+// Barrido Fase 3 (23-jul, Abril): "porfa algo más, aunque sea un poquito más" tras la defensa caía a
+// ingresos y la escalera no seguía. En moneyContext es regateo inequívoco.
+describe("continuaciones blandas de regateo (Fase 3)", () => {
+  it("'porfa algo más' / 'aunque sea un poquito más' en moneyContext -> queja del reparto", () => {
+    expect(classifyCallSignal({ utterance: "porfa algo más, aunque sea un poquito más", moneyContext: true })).toBe(
+      "complains-about-share"
+    );
+    expect(classifyCallSignal({ utterance: "dale, aunque sea un toque más y cerramos", moneyContext: true })).toBe(
+      "complains-about-share"
+    );
+  });
+  it("SIN moneyContext no disparan (pueden ser de contenido/tiempo)", () => {
+    expect(classifyCallSignal({ utterance: "porfa algo más de tiempo" })).not.toBe("complains-about-share");
+  });
+});

@@ -584,7 +584,11 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // Cifras del reparto SOLO en el turno de dinero (endurecimiento R1 jul-2026): en cualquier otro turno
     // redactado, un porcentaje —aunque sea el autorizado— está fuera de sitio y tira el draft al fallback.
     // Y un draft JAMÁS se despide (los cierres son deterministas): despedida improvisada -> fallback.
-    const allowShare = result.directive.type === "COVER_STAGE" && result.directive.stageId === "MONEY";
+    // DEFEND_SHARE también es turno de dinero (Fase 3): su draft puede referirse al 70/30 AUTORIZADO al
+    // defenderlo; la inversión parafraseada y los números grandes los vetan las guardas nuevas del validador.
+    const allowShare =
+      (result.directive.type === "COVER_STAGE" && result.directive.stageId === "MONEY") ||
+      result.directive.type === "DEFEND_SHARE";
     // Turno de INGRESOS ("cuanto se gana"): barrera ABSOLUTA de cifras. Ningun numero es legitimo ahi, asi que
     // cualquier cifra que colara el LLM tira el draft al fallback determinista (invariante de ingresos).
     const noMoneyFigures = result.directive.type === "GIVE_EARNINGS";
