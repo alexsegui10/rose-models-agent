@@ -505,6 +505,23 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
     )
   )
     tags.push("agency-responsibilities", "operations");
+  // TANDA 3 (Guada): "¿CÓMO se quedan ustedes el 70 si entra en mi cuenta?" pregunta el MECANISMO del cobro
+  // (ella transfiere la parte de la agencia) y defería — la ficha de liquidación lo cubre. OJO: "cuánto se
+  // llevan" (la CIFRA) va por asks-share-figure; esto es el "cómo".
+  if (
+    /\bcomo\s+(?:se\s+(?:quedan|llevan|cobran)|les\s+(?:llega|paso|pago|transfiero|mando)|os\s+(?:llega|paso|pago|mando|transfiero))\b|\bcomo\s+se\s+aplica\s+el\s+reparto\b|\byo\s+les\s+(?:paso|pago|transfiero)\b[^.!?]{0,20}\b(?:parte|70|porcentaje|comision)\b/.test(
+      message
+    )
+  )
+    tags.push("settlement", "payment", "revenue-share");
+  // TANDA 3 (Guada): "¿CUÁNTO contenido quieren POR SEMANA?" recibía vaguedad — la ficha de volumen (5 días,
+  // 2-3 fotos, 10-20 reels) lo cubre exacto. Cantidad+periodo -> producción.
+  if (
+    /\bcuant[oa]s?\s+(?:contenido|fotos?|videos?|reels?)\b[^.!?]{0,30}\b(?:por\s+semana|a\s+la\s+semana|semanal\w*|por\s+dia|al\s+dia|por\s+mes|al\s+mes)\b|\b(?:por|a\s+la)\s+semana\b[^.!?]{0,20}\b(?:de\s+)?(?:contenido|fotos?|reels?|videos?)\b|\bque\s+volumen\b/.test(
+      message
+    )
+  )
+    tags.push("production", "reels", "photos", "warmup");
   // DICTADA POR ALEX (18-jul): "¿qué (tipo de) contenido debo enviarte?" / "¿cuánto contenido?" / "¿qué me
   // pides para comenzar?" -> la ficha de referencias y guiones (content-what-to-send). Antes caía en la del
   // perfil objetivo ("no hace falta experiencia...") — un non-sequitur visto en conversaciones REALES.

@@ -28,6 +28,13 @@ export interface CallValidationOptions {
    */
   allowAuthorizedShare?: boolean;
   /**
+   * OFERTA VIGENTE del turno de dinero (B1 auditoría 24-jul): con allowAuthorizedShare, además de "cifra de
+   * la escalera", la cifra debe ser DE LA OFERTA ACTUAL (p. ej. [30,70] en el escalón 0). Sin esto, un draft
+   * de DEFEND podía "conceder" de palabra un 65/35 o saltar al 60/40 que el código NO decidió (la escalera
+   * quedaba desincronizada de lo dicho). La concesión la decide SOLO negotiateShare.
+   */
+  authorizedShareFigures?: readonly number[];
+  /**
    * ¿Puede este turno despedirse/cerrar? Los turnos REDACTADOS por el LLM son siempre turnos intermedios
    * (los cierres son deterministas): una despedida improvisada ("no podemos trabajar contigo, un saludo")
    * suena a fin de llamada sin que el director haya cerrado (barrido jul-2026). Por defecto true
@@ -62,6 +69,15 @@ export interface CallValidationOptions {
 const AUTHORIZED_SHARE = new Set([70, 65, 60, 30, 35, 40]);
 /** Porcentajes en PALABRAS permitidos (mismos valores). */
 const ALLOWED_PCT_WORDS = new Set(["setenta", "sesenta", "sesenta y cinco", "treinta", "treinta y cinco", "cuarenta"]);
+/** Valor numérico de cada palabra de la escalera (para el candado de la oferta VIGENTE, B1 24-jul). */
+const PCT_WORD_VALUES: Record<string, number> = {
+  setenta: 70,
+  sesenta: 60,
+  "sesenta y cinco": 65,
+  treinta: 30,
+  "treinta y cinco": 35,
+  cuarenta: 40
+};
 /** Palabras que SON un numeral (para detectar "X por ciento" en letra). */
 const NUMBER_WORDS = new Set([
   "cero",
@@ -210,11 +226,19 @@ export function validateCallUtterance(
     }
   }
 
+  // OFERTA VIGENTE (B1): en el turno de dinero, cualquier cifra de la escalera que NO sea la oferta actual
+  // (p. ej. un 65/35 "concedido" por el draft en el escalón 0) también invalida.
+  const currentFigures = options?.authorizedShareFigures?.length ? new Set(options.authorizedShareFigures) : undefined;
+
   // Porcentajes en DÍGITOS ("80%", "1000 por ciento"): solo los autorizados (admite 1-4 dígitos para que
   // un número grande también se rechace).
   for (const match of norm.matchAll(/\b(\d{1,4})\s*(?:%|por\s?ciento)/g)) {
-    if (!AUTHORIZED_SHARE.has(Number(match[1]))) {
+    const value = Number(match[1]);
+    if (!AUTHORIZED_SHARE.has(value)) {
       return { valid: false, reason: `porcentaje no autorizado: ${match[1]}` };
+    }
+    if (currentFigures && !currentFigures.has(value)) {
+      return { valid: false, reason: `cifra de la escalera fuera de la oferta vigente: ${match[1]}` };
     }
   }
 
@@ -224,12 +248,39 @@ export function validateCallUtterance(
     if (NUMBER_WORDS.has(word) && !ALLOWED_PCT_WORDS.has(word)) {
       return { valid: false, reason: `porcentaje no autorizado (en palabras): ${word}` };
     }
+    const value = PCT_WORD_VALUES[word];
+    if (currentFigures && value !== undefined && !currentFigures.has(value)) {
+      return { valid: false, reason: `cifra en letra fuera de la oferta vigente: ${word}` };
+    }
+  }
+  // Cifras de la escalera EN LETRA sin "por ciento" ("lo dejamos en sesenta y cinco para nosotros"): con
+  // oferta vigente, cualquier palabra de la escalera que no sea de la oferta también invalida (B1).
+  if (currentFigures) {
+    for (const [word, value] of Object.entries(PCT_WORD_VALUES)) {
+      if (!currentFigures.has(value) && new RegExp(`\\b${word}\\b`).test(norm)) {
+        // "sesenta" dentro de "sesenta y cinco" ya lo cubre su propia entrada; evita el falso anidado.
+        if (word === "sesenta" && /\bsesenta\s+y\s+cinco\b/.test(norm) && !/\bsesenta\b(?!\s+y\s+cinco)/.test(norm)) continue;
+        return { valid: false, reason: `cifra de la escalera fuera de la oferta vigente (en letra): ${word}` };
+      }
+    }
   }
 
   // Reparto "N/N" o "N-N": ambos lados deben ser autorizados.
   for (const match of norm.matchAll(/\b(\d{1,3})\s*[/-]\s*(\d{1,3})\b/g)) {
     if (!AUTHORIZED_SHARE.has(Number(match[1])) || !AUTHORIZED_SHARE.has(Number(match[2]))) {
       return { valid: false, reason: `reparto no autorizado: ${match[0]}` };
+    }
+    if (currentFigures && (!currentFigures.has(Number(match[1])) || !currentFigures.has(Number(match[2])))) {
+      return { valid: false, reason: `reparto fuera de la oferta vigente: ${match[0]}` };
+    }
+  }
+  // Cifras DESNUDAS de la escalera en dígitos ("te hago la última: 60 para la agencia y 40 para ti"): con
+  // oferta vigente, un 35/40/60/65 suelto que no sea de la oferta también invalida (B1).
+  if (currentFigures) {
+    for (const match of norm.matchAll(/\b(30|35|40|60|65|70)\b/g)) {
+      if (!currentFigures.has(Number(match[1]))) {
+        return { valid: false, reason: `cifra de la escalera fuera de la oferta vigente: ${match[1]}` };
+      }
     }
   }
 
@@ -259,9 +310,14 @@ export function validateCallUtterance(
   // del reparto la decide SOLO el código (escalera); un draft jamás la promete ni la insinúa (Fase 3, 24-jul).
   if (
     options?.allowAuthorizedShare === true &&
-    /\b(?:te\s+lo|lo|te)\s+(?:puedo|podemos|voy\s+a|vamos\s+a|podria(?:mos)?)\s+(?:mejorar|subir)\b|\blo\s+(?:mejoramos|subimos)\b|\bte\s+(?:subo|subimos|mejoro|mejoramos)\b/.test(
+    (/\b(?:te\s+lo|lo|te)\s+(?:puedo|podemos|voy\s+a|vamos\s+a|podria(?:mos)?)\s+(?:mejorar|subir)\b|\blo\s+(?:mejoramos|subimos)\b|\bte\s+(?:subo|subimos|mejoro|mejoramos)\b/.test(
       norm
-    )
+    ) ||
+      // Paráfrasis (auditoría 24-jul): "lo podemos ajustar/revisar/negociar/mover", "hay margen", "punto
+      // medio", "te dejo mejor porcentaje", "quedarnos con menos", "se puede negociar/hablar más adelante".
+      /\b(?:lo|te\s+lo|el\s+(?:reparto|porcentaje))\s+(?:podemos|puedo|podriamos|se\s+puede)\s+(?:ajustar|revisar|negociar|mover|tocar|hablar)\b|\bhay\s+margen\b|\bpunto\s+medio\b|\bte\s+dejo\s+mejor\b|\bquedarnos\s+con\s+menos\b|\bse\s+puede\s+(?:negociar|ajustar|revisar)\b/.test(
+        norm
+      ))
   ) {
     return { valid: false, reason: "promesa de mejorar el reparto (la concesión la decide el código)" };
   }

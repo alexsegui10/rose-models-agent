@@ -167,6 +167,12 @@ export function decideCallDirective(input: {
    * sin estado); el adelanto solo ocurre cuando la señal viene del clasificador (idéntico en vivo y replay).
    */
   refinedByUnderstander?: boolean;
+  /**
+   * true si la señal la refinó la IA Y NO hay memoria de llamada disponible (R4 auditoría 24-jul): sin
+   * memoria, el replay no puede reproducir una mutación nacida de la IA — distrust/acknowledge se comportan
+   * entonces como antes (sin racha de calma, sin avance). Con memoria, mutan y el registro lo reproduce.
+   */
+  refinedWithoutMemory?: boolean;
 }): CallTurnDecision {
   const { state, signal } = input;
 
@@ -392,6 +398,10 @@ export function decideCallDirective(input: {
       // ANTI-BUCLE de calma (24-jul): al 3er turno consecutivo de tranquilizar/acusar sin avance, el guion
       // AVANZA (validar y seguir, como una persona real); la desconfianza REAL persistente ya tiene sus
       // salidas (hostile->handoff, wants-to-end->cierre). El redactor de la etapa reacciona a lo que dijo.
+      // Señal refinada por IA SIN memoria (R4): no muta la racha (el replay no la reproduciría).
+      if (input.refinedWithoutMemory) {
+        return { directive: { type: "REASSURE" }, nextState: s };
+      }
       if (s.calmStreak >= 2) {
         return advanceAgenda({ ...s, calmStreak: 0 });
       }
@@ -401,6 +411,9 @@ export function decideCallDirective(input: {
       // ruido): se ACUSA con naturalidad y se sigue, en vez de fingir "no te pillo, repite" (sweep AR 14-jul,
       // candidata que contaba su vida). Con el tope de calma (24-jul): al 3º consecutivo el guion AVANZA
       // (Roxana encadenó 6 ACKNOWLEDGE y luna acabó improvisando "pásame tus datos").
+      if (input.refinedWithoutMemory) {
+        return { directive: { type: "ACKNOWLEDGE" }, nextState: s };
+      }
       if (s.calmStreak >= 2) {
         return advanceAgenda({ ...s, calmStreak: 0 });
       }

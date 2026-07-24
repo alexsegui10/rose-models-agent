@@ -59,6 +59,8 @@ export interface RunCallTurnInput {
   recentBotUtterances?: string[];
   /** true si `signal` la produjo la comprensión IA (no el oído): las señales de IA nunca mutan estado. */
   signalRefinedByUnderstander?: boolean;
+  /** true si la señal es de IA y NO hay memoria (R4): distrust/acknowledge no mutan racha (replay-safe). */
+  signalRefinedWithoutMemory?: boolean;
 }
 
 /** Ejecuta un turno del cerebro de la llamada. */
@@ -77,7 +79,8 @@ export function runCallTurn(input: RunCallTurnInput): CallTurnResult {
   const { directive, nextState } = decideCallDirective({
     state: input.state,
     signal,
-    refinedByUnderstander: input.signalRefinedByUnderstander
+    refinedByUnderstander: input.signalRefinedByUnderstander,
+    refinedWithoutMemory: input.signalRefinedWithoutMemory
   });
   // Para las ACLARACIONES, el redactor se apoya en el conocimiento de la etapa que se estaba explicando.
   const lastStageId = input.state.coveredStages.filter((id) => id !== "CLOSE").at(-1);

@@ -19,6 +19,7 @@ import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 import { runCallTurn, type CallTurnResult } from "./callBrain";
 import { deferFallbackText } from "./callRedaction";
+import { callRevenueShareOfferForStep } from "./callNegotiation";
 import type { CallContext } from "./callContext";
 import type { CallUtteranceDrafter } from "./callDrafter";
 import { extractCallFacts } from "./callFactExtractor";
@@ -460,11 +461,13 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       // face-concern / question / none -> NO se rescata (se queda asks-unknown = defer seguro).
       if (rescued) {
         // La comparación usa refinedByUnderstander:true (la señal ES de la IA): así asks-earnings, que con el
-        // flag no muta estado, sigue siendo rescatable a la respuesta honesta de ingresos.
-        const deterministicNext = JSON.stringify(decideCallDirective({ state, signal: "asks-unknown" }).nextState);
-        const rescuedNext = JSON.stringify(
-          decideCallDirective({ state, signal: rescued, refinedByUnderstander: true }).nextState
-        );
+        // flag no muta estado, sigue siendo rescatable a la respuesta honesta de ingresos. calmStreak se
+        // NORMALIZA a 0 en ambos lados (R3 auditoría 24-jul: el streak de calma mataba en silencio el rescate
+        // distrust/acknowledge — el resto del estado sigue comparándose entero, así lo peligroso se rechaza:
+        // con calmStreak>=2 el rescate avanzaría agenda y coveredStages/closed difieren igualmente).
+        const normalizeCalm = (s: typeof state) => JSON.stringify({ ...s, calmStreak: 0 });
+        const deterministicNext = normalizeCalm(decideCallDirective({ state, signal: "asks-unknown" }).nextState);
+        const rescuedNext = normalizeCalm(decideCallDirective({ state, signal: rescued, refinedByUnderstander: true }).nextState);
         if (rescuedNext === deterministicNext) {
           signal = rescued; // replay-safe: mismo efecto de estado que el asks-unknown determinista
           liveSignalRefined = true;
@@ -557,6 +560,9 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     // Señal ya resuelta arriba (oído determinista + comprensión). En apertura (el bot aún no habló): "none".
     signal: liveSignal,
     signalRefinedByUnderstander: liveSignalRefined,
+    // R4 (auditoría 24-jul): una señal refinada por IA SIN memoria no muta la racha de calma (el replay no
+    // podría reproducirla); con memoria, muta y el registro la reproduce exacta.
+    signalRefinedWithoutMemory: liveSignalRefined && !input.turnMemory?.save,
     resolveQuestion: () => liveCoveringEntries,
     // Memoria de la llamada (jul-2026): lo que ELLA ya dijo en cualquier turno (extractor determinista),
     // para que el redactor no re-pregunte y pueda referenciarlo. No decide nada (solo informa).
@@ -607,10 +613,22 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
       ?.replace(/\p{Extended_Pictographic}/gu, "")
       .replace(/\s{2,}/g, " ")
       .trim();
+    // OFERTA VIGENTE (B1 auditoría 24-jul): en los turnos de dinero, el validador solo admite las cifras de
+    // la oferta ACTUAL (COVER MONEY lleva la suya; DEFEND defiende el escalón vigente). Así un draft jamás
+    // "concede" de palabra un 65/35 o 60/40 que la escalera no decidió.
+    const authorizedShareFigures = allowShare
+      ? result.directive.type === "COVER_STAGE" && result.directive.shareOffer
+        ? [result.directive.shareOffer.modelShare, result.directive.shareOffer.agencyShare]
+        : [
+            callRevenueShareOfferForStep(result.nextState.revenueShareStep).modelShare,
+            callRevenueShareOfferForStep(result.nextState.revenueShareStep).agencyShare
+          ]
+      : undefined;
     if (
       spokenDraft &&
       validateCallUtterance(spokenDraft, plan.draftingBrief, {
         allowAuthorizedShare: allowShare,
+        authorizedShareFigures,
         allowFarewell: false,
         noMoneyFigures,
         noContactTimePromise,
