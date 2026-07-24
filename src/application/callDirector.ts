@@ -93,6 +93,13 @@ export interface CallDirectorState {
   /** Turnos consecutivos sin entender (se reinicia al entender algo); a UNCLEAR_HANDOFF_THRESHOLD -> handoff. */
   unclearStreak: number;
   /**
+   * Turnos CONSECUTIVOS de calma sin avance (distrust->REASSURE / acknowledge->ACKNOWLEDGE). Anti-bucle
+   * (TANDA 1, 24-jul): con una candidata indecisa/charlatana el bot tranquilizaba o acusaba SIN FIN (6
+   * REASSURE seguidos) y luna acababa improvisando. Al 3º consecutivo, el guion AVANZA (como una persona:
+   * valida y sigue). Determinista y replay-safe (se reconstruye de las señales).
+   */
+  calmStreak: number;
+  /**
    * Peticiones CONSECUTIVAS de "¿qué decías?" (ella no nos oye). A la 3ª, el audio está roto en su
    * dirección -> handoff (igual que unclearStreak, que cubre la dirección contraria). Sin este tope,
    * un ASR roto emitiendo "¿cómo?" dejaría al bot repitiéndose para siempre (riesgo del revisor jul-2026).
@@ -141,6 +148,7 @@ export function initialCallDirectorState(): CallDirectorState {
     shareDefended: false,
     unclearStreak: 0,
     repeatRequestStreak: 0,
+    calmStreak: 0,
     faceObjectionCount: 0,
     handedOff: false,
     closed: false,
@@ -294,6 +302,10 @@ export function decideCallDirective(input: {
   if (signal !== "asks-bot-to-repeat" && s.repeatRequestStreak !== 0) {
     s = { ...s, repeatRequestStreak: 0 };
   }
+  // La racha de calma solo viven distrust/acknowledge; cualquier otra señal la reinicia.
+  if (signal !== "distrust" && signal !== "acknowledge" && s.calmStreak !== 0) {
+    s = { ...s, calmStreak: 0 };
+  }
 
   switch (signal) {
     case "hostile-or-suspicious":
@@ -377,13 +389,22 @@ export function decideCallDirective(input: {
       // con los hechos de la etapa; jamás "mi socio" para el propio vocabulario del bot — 3-jul).
       return { directive: { type: "CLARIFY_LAST_UTTERANCE" }, nextState: s };
     case "distrust":
-      return { directive: { type: "REASSURE" }, nextState: s };
+      // ANTI-BUCLE de calma (24-jul): al 3er turno consecutivo de tranquilizar/acusar sin avance, el guion
+      // AVANZA (validar y seguir, como una persona real); la desconfianza REAL persistente ya tiene sus
+      // salidas (hostile->handoff, wants-to-end->cierre). El redactor de la etapa reacciona a lo que dijo.
+      if (s.calmStreak >= 2) {
+        return advanceAgenda({ ...s, calmStreak: 0 });
+      }
+      return { directive: { type: "REASSURE" }, nextState: { ...s, calmStreak: s.calmStreak + 1 } };
     case "acknowledge":
       // Dijo algo REAL que no es pregunta ni objecion (la comprension lo entendio como charla/respuesta, no
       // ruido): se ACUSA con naturalidad y se sigue, en vez de fingir "no te pillo, repite" (sweep AR 14-jul,
-      // candidata que contaba su vida). NO cambia estado -> replay-safe (el replay ya trata el unclear-
-      // inteligible como reinicio-de-racha sin avanzar el guion, asi que live y replay coinciden).
-      return { directive: { type: "ACKNOWLEDGE" }, nextState: s };
+      // candidata que contaba su vida). Con el tope de calma (24-jul): al 3º consecutivo el guion AVANZA
+      // (Roxana encadenó 6 ACKNOWLEDGE y luna acabó improvisando "pásame tus datos").
+      if (s.calmStreak >= 2) {
+        return advanceAgenda({ ...s, calmStreak: 0 });
+      }
+      return { directive: { type: "ACKNOWLEDGE" }, nextState: { ...s, calmStreak: s.calmStreak + 1 } };
     case "wants-to-end": {
       // jul-2026 (decisión de Alex): si quiere colgar NADA MÁS descolgar (aún no se ha explicado NADA),
       // no tiene sentido "te paso el contrato" — se cierra con reagendado por Instagram y el sistema

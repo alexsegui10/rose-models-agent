@@ -490,9 +490,21 @@ function tagsFromInput(input: BusinessKnowledgeRetrievalInput): string[] {
       /\bni tengo (?:cuenta|onlyfans|only fans|of)\b/.test(message) ||
       /\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,30}\b(?:lo tengo que abrir|la tengo que abrir|tengo que (?:abrirl[ao]|crearl[ao])|abrir antes|da igual o l[ao])\b/.test(
         message
+      ) ||
+      // TANDA 1 (Belen): "¿tengo que TENER OnlyFans ya o no?" — sin verbo de crear/abrir no casaba y defería.
+      /\btengo que tener\b[^.!?]{0,15}\b(?:onlyfans|only fans|of|cuenta)\b|\b(?:onlyfans|only fans|of|cuenta)\b[^.!?]{0,12}\bya o no\b/.test(
+        message
       ))
   )
     tags.push("of-account", "account-setup", "onboarding", "faq");
+  // TANDA 1 (Belen): "¿ustedes manejan todo y YO NO HABLO CON NADIE?" pregunta por los chatters (cubierto:
+  // el equipo lleva el chat) y defería. Quién habla/chatea con los clientes -> responsabilidades de la agencia.
+  if (
+    /\b(?:yo\s+)?no\s+(?:hablo|escribo|chateo)\s+con\s+(?:nadie|los\s+clientes|la\s+gente)\b|\bquien\s+(?:habla|chatea|escribe|contesta)\s+(?:con\s+)?(?:los\s+clientes|la\s+gente|ellos)\b|\bno\s+(?:tengo|tendria)\s+que\s+(?:hablar|escribir|chatear|contestar)\s+(?:con\s+nadie|nada|mensajes)\b/.test(
+      message
+    )
+  )
+    tags.push("agency-responsibilities", "operations");
   // DICTADA POR ALEX (18-jul): "¿qué (tipo de) contenido debo enviarte?" / "¿cuánto contenido?" / "¿qué me
   // pides para comenzar?" -> la ficha de referencias y guiones (content-what-to-send). Antes caía en la del
   // perfil objetivo ("no hace falta experiencia...") — un non-sequitur visto en conversaciones REALES.

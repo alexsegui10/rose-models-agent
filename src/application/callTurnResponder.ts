@@ -18,6 +18,7 @@ import { businessKnowledgeEntries } from "@/content/business";
 import { createCandidate, normalizeCandidate } from "@/domain/candidate";
 import type { KnowledgeEntry } from "@/domain/businessKnowledge";
 import { runCallTurn, type CallTurnResult } from "./callBrain";
+import { deferFallbackText } from "./callRedaction";
 import type { CallContext } from "./callContext";
 import type { CallUtteranceDrafter } from "./callDrafter";
 import { extractCallFacts } from "./callFactExtractor";
@@ -131,7 +132,9 @@ function draftBufferWord(directive: CallDirectiveType, turnIndex: number): strin
 // de la lista se mutilaba ("¿Te viene bien?" -> "¿Te viene.", "¿Tienes OnlyFans o no?" -> "...o."). Una
 // coletilla de verdad siempre llega como frase aparte (", ¿vale?" / ". ¿Me sigues?" / " ¿te va?").
 const TRAILING_CHECK_CLOSER =
-  /(?:[.,;!…—-]\s*¿?|\s¿)\b(?:vale|va|s[ií]|no|eh|bien|ok(?:ey)?|de acuerdo|me sigues|te va(?: bien)?|te parece(?: bien)?|te cuadra(?: as[ií])?|c[oó]mo lo ves|qu[eé] te parece|te encaja(?: as[ií])?|mejor(?: as[ií])?|seguimos|sigo|hasta ah[ií] bien|me explico|lo ves|verdad|sabes|te queda(?: m[aá]s)? claro[^?]{0,35}|alguna (?:otra )?duda[^?]{0,25})\s*\?\s*$/i;
+  /(?:[.,;!…—-]\s*¿?|\s¿)\b(?:vale|va|s[ií]|no|eh|bien|ok(?:ey)?|de acuerdo|me sigues|te va(?: bien)?|te parece(?: bien)?|te cuadra(?: as[ií])?|c[oó]mo lo ves|qu[eé] te parece|te encaja(?: as[ií])?|mejor(?: as[ií])?|seguimos|sigo|hasta ah[ií] bien|me explico|lo ves|verdad|sabes|te queda(?: m[aá]s)? claro[^?]{0,35}|alguna (?:otra )?duda[^?]{0,25}|te (?:deja|quedas?)(?:\s+[^\s?]+){0,3}\s+tranquil\w*(?:\s+o[^?]{0,35})?|te sigue rondando[^?]{0,25})\s*\?\s*$/i;
+// + coletillas del REASSURE (TANDA 1, Romina/Malena): "¿te quedas más tranquila o te sigue rondando algo?"
+// salía CLAVADA al final de cada turno de calma — con esto se recorta cuando el turno anterior ya preguntó.
 
 /**
  * Quita la coletilla-check final si la hay (y remata con puntuación limpia). Si la coletilla ERA todo el
@@ -621,6 +624,20 @@ export async function respondToCall(input: RespondToCallInput): Promise<CallResp
     }
   } else {
     content = plan.fallbackText;
+  }
+
+  // ANTI-ECO determinista (TANDA 1, 24-jul, caso Sol): el bot repitió el MISMO texto de conocimiento 3 veces
+  // clavado ("Vale pues, te voy a explicar...") porque el draft caía y el fallback de la ficha es fijo. Una
+  // persona jamás repite su frase literal: si la respuesta elegida es IDÉNTICA a algo que el bot ya dijo en
+  // sus últimos turnos, se sustituye por el defer honesto ("eso te lo confirmo por WhatsApp") — no tenemos
+  // más detalle aquí y repetirse es peor. Solo respuestas de conocimiento (el eco fiel de REPEAT y los
+  // cierres/seguridad no se tocan). Determinista y replay-safe (solo compara con el transcript).
+  if (
+    content &&
+    result.directive.type === "ANSWER_FROM_KNOWLEDGE" &&
+    recentBotUtterances.some((prev) => prev.trim() === content.trim())
+  ) {
+    content = deferFallbackText(directiveRepeats.DEFER_TO_PARTNER ?? 0);
   }
 
   // ALTERNANCIA de coletillas-check (Ronda 2, 17-jul): si el turno ANTERIOR del bot ya acabó en pregunta,

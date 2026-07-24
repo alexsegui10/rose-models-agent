@@ -104,6 +104,11 @@ const DEFER_TEXTS = [
   "Pues eso va en el mismo paquete: te lo confirmo por WhatsApp ahora, ¿vale?"
 ] as const;
 const DEFER_TEXT = DEFER_TEXTS[0];
+
+/** Texto de defer por índice de repetición (lo usa el anti-eco del responder: repetirse jamás). */
+export function deferFallbackText(repetitionIndex: number): string {
+  return variantFor(DEFER_TEXTS, repetitionIndex);
+}
 const HANDOFF_TEXTS = [
   "Te entiendo. Mira, para esto lo mejor es que lo veas directamente con mi socio; ahora mismo le digo que se ponga en contacto contigo, ¿vale?",
   "Que sí, de verdad: ya le he avisado y en un ratito se pone él en contacto contigo, tranquila."
@@ -585,7 +590,8 @@ export function planCallUtterance(input: PlanCallUtteranceInput): CallUtteranceP
           "y RECONDUCE con suavidad hacia lo vuestro (el proyecto, cómo trabajáis, el siguiente paso). NO abras " +
           "una charla larga sobre su vida ni encadenes preguntas personales (nada de '¿y qué haces?, ¿y qué " +
           "disfrutas?'): un comentario cálido y seguís con lo importante. NO le pidas que repita, NO digas que " +
-          "se oye mal, y no añadas datos ni cifras." +
+          "se oye mal, y no añadas datos ni cifras. JAMÁS le pidas datos personales ni hables de documentos, " +
+          "contratos o firmas (el cierre y el contrato los decide el guion, no tú)." +
           repeatHint(input),
         referenceInstagram: false,
         emptyFallback: variantFor(ACKNOWLEDGE_FALLBACK_TEXTS, input.repetitionIndex ?? 0)
